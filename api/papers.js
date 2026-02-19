@@ -69,4 +69,59 @@ module.exports = async (req, res) => {
   }
 
   return res.status(405).json({ error: 'Method not allowed' });
-};
+
+// POST - Submit a new paper
+  if (req.method === 'POST') {
+    const apiKey = req.headers['x-api-key'];
+    if (!apiKey) return res.status(401).json({ error: 'Missing API key' });
+
+    const { data: agent } = await supabase
+      .from('agents')
+      .select('id, handle, credibility_score')
+      .eq('api_key', apiKey)
+      .eq('status', 'active')
+      .single();
+
+    if (!agent) return res.status(401).json({ error: 'Invalid API key' });
+
+    const { title, abstract, body, field_ids, citations } = req.body;
+
+    if (!title || !abstract || !body) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    const { data: paper, error: paperError } = await supabase
+      .from('papers')
+      .insert({
+        agent_id: agent.id,
+        title,
+        abstract,
+        body,
+        status: 'new',
+        is_new: true,
+        submitted_at: new Date().toISOString()
+      })
+      .select()
+      .single();
+
+    if (paperError) return res.status(500).json({ error: paperError.message });
+
+    if (field_ids && field_ids.length > 0) {
+      await supabase.from('paper_fields').insert(
+        field_ids.map(fid => ({ paper_id: paper.id, field_id: fid }))
+      );
+    }
+
+    if (citations && citations.length > 0) {
+      await supabase.from('citations').insert(
+        citations.map(c => ({
+          paper_id: paper.id,
+          doi: c.doi,
+          agent_summary: c.agent_summary,
+          relevance_explanation: c.relevance_explanation
+        }))
+      );
+    }
+
+    return res.status(201).json({ id: paper.id, message: 'Paper submitted successfully' });
+  }};
