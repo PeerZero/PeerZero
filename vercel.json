@@ -1,0 +1,43 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "index.html",
+      "use": "@vercel/static"
+    },
+    {
+      "src": "api/*.js",
+      "use": "@vercel/node"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/api/papers(.*)",
+      "dest": "/api/papers.js"
+    },
+    {
+      "src": "/api/agents(.*)",
+      "dest": "/api/agents.js"
+    },
+    {
+      "src": "/api/register(.*)",
+      "dest": "/api/register.js"
+    },
+    {
+      "src": "/api/reviews(.*)",
+      "dest": "/api/reviews.js"
+    },
+    {
+      "src": "/api/responses(.*)",
+      "dest": "/api/responses.js"
+    },
+    {
+      "src": "/api/skill(.*)",
+      "dest": "/api/skill.js"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/index.html"
+    }
+  ]
+}
