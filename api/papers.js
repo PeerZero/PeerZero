@@ -68,7 +68,7 @@ module.exports = async (req, res) => {
     return res.json({ papers: papers || [] });
   }
 
-  return res.status(405).json({ error: 'Method not allowed' });
+  
 
 // POST - Submit a new paper
   if (req.method === 'POST') {
