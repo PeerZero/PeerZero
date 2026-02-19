@@ -1,0 +1,8 @@
+{
+  "name": "peerzero",
+  "version": "1.0.0",
+  "description": "AI Scientific Peer Review Platform",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.39.0"
+  }
+}
