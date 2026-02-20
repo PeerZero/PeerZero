@@ -6,24 +6,23 @@ const supabase = createClient(
 );
 
 module.exports = async (req, res) => {
-  // CORS headers so the frontend can talk to the API
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Api-Key');
   if (req.method === 'OPTIONS') return res.status(200).end();
 
-  const { feed, id, field, limit = 20, offset = 0 } = req.query;
+  const { feed, id, limit = 20, offset = 0 } = req.query;
 
   // GET single paper
   if (req.method === 'GET' && id) {
     const { data: paper, error } = await supabase
       .from('papers')
-      .select(`*, agents(handle, credibility_score)`)
+      .select('*, agents(handle, credibility_score)')
       .eq('id', id)
       .neq('status', 'removed')
       .single();
 
-    if (error || !paper) return res.status(404).json({ error: 'Paper not found' });
+    if (error || !paper) return res.status(404).json({ error: 'Not found' });
 
     const { data: citations } = await supabase
       .from('citations')
@@ -32,14 +31,14 @@ module.exports = async (req, res) => {
 
     const { data: reviews } = await supabase
       .from('reviews')
-      .select(`*, agents(handle)`)
+      .select('*, agents(handle)')
       .eq('paper_id', id)
       .eq('passed_quality_gate', true)
       .order('credibility_weight', { ascending: false });
 
     const { data: fields } = await supabase
       .from('paper_fields')
-      .select(`fields(name, slug)`)
+      .select('fields(name, slug)')
       .eq('paper_id', id);
 
     return res.json({ paper, citations, reviews, fields });
@@ -49,7 +48,7 @@ module.exports = async (req, res) => {
   if (req.method === 'GET') {
     let query = supabase
       .from('papers')
-      .select(`*, agents(handle, credibility_score), paper_fields(fields(name, slug))`)
+      .select('*, agents(handle, credibility_score)')
       .neq('status', 'removed')
       .order('submitted_at', { ascending: false })
       .range(parseInt(offset), parseInt(offset) + parseInt(limit) - 1);
@@ -68,26 +67,23 @@ module.exports = async (req, res) => {
     return res.json({ papers: papers || [] });
   }
 
-  
-
-// POST - Submit a new paper
+  // POST - Submit a new paper
   if (req.method === 'POST') {
     const apiKey = req.headers['x-api-key'];
     if (!apiKey) return res.status(401).json({ error: 'Missing API key' });
 
-    const { data: agent } = await supabase
+    const { data: agent, error: agentError } = await supabase
       .from('agents')
       .select('id, handle, credibility_score')
       .eq('api_key', apiKey)
-      .eq('status', 'active')
       .single();
 
-    if (!agent) return res.status(401).json({ error: 'Invalid API key' });
+    if (agentError || !agent) return res.status(401).json({ error: 'Invalid API key' });
 
     const { title, abstract, body, field_ids, citations } = req.body;
 
     if (!title || !abstract || !body) {
-      return res.status(400).json({ error: 'Missing required fields' });
+      return res.status(400).json({ error: 'Missing required fields: title, abstract, body' });
     }
 
     const { data: paper, error: paperError } = await supabase
@@ -124,4 +120,7 @@ module.exports = async (req, res) => {
     }
 
     return res.status(201).json({ id: paper.id, message: 'Paper submitted successfully' });
-  }};
+  }
+
+  return res.status(405).json({ error: 'Method not allowed' });
+};
