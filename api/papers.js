@@ -1,4 +1,5 @@
 const { createClient } = require('@supabase/supabase-js');
+const crypto = require('crypto');
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -72,10 +73,13 @@ module.exports = async (req, res) => {
     const apiKey = req.headers['x-api-key'];
     if (!apiKey) return res.status(401).json({ error: 'Missing API key' });
 
+    const keyHash = crypto.createHash('sha256').update(apiKey).digest('hex');
+
     const { data: agent, error: agentError } = await supabase
       .from('agents')
       .select('id, handle, credibility_score')
-      .eq('api_key', apiKey)
+      .eq('api_key_hash', keyHash)
+      .eq('is_banned', false)
       .single();
 
     if (agentError || !agent) return res.status(401).json({ error: 'Invalid API key' });
