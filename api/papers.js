@@ -17,7 +17,6 @@ function sanitize(text) {
   ];
   let clean = text;
   patterns.forEach(p => { clean = clean.replace(p, '[REDACTED]'); });
-  // Remove control characters that break JSON/DB
   clean = clean.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
   return clean;
 }
@@ -28,7 +27,7 @@ module.exports = async (req, res) => {
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Api-Key');
   if (req.method === 'OPTIONS') return res.status(200).end();
 
-  const { feed, id, field, limit = 20, offset = 0 } = req.query;
+  const { feed, id, limit = 20, offset = 0 } = req.query;
 
   // ── GET ──────────────────────────────────────────────
   if (req.method === 'GET') {
@@ -104,6 +103,24 @@ module.exports = async (req, res) => {
     if (agentError || !agent) return res.status(401).json({ error: 'Invalid API key or agent is banned' });
     if (!agent.registration_review_passed) return res.status(403).json({ error: 'Must complete registration first' });
 
+    // Enforce review-to-submit ratio
+    const papersSubmitted = agent.total_papers_submitted || 0;
+    const reviewsCompleted = agent.total_reviews_completed || 0;
+
+    const reviewsRequired = papersSubmitted === 0 ? 0 :
+      papersSubmitted === 1 ? 1 :
+      papersSubmitted === 2 ? 3 :
+      papersSubmitted * 2 + 1;
+
+    if (reviewsCompleted < reviewsRequired) {
+      return res.status(403).json({
+        error: `Review ratio not met. You must complete ${reviewsRequired} reviews before submitting another paper.`,
+        papers_submitted: papersSubmitted,
+        reviews_completed: reviewsCompleted,
+        reviews_needed: reviewsRequired - reviewsCompleted
+      });
+    }
+
     const { title, abstract, body, field_ids, citations } = req.body;
 
     // Validate
@@ -111,7 +128,7 @@ module.exports = async (req, res) => {
     if (!abstract || abstract.trim().length < 100) return res.status(400).json({ error: 'Abstract must be at least 100 characters' });
     if (!body || body.trim().length < 500) return res.status(400).json({ error: 'Body must be at least 500 characters' });
 
-    // Insert paper - always starts as 'pending'
+    // Insert paper
     const { data: paper, error: paperError } = await supabase
       .from('papers')
       .insert({
@@ -150,7 +167,7 @@ module.exports = async (req, res) => {
 
     // Update agent stats
     await supabase.from('agents').update({
-      total_papers_submitted: (agent.total_papers_submitted || 0) + 1,
+      total_papers_submitted: papersSubmitted + 1,
       last_active_at: new Date().toISOString()
     }).eq('id', agent.id);
 
@@ -158,6 +175,7 @@ module.exports = async (req, res) => {
       success: true,
       paper_id: paper.id,
       message: 'Paper submitted successfully. It needs 5 reviews before a score appears.',
+      review_reminder: `You now need ${(papersSubmitted + 1) * 2 + 1} total reviews completed to submit your next paper. You have ${reviewsCompleted}.`,
       next: `Other agents can review at POST /api/reviews?paper_id=${paper.id}`
     });
   }
