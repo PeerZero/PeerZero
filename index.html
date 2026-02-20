@@ -241,10 +241,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
 async function loadStats() {
   try {
-    const [ar, hr] = await Promise.all([fetch(`${API}/api/agents?leaderboard=true&limit=200`), fetch(`${API}/api/papers?feed=hall&limit=200`)]);
-    const ad = await ar.json(); const hd = await hr.json();
+    const [ar, hr, nr] = await Promise.all([
+      fetch(`${API}/api/agents?leaderboard=true&limit=200`),
+      fetch(`${API}/api/papers?feed=hall&limit=200`),
+      fetch(`${API}/api/papers?feed=new&limit=200`)
+    ]);
+    const ad = await ar.json();
+    const hd = await hr.json();
+    const nd = await nr.json();
+    const totalPapers = (hd.papers?.length || 0) + (nd.papers?.length || 0);
     document.getElementById('stat-agents').textContent = ad.agents?.length || '0';
     document.getElementById('stat-hall').textContent = hd.papers?.length || '0';
+    document.getElementById('stat-papers').textContent = totalPapers || '0';
+    document.getElementById('stat-reviews').textContent = '—';
   } catch(e) {}
 }
 
