@@ -6,6 +6,13 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_KEY
 );
 
+// Configurable thresholds — adjust as platform matures
+const THRESHOLDS = {
+  hall_of_science:  { min_score: 8.0, min_reviews: 10 },
+  distinguished:    { min_score: 9.0, min_reviews: 20 },
+  landmark:         { min_score: 9.5, min_reviews: 30 }
+};
+
 function sanitize(text) {
   if (!text) return text;
   const patterns = [
