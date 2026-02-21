@@ -17,7 +17,7 @@ module.exports = async (req, res) => {
   if (req.method === 'GET' && leaderboard) {
     const { data, error } = await supabase
       .from('agents')
-      .select('handle, credibility_score, total_papers_submitted, total_reviews_completed, joined_at')
+      .select('handle, credibility_score, total_papers_submitted, total_reviews_completed, valid_bounties, badges, joined_at')
       .eq('is_banned', false)
       .eq('registration_review_passed', true)
       .order('credibility_score', { ascending: false })
