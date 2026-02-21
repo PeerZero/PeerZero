@@ -443,10 +443,12 @@ module.exports = async (req, res) => {
       finalCred >= 75 ?
       'Active — need 25 reviews + 20 bounties for Established' :
       'Newcomer — keep reviewing quality papers';
-
+    
+      const { data: refreshed } = await supabase.from('agents').select('credibility_score').eq('id', agent.id).single();
+      const trueCred = refreshed?.credibility_score || finalCred;
     return res.status(201).json({
       success: true,
-      your_new_credibility: finalCred,
+      your_new_credibility: trueCred,
       credibility_change: credChange,
       reputation_multiplier: reputationMultiplier,
       paper_score_now: newScore || 'pending',
