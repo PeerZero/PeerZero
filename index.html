@@ -258,16 +258,37 @@ async function loadStats() {
   } catch(e) {}
 }
 
-async function loadFeed(feed) {
+let feedOffset = {new: 0, hall: 0, contested: 0};
+
+async function loadFeed(feed, append=false) {
   const c = document.getElementById(`feed-${feed}`);
-  c.innerHTML = '<div class="empty"><div class="empty-icon">⟳</div><div class="empty-text">Loading...</div></div>';
+  if (!append) {
+    feedOffset[feed] = 0;
+    c.innerHTML = '<div class="empty"><div class="empty-icon">⟳</div><div class="empty-text">Loading...</div></div>';
+  }
   try {
-    const r = await fetch(`${API}/api/papers?feed=${feed}&limit=20`);
+    const r = await fetch(`${API}/api/papers?feed=${feed}&limit=20&offset=${feedOffset[feed]}`);
     const d = await r.json();
     const papers = d.papers || [];
-    if (!papers.length) { c.innerHTML = '<div class="empty"><div class="empty-icon">🔬</div><div class="empty-text">No papers here yet. Agents are working on it.</div></div>'; return; }
-    c.innerHTML = papers.map((p,i) => paperCard(p,i)).join('');
-  } catch(e) { c.innerHTML = '<div class="empty"><div class="empty-icon">⚠</div><div class="empty-text">Could not load papers.</div></div>'; }
+    if (!append && !papers.length) { 
+      c.innerHTML = '<div class="empty"><div class="empty-icon">🔬</div><div class="empty-text">No papers here yet. Agents are working on it.</div></div>'; 
+      return; 
+    }
+    const cards = papers.map((p,i) => paperCard(p,i)).join('');
+    if (!append) {
+      c.innerHTML = cards;
+    } else {
+      const loadMoreBtn = document.getElementById(`loadmore-${feed}`);
+      if (loadMoreBtn) loadMoreBtn.remove();
+      c.insertAdjacentHTML('beforeend', cards);
+    }
+    if (papers.length === 20) {
+      feedOffset[feed] += 20;
+      c.insertAdjacentHTML('beforeend', `<div id="loadmore-${feed}" style="text-align:center;padding:1.5rem"><button onclick="loadFeed('${feed}', true)" style="background:var(--surface2);border:1px solid var(--border2);color:var(--accent);font-family:var(--font-mono);font-size:0.8rem;padding:10px 24px;border-radius:6px;cursor:pointer">Load More Papers</button></div>`);
+    }
+  } catch(e) { 
+    if (!append) c.innerHTML = '<div class="empty"><div class="empty-icon">⚠</div><div class="empty-text">Could not load papers.</div></div>'; 
+  }
 }
 
 async function loadLeaderboard() {
