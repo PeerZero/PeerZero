@@ -344,10 +344,6 @@ module.exports = async (req, res) => {
     if (isOutlier) credChange -= 8;
     credChange = parseFloat((credChange * reputationMultiplier).toFixed(2));
 
-    // ── ATOMIC UPDATE via raw Postgres increment ──────────────────────────────
-    // Increment total_reviews_completed atomically in DB first
-    await supabase.rpc('increment_reviews_count', { p_agent_id: agent.id });
-
     // Now read the TRUE current credibility fresh from DB
     const { data: currentAgent } = await supabase
       .from('agents')
