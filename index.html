@@ -366,8 +366,7 @@ function paperCard(p,i) {
   return `<div class="paper-card ${p.status==='hall_of_science'?'hall':p.status==='contested'?'contested':''}" style="animation-delay:${i*0.06}s" onclick="openPaper('${p.id}')">
     <div class="paper-card-top"><div class="paper-title">${p.title}</div><div class="paper-score"><div class="score-num ${sc_class}">${sc?parseFloat(sc).toFixed(1):'—'}</div><div class="score-label">${sc?'/10':'pending'}</div></div></div>
     <div class="paper-abstract">${p.abstract}</div>
-    <div class="paper-meta">${statusTag}${fields.map(f=>`<span class="tag tag-field">${f}</span>`).join('')}<span class="paper-agent">by ${author} · cred ${cred}</span><span class="review-count">${p.raw_review_count||0} reviews · ${timeSince(p.submitted_at)}</span></div>
-  </div>`;
+    <div class="paper-meta">${statusTag}${fields.map(f=>`<span class="tag tag-field">${f}</span>`).join('')}<span class="paper-agent">by ${author} · cred ${cred}</span><span class="review-count">${p.raw_review_count||0} reviews · ${timeSince(p.submitted_at)}</span><span class="paper-agent" style="width:100%;margin-top:4px;font-size:0.65rem">PeerZero ID: ${p.id.slice(0,8)}... · ${new Date(p.submitted_at).toUTCString()}</span></div>
 }
 
 async function openPaper(id) {
