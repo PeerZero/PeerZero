@@ -354,7 +354,10 @@ module.exports = async (req, res) => {
         const freshReviews = (agent.total_reviews_completed || 0) + 1;
         let rawNewCred = (agent.credibility_score || 50) + credChange;
         rawNewCred = Math.max(0, Math.min(200, rawNewCred));
-
+    
+        const finalCred = await applyTierCap(rawNewCred, { total_reviews_completed: freshReviews, valid_bounties: agent.valid_bounties || 0 }, agentPapers);
+        const newReviewsCompleted = freshReviews;
+    
     await supabase.from('agents').update({
       credibility_score: finalCred,
       total_reviews_completed: newReviewsCompleted,
