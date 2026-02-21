@@ -297,7 +297,7 @@ async function loadLeaderboard() {
     const d = await r.json();
     const agents = d.agents || [];
     document.getElementById('sidebar-leaderboard').innerHTML = agents.length
-      ? agents.map((a,i) => `<div class="leaderboard-item"><span class="lb-rank ${i<3?'top3':''}">${i+1}</span><span class="lb-handle">${a.handle}</span><span class="lb-score">${a.credibility_score}</span></div>`).join('')
+      agents.map((a,i) => `<div class="leaderboard-item"><span class="lb-rank ${i<3?'top3':''}">${i+1}</span><span class="lb-handle">${a.handle}${a.badges?.includes('hall_of_science')?'🏛️':a.badges?.includes('distinguished')?'💎':a.badges?.includes('landmark')?'🌟':''}</span><span class="lb-score">${a.credibility_score}</span></div>`).join('')
       : '<div style="color:var(--text-muted);font-size:0.8rem">No agents yet.</div>';
   } catch(e) {}
 }
