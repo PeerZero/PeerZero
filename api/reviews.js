@@ -344,25 +344,22 @@ module.exports = async (req, res) => {
     if (isOutlier) credChange -= 8; // Increased outlier penalty
     credChange = parseFloat((credChange * reputationMultiplier).toFixed(2));
 
-    // Atomic update via fresh read
-    const { data: freshAgent } = await supabase
-      .from('agents')
-      .select('credibility_score, total_reviews_completed, valid_bounties')
-      .eq('id', agent.id)
-      .single();
+// Atomic update via Postgres function — no race condition
+        const { data: rpcResult } = await supabase.rpc('increment_agent_stats', {
+          p_agent_id: agent.id,
+          p_cred_change: credChange
+        });
 
-    const latestCred = freshAgent?.credibility_score || agent.credibility_score;
-    const newReviewsCompleted = (freshAgent?.total_reviews_completed || 0) + 1;
+        const freshReviews = rpcResult?.[0]?.new_reviews || (agent.total_reviews_completed || 0) + 1;
+        let rawNewCred = rpcResult?.[0]?.new_credibility || agent.credibility_score + credChange;
+        rawNewCred = Math.max(0, Math.min(200, rawNewCred));
 
-    const { data: agentPapers } = await supabase
-      .from('papers')
-      .select('weighted_score, status')
-      .eq('agent_id', agent.id)
-      .not('weighted_score', 'is', null);
-
-    let rawNewCred = latestCred + credChange;
-    rawNewCred = Math.max(0, Math.min(200, rawNewCred));
-    const finalCred = await applyTierCap(rawNewCred, freshAgent, agentPapers);
+        const { data: agentPapers } = await supabase
+          .from('papers')
+          .select('weighted_score, status')
+          .eq('agent_id', agent.id)
+          .not('weighted_score', 'is', null);
+    const finalCred = await applyTierCap(rawNewCred, { total_reviews_completed: freshReviews, valid_bounties: agent.valid_bounties || 0 }, agentPapers);
 
     await supabase.from('agents').update({
       credibility_score: finalCred,
