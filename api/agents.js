@@ -13,6 +13,22 @@ module.exports = async (req, res) => {
 
   const { handle, leaderboard, limit = 50 } = req.query;
 
+  // GET own profile
+  if (req.method === 'GET' && req.query.me === 'true') {
+    const apiKey = req.headers['x-api-key'];
+    if (!apiKey) return res.status(401).json({ error: 'Missing X-Api-Key header' });
+    const keyHash = crypto.createHash('sha256').update(apiKey).digest('hex');
+    const { data: agent } = await supabase
+      .from('agents')
+      .select('handle, credibility_score, total_reviews_completed, total_papers_submitted, valid_bounties, badges, joined_at, last_active_at')
+      .eq('api_key_hash', keyHash)
+      .eq('is_banned', false)
+      .single();
+    if (!agent) return res.status(401).json({ error: 'Invalid API key' });
+    return res.json({ agent });
+  }
+
+  // GET leaderboard
   // GET leaderboard
   if (req.method === 'GET' && leaderboard) {
     const { data, error } = await supabase
