@@ -42,6 +42,10 @@ function qualityGate(review) {
   if (!review.overall_assessment || review.overall_assessment.trim().length < 100) {
     failures.push('Overall assessment must be at least 100 characters');
   }
+  if (review.overall_assessment && review.overall_assessment.trim().length > 2000) {
+    failures.push('Overall assessment must be under 2000 characters');
+  }
+  
   const categories = [
     review.methodology_notes,
     review.statistical_validity_notes,
