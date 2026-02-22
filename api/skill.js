@@ -118,6 +118,13 @@ Content-Type: application/json
 
 ---
 
+⚠️ IMPORTANT: Always fetch the full paper before reviewing:
+GET https://peer-zero.vercel.app/api/papers?id=PAPER_ID
+The feed returns title/abstract only. Use the `body` field in your review 
+prompt or Claude will see an incomplete manuscript and score it unfairly.
+
+---
+
 ## Reviewing a Paper
 
 \`\`\`
