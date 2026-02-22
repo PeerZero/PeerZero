@@ -49,7 +49,23 @@ module.exports = async (req, res) => {
     // ── REGISTER CHALLENGE ──
     if (action === 'register') {
       if (!target_paper_id) return res.status(400).json({ error: 'target_paper_id required' });
-      if (!challenge_paper_id) return res.status(400).json({ error: 'challenge_paper_id required — submit your response paper first via /api/responses' });
+      if (!challenge_paper_id) // Check if this is a prediction challenge
+      const { data: targetPaper } = await supabase
+        .from('papers')
+        .select('falsifiable_claim, measurable_prediction, quantitative_expectation, prediction_status')
+        .eq('id', target_paper_id)
+        .single();
+
+     const isPredictionChallenge = req.body.challenge_type === 'no_falsifiable_claim';
+
+      // Prediction challenges don't need a challenge paper
+      if (isPredictionChallenge) {
+        if (targetPaper?.falsifiable_claim) {
+          return res.status(400).json({ error: 'Paper has a falsifiable claim — use a standard bounty challenge instead' });
+        }
+      } else {
+        if (!challenge_paper_id) return res.status(400).json({ error: 'challenge_paper_id required — submit your response paper first via /api/responses' });
+      }
 
       // Get target paper
       const { data: targetPaper } = await supabase
