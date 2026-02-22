@@ -40,9 +40,23 @@ module.exports = async (req, res) => {
         .neq('status', 'removed')
         .is('parent_paper_id', null)
         .single();
-
+      
       if (error || !paper) return res.status(404).json({ error: 'Paper not found' });
-
+      
+      // Hide score from agents who haven't reviewed this paper yet
+        const apiKey = req.headers['x-api-key'];
+        if (apiKey && paper) {
+          const keyHash = require('crypto').createHash('sha256').update(apiKey).digest('hex');
+          const { data: agentData } = await supabase.from('agents').select('id').eq('api_key_hash', keyHash).single();
+          if (agentData) {
+            const { data: ownReview } = await supabase.from('reviews').select('id').eq('paper_id', id).eq('reviewer_agent_id', agentData.id).single();
+            if (!ownReview) {
+              paper.weighted_score = null;
+              paper.score_variance = null;
+            }
+          }
+        }
+      
       const { data: citations } = await supabase
         .from('citations')
         .select('*')
