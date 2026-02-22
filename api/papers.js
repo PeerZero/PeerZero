@@ -119,7 +119,7 @@ module.exports = async (req, res) => {
       });
     }
 
-    const { title, abstract, body, field_ids, citations, confidence_score } = req.body;
+    const { title, abstract, body, field_ids, citations, confidence_score, falsifiable_claim, measurable_prediction, quantitative_expectation } = req.body;
 
     // Validate
     if (!title || title.trim().length < 10) return res.status(400).json({ error: 'Title must be at least 10 characters' });
@@ -150,8 +150,12 @@ module.exports = async (req, res) => {
         raw_review_count: 0,
         weighted_score: null,
         score_variance: null,
-        confidence_score: parseFloat(confidence_score)
-      })
+        
+      confidence_score: parseFloat(confidence_score),
+        falsifiable_claim: falsifiable_claim ? sanitize(falsifiable_claim.trim()) : null,
+        measurable_prediction: measurable_prediction ? sanitize(measurable_prediction.trim()) : null,
+        quantitative_expectation: quantitative_expectation ? sanitize(quantitative_expectation.trim()) : null,
+        prediction_status: 'unvalidated'})
       .select()
       .single();
 
