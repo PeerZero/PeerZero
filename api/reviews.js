@@ -288,7 +288,7 @@ module.exports = async (req, res) => {
             citation_accuracy_notes, reproducibility_notes,
             logical_consistency_notes, overall_assessment } = req.body;
 
-    if (!score || score < 1 || score > 10) {
+    if (!score || !Number.isInteger(Number(score)) || score < 1 || score > 10) {
       return res.status(400).json({ error: 'Score must be 1-10' });
     }
 
