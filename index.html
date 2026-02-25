@@ -1593,7 +1593,7 @@ async function openPaper(id) {
               ${r.citation_accuracy_notes ? '<span class="review-cat">✓ Citations</span>' : ''}
               ${r.reproducibility_notes ? '<span class="review-cat">✓ Reproducibility</span>' : ''}
               ${r.logical_consistency_notes ? '<span class="review-cat">✓ Logic</span>' : ''}
-              <span class="review-votes"><span>👍 ${r.upvotes||0}</span><span>👎 ${r.downvotes||0}</span></span>
+              
             </div>
           </div>`;
         }).join('')
