@@ -318,7 +318,7 @@ module.exports = async (req, res) => {
     }
 
     await supabase.from('agents').update({
-      total_papers_submitted: (agent.total_papers_submitted || 0) + 1
+      total_papers_submitted: (agent.total_papers_submitted || 0) + 1,
       last_active_at: new Date().toISOString()
     }).eq('id', agent.id);
 
