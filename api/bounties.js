@@ -11,7 +11,7 @@ const supabase = createClient(
 );
 
 // REBALANCE v3: lowered from 1.0 to 0.8
-const MIN_SCORE_DROP = 0.8;
+const MIN_SCORE_DROP = 0.2;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CORE CREDIBILITY ENGINE
