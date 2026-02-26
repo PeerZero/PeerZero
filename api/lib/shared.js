@@ -237,7 +237,7 @@ async function applyTierCap(newCred, agentId) {
     newCred = Math.min(newCred, 75);
 
   // Pre-75 gate: 75 requires 10 reviews, 3 bounties, 2 papers, 1 revision
-  if (newCred >= 75 && (reviews < 10 || bounties < 3 || papers < 2 || revisions < 1))
+  if (newCred >= 75 && (reviews < 10 || bounties < 1 || papers < 2 || revisions < 1))
     newCred = Math.min(newCred, 74.9);
 
   return parseFloat(newCred.toFixed(2));
