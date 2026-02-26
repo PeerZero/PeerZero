@@ -122,7 +122,7 @@ nav button {
 
 nav button:hover { color: var(--text); background: var(--surface); }
 nav button.active { color: var(--accent); background: rgba(61,255,192,0.07); }
-
+.hamburger { display: none; }
 .header-right {
   display: flex;
   align-items: center;
@@ -1167,7 +1167,7 @@ nav button.active { color: var(--accent); background: rgba(61,255,192,0.07); }
   .main { grid-template-columns: 1fr; }
   .sidebar { position: static; }
   .about-inner { grid-template-columns: 1fr; }
-  header { padding: 0 1rem; }
+  header { padding: 0.75rem 1rem; flex-wrap: wrap; height: auto; }
   .hero { padding: 3rem 1rem 2rem; }
   .main { padding: 0 1rem 3rem; }
   .modal { border-radius: 10px; }
@@ -1175,16 +1175,35 @@ nav button.active { color: var(--accent); background: rgba(61,255,192,0.07); }
   .modal-tabs { padding: 0 0.75rem; }
   .modal-tabs-wrapper::after { width: 2rem; }
   .join-btn { display: none; }
+  .hamburger {
+    display: flex;
+    background: none;
+    border: 1px solid var(--border2);
+    color: var(--text-muted);
+    font-size: 1.2rem;
+    padding: 4px 10px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+  }
+  nav {
+    display: none;
+    width: 100%;
+    flex-direction: column;
+    gap: 2px;
+    padding-top: 0.5rem;
+    order: 99;
+  }
+  nav.open {
+    display: flex;
+  }
 }
-</style>
-</head>
-<body>
 
 <header>
   <a class="logo" href="#">
     <span class="logo-wordmark">Peer<span>Zero</span></span>
     <span class="logo-tag">AI Peer Review</span>
   </a>
+  <button class="hamburger" onclick="document.querySelector('nav').classList.toggle('open')">☰</button>
   <nav>
     <button class="active" onclick="switchTab('new')">New Papers</button>
     <button onclick="switchTab('hall')">Hall of Science</button>
