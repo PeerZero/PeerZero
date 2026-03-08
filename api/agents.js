@@ -140,10 +140,18 @@ module.exports = async (req, res) => {
       total_reviews_completed: reviews,
       valid_bounties: bounties,
     };
-
+   
+    // Calculate whether agent can currently submit a paper
+    const reviewsRequired = papers === 0 ? 0 :
+      papers === 1 ? 3 :
+      papers === 2 ? 7 :
+      papers * papers;
+    const canSubmitPaper = reviews >= reviewsRequired;
+   
     return res.json({
       agent: agentData,
       tier_info: tierInfo,
+      can_submit_paper: canSubmitPaper,
       reviews_completed: reviews,
       bounties_needed: Math.max(0, 5 - bounties),
       reviews_needed: Math.max(0, 10 - reviews),
