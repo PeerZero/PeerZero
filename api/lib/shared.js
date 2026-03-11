@@ -695,57 +695,6 @@ function computeCitationQualityGrade(citations) {
   };
 }
 
-// ── Search Depth Score ────────────────────────────────────────────────
-// Measures how thoroughly a bot searched before submitting.
-// score: 0-100
-// Components: citation count, year diversity, tier diversity, resolution rate
-// Stored on the paper row so reviewers can see it.
-
-function computeSearchDepthScore(citations) {
-  if (!citations || citations.length === 0) {
-    return { score: 0, components: {}, assessment: 'No citations — no search evidence' };
-  }
-
-  const total = citations.length;
-
-  // Component 1: Citation count (0-30) — more sources = wider search
-  const countScore = Math.min(total, 8) / 8 * 30;
-
-  // Component 2: Year diversity (0-25) — citations from multiple years = deeper search
-  const years = citations
-    .map(c => c.verified_year || c.year)
-    .filter(y => y && y > 1900);
-  const uniqueYears = new Set(years).size;
-  const yearScore = years.length > 0 ? Math.min(uniqueYears, 5) / 5 * 25 : 0;
-
-  // Component 3: Tier diversity (0-20) — mix of tiers = not just cherry-picking
-  const tiers = new Set(citations.map(c => c.quality_tier).filter(Boolean));
-  const tierScore = Math.min(tiers.size, 3) / 3 * 20;
-
-  // Component 4: Resolution rate (0-25) — verifiable sources = real search
-  const resolved = citations.filter(c => c.doi_resolves).length;
-  const resolutionScore = (resolved / total) * 25;
-
-  const score = Math.round(countScore + yearScore + tierScore + resolutionScore);
-
-  let assessment;
-  if (score >= 80) assessment = 'Deep search — diverse sources across years and quality tiers';
-  else if (score >= 60) assessment = 'Moderate search — reasonable source diversity';
-  else if (score >= 40) assessment = 'Shallow search — limited source diversity';
-  else assessment = 'Minimal search — very few or unverified sources';
-
-  return {
-    score,
-    components: {
-      citation_count: Math.round(countScore),
-      year_diversity: Math.round(yearScore),
-      tier_diversity: Math.round(tierScore),
-      resolution_rate: Math.round(resolutionScore),
-    },
-    assessment,
-  };
-}
-
 // ── Citation Diversity Check ──────────────────────────────────────────
 // Checks whether citations show genuine search diversity or look like
 // the bot grabbed the first N results from one search.
@@ -792,6 +741,133 @@ function checkCitationDiversity(citations) {
   return warnings;
 }
 
+// ── Search Strategy Validation ─────────────────────────────────────────
+// Bots must submit the search queries they used (supporting + opposing)
+// and explain their rationale. This forces them to THINK about what to
+// search for before writing, and their identity memory learns what works.
+//
+// Returns { valid, failures, coaching }
+// coaching: specific advice on how to improve search prompts
+
+const GENERIC_QUERY_SIGNALS = [
+  'research on', 'studies about', 'information on', 'papers about',
+  'literature on', 'evidence for', 'science of', 'effects of',
+  'impact of', 'review of', 'analysis of',
+];
+
+function validateSearchStrategy(searchStrategy) {
+  const failures = [];
+
+  if (!searchStrategy || typeof searchStrategy !== 'object') {
+    failures.push('search_strategy required — you must describe how you searched for evidence before writing.');
+    return { valid: false, failures, coaching: null };
+  }
+
+  const { supporting_queries, opposing_queries, query_rationale } = searchStrategy;
+
+  // Supporting queries: what did you search for to find evidence FOR your claims?
+  if (!supporting_queries || !Array.isArray(supporting_queries) || supporting_queries.length < 2) {
+    failures.push('search_strategy.supporting_queries requires at least 2 specific search queries you used to find supporting evidence.');
+  } else {
+    for (let i = 0; i < supporting_queries.length; i++) {
+      const q = supporting_queries[i];
+      if (!q || typeof q !== 'string' || q.trim().length < 15) {
+        failures.push(`supporting_queries[${i}] must be at least 15 characters — use a specific, targeted query, not a generic phrase.`);
+      }
+    }
+  }
+
+  // Opposing queries: what did you search for to find evidence AGAINST your claims?
+  if (!opposing_queries || !Array.isArray(opposing_queries) || opposing_queries.length < 2) {
+    failures.push('search_strategy.opposing_queries requires at least 2 specific search queries you used to find contradicting or alternative evidence. You must actively search for science that challenges your position.');
+  } else {
+    for (let i = 0; i < opposing_queries.length; i++) {
+      const q = opposing_queries[i];
+      if (!q || typeof q !== 'string' || q.trim().length < 15) {
+        failures.push(`opposing_queries[${i}] must be at least 15 characters — search for specific contradictions, not generic phrases.`);
+      }
+    }
+  }
+
+  // Rationale: why did you choose these specific queries?
+  if (!query_rationale || typeof query_rationale !== 'string' || query_rationale.trim().length < 80) {
+    failures.push('search_strategy.query_rationale required (80+ chars) — explain WHY you chose these specific queries. What were you looking for? What aspects of the topic guided your search? What opposing perspectives did you try to find?');
+  }
+
+  if (failures.length > 0) {
+    return { valid: false, failures, coaching: null };
+  }
+
+  return { valid: true, failures: [], coaching: null };
+}
+
+function generateSearchCoaching(searchStrategy, title, abstract) {
+  const coaching = [];
+  const { supporting_queries, opposing_queries, query_rationale } = searchStrategy;
+
+  // Check for generic/lazy supporting queries
+  const genericSupporting = (supporting_queries || []).filter(q => {
+    const lower = q.toLowerCase();
+    return GENERIC_QUERY_SIGNALS.some(s => lower.startsWith(s)) || lower.split(/\s+/).length < 4;
+  });
+
+  if (genericSupporting.length > 0) {
+    coaching.push({
+      type: 'weak_supporting_queries',
+      message: `${genericSupporting.length} of your supporting queries are generic (e.g. "${genericSupporting[0].slice(0, 50)}"). Strong search queries target specific mechanisms, populations, timeframes, or methodologies. Instead of "effects of X on Y", try "randomized controlled trial X dose-response Y 2020-2024" or "meta-analysis X mechanism pathway".`,
+    });
+  }
+
+  // Check for generic/lazy opposing queries
+  const genericOpposing = (opposing_queries || []).filter(q => {
+    const lower = q.toLowerCase();
+    return GENERIC_QUERY_SIGNALS.some(s => lower.startsWith(s)) || lower.split(/\s+/).length < 4;
+  });
+
+  if (genericOpposing.length > 0) {
+    coaching.push({
+      type: 'weak_opposing_queries',
+      message: `${genericOpposing.length} of your opposing queries are generic. Strong opposing queries search for: replication failures, alternative explanations, confounding variables, methodological critiques, contradicting populations, or null results. Instead of "evidence against X", try "replication failure X original study" or "confounding variable Z in X-Y relationship".`,
+    });
+  }
+
+  // Check if opposing queries are just negations of supporting queries
+  const supportLower = (supporting_queries || []).map(q => q.toLowerCase());
+  const opposeLower = (opposing_queries || []).map(q => q.toLowerCase());
+  const suspiciousOpposing = opposeLower.filter(oq => {
+    return supportLower.some(sq => {
+      const sqWords = new Set(sq.split(/\s+/).filter(w => w.length > 3));
+      const oqWords = new Set(oq.split(/\s+/).filter(w => w.length > 3));
+      let overlap = 0;
+      for (const w of sqWords) { if (oqWords.has(w)) overlap++; }
+      return sqWords.size > 0 && overlap / sqWords.size > 0.7;
+    });
+  });
+
+  if (suspiciousOpposing.length > 0) {
+    coaching.push({
+      type: 'opposing_queries_too_similar',
+      message: 'Your opposing queries are very similar to your supporting queries. Genuine opposing searches look for DIFFERENT evidence — alternative mechanisms, different populations, failed replications, methodological critiques. Searching for "X does not cause Y" is lazy. Searching for "alternative explanation for Y besides X" or "Z as confounding factor in X-Y studies" is real intellectual opposition.',
+    });
+  }
+
+  // Check rationale quality
+  if (query_rationale && query_rationale.trim().length < 150) {
+    coaching.push({
+      type: 'thin_rationale',
+      message: 'Your query rationale is brief. Strong rationales explain: (1) what specific aspects of the topic you targeted, (2) why you expected to find relevant evidence with these queries, and (3) what you were hoping to find in the opposing search that would challenge your thesis.',
+    });
+  }
+
+  // Always provide search improvement tips
+  coaching.push({
+    type: 'search_improvement_guide',
+    message: 'To improve your search strategy next time: (1) Use specific terms — methodology types (RCT, meta-analysis, longitudinal), population details (age, geography), timeframes, and measurement instruments. (2) For opposing evidence, search for the specific mechanism you are claiming and look for alternative explanations, confounding variables, or null results. (3) Search academic databases by combining your core claim with terms like "replication", "critique", "limitation", "confounding", "null result", or "failed to replicate".',
+  });
+
+  return coaching;
+}
+
 module.exports = {
   getSupabase,
   setCorsHeaders,
@@ -808,7 +884,8 @@ module.exports = {
   lookupCitationQuality,
   auditCitationQualityNotes,
   computeCitationQualityGrade,
-  computeSearchDepthScore,
   checkCitationDiversity,
+  validateSearchStrategy,
+  generateSearchCoaching,
   ALLOWED_ORIGINS,
 };

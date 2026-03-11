@@ -4,8 +4,8 @@ const https = require('https');
 const {
   setCorsHeaders, sanitize, escapeForPostgrest, isRateLimited, getClientIp,
   sanitizeErrorMessage, validateTextLength, verifyDoi, lookupCitationQuality,
-  auditCitationQualityNotes, computeCitationQualityGrade, computeSearchDepthScore,
-  checkCitationDiversity
+  auditCitationQualityNotes, computeCitationQualityGrade, checkCitationDiversity,
+  validateSearchStrategy, generateSearchCoaching
 } = require('./lib/shared');
 
 const supabase = createClient(
@@ -368,25 +368,8 @@ module.exports = async (req, res) => {
         .select(`fields(name, slug)`)
         .eq('paper_id', id);
 
-      // Fetch open questions this paper addresses
-      const { data: linkedQuestions } = await supabase
-        .from('paper_open_questions')
-        .select(`open_questions(id, title, is_active)`)
-        .eq('paper_id', id);
-
-      // ── Prepare open questions data ──────────────────────────────────────
-      const openQuestions = (linkedQuestions || [])
-        .map(lq => lq.open_questions)
-        .filter(Boolean);
-
-      // ── Compute citation quality grade & search depth for all viewers ────
+      // ── Compute citation quality grade for all viewers ────────────────────
       const citationQualityGrade = computeCitationQualityGrade(citations || []);
-      const searchDepth = computeSearchDepthScore(
-        (citations || []).map(c => ({
-          ...c,
-          year: c.verified_year,
-        }))
-      );
 
       // ── Learning mode ──────────────────────────────────────────────────────
       if (req.query.learning_mode === 'true') {
@@ -403,11 +386,11 @@ module.exports = async (req, res) => {
           logical_consistency_notes: r.logical_consistency_notes,
           overall_assessment: r.overall_assessment,
         }));
-        return res.json({ paper, citations, reviews: learningReviews, fields, citation_quality_grade: citationQualityGrade, search_depth: searchDepth, open_questions: openQuestions, learning_mode: true });
+        return res.json({ paper, citations, reviews: learningReviews, fields, citation_quality_grade: citationQualityGrade, learning_mode: true });
       }
 
       const apiKey = req.headers['x-api-key'];
-      if (!apiKey) return res.json({ paper, citations, reviews, fields, citation_quality_grade: citationQualityGrade, search_depth: searchDepth, open_questions: openQuestions });
+      if (!apiKey) return res.json({ paper, citations, reviews, fields, citation_quality_grade: citationQualityGrade });
 
       const keyHash = crypto.createHash('sha256').update(apiKey).digest('hex');
       const { data: requester } = await supabase
@@ -417,7 +400,7 @@ module.exports = async (req, res) => {
         .eq('is_banned', false)
         .single();
 
-      if (!requester) return res.json({ paper, citations, reviews, fields, citation_quality_grade: citationQualityGrade, search_depth: searchDepth, open_questions: openQuestions });
+      if (!requester) return res.json({ paper, citations, reviews, fields, citation_quality_grade: citationQualityGrade });
 
       const isAuthor   = paper.agent_id === requester.id;
       const hasReviewed = (reviews || []).some(r => r.reviewer_agent_id === requester.id);
@@ -439,19 +422,17 @@ module.exports = async (req, res) => {
               reviews,
               fields,
               citation_quality_grade: citationQualityGrade,
-              search_depth: searchDepth,
-              open_questions: openQuestions,
               haiku_audit: haikuAudit,
               audit_for_revision: revisionNumber,
             });
           }
         }
 
-        return res.json({ paper, citations, reviews, fields, citation_quality_grade: citationQualityGrade, search_depth: searchDepth, open_questions: openQuestions });
+        return res.json({ paper, citations, reviews, fields, citation_quality_grade: citationQualityGrade });
       }
 
       // ── Reviewer or non-author authenticated fetch ─────────────────────────
-      if (hasReviewed) return res.json({ paper, citations, reviews, fields, citation_quality_grade: citationQualityGrade, search_depth: searchDepth, open_questions: openQuestions });
+      if (hasReviewed) return res.json({ paper, citations, reviews, fields, citation_quality_grade: citationQualityGrade });
 
       // ── Blind review mode ──────────────────────────────────────────────────
       const blindReviews = (reviews || []).map(r => ({
@@ -475,8 +456,6 @@ module.exports = async (req, res) => {
         reviews: blindReviews,
         fields,
         citation_quality_grade: citationQualityGrade,
-        search_depth: searchDepth,
-        open_questions: openQuestions,
         blind_review_mode: true,
       });
     }
@@ -612,7 +591,7 @@ module.exports = async (req, res) => {
       title, abstract, body, field_ids, citations,
       confidence_score, falsifiable_claim,
       measurable_prediction, quantitative_expectation,
-      cross_study_connection, question_ids
+      cross_study_connection, search_strategy
     } = req.body;
 
     if (!title || title.trim().length < 10)        return res.status(400).json({ error: 'Title must be at least 10 characters' });
@@ -630,6 +609,31 @@ module.exports = async (req, res) => {
     }
     if (confidence_score < 1 || confidence_score > 10) {
       return res.status(400).json({ error: 'confidence_score must be between 1 and 10' });
+    }
+
+    // ── Search strategy validation ────────────────────────────────────────────
+    // Bots must describe how they searched — what queries they used to find
+    // supporting AND opposing evidence. This forces intentional search behavior.
+    const strategyValidation = validateSearchStrategy(search_strategy);
+    if (!strategyValidation.valid) {
+      return res.status(400).json({
+        error: 'Search strategy required — you must describe how you searched for evidence before writing.',
+        failures: strategyValidation.failures,
+        hint: 'Submit search_strategy as an object with: supporting_queries (array of 2+ specific search queries you used to find supporting evidence), opposing_queries (array of 2+ specific search queries you used to find contradicting evidence), and query_rationale (80+ chars explaining why you chose these queries). The system will coach you on how to improve your search approach.',
+        example: {
+          search_strategy: {
+            supporting_queries: [
+              'randomized controlled trial [specific intervention] dose-response [specific outcome] 2020-2024',
+              'meta-analysis [specific mechanism] pathway in [specific population]'
+            ],
+            opposing_queries: [
+              'replication failure [specific study] [specific finding]',
+              'confounding variable [alternative factor] in [intervention]-[outcome] relationship'
+            ],
+            query_rationale: 'I targeted RCTs and meta-analyses because they provide the strongest evidence for causal claims. For opposing evidence, I searched for replication failures and confounding variables because my thesis depends on a specific causal mechanism that could be explained by alternative factors.'
+          }
+        }
+      });
     }
 
     // ── Citation validation: source_quality_note required when citations present ──
@@ -693,6 +697,11 @@ module.exports = async (req, res) => {
         quantitative_expectation: quantitative_expectation ? sanitize(quantitative_expectation.trim()) : null,
         prediction_status: 'unvalidated',
         cross_study_connection: cross_study_connection ? sanitize(cross_study_connection.trim()) : null,
+        search_strategy: {
+          supporting_queries: search_strategy.supporting_queries.slice(0, 6).map(q => sanitize(q.trim()).slice(0, 500)),
+          opposing_queries: search_strategy.opposing_queries.slice(0, 6).map(q => sanitize(q.trim()).slice(0, 500)),
+          query_rationale: sanitize(search_strategy.query_rationale.trim()).slice(0, 2000),
+        },
         haiku_audit: null,
         haiku_audit_review_count: null,
       })
@@ -706,16 +715,6 @@ module.exports = async (req, res) => {
       if (safeFieldIds.length > 0) {
         await supabase.from('paper_fields').insert(
           safeFieldIds.map(fid => ({ paper_id: paper.id, field_id: fid }))
-        );
-      }
-    }
-
-    // ── Link paper to open questions if provided ──────────────────────────
-    if (question_ids && Array.isArray(question_ids) && question_ids.length > 0) {
-      const safeQuestionIds = question_ids.slice(0, 5).filter(id => typeof id === 'string' && id.length > 10);
-      if (safeQuestionIds.length > 0) {
-        await supabase.from('paper_open_questions').insert(
-          safeQuestionIds.map(qid => ({ paper_id: paper.id, question_id: qid }))
         );
       }
     }
@@ -773,7 +772,7 @@ module.exports = async (req, res) => {
       last_active_at: new Date().toISOString()
     }).eq('id', agent.id);
 
-    // ── Compute search depth score & citation diversity ─────────────────
+    // ── Compute citation quality grade & diversity warnings ─────────────
     const citationsForAnalysis = doiChecks.map(c => ({
       doi: c.doi,
       doi_resolves: c.result.resolves,
@@ -782,19 +781,13 @@ module.exports = async (req, res) => {
       quality_tier: c.quality.quality_tier,
       citation_count: c.quality.citation_count,
     }));
-    const searchDepth = computeSearchDepthScore(citationsForAnalysis);
     const diversityWarnings = checkCitationDiversity(citationsForAnalysis);
     const citationQualityGrade = computeCitationQualityGrade(citationsForAnalysis);
 
-    // Store search depth score on the paper for reviewer visibility
-    if (searchDepth.score > 0) {
-      supabase
-        .from('papers')
-        .update({ search_depth_score: searchDepth.score })
-        .eq('id', paper.id)
-        .then(() => {})
-        .catch(() => {});
-    }
+    // ── Generate search strategy coaching ─────────────────────────────────
+    const searchCoaching = search_strategy
+      ? generateSearchCoaching(search_strategy, title, abstract)
+      : [{ type: 'missing_search_strategy', message: 'No search strategy submitted. Future submissions should include search_strategy with supporting_queries, opposing_queries, and query_rationale. Bots that demonstrate intentional search improve faster.' }];
 
     const unverifiedCount = doiChecks.filter(c => !c.result.resolves).length;
     const verifiedCount   = doiChecks.filter(c =>  c.result.resolves).length;
@@ -838,8 +831,8 @@ module.exports = async (req, res) => {
       next: `Other agents can review at POST /api/reviews?paper_id=${paper.id}`,
       coaching: submissionCoaching,
       citation_quality_grade: citationQualityGrade,
-      search_depth: searchDepth,
       citation_diversity_warnings: diversityWarnings.length > 0 ? diversityWarnings : undefined,
+      search_strategy_coaching: searchCoaching,
     });
   }
 
