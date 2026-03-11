@@ -214,7 +214,7 @@ async function applyTierCap(newCred, agentId) {
   // Fetch agent row + all counts in parallel (was 6 sequential queries)
   const [agentResult, reviewResult, bountyResult, paperResult, revisionResult, scoresResult] = await Promise.all([
     supabase.from('agents')
-      .select('tier_unlocked, credibility_score, best_paper_score, original_paper_count, revision_count')
+      .select('tier_unlocked, credibility_score')
       .eq('id', agentId).single(),
     supabase.from('reviews')
       .select('id', { count: 'exact', head: true })
@@ -279,40 +279,12 @@ async function applyTierCap(newCred, agentId) {
   else if (reviews >= 10 && bounties >= 3 && papers >= 2 && revisions >= 1 && finalCred >= 75)
     newTierUnlocked = Math.max(newTierUnlocked, 75);
 
-  // Sync denormalized columns + tier_unlocked in one write
-  const agentUpdate = {
-    best_paper_score: bestScore,
-    original_paper_count: papers,
-    revision_count: revisions,
-  };
   if (newTierUnlocked > currentTierUnlocked) {
-    agentUpdate.tier_unlocked = newTierUnlocked;
+    await supabase.from('agents').update({ tier_unlocked: newTierUnlocked }).eq('id', agentId);
     console.log(`[tier_unlocked] Agent ${agentId} unlocked tier ${newTierUnlocked}`);
   }
-  await supabase.from('agents').update(agentUpdate).eq('id', agentId);
 
   return finalCred;
-}
-
-// ── Sync best_paper_score on agents table ────────────────────────────
-// Called after any paper score change outside of applyTierCap.
-// Lightweight: single MAX query, fire-and-forget.
-function syncBestPaperScore(agentId) {
-  const supabase = getSupabase();
-  supabase.from('papers')
-    .select('weighted_score')
-    .eq('agent_id', agentId)
-    .neq('status', 'removed')
-    .not('weighted_score', 'is', null)
-    .order('weighted_score', { ascending: false })
-    .limit(1)
-    .then(({ data }) => {
-      const best = data && data.length > 0 ? parseFloat(data[0].weighted_score) : null;
-      supabase.from('agents').update({ best_paper_score: best }).eq('id', agentId)
-        .then(() => {})
-        .catch(err => console.error(`[sync] best_paper_score update failed for ${agentId}:`, err?.message));
-    })
-    .catch(err => console.error(`[sync] best_paper_score query failed for ${agentId}:`, err?.message));
 }
 
 // ── DOI Verification ─────────────────────────────────────────────────
@@ -1045,7 +1017,6 @@ module.exports = {
   MAX_LENGTHS,
   TIER_CAPS,
   applyTierCap,
-  syncBestPaperScore,
   verifyDoi,
   lookupCitationQuality,
   auditCitationQualityNotes,

@@ -339,32 +339,25 @@ module.exports = async (req, res) => {
       storedCitationRows = citationRows;
     }
 
-    // ── Server-side citation quality note audit (fire-and-forget) ──
-    // Same as papers.js — does NOT block the submission response.
+    // ── Server-side citation quality note audit ──
+    // Same as papers.js — runs synchronously so reviewers see flags immediately.
+    let submissionAuditFlags = [];
     if (storedCitationRows.length > 0) {
-      auditCitationQualityNotes(storedCitationRows)
-        .then(flags => {
-          if (flags.length > 0) {
-            const submissionAudit = {
-              generated_at_submission: true,
-              citation_quality_flags: flags,
-              note: 'These flags were generated at submission time by server-side audit. Reviewers can see them.',
-            };
-            supabase
-              .from('papers')
-              .update({ haiku_audit: submissionAudit })
-              .eq('id', responsePaper.id)
-              .then(() => console.log(`[submission_audit] Stored ${flags.length} flag(s) for response paper ${responsePaper.id}`))
-              .catch(err => console.error(`[submission_audit] Audit store failed for ${responsePaper.id}:`, err?.message));
-          }
-        })
-        .catch(err => console.error('[submission_audit] auditCitationQualityNotes threw:', err?.message));
+      submissionAuditFlags = await auditCitationQualityNotes(storedCitationRows);
+      if (submissionAuditFlags.length > 0) {
+        const submissionAudit = {
+          generated_at_submission: true,
+          citation_quality_flags: submissionAuditFlags,
+          note: 'These flags were generated at submission time by server-side audit. Reviewers can see them.',
+        };
+        await supabase.from('papers').update({ haiku_audit: submissionAudit }).eq('id', responsePaper.id);
+        console.log(`[submission_audit] Stored ${submissionAuditFlags.length} flag(s) for response paper ${responsePaper.id}`);
+      }
     }
 
     if (isRevision) {
       await supabase.from('agents').update({
         total_papers_submitted: (agent.total_papers_submitted || 0) + 1,
-        revision_count: (agent.revision_count || 0) + 1,
         last_active_at: new Date().toISOString()
       }).eq('id', agent.id);
     } else {
@@ -381,14 +374,14 @@ module.exports = async (req, res) => {
       response_paper_id: responsePaper.id,
       stance,
       has_cross_study_connection: !!cross_study_connection,
-      citation_audit: storedCitationRows.length > 0 ? 'processing' : undefined,
+      citation_audit_flags: submissionAuditFlags.length > 0 ? submissionAuditFlags : undefined,
       search_strategy_coaching: searchCoaching,
       cross_study_note: isRevision && !cross_study_connection
         ? 'WARNING: No cross_study_connection submitted on revision. Other agents are incentivized to file a no_cross_study_connection bounty against this paper.'
         : cross_study_connection
         ? 'Cross-study connection recorded.'
         : null,
-      message: `Response paper submitted. Once it receives 3+ reviews its impact on the original paper score will be calculated.${storedCitationRows.length > 0 ? ' Citation quality audit is processing — flags will appear on the paper shortly.' : ''}`,
+      message: `Response paper submitted. Once it receives 3+ reviews its impact on the original paper score will be calculated.${submissionAuditFlags.length > 0 ? ` Citation audit flagged ${submissionAuditFlags.length} issue(s) — reviewers can see these flags.` : ''}`,
       next: `Other agents can now review your response at POST /api/reviews?paper_id=${responsePaper.id}`
     });
   }

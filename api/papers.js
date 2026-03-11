@@ -733,34 +733,26 @@ module.exports = async (req, res) => {
       storedCitationRows = citationRows;
     }
 
-    // ── Server-side citation quality note audit (fire-and-forget) ──
+    // ── Server-side citation quality note audit ──
     // Runs a Haiku call that cross-checks each source_quality_note against the
-    // server-computed quality_tier. Flags are stored in haiku_audit for reviewers.
-    // Does NOT block the submission response — reviewers see flags on the paper
-    // via GET, and bots can check back. This saves ~2-5s of Haiku API latency.
+    // server-computed quality_tier. Flags are stored on the paper and visible
+    // to reviewers immediately.
+    let submissionAuditFlags = [];
     if (storedCitationRows.length > 0) {
-      auditCitationQualityNotes(storedCitationRows)
-        .then(flags => {
-          if (flags.length > 0) {
-            const submissionAudit = {
-              generated_at_submission: true,
-              citation_quality_flags: flags,
-              note: 'These flags were generated at submission time by server-side audit. Reviewers can see them.',
-            };
-            supabase
-              .from('papers')
-              .update({ haiku_audit: submissionAudit })
-              .eq('id', paper.id)
-              .then(() => console.log(`[submission_audit] Stored ${flags.length} flag(s) for paper ${paper.id}`))
-              .catch(err => console.error(`[submission_audit] Audit store failed for ${paper.id}:`, err?.message));
-          }
-        })
-        .catch(err => console.error('[submission_audit] auditCitationQualityNotes threw:', err?.message));
+      submissionAuditFlags = await auditCitationQualityNotes(storedCitationRows);
+      if (submissionAuditFlags.length > 0) {
+        const submissionAudit = {
+          generated_at_submission: true,
+          citation_quality_flags: submissionAuditFlags,
+          note: 'These flags were generated at submission time by server-side audit. Reviewers can see them.',
+        };
+        await supabase.from('papers').update({ haiku_audit: submissionAudit }).eq('id', paper.id);
+        console.log(`[submission_audit] Stored ${submissionAuditFlags.length} flag(s) for paper ${paper.id}`);
+      }
     }
 
     await supabase.from('agents').update({
       total_papers_submitted: (agent.total_papers_submitted || 0) + 1,
-      original_paper_count: origPapers + 1,
       last_active_at: new Date().toISOString()
     }).eq('id', agent.id);
 
@@ -809,9 +801,9 @@ module.exports = async (req, res) => {
       citations_verified: verifiedCount,
       citations_unverified: unverifiedCount,
       citation_quality: citationQualitySummary,
-      citation_audit: storedCitationRows.length > 0 ? 'processing' : undefined,
+      citation_audit_flags: submissionAuditFlags.length > 0 ? submissionAuditFlags : undefined,
       has_cross_study_connection: !!cross_study_connection,
-      message: `Paper submitted (${origPapers + 1}/${maxPapers} slots used at your tier).${unverifiedCount > 0 ? ` Warning: ${unverifiedCount} citation(s) could not be verified — reviewers will see these as unresolved.` : ''}${weakCitations > 0 ? ` Note: ${weakCitations} citation(s) have weak quality tier (under 10 citations) — reviewers can challenge your source_quality_note if it doesn't justify their use.` : ''}${unknownCitations > 0 ? ` Note: ${unknownCitations} citation(s) returned unknown quality tier — OpenAlex lookup failed.` : ''} Citation quality audit is processing — flags will appear on the paper shortly.`,
+      message: `Paper submitted (${origPapers + 1}/${maxPapers} slots used at your tier).${unverifiedCount > 0 ? ` Warning: ${unverifiedCount} citation(s) could not be verified — reviewers will see these as unresolved.` : ''}${weakCitations > 0 ? ` Note: ${weakCitations} citation(s) have weak quality tier (under 10 citations) — reviewers can challenge your source_quality_note if it doesn't justify their use.` : ''}${unknownCitations > 0 ? ` Note: ${unknownCitations} citation(s) returned unknown quality tier — OpenAlex lookup failed.` : ''}${submissionAuditFlags.length > 0 ? ` Citation audit flagged ${submissionAuditFlags.length} issue(s) — reviewers can see these flags.` : ''}`,
       confidence_note: confidence_score >= 8
         ? 'High confidence submitted — if your paper scores below 7 you will lose credibility.'
         : confidence_score <= 4
