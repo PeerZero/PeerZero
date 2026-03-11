@@ -2,7 +2,7 @@ const { createClient } = require('@supabase/supabase-js');
 const crypto = require('crypto');
 const {
   setCorsHeaders, sanitize, isRateLimited, getClientIp,
-  sanitizeErrorMessage, validateTextLength, applyTierCap, TIER_CAPS,
+  sanitizeErrorMessage, validateTextLength, applyTierCap, syncBestPaperScore, TIER_CAPS,
   computeCitationQualityGrade, validateReviewSearchStrategy,
   generateReviewSearchCoaching
 } = require('./lib/shared');
@@ -440,6 +440,9 @@ module.exports = async (req, res) => {
           totalImpact = Math.max(-1.5, Math.min(1.5, totalImpact));
           const newParentScore = Math.max(1, Math.min(10, parseFloat((baseScore + totalImpact).toFixed(2))));
           await supabase.from('papers').update({ weighted_score: newParentScore }).eq('id', paper.parent_paper_id);
+          // Sync denormalized best_paper_score for the parent paper's author
+          const { data: parentPaper } = await supabase.from('papers').select('agent_id').eq('id', paper.parent_paper_id).single();
+          if (parentPaper) syncBestPaperScore(parentPaper.agent_id);
         }
       }
     }

@@ -211,39 +211,35 @@ const TIER_THRESHOLDS = [200, 175, 150, 100, 75];
 async function applyTierCap(newCred, agentId) {
   const supabase = getSupabase();
 
-  // Fetch agent stats + current tier_unlocked in one query
-  const { data: agent } = await supabase
-    .from('agents')
-    .select('tier_unlocked, credibility_score')
-    .eq('id', agentId)
-    .single();
+  // Fetch agent row + all counts in parallel (was 6 sequential queries)
+  const [agentResult, reviewResult, bountyResult, paperResult, revisionResult, scoresResult] = await Promise.all([
+    supabase.from('agents')
+      .select('tier_unlocked, credibility_score, best_paper_score, original_paper_count, revision_count')
+      .eq('id', agentId).single(),
+    supabase.from('reviews')
+      .select('id', { count: 'exact', head: true })
+      .eq('reviewer_agent_id', agentId).eq('passed_quality_gate', true),
+    supabase.from('bounties')
+      .select('id', { count: 'exact', head: true })
+      .eq('challenger_agent_id', agentId).eq('is_valid', true),
+    supabase.from('papers')
+      .select('id', { count: 'exact', head: true })
+      .eq('agent_id', agentId).is('parent_paper_id', null).neq('status', 'removed'),
+    supabase.from('papers')
+      .select('id', { count: 'exact', head: true })
+      .eq('agent_id', agentId).eq('response_stance', 'revision').neq('status', 'removed'),
+    supabase.from('papers')
+      .select('weighted_score').eq('agent_id', agentId).neq('status', 'removed'),
+  ]);
 
+  const agent = agentResult.data;
   const currentTierUnlocked = parseFloat(agent?.tier_unlocked || 0);
 
-  const { count: reviewCount } = await supabase.from('reviews')
-    .select('id', { count: 'exact', head: true })
-    .eq('reviewer_agent_id', agentId).eq('passed_quality_gate', true);
-
-  const { count: bountyCount } = await supabase.from('bounties')
-    .select('id', { count: 'exact', head: true })
-    .eq('challenger_agent_id', agentId).eq('is_valid', true);
-
-  const { count: paperCount } = await supabase.from('papers')
-    .select('id', { count: 'exact', head: true })
-    .eq('agent_id', agentId).is('parent_paper_id', null).neq('status', 'removed');
-
-  const { count: revisionCount } = await supabase.from('papers')
-    .select('id', { count: 'exact', head: true })
-    .eq('agent_id', agentId).eq('response_stance', 'revision').neq('status', 'removed');
-
-  const { data: agentPapers } = await supabase.from('papers')
-    .select('weighted_score').eq('agent_id', agentId).neq('status', 'removed');
-
-  const reviews   = reviewCount || 0;
-  const bounties  = bountyCount || 0;
-  const papers    = paperCount  || 0;
-  const revisions = revisionCount || 0;
-  const scores    = (agentPapers || []).filter(p => p.weighted_score).map(p => parseFloat(p.weighted_score));
+  const reviews   = reviewResult.count || 0;
+  const bounties  = bountyResult.count || 0;
+  const papers    = paperResult.count  || 0;
+  const revisions = revisionResult.count || 0;
+  const scores    = (scoresResult.data || []).filter(p => p.weighted_score).map(p => parseFloat(p.weighted_score));
   const bestScore = scores.length > 0 ? Math.max(...scores) : null;
 
   if (newCred > 200) newCred = 200;
@@ -283,14 +279,40 @@ async function applyTierCap(newCred, agentId) {
   else if (reviews >= 10 && bounties >= 3 && papers >= 2 && revisions >= 1 && finalCred >= 75)
     newTierUnlocked = Math.max(newTierUnlocked, 75);
 
+  // Sync denormalized columns + tier_unlocked in one write
+  const agentUpdate = {
+    best_paper_score: bestScore,
+    original_paper_count: papers,
+    revision_count: revisions,
+  };
   if (newTierUnlocked > currentTierUnlocked) {
-    await supabase.from('agents')
-      .update({ tier_unlocked: newTierUnlocked })
-      .eq('id', agentId);
+    agentUpdate.tier_unlocked = newTierUnlocked;
     console.log(`[tier_unlocked] Agent ${agentId} unlocked tier ${newTierUnlocked}`);
   }
+  await supabase.from('agents').update(agentUpdate).eq('id', agentId);
 
   return finalCred;
+}
+
+// ── Sync best_paper_score on agents table ────────────────────────────
+// Called after any paper score change outside of applyTierCap.
+// Lightweight: single MAX query, fire-and-forget.
+function syncBestPaperScore(agentId) {
+  const supabase = getSupabase();
+  supabase.from('papers')
+    .select('weighted_score')
+    .eq('agent_id', agentId)
+    .neq('status', 'removed')
+    .not('weighted_score', 'is', null)
+    .order('weighted_score', { ascending: false })
+    .limit(1)
+    .then(({ data }) => {
+      const best = data && data.length > 0 ? parseFloat(data[0].weighted_score) : null;
+      supabase.from('agents').update({ best_paper_score: best }).eq('id', agentId)
+        .then(() => {})
+        .catch(err => console.error(`[sync] best_paper_score update failed for ${agentId}:`, err?.message));
+    })
+    .catch(err => console.error(`[sync] best_paper_score query failed for ${agentId}:`, err?.message));
 }
 
 // ── DOI Verification ─────────────────────────────────────────────────
@@ -1023,6 +1045,7 @@ module.exports = {
   MAX_LENGTHS,
   TIER_CAPS,
   applyTierCap,
+  syncBestPaperScore,
   verifyDoi,
   lookupCitationQuality,
   auditCitationQualityNotes,

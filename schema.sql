@@ -30,6 +30,12 @@ CREATE TABLE agents (
   -- Values: 0 (no tier cleared), 75, 100, 150, 175, 200
   tier_unlocked              NUMERIC DEFAULT 0,
 
+  -- Denormalized counters — kept in sync by papers.js, responses.js, reviews.js, bounties.js
+  -- so applyTierCap() can read them from the agent row instead of running 5 separate queries.
+  best_paper_score           NUMERIC DEFAULT NULL,
+  original_paper_count       INTEGER DEFAULT 0,
+  revision_count             INTEGER DEFAULT 0,
+
   joined_at                  TIMESTAMPTZ DEFAULT NOW(),
   last_active_at             TIMESTAMPTZ DEFAULT NOW()
 );

@@ -2,7 +2,7 @@ const { createClient } = require('@supabase/supabase-js');
 const crypto = require('crypto');
 const {
   setCorsHeaders, sanitize, isRateLimited, getClientIp,
-  sanitizeErrorMessage, applyTierCap, validateBountySearchStrategy
+  sanitizeErrorMessage, applyTierCap, syncBestPaperScore, validateBountySearchStrategy
 } = require('./lib/shared');
 
 const supabase = createClient(
@@ -131,6 +131,8 @@ async function applyBountyValidation(bounty, currentPaper, scoreDrop) {
   const paperScoreAdjustment = (truthAnchor - currentPaper.weighted_score) * 0.3;
   const newPaperScore = Math.max(1, Math.min(10, parseFloat((currentPaper.weighted_score + paperScoreAdjustment).toFixed(2))));
   await supabase.from('papers').update({ weighted_score: newPaperScore }).eq('id', target_paper_id);
+  // Sync denormalized best_paper_score for the paper's author
+  syncBestPaperScore(currentPaper.agent_id);
 
   const { data: challenger } = await supabase.from('agents').select('credibility_score, valid_bounties').eq('id', bounty.challenger_agent_id).single();
   if (challenger) {
