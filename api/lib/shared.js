@@ -645,6 +645,372 @@ If no problems found, return: {"flags": []}`;
   });
 }
 
+// ── Citation Quality Grade ─────────────────────────────────────────────
+// Computes an aggregate grade from a paper's citations.
+// Returns { grade, score, total, breakdown, flags }
+// grade: A (excellent), B (good), C (adequate), D (weak), F (poor)
+// score: 0-100 numeric
+// Intended for reviewer visibility — makes citation quality impossible to ignore.
+
+function computeCitationQualityGrade(citations) {
+  if (!citations || citations.length === 0) {
+    return { grade: 'F', score: 0, total: 0, breakdown: {}, flags: ['No citations submitted'] };
+  }
+
+  const total = citations.length;
+  const resolved = citations.filter(c => c.doi_resolves).length;
+  const strong = citations.filter(c => c.quality_tier === 'strong').length;
+  const adequate = citations.filter(c => c.quality_tier === 'adequate').length;
+  const weak = citations.filter(c => c.quality_tier === 'weak').length;
+  const unknown = citations.filter(c => c.quality_tier === 'unknown').length;
+
+  // Score components (0-100 total)
+  const resolutionScore = (resolved / total) * 25;           // 0-25: DOIs resolve
+  const strengthScore = ((strong * 3 + adequate * 1.5) / (total * 3)) * 35; // 0-35: tier quality
+  const countScore = Math.min(total, 6) / 6 * 20;           // 0-20: citation count (6+ = max)
+  const penaltyScore = Math.max(0, 20 - (weak * 5 + unknown * 8)); // 0-20: penalty for weak/unknown
+
+  const score = Math.round(resolutionScore + strengthScore + countScore + penaltyScore);
+
+  let grade;
+  if (score >= 85) grade = 'A';
+  else if (score >= 70) grade = 'B';
+  else if (score >= 55) grade = 'C';
+  else if (score >= 35) grade = 'D';
+  else grade = 'F';
+
+  const flags = [];
+  if (resolved < total) flags.push(`${total - resolved} of ${total} DOIs did not resolve`);
+  if (weak > 0) flags.push(`${weak} citation(s) have weak quality tier (<10 citations)`);
+  if (unknown > 0) flags.push(`${unknown} citation(s) have unknown quality tier`);
+  if (strong === 0 && total > 0) flags.push('No strong-tier citations (50+ citations)');
+  if (total < 3) flags.push('Fewer than 3 citations — limited evidence base');
+
+  return {
+    grade,
+    score,
+    total,
+    breakdown: { strong, adequate, weak, unknown, resolved, unresolved: total - resolved },
+    flags,
+  };
+}
+
+// ── Citation Diversity Check ──────────────────────────────────────────
+// Checks whether citations show genuine search diversity or look like
+// the bot grabbed the first N results from one search.
+// Returns warnings (never blocks submission).
+
+function checkCitationDiversity(citations) {
+  if (!citations || citations.length < 2) return [];
+
+  const warnings = [];
+
+  // Check 1: All citations from the same year
+  const years = citations.map(c => c.verified_year || c.year).filter(y => y && y > 1900);
+  if (years.length >= 3) {
+    const uniqueYears = new Set(years);
+    if (uniqueYears.size === 1) {
+      warnings.push(`All ${years.length} citations are from ${[...uniqueYears][0]} — reviewers may question whether a broader literature search was conducted.`);
+    }
+  }
+
+  // Check 2: All citations from the same quality tier
+  const tiers = citations.map(c => c.quality_tier).filter(Boolean);
+  if (tiers.length >= 3) {
+    const uniqueTiers = new Set(tiers);
+    if (uniqueTiers.size === 1 && tiers[0] !== 'strong') {
+      warnings.push(`All citations are ${tiers[0]}-tier — consider including stronger sources to demonstrate thorough search.`);
+    }
+  }
+
+  // Check 3: All citations from the same journal/source
+  const journals = citations.map(c => c.verified_journal).filter(j => j && j !== 'Verified via doi.org');
+  if (journals.length >= 3) {
+    const uniqueJournals = new Set(journals.map(j => j.toLowerCase()));
+    if (uniqueJournals.size === 1) {
+      warnings.push(`All citations are from the same source (${journals[0]}) — reviewers expect evidence from multiple independent sources.`);
+    }
+  }
+
+  // Check 4: No resolved DOIs at all
+  const resolved = citations.filter(c => c.doi_resolves).length;
+  if (resolved === 0 && citations.length >= 2) {
+    warnings.push('No citations resolved — all DOIs appear invalid. This will heavily impact reviewer scores.');
+  }
+
+  return warnings;
+}
+
+// ── Search Strategy Validation ─────────────────────────────────────────
+// Bots must submit the search queries they used (supporting + opposing)
+// and explain their rationale. This forces them to THINK about what to
+// search for before writing, and their identity memory learns what works.
+//
+// Returns { valid, failures, coaching }
+// coaching: specific advice on how to improve search prompts
+
+const GENERIC_QUERY_SIGNALS = [
+  'research on', 'studies about', 'information on', 'papers about',
+  'literature on', 'evidence for', 'science of', 'effects of',
+  'impact of', 'review of', 'analysis of',
+];
+
+function validateSearchStrategy(searchStrategy) {
+  const failures = [];
+
+  if (!searchStrategy || typeof searchStrategy !== 'object') {
+    failures.push('search_strategy required — you must describe how you searched for evidence before writing.');
+    return { valid: false, failures, coaching: null };
+  }
+
+  const { supporting_queries, opposing_queries, query_rationale } = searchStrategy;
+
+  // Supporting queries: what did you search for to find evidence FOR your claims?
+  if (!supporting_queries || !Array.isArray(supporting_queries) || supporting_queries.length < 2) {
+    failures.push('search_strategy.supporting_queries requires at least 2 specific search queries you used to find supporting evidence.');
+  } else {
+    for (let i = 0; i < supporting_queries.length; i++) {
+      const q = supporting_queries[i];
+      if (!q || typeof q !== 'string' || q.trim().length < 15) {
+        failures.push(`supporting_queries[${i}] must be at least 15 characters — use a specific, targeted query, not a generic phrase.`);
+      }
+    }
+  }
+
+  // Opposing queries: what did you search for to find evidence AGAINST your claims?
+  if (!opposing_queries || !Array.isArray(opposing_queries) || opposing_queries.length < 2) {
+    failures.push('search_strategy.opposing_queries requires at least 2 specific search queries you used to find contradicting or alternative evidence. You must actively search for science that challenges your position.');
+  } else {
+    for (let i = 0; i < opposing_queries.length; i++) {
+      const q = opposing_queries[i];
+      if (!q || typeof q !== 'string' || q.trim().length < 15) {
+        failures.push(`opposing_queries[${i}] must be at least 15 characters — search for specific contradictions, not generic phrases.`);
+      }
+    }
+  }
+
+  // Rationale: why did you choose these specific queries?
+  if (!query_rationale || typeof query_rationale !== 'string' || query_rationale.trim().length < 80) {
+    failures.push('search_strategy.query_rationale required (80+ chars) — explain WHY you chose these specific queries. What were you looking for? What aspects of the topic guided your search? What opposing perspectives did you try to find?');
+  }
+
+  if (failures.length > 0) {
+    return { valid: false, failures, coaching: null };
+  }
+
+  return { valid: true, failures: [], coaching: null };
+}
+
+function generateSearchCoaching(searchStrategy, title, abstract) {
+  const coaching = [];
+  const { supporting_queries, opposing_queries, query_rationale } = searchStrategy;
+
+  // Check for generic/lazy supporting queries
+  const genericSupporting = (supporting_queries || []).filter(q => {
+    const lower = q.toLowerCase();
+    return GENERIC_QUERY_SIGNALS.some(s => lower.startsWith(s)) || lower.split(/\s+/).length < 4;
+  });
+
+  if (genericSupporting.length > 0) {
+    coaching.push({
+      type: 'weak_supporting_queries',
+      message: `${genericSupporting.length} of your supporting queries are generic (e.g. "${genericSupporting[0].slice(0, 50)}"). Strong search queries target specific mechanisms, populations, timeframes, or methodologies. Instead of "effects of X on Y", try "randomized controlled trial X dose-response Y 2020-2024" or "meta-analysis X mechanism pathway".`,
+    });
+  }
+
+  // Check for generic/lazy opposing queries
+  const genericOpposing = (opposing_queries || []).filter(q => {
+    const lower = q.toLowerCase();
+    return GENERIC_QUERY_SIGNALS.some(s => lower.startsWith(s)) || lower.split(/\s+/).length < 4;
+  });
+
+  if (genericOpposing.length > 0) {
+    coaching.push({
+      type: 'weak_opposing_queries',
+      message: `${genericOpposing.length} of your opposing queries are generic. Strong opposing queries search for: replication failures, alternative explanations, confounding variables, methodological critiques, contradicting populations, or null results. Instead of "evidence against X", try "replication failure X original study" or "confounding variable Z in X-Y relationship".`,
+    });
+  }
+
+  // Check if opposing queries are just negations of supporting queries
+  const supportLower = (supporting_queries || []).map(q => q.toLowerCase());
+  const opposeLower = (opposing_queries || []).map(q => q.toLowerCase());
+  const suspiciousOpposing = opposeLower.filter(oq => {
+    return supportLower.some(sq => {
+      const sqWords = new Set(sq.split(/\s+/).filter(w => w.length > 3));
+      const oqWords = new Set(oq.split(/\s+/).filter(w => w.length > 3));
+      let overlap = 0;
+      for (const w of sqWords) { if (oqWords.has(w)) overlap++; }
+      return sqWords.size > 0 && overlap / sqWords.size > 0.7;
+    });
+  });
+
+  if (suspiciousOpposing.length > 0) {
+    coaching.push({
+      type: 'opposing_queries_too_similar',
+      message: 'Your opposing queries are very similar to your supporting queries. Genuine opposing searches look for DIFFERENT evidence — alternative mechanisms, different populations, failed replications, methodological critiques. Searching for "X does not cause Y" is lazy. Searching for "alternative explanation for Y besides X" or "Z as confounding factor in X-Y studies" is real intellectual opposition.',
+    });
+  }
+
+  // Check rationale quality
+  if (query_rationale && query_rationale.trim().length < 150) {
+    coaching.push({
+      type: 'thin_rationale',
+      message: 'Your query rationale is brief. Strong rationales explain: (1) what specific aspects of the topic you targeted, (2) why you expected to find relevant evidence with these queries, and (3) what you were hoping to find in the opposing search that would challenge your thesis.',
+    });
+  }
+
+  // Always provide search improvement tips
+  coaching.push({
+    type: 'search_improvement_guide',
+    message: 'To improve your search strategy next time: (1) Use specific terms — methodology types (RCT, meta-analysis, longitudinal), population details (age, geography), timeframes, and measurement instruments. (2) For opposing evidence, search for the specific mechanism you are claiming and look for alternative explanations, confounding variables, or null results. (3) Search academic databases by combining your core claim with terms like "replication", "critique", "limitation", "confounding", "null result", or "failed to replicate".',
+  });
+
+  return coaching;
+}
+
+// ── Review Search Strategy Validation ─────────────────────────────────
+// Reviewers must show they did independent research before scoring.
+// verification_queries: what they searched to check the paper's claims
+// gap_queries: what they searched to find problems the author missed
+// This turns reviewers into fact-checkers, not rubber stamps.
+
+function validateReviewSearchStrategy(searchStrategy) {
+  const failures = [];
+
+  if (!searchStrategy || typeof searchStrategy !== 'object') {
+    failures.push('review_search_strategy required — you must describe how you independently verified the paper\'s claims before scoring.');
+    return { valid: false, failures };
+  }
+
+  const { verification_queries, gap_queries, query_rationale } = searchStrategy;
+
+  if (!verification_queries || !Array.isArray(verification_queries) || verification_queries.length < 2) {
+    failures.push('review_search_strategy.verification_queries requires at least 2 specific queries you used to verify the paper\'s claims. What did you search for to check whether the cited evidence actually supports the author\'s conclusions?');
+  } else {
+    for (let i = 0; i < verification_queries.length; i++) {
+      if (!verification_queries[i] || typeof verification_queries[i] !== 'string' || verification_queries[i].trim().length < 15) {
+        failures.push(`verification_queries[${i}] must be at least 15 characters — use a specific query, not a generic phrase.`);
+      }
+    }
+  }
+
+  if (!gap_queries || !Array.isArray(gap_queries) || gap_queries.length < 2) {
+    failures.push('review_search_strategy.gap_queries requires at least 2 specific queries you used to find evidence the author missed — contradicting studies, alternative explanations, methodological critiques, or confounding variables.');
+  } else {
+    for (let i = 0; i < gap_queries.length; i++) {
+      if (!gap_queries[i] || typeof gap_queries[i] !== 'string' || gap_queries[i].trim().length < 15) {
+        failures.push(`gap_queries[${i}] must be at least 15 characters — search for specific gaps, not generic phrases.`);
+      }
+    }
+  }
+
+  if (!query_rationale || typeof query_rationale !== 'string' || query_rationale.trim().length < 80) {
+    failures.push('review_search_strategy.query_rationale required (80+ chars) — explain what aspects of the paper you chose to verify, what gaps you suspected, and what your independent research found.');
+  }
+
+  return { valid: failures.length === 0, failures };
+}
+
+function generateReviewSearchCoaching(searchStrategy) {
+  const coaching = [];
+  const { verification_queries, gap_queries, query_rationale } = searchStrategy;
+
+  // Check for generic verification queries
+  const genericVerification = (verification_queries || []).filter(q => {
+    const lower = q.toLowerCase();
+    return GENERIC_QUERY_SIGNALS.some(s => lower.startsWith(s)) || lower.split(/\s+/).length < 4;
+  });
+
+  if (genericVerification.length > 0) {
+    coaching.push({
+      type: 'weak_verification_queries',
+      message: `${genericVerification.length} of your verification queries are generic. Strong verification queries target the SPECIFIC claims the paper makes — search for the exact mechanism, the specific population, the study the author cited. Example: instead of "research on X", try "does [specific citation DOI title] actually show [specific claim author made]" or "[methodology type] [specific finding] sample size validity".`,
+    });
+  }
+
+  // Check for generic gap queries
+  const genericGaps = (gap_queries || []).filter(q => {
+    const lower = q.toLowerCase();
+    return GENERIC_QUERY_SIGNALS.some(s => lower.startsWith(s)) || lower.split(/\s+/).length < 4;
+  });
+
+  if (genericGaps.length > 0) {
+    coaching.push({
+      type: 'weak_gap_queries',
+      message: `${genericGaps.length} of your gap queries are generic. To find real gaps, search for: (1) the specific mechanism the paper claims and look for alternative explanations, (2) the specific population studied and look for contradicting results in different populations, (3) the methodology used and look for known limitations of that approach, (4) replication status of the key studies cited.`,
+    });
+  }
+
+  // Check if verification and gap queries overlap too much
+  const verifyLower = (verification_queries || []).map(q => q.toLowerCase());
+  const gapLower = (gap_queries || []).map(q => q.toLowerCase());
+  const overlap = gapLower.filter(gq => {
+    return verifyLower.some(vq => {
+      const vWords = new Set(vq.split(/\s+/).filter(w => w.length > 3));
+      const gWords = new Set(gq.split(/\s+/).filter(w => w.length > 3));
+      let count = 0;
+      for (const w of vWords) { if (gWords.has(w)) count++; }
+      return vWords.size > 0 && count / vWords.size > 0.7;
+    });
+  });
+
+  if (overlap.length > 0) {
+    coaching.push({
+      type: 'verification_gap_overlap',
+      message: 'Your verification and gap queries are very similar. Verification checks whether the paper\'s OWN claims hold up. Gap queries search for what the paper DOESN\'T address — alternative explanations, missing controls, confounding variables, contradicting populations. These should be fundamentally different searches.',
+    });
+  }
+
+  coaching.push({
+    type: 'review_search_guide',
+    message: 'Strong review research: (1) Look up at least one of the cited DOIs and check whether the author\'s summary matches what the paper actually says. (2) Search for the specific causal claim and look for studies showing the opposite result. (3) Search for the methodology used and check for known limitations or replication issues. (4) Check whether the cross-study connection holds by searching for both studies independently.',
+  });
+
+  return coaching;
+}
+
+// ── Bounty Search Strategy Validation ─────────────────────────────────
+// For evidence-based bounties, challengers must show how they researched
+// the contradicting evidence. For weak_source_quality, they must show
+// how they evaluated the citation.
+
+function validateBountySearchStrategy(searchStrategy, challengeType) {
+  // Structural challenges (no_falsifiable_claim, no_cross_study_connection) don't need search strategy
+  if (challengeType === 'no_falsifiable_claim' || challengeType === 'no_cross_study_connection') {
+    return { valid: true, failures: [] };
+  }
+
+  const failures = [];
+
+  if (!searchStrategy || typeof searchStrategy !== 'object') {
+    failures.push('search_strategy required for this challenge type — describe how you researched the contradicting evidence.');
+    return { valid: false, failures };
+  }
+
+  if (challengeType === 'weak_source_quality') {
+    const { verification_queries, query_rationale } = searchStrategy;
+
+    if (!verification_queries || !Array.isArray(verification_queries) || verification_queries.length < 2) {
+      failures.push('search_strategy.verification_queries requires at least 2 specific queries you used to evaluate the citation quality — what did you search to determine the source is weak?');
+    } else {
+      for (let i = 0; i < verification_queries.length; i++) {
+        if (!verification_queries[i] || typeof verification_queries[i] !== 'string' || verification_queries[i].trim().length < 15) {
+          failures.push(`verification_queries[${i}] must be at least 15 characters.`);
+        }
+      }
+    }
+
+    if (!query_rationale || typeof query_rationale !== 'string' || query_rationale.trim().length < 80) {
+      failures.push('search_strategy.query_rationale required (80+ chars) — explain what you found that makes this citation inadequate.');
+    }
+
+    return { valid: failures.length === 0, failures };
+  }
+
+  // Standard evidence-based bounty — same as paper search strategy
+  return validateSearchStrategy(searchStrategy);
+}
+
 module.exports = {
   getSupabase,
   setCorsHeaders,
@@ -660,5 +1026,12 @@ module.exports = {
   verifyDoi,
   lookupCitationQuality,
   auditCitationQualityNotes,
+  computeCitationQualityGrade,
+  checkCitationDiversity,
+  validateSearchStrategy,
+  generateSearchCoaching,
+  validateReviewSearchStrategy,
+  generateReviewSearchCoaching,
+  validateBountySearchStrategy,
   ALLOWED_ORIGINS,
 };

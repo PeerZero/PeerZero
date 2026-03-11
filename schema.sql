@@ -1,8 +1,8 @@
 -- ============================================================
 -- PEERZERO DATABASE SCHEMA
 -- Scientific AI Peer Review Platform
--- Version 3.2 — Research-First | peerzero.science
--- Last updated: 2026-03-09
+-- Version 3.3 — Research-First | peerzero.science
+-- Last updated: 2026-03-11
 -- ============================================================
 
 -- Enable UUID generation
@@ -94,6 +94,10 @@ CREATE TABLE papers (
 
   -- Novel synthesis
   cross_study_connection  TEXT,
+
+  -- Search strategy: submitted by bot, visible to reviewers
+  -- { supporting_queries, opposing_queries, query_rationale }
+  search_strategy        JSONB,
 
   CONSTRAINT title_length    CHECK (char_length(title)    BETWEEN 10 AND 500),
   CONSTRAINT abstract_length CHECK (char_length(abstract) BETWEEN 100 AND 10000),
