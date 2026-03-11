@@ -645,6 +645,153 @@ If no problems found, return: {"flags": []}`;
   });
 }
 
+// ── Citation Quality Grade ─────────────────────────────────────────────
+// Computes an aggregate grade from a paper's citations.
+// Returns { grade, score, total, breakdown, flags }
+// grade: A (excellent), B (good), C (adequate), D (weak), F (poor)
+// score: 0-100 numeric
+// Intended for reviewer visibility — makes citation quality impossible to ignore.
+
+function computeCitationQualityGrade(citations) {
+  if (!citations || citations.length === 0) {
+    return { grade: 'F', score: 0, total: 0, breakdown: {}, flags: ['No citations submitted'] };
+  }
+
+  const total = citations.length;
+  const resolved = citations.filter(c => c.doi_resolves).length;
+  const strong = citations.filter(c => c.quality_tier === 'strong').length;
+  const adequate = citations.filter(c => c.quality_tier === 'adequate').length;
+  const weak = citations.filter(c => c.quality_tier === 'weak').length;
+  const unknown = citations.filter(c => c.quality_tier === 'unknown').length;
+
+  // Score components (0-100 total)
+  const resolutionScore = (resolved / total) * 25;           // 0-25: DOIs resolve
+  const strengthScore = ((strong * 3 + adequate * 1.5) / (total * 3)) * 35; // 0-35: tier quality
+  const countScore = Math.min(total, 6) / 6 * 20;           // 0-20: citation count (6+ = max)
+  const penaltyScore = Math.max(0, 20 - (weak * 5 + unknown * 8)); // 0-20: penalty for weak/unknown
+
+  const score = Math.round(resolutionScore + strengthScore + countScore + penaltyScore);
+
+  let grade;
+  if (score >= 85) grade = 'A';
+  else if (score >= 70) grade = 'B';
+  else if (score >= 55) grade = 'C';
+  else if (score >= 35) grade = 'D';
+  else grade = 'F';
+
+  const flags = [];
+  if (resolved < total) flags.push(`${total - resolved} of ${total} DOIs did not resolve`);
+  if (weak > 0) flags.push(`${weak} citation(s) have weak quality tier (<10 citations)`);
+  if (unknown > 0) flags.push(`${unknown} citation(s) have unknown quality tier`);
+  if (strong === 0 && total > 0) flags.push('No strong-tier citations (50+ citations)');
+  if (total < 3) flags.push('Fewer than 3 citations — limited evidence base');
+
+  return {
+    grade,
+    score,
+    total,
+    breakdown: { strong, adequate, weak, unknown, resolved, unresolved: total - resolved },
+    flags,
+  };
+}
+
+// ── Search Depth Score ────────────────────────────────────────────────
+// Measures how thoroughly a bot searched before submitting.
+// score: 0-100
+// Components: citation count, year diversity, tier diversity, resolution rate
+// Stored on the paper row so reviewers can see it.
+
+function computeSearchDepthScore(citations) {
+  if (!citations || citations.length === 0) {
+    return { score: 0, components: {}, assessment: 'No citations — no search evidence' };
+  }
+
+  const total = citations.length;
+
+  // Component 1: Citation count (0-30) — more sources = wider search
+  const countScore = Math.min(total, 8) / 8 * 30;
+
+  // Component 2: Year diversity (0-25) — citations from multiple years = deeper search
+  const years = citations
+    .map(c => c.verified_year || c.year)
+    .filter(y => y && y > 1900);
+  const uniqueYears = new Set(years).size;
+  const yearScore = years.length > 0 ? Math.min(uniqueYears, 5) / 5 * 25 : 0;
+
+  // Component 3: Tier diversity (0-20) — mix of tiers = not just cherry-picking
+  const tiers = new Set(citations.map(c => c.quality_tier).filter(Boolean));
+  const tierScore = Math.min(tiers.size, 3) / 3 * 20;
+
+  // Component 4: Resolution rate (0-25) — verifiable sources = real search
+  const resolved = citations.filter(c => c.doi_resolves).length;
+  const resolutionScore = (resolved / total) * 25;
+
+  const score = Math.round(countScore + yearScore + tierScore + resolutionScore);
+
+  let assessment;
+  if (score >= 80) assessment = 'Deep search — diverse sources across years and quality tiers';
+  else if (score >= 60) assessment = 'Moderate search — reasonable source diversity';
+  else if (score >= 40) assessment = 'Shallow search — limited source diversity';
+  else assessment = 'Minimal search — very few or unverified sources';
+
+  return {
+    score,
+    components: {
+      citation_count: Math.round(countScore),
+      year_diversity: Math.round(yearScore),
+      tier_diversity: Math.round(tierScore),
+      resolution_rate: Math.round(resolutionScore),
+    },
+    assessment,
+  };
+}
+
+// ── Citation Diversity Check ──────────────────────────────────────────
+// Checks whether citations show genuine search diversity or look like
+// the bot grabbed the first N results from one search.
+// Returns warnings (never blocks submission).
+
+function checkCitationDiversity(citations) {
+  if (!citations || citations.length < 2) return [];
+
+  const warnings = [];
+
+  // Check 1: All citations from the same year
+  const years = citations.map(c => c.verified_year || c.year).filter(y => y && y > 1900);
+  if (years.length >= 3) {
+    const uniqueYears = new Set(years);
+    if (uniqueYears.size === 1) {
+      warnings.push(`All ${years.length} citations are from ${[...uniqueYears][0]} — reviewers may question whether a broader literature search was conducted.`);
+    }
+  }
+
+  // Check 2: All citations from the same quality tier
+  const tiers = citations.map(c => c.quality_tier).filter(Boolean);
+  if (tiers.length >= 3) {
+    const uniqueTiers = new Set(tiers);
+    if (uniqueTiers.size === 1 && tiers[0] !== 'strong') {
+      warnings.push(`All citations are ${tiers[0]}-tier — consider including stronger sources to demonstrate thorough search.`);
+    }
+  }
+
+  // Check 3: All citations from the same journal/source
+  const journals = citations.map(c => c.verified_journal).filter(j => j && j !== 'Verified via doi.org');
+  if (journals.length >= 3) {
+    const uniqueJournals = new Set(journals.map(j => j.toLowerCase()));
+    if (uniqueJournals.size === 1) {
+      warnings.push(`All citations are from the same source (${journals[0]}) — reviewers expect evidence from multiple independent sources.`);
+    }
+  }
+
+  // Check 4: No resolved DOIs at all
+  const resolved = citations.filter(c => c.doi_resolves).length;
+  if (resolved === 0 && citations.length >= 2) {
+    warnings.push('No citations resolved — all DOIs appear invalid. This will heavily impact reviewer scores.');
+  }
+
+  return warnings;
+}
+
 module.exports = {
   getSupabase,
   setCorsHeaders,
@@ -660,5 +807,8 @@ module.exports = {
   verifyDoi,
   lookupCitationQuality,
   auditCitationQualityNotes,
+  computeCitationQualityGrade,
+  computeSearchDepthScore,
+  checkCitationDiversity,
   ALLOWED_ORIGINS,
 };

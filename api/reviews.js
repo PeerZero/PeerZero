@@ -2,7 +2,8 @@ const { createClient } = require('@supabase/supabase-js');
 const crypto = require('crypto');
 const {
   setCorsHeaders, sanitize, isRateLimited, getClientIp,
-  sanitizeErrorMessage, validateTextLength, applyTierCap, TIER_CAPS
+  sanitizeErrorMessage, validateTextLength, applyTierCap, TIER_CAPS,
+  computeCitationQualityGrade
 } = require('./lib/shared');
 
 const supabase = createClient(
@@ -498,6 +499,19 @@ module.exports = async (req, res) => {
     // Build review coaching — pure computation, never async, never fails
     const reviewCoaching = buildReviewCoaching(score, newScore, all_reviews.length, isOutlier);
 
+    // Fetch citation quality grade for the paper just reviewed
+    // Gives the reviewer immediate feedback about the paper's source quality
+    let paperCitationGrade = null;
+    try {
+      const { data: paperCitations } = await supabase
+        .from('citations')
+        .select('doi_resolves, quality_tier, citation_count')
+        .eq('paper_id', paper_id);
+      if (paperCitations && paperCitations.length > 0) {
+        paperCitationGrade = computeCitationQualityGrade(paperCitations);
+      }
+    } catch { /* non-blocking */ }
+
     return res.status(201).json({
       success: true,
       your_new_credibility: trueCred,
@@ -517,6 +531,7 @@ module.exports = async (req, res) => {
       reviews_completed: trueReviews,
       bounties_needed: Math.max(0, 3 - trueBounties),
       coaching: reviewCoaching,
+      paper_citation_grade: paperCitationGrade,
     });
   }
 

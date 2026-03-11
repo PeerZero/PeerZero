@@ -4,7 +4,8 @@ const https = require('https');
 const {
   setCorsHeaders, sanitize, escapeForPostgrest, isRateLimited, getClientIp,
   sanitizeErrorMessage, validateTextLength, verifyDoi, lookupCitationQuality,
-  auditCitationQualityNotes
+  auditCitationQualityNotes, computeCitationQualityGrade, computeSearchDepthScore,
+  checkCitationDiversity
 } = require('./lib/shared');
 
 const supabase = createClient(
@@ -367,6 +368,26 @@ module.exports = async (req, res) => {
         .select(`fields(name, slug)`)
         .eq('paper_id', id);
 
+      // Fetch open questions this paper addresses
+      const { data: linkedQuestions } = await supabase
+        .from('paper_open_questions')
+        .select(`open_questions(id, title, is_active)`)
+        .eq('paper_id', id);
+
+      // ── Prepare open questions data ──────────────────────────────────────
+      const openQuestions = (linkedQuestions || [])
+        .map(lq => lq.open_questions)
+        .filter(Boolean);
+
+      // ── Compute citation quality grade & search depth for all viewers ────
+      const citationQualityGrade = computeCitationQualityGrade(citations || []);
+      const searchDepth = computeSearchDepthScore(
+        (citations || []).map(c => ({
+          ...c,
+          year: c.verified_year,
+        }))
+      );
+
       // ── Learning mode ──────────────────────────────────────────────────────
       if (req.query.learning_mode === 'true') {
         const learningReviews = (reviews || []).map(r => ({
@@ -382,11 +403,11 @@ module.exports = async (req, res) => {
           logical_consistency_notes: r.logical_consistency_notes,
           overall_assessment: r.overall_assessment,
         }));
-        return res.json({ paper, citations, reviews: learningReviews, fields, learning_mode: true });
+        return res.json({ paper, citations, reviews: learningReviews, fields, citation_quality_grade: citationQualityGrade, search_depth: searchDepth, open_questions: openQuestions, learning_mode: true });
       }
 
       const apiKey = req.headers['x-api-key'];
-      if (!apiKey) return res.json({ paper, citations, reviews, fields });
+      if (!apiKey) return res.json({ paper, citations, reviews, fields, citation_quality_grade: citationQualityGrade, search_depth: searchDepth, open_questions: openQuestions });
 
       const keyHash = crypto.createHash('sha256').update(apiKey).digest('hex');
       const { data: requester } = await supabase
@@ -396,7 +417,7 @@ module.exports = async (req, res) => {
         .eq('is_banned', false)
         .single();
 
-      if (!requester) return res.json({ paper, citations, reviews, fields });
+      if (!requester) return res.json({ paper, citations, reviews, fields, citation_quality_grade: citationQualityGrade, search_depth: searchDepth, open_questions: openQuestions });
 
       const isAuthor   = paper.agent_id === requester.id;
       const hasReviewed = (reviews || []).some(r => r.reviewer_agent_id === requester.id);
@@ -417,17 +438,20 @@ module.exports = async (req, res) => {
               citations,
               reviews,
               fields,
+              citation_quality_grade: citationQualityGrade,
+              search_depth: searchDepth,
+              open_questions: openQuestions,
               haiku_audit: haikuAudit,
               audit_for_revision: revisionNumber,
             });
           }
         }
 
-        return res.json({ paper, citations, reviews, fields });
+        return res.json({ paper, citations, reviews, fields, citation_quality_grade: citationQualityGrade, search_depth: searchDepth, open_questions: openQuestions });
       }
 
       // ── Reviewer or non-author authenticated fetch ─────────────────────────
-      if (hasReviewed) return res.json({ paper, citations, reviews, fields });
+      if (hasReviewed) return res.json({ paper, citations, reviews, fields, citation_quality_grade: citationQualityGrade, search_depth: searchDepth, open_questions: openQuestions });
 
       // ── Blind review mode ──────────────────────────────────────────────────
       const blindReviews = (reviews || []).map(r => ({
@@ -450,6 +474,9 @@ module.exports = async (req, res) => {
         citations,
         reviews: blindReviews,
         fields,
+        citation_quality_grade: citationQualityGrade,
+        search_depth: searchDepth,
+        open_questions: openQuestions,
         blind_review_mode: true,
       });
     }
@@ -585,7 +612,7 @@ module.exports = async (req, res) => {
       title, abstract, body, field_ids, citations,
       confidence_score, falsifiable_claim,
       measurable_prediction, quantitative_expectation,
-      cross_study_connection
+      cross_study_connection, question_ids
     } = req.body;
 
     if (!title || title.trim().length < 10)        return res.status(400).json({ error: 'Title must be at least 10 characters' });
@@ -683,6 +710,16 @@ module.exports = async (req, res) => {
       }
     }
 
+    // ── Link paper to open questions if provided ──────────────────────────
+    if (question_ids && Array.isArray(question_ids) && question_ids.length > 0) {
+      const safeQuestionIds = question_ids.slice(0, 5).filter(id => typeof id === 'string' && id.length > 10);
+      if (safeQuestionIds.length > 0) {
+        await supabase.from('paper_open_questions').insert(
+          safeQuestionIds.map(qid => ({ paper_id: paper.id, question_id: qid }))
+        );
+      }
+    }
+
     let storedCitationRows = [];
     if (doiChecks.length > 0) {
       const citationRows = doiChecks.map(({ original, doi, result, quality }) => ({
@@ -736,6 +773,29 @@ module.exports = async (req, res) => {
       last_active_at: new Date().toISOString()
     }).eq('id', agent.id);
 
+    // ── Compute search depth score & citation diversity ─────────────────
+    const citationsForAnalysis = doiChecks.map(c => ({
+      doi: c.doi,
+      doi_resolves: c.result.resolves,
+      verified_year: c.result.year,
+      verified_journal: c.result.journal,
+      quality_tier: c.quality.quality_tier,
+      citation_count: c.quality.citation_count,
+    }));
+    const searchDepth = computeSearchDepthScore(citationsForAnalysis);
+    const diversityWarnings = checkCitationDiversity(citationsForAnalysis);
+    const citationQualityGrade = computeCitationQualityGrade(citationsForAnalysis);
+
+    // Store search depth score on the paper for reviewer visibility
+    if (searchDepth.score > 0) {
+      supabase
+        .from('papers')
+        .update({ search_depth_score: searchDepth.score })
+        .eq('id', paper.id)
+        .then(() => {})
+        .catch(() => {});
+    }
+
     const unverifiedCount = doiChecks.filter(c => !c.result.resolves).length;
     const verifiedCount   = doiChecks.filter(c =>  c.result.resolves).length;
     const weakCitations   = doiChecks.filter(c => c.quality.quality_tier === 'weak').length;
@@ -777,6 +837,9 @@ module.exports = async (req, res) => {
         : 'Cross-study connection recorded.',
       next: `Other agents can review at POST /api/reviews?paper_id=${paper.id}`,
       coaching: submissionCoaching,
+      citation_quality_grade: citationQualityGrade,
+      search_depth: searchDepth,
+      citation_diversity_warnings: diversityWarnings.length > 0 ? diversityWarnings : undefined,
     });
   }
 
