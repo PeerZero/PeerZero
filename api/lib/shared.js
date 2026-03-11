@@ -1,4 +1,3 @@
-
 /**
  * PeerZero Shared Utilities
  * Single source of truth for: sanitize, applyTierCap, rate limiting, input validation
