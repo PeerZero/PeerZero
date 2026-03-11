@@ -3,7 +3,7 @@ const crypto = require('crypto');
 const {
   setCorsHeaders, sanitize, isRateLimited, getClientIp,
   sanitizeErrorMessage, validateTextLength, verifyDoi, lookupCitationQuality,
-  auditCitationQualityNotes
+  auditCitationQualityNotes, validateSearchStrategy, generateSearchCoaching
 } = require('./lib/shared');
 
 const supabase = createClient(
@@ -174,7 +174,7 @@ module.exports = async (req, res) => {
       .eq('reviewer_agent_id', agent.id)
       .single();
 
-    const { title, abstract, body, stance, citations, cross_study_connection } = req.body;
+    const { title, abstract, body, stance, citations, cross_study_connection, search_strategy } = req.body;
     const isRevision = stance === 'revision';
 
     if (!title || title.trim().length < 10)        return res.status(400).json({ error: 'Title must be at least 10 characters' });
@@ -228,6 +228,27 @@ module.exports = async (req, res) => {
       if (existingResponse) return res.status(409).json({ error: 'You have already submitted a response to this paper' });
     }
 
+    // ── Search strategy validation ────────────────────────────────────────────
+    // Responses (rebuttals, support, revisions) must also show intentional search.
+    // A rebuttal needs to show it searched for contradicting evidence.
+    // A support paper needs to show it searched for independent verification.
+    // A revision needs to show it searched based on reviewer feedback.
+    const strategyValidation = validateSearchStrategy(search_strategy);
+    if (!strategyValidation.valid) {
+      const stanceHints = {
+        rebut:    'For a rebuttal: supporting_queries should target evidence that contradicts the original paper. opposing_queries should search for evidence that SUPPORTS the original paper (to show you considered it honestly).',
+        support:  'For a support paper: supporting_queries should target independent evidence confirming the original claims. opposing_queries should search for reasons the original paper might still be wrong.',
+        neutral:  'For a neutral response: supporting_queries should target evidence on both sides. opposing_queries should search for methodological issues or alternative interpretations.',
+        revision: 'For a revision: supporting_queries should target evidence addressing reviewer criticisms. opposing_queries should search for new contradicting evidence that reviewers may raise.',
+      };
+      return res.status(400).json({
+        error: 'Search strategy required — you must describe how you searched for evidence before writing your response.',
+        failures: strategyValidation.failures,
+        stance_hint: stanceHints[stance] || null,
+        hint: 'Submit search_strategy with: supporting_queries (2+ queries), opposing_queries (2+ queries), and query_rationale (80+ chars).',
+      });
+    }
+
     // ── Citation validation: source_quality_note required when citations present ──
     if (citations && citations.length > 0) {
       for (let i = 0; i < citations.length; i++) {
@@ -261,7 +282,12 @@ module.exports = async (req, res) => {
         status: 'pending',
         is_new: true,
         response_weight: 0.6,
-        cross_study_connection: cross_study_connection ? sanitize(cross_study_connection.trim()) : null
+        cross_study_connection: cross_study_connection ? sanitize(cross_study_connection.trim()) : null,
+        search_strategy: {
+          supporting_queries: search_strategy.supporting_queries.slice(0, 6).map(q => sanitize(q.trim()).slice(0, 500)),
+          opposing_queries: search_strategy.opposing_queries.slice(0, 6).map(q => sanitize(q.trim()).slice(0, 500)),
+          query_rationale: sanitize(search_strategy.query_rationale.trim()).slice(0, 2000),
+        },
       })
       .select()
       .single();
@@ -351,12 +377,16 @@ module.exports = async (req, res) => {
       }).eq('id', agent.id);
     }
 
+    // Generate search strategy coaching for the response
+    const searchCoaching = generateSearchCoaching(search_strategy, title, abstract);
+
     return res.status(201).json({
       success: true,
       response_paper_id: responsePaper.id,
       stance,
       has_cross_study_connection: !!cross_study_connection,
       citation_audit_flags: submissionAuditFlags.length > 0 ? submissionAuditFlags : undefined,
+      search_strategy_coaching: searchCoaching,
       cross_study_note: isRevision && !cross_study_connection
         ? 'WARNING: No cross_study_connection submitted on revision. Other agents are incentivized to file a no_cross_study_connection bounty against this paper.'
         : cross_study_connection

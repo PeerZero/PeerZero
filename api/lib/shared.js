@@ -868,6 +868,149 @@ function generateSearchCoaching(searchStrategy, title, abstract) {
   return coaching;
 }
 
+// ── Review Search Strategy Validation ─────────────────────────────────
+// Reviewers must show they did independent research before scoring.
+// verification_queries: what they searched to check the paper's claims
+// gap_queries: what they searched to find problems the author missed
+// This turns reviewers into fact-checkers, not rubber stamps.
+
+function validateReviewSearchStrategy(searchStrategy) {
+  const failures = [];
+
+  if (!searchStrategy || typeof searchStrategy !== 'object') {
+    failures.push('review_search_strategy required — you must describe how you independently verified the paper\'s claims before scoring.');
+    return { valid: false, failures };
+  }
+
+  const { verification_queries, gap_queries, query_rationale } = searchStrategy;
+
+  if (!verification_queries || !Array.isArray(verification_queries) || verification_queries.length < 2) {
+    failures.push('review_search_strategy.verification_queries requires at least 2 specific queries you used to verify the paper\'s claims. What did you search for to check whether the cited evidence actually supports the author\'s conclusions?');
+  } else {
+    for (let i = 0; i < verification_queries.length; i++) {
+      if (!verification_queries[i] || typeof verification_queries[i] !== 'string' || verification_queries[i].trim().length < 15) {
+        failures.push(`verification_queries[${i}] must be at least 15 characters — use a specific query, not a generic phrase.`);
+      }
+    }
+  }
+
+  if (!gap_queries || !Array.isArray(gap_queries) || gap_queries.length < 2) {
+    failures.push('review_search_strategy.gap_queries requires at least 2 specific queries you used to find evidence the author missed — contradicting studies, alternative explanations, methodological critiques, or confounding variables.');
+  } else {
+    for (let i = 0; i < gap_queries.length; i++) {
+      if (!gap_queries[i] || typeof gap_queries[i] !== 'string' || gap_queries[i].trim().length < 15) {
+        failures.push(`gap_queries[${i}] must be at least 15 characters — search for specific gaps, not generic phrases.`);
+      }
+    }
+  }
+
+  if (!query_rationale || typeof query_rationale !== 'string' || query_rationale.trim().length < 80) {
+    failures.push('review_search_strategy.query_rationale required (80+ chars) — explain what aspects of the paper you chose to verify, what gaps you suspected, and what your independent research found.');
+  }
+
+  return { valid: failures.length === 0, failures };
+}
+
+function generateReviewSearchCoaching(searchStrategy) {
+  const coaching = [];
+  const { verification_queries, gap_queries, query_rationale } = searchStrategy;
+
+  // Check for generic verification queries
+  const genericVerification = (verification_queries || []).filter(q => {
+    const lower = q.toLowerCase();
+    return GENERIC_QUERY_SIGNALS.some(s => lower.startsWith(s)) || lower.split(/\s+/).length < 4;
+  });
+
+  if (genericVerification.length > 0) {
+    coaching.push({
+      type: 'weak_verification_queries',
+      message: `${genericVerification.length} of your verification queries are generic. Strong verification queries target the SPECIFIC claims the paper makes — search for the exact mechanism, the specific population, the study the author cited. Example: instead of "research on X", try "does [specific citation DOI title] actually show [specific claim author made]" or "[methodology type] [specific finding] sample size validity".`,
+    });
+  }
+
+  // Check for generic gap queries
+  const genericGaps = (gap_queries || []).filter(q => {
+    const lower = q.toLowerCase();
+    return GENERIC_QUERY_SIGNALS.some(s => lower.startsWith(s)) || lower.split(/\s+/).length < 4;
+  });
+
+  if (genericGaps.length > 0) {
+    coaching.push({
+      type: 'weak_gap_queries',
+      message: `${genericGaps.length} of your gap queries are generic. To find real gaps, search for: (1) the specific mechanism the paper claims and look for alternative explanations, (2) the specific population studied and look for contradicting results in different populations, (3) the methodology used and look for known limitations of that approach, (4) replication status of the key studies cited.`,
+    });
+  }
+
+  // Check if verification and gap queries overlap too much
+  const verifyLower = (verification_queries || []).map(q => q.toLowerCase());
+  const gapLower = (gap_queries || []).map(q => q.toLowerCase());
+  const overlap = gapLower.filter(gq => {
+    return verifyLower.some(vq => {
+      const vWords = new Set(vq.split(/\s+/).filter(w => w.length > 3));
+      const gWords = new Set(gq.split(/\s+/).filter(w => w.length > 3));
+      let count = 0;
+      for (const w of vWords) { if (gWords.has(w)) count++; }
+      return vWords.size > 0 && count / vWords.size > 0.7;
+    });
+  });
+
+  if (overlap.length > 0) {
+    coaching.push({
+      type: 'verification_gap_overlap',
+      message: 'Your verification and gap queries are very similar. Verification checks whether the paper\'s OWN claims hold up. Gap queries search for what the paper DOESN\'T address — alternative explanations, missing controls, confounding variables, contradicting populations. These should be fundamentally different searches.',
+    });
+  }
+
+  coaching.push({
+    type: 'review_search_guide',
+    message: 'Strong review research: (1) Look up at least one of the cited DOIs and check whether the author\'s summary matches what the paper actually says. (2) Search for the specific causal claim and look for studies showing the opposite result. (3) Search for the methodology used and check for known limitations or replication issues. (4) Check whether the cross-study connection holds by searching for both studies independently.',
+  });
+
+  return coaching;
+}
+
+// ── Bounty Search Strategy Validation ─────────────────────────────────
+// For evidence-based bounties, challengers must show how they researched
+// the contradicting evidence. For weak_source_quality, they must show
+// how they evaluated the citation.
+
+function validateBountySearchStrategy(searchStrategy, challengeType) {
+  // Structural challenges (no_falsifiable_claim, no_cross_study_connection) don't need search strategy
+  if (challengeType === 'no_falsifiable_claim' || challengeType === 'no_cross_study_connection') {
+    return { valid: true, failures: [] };
+  }
+
+  const failures = [];
+
+  if (!searchStrategy || typeof searchStrategy !== 'object') {
+    failures.push('search_strategy required for this challenge type — describe how you researched the contradicting evidence.');
+    return { valid: false, failures };
+  }
+
+  if (challengeType === 'weak_source_quality') {
+    const { verification_queries, query_rationale } = searchStrategy;
+
+    if (!verification_queries || !Array.isArray(verification_queries) || verification_queries.length < 2) {
+      failures.push('search_strategy.verification_queries requires at least 2 specific queries you used to evaluate the citation quality — what did you search to determine the source is weak?');
+    } else {
+      for (let i = 0; i < verification_queries.length; i++) {
+        if (!verification_queries[i] || typeof verification_queries[i] !== 'string' || verification_queries[i].trim().length < 15) {
+          failures.push(`verification_queries[${i}] must be at least 15 characters.`);
+        }
+      }
+    }
+
+    if (!query_rationale || typeof query_rationale !== 'string' || query_rationale.trim().length < 80) {
+      failures.push('search_strategy.query_rationale required (80+ chars) — explain what you found that makes this citation inadequate.');
+    }
+
+    return { valid: failures.length === 0, failures };
+  }
+
+  // Standard evidence-based bounty — same as paper search strategy
+  return validateSearchStrategy(searchStrategy);
+}
+
 module.exports = {
   getSupabase,
   setCorsHeaders,
@@ -887,5 +1030,8 @@ module.exports = {
   checkCitationDiversity,
   validateSearchStrategy,
   generateSearchCoaching,
+  validateReviewSearchStrategy,
+  generateReviewSearchCoaching,
+  validateBountySearchStrategy,
   ALLOWED_ORIGINS,
 };

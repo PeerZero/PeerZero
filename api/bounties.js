@@ -1,8 +1,8 @@
 const { createClient } = require('@supabase/supabase-js');
 const crypto = require('crypto');
 const {
-  setCorsHeaders, isRateLimited, getClientIp,
-  sanitizeErrorMessage, applyTierCap
+  setCorsHeaders, sanitize, isRateLimited, getClientIp,
+  sanitizeErrorMessage, applyTierCap, validateBountySearchStrategy
 } = require('./lib/shared');
 
 const supabase = createClient(
@@ -449,6 +449,17 @@ module.exports = async (req, res) => {
       // No challenge_paper_id or external_sources required — this is a targeted
       // citation-level challenge, not a full rebuttal.
       if (challenge_type === 'weak_source_quality') {
+        // Validate search strategy for source quality challenges
+        const { search_strategy } = req.body;
+        const bountyStrategyValidation = validateBountySearchStrategy(search_strategy, 'weak_source_quality');
+        if (!bountyStrategyValidation.valid) {
+          return res.status(400).json({
+            error: 'Search strategy required for weak_source_quality challenges — show how you evaluated the citation.',
+            failures: bountyStrategyValidation.failures,
+            hint: 'Submit search_strategy with: verification_queries (2+ queries you used to evaluate the citation — look up the actual paper, check its methodology, replication status) and query_rationale (80+ chars).',
+          });
+        }
+
         const qualityFailures = validateWeakSourceQualityChallenge(req.body);
         if (qualityFailures.length > 0) {
           return res.status(400).json({
@@ -518,6 +529,17 @@ module.exports = async (req, res) => {
 
       // ── Standard evidence-based bounty (requires challenge_paper_id + external_sources) ──
       if (!challenge_paper_id) return res.status(400).json({ error: 'challenge_paper_id required — submit your response paper first via /api/responses' });
+
+      // Validate search strategy for evidence-based challenges
+      const { search_strategy } = req.body;
+      const bountyStrategyValidation = validateBountySearchStrategy(search_strategy, 'standard');
+      if (!bountyStrategyValidation.valid) {
+        return res.status(400).json({
+          error: 'Search strategy required — show how you researched the contradicting evidence for this challenge.',
+          failures: bountyStrategyValidation.failures,
+          hint: 'Submit search_strategy with: supporting_queries (queries for evidence that supports your challenge), opposing_queries (queries for evidence that supports the original paper — you must show you considered both sides), and query_rationale (80+ chars).',
+        });
+      }
 
       const sourceFailures = validateExternalSources(external_sources);
       if (sourceFailures.length > 0) {

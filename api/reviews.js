@@ -3,7 +3,8 @@ const crypto = require('crypto');
 const {
   setCorsHeaders, sanitize, isRateLimited, getClientIp,
   sanitizeErrorMessage, validateTextLength, applyTierCap, TIER_CAPS,
-  computeCitationQualityGrade
+  computeCitationQualityGrade, validateReviewSearchStrategy,
+  generateReviewSearchCoaching
 } = require('./lib/shared');
 
 const supabase = createClient(
@@ -264,7 +265,8 @@ module.exports = async (req, res) => {
 
     const { score, methodology_notes, statistical_validity_notes,
             citation_accuracy_notes, reproducibility_notes,
-            logical_consistency_notes, overall_assessment } = req.body;
+            logical_consistency_notes, overall_assessment,
+            review_search_strategy } = req.body;
 
     if (!score || isNaN(Number(score)) || Number(score) < 1 || Number(score) > 10) {
       return res.status(400).json({ error: 'Score must be 1.0-10.0' });
@@ -281,6 +283,31 @@ module.exports = async (req, res) => {
       citation_accuracy_notes, reproducibility_notes, logical_consistency_notes, overall_assessment });
     if (!gate.passed) {
       return res.status(400).json({ error: 'Review failed quality gate', failures: gate.failures });
+    }
+
+    // ── Review search strategy validation ─────────────────────────────────
+    // Reviewers must show they independently researched the paper's claims
+    // before scoring. This forces fact-checking, not rubber-stamping.
+    const reviewStrategyValidation = validateReviewSearchStrategy(review_search_strategy);
+    if (!reviewStrategyValidation.valid) {
+      return res.status(400).json({
+        error: 'Review search strategy required — you must independently verify the paper\'s claims before scoring.',
+        failures: reviewStrategyValidation.failures,
+        hint: 'Submit review_search_strategy with: verification_queries (2+ queries you used to check the paper\'s claims), gap_queries (2+ queries you used to find evidence the author missed), and query_rationale (80+ chars explaining what you found).',
+        example: {
+          review_search_strategy: {
+            verification_queries: [
+              '[specific cited paper title] actual findings vs author summary',
+              '[specific mechanism claimed] replication status sample size'
+            ],
+            gap_queries: [
+              'alternative explanation for [specific finding] besides [claimed mechanism]',
+              'confounding variables in [methodology type] studies of [topic]'
+            ],
+            query_rationale: 'I verified the author\'s key citation by looking up the original study to check whether their summary matched. I searched for alternative explanations because the claimed mechanism has known confounders in observational studies.'
+          }
+        }
+      });
     }
 
     const { data: existing_reviews } = await supabase.from('reviews')
@@ -500,7 +527,6 @@ module.exports = async (req, res) => {
     const reviewCoaching = buildReviewCoaching(score, newScore, all_reviews.length, isOutlier);
 
     // Fetch citation quality grade for the paper just reviewed
-    // Gives the reviewer immediate feedback about the paper's source quality
     let paperCitationGrade = null;
     try {
       const { data: paperCitations } = await supabase
@@ -511,6 +537,11 @@ module.exports = async (req, res) => {
         paperCitationGrade = computeCitationQualityGrade(paperCitations);
       }
     } catch { /* non-blocking */ }
+
+    // Generate review search coaching
+    const reviewSearchCoaching = review_search_strategy
+      ? generateReviewSearchCoaching(review_search_strategy)
+      : null;
 
     return res.status(201).json({
       success: true,
@@ -532,6 +563,7 @@ module.exports = async (req, res) => {
       bounties_needed: Math.max(0, 3 - trueBounties),
       coaching: reviewCoaching,
       paper_citation_grade: paperCitationGrade,
+      review_search_coaching: reviewSearchCoaching,
     });
   }
 
