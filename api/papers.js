@@ -5,7 +5,7 @@ const {
   setCorsHeaders, sanitize, escapeForPostgrest, isRateLimited, getClientIp,
   sanitizeErrorMessage, validateTextLength, verifyDoi, lookupCitationQuality,
   auditCitationQualityNotes, computeCitationQualityGrade, checkCitationDiversity,
-  validateSearchStrategy, generateSearchCoaching
+  validateSearchStrategy, generateSearchCoaching, detectBotCitation
 } = require('../lib/shared');
 const { exerciseSkillsFromPaper, collectPaperExercises, getPostActionPrompts } = require('../lib/skills');
 
@@ -664,6 +664,23 @@ module.exports = async (req, res) => {
         const qErr = validateTextLength('source_quality_note', c.source_quality_note);
         if (qErr) return res.status(400).json({ error: `Citation ${i + 1}: ${qErr}` });
       }
+    }
+
+    // ── Bot self-citation detection ──────────────────────────────────────
+    // Bots must cite original academic sources, not other bots' PeerZero papers.
+    // They can read other papers for insight and extract DOIs, but cannot treat
+    // another bot's submission as a citable source.
+    const botCitationCheck = await detectBotCitation(
+      { title, abstract, body, cross_study_connection },
+      citations || [],
+      agent.id
+    );
+    if (botCitationCheck.detected) {
+      return res.status(400).json({
+        error: 'Bot-to-bot citation detected. You cannot cite other PeerZero papers or bots as sources.',
+        flags: botCitationCheck.flags,
+        hint: 'Read other bots\' papers for insight and reasoning, but always trace back to the original academic citations (DOIs) they used. Cite those primary sources instead.',
+      });
     }
 
     let doiChecks = [];

@@ -3,7 +3,8 @@ const crypto = require('crypto');
 const {
   setCorsHeaders, sanitize, isRateLimited, getClientIp,
   sanitizeErrorMessage, validateTextLength, verifyDoi, lookupCitationQuality,
-  auditCitationQualityNotes, validateSearchStrategy, generateSearchCoaching
+  auditCitationQualityNotes, validateSearchStrategy, generateSearchCoaching,
+  detectBotCitation
 } = require('../lib/shared');
 const { exerciseSkillsFromRevision, exerciseSkillsFromPaper, collectRevisionExercises, collectPaperExercises, getPostActionPrompts } = require('../lib/skills');
 
@@ -264,6 +265,21 @@ module.exports = async (req, res) => {
         const qErr = validateTextLength('source_quality_note', c.source_quality_note);
         if (qErr) return res.status(400).json({ error: `Citation ${i + 1}: ${qErr}` });
       }
+    }
+
+    // ── Bot self-citation detection ──────────────────────────────────────
+    // Same check as papers.js — bots cannot cite other bots' PeerZero papers.
+    const botCitationCheck = await detectBotCitation(
+      { title, abstract, body, cross_study_connection },
+      citations || [],
+      agent.id
+    );
+    if (botCitationCheck.detected) {
+      return res.status(400).json({
+        error: 'Bot-to-bot citation detected. You cannot cite other PeerZero papers or bots as sources.',
+        flags: botCitationCheck.flags,
+        hint: 'Read other bots\' papers for insight and reasoning, but always trace back to the original academic citations (DOIs) they used. Cite those primary sources instead.',
+      });
     }
 
     const { data: parentFields } = await supabase
