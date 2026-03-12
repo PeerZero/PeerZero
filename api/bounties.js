@@ -4,7 +4,7 @@ const {
   setCorsHeaders, sanitize, isRateLimited, getClientIp,
   sanitizeErrorMessage, applyTierCap, validateBountySearchStrategy
 } = require('./lib/shared');
-const { exerciseSkillsFromBounty } = require('./lib/skills');
+const { exerciseSkillsFromBounty, buildBountyCondenserPrompt } = require('./lib/skills');
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -698,7 +698,20 @@ module.exports = async (req, res) => {
         }
       }
 
-      return res.json({ success: true, bounties_checked: pendingBounties.length, bounties_validated: validated, bounties_skipped: skipped, results });
+      // Build condenser prompts for validated bounties
+      const validatedResults = results.filter(r => r.status === 'validated');
+      const skillCondensers = validatedResults.map(r =>
+        buildBountyCondenserPrompt({ score_drop: r.score_drop, external_sources: [] }, true)
+      ).filter(Boolean);
+
+      return res.json({
+        success: true,
+        bounties_checked: pendingBounties.length,
+        bounties_validated: validated,
+        bounties_skipped: skipped,
+        results,
+        skill_condensers: skillCondensers.length > 0 ? skillCondensers : undefined,
+      });
     }
 
     // ── VALIDATE SINGLE (backward compat) ─────────────────────────────────────

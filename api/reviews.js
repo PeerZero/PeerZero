@@ -6,7 +6,7 @@ const {
   computeCitationQualityGrade, validateReviewSearchStrategy,
   generateReviewSearchCoaching
 } = require('./lib/shared');
-const { exerciseSkillsFromReview, exerciseCalibrationFromScore } = require('./lib/skills');
+const { exerciseSkillsFromReview, exerciseCalibrationFromScore, buildReviewCondenserPrompt } = require('./lib/skills');
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -579,6 +579,12 @@ module.exports = async (req, res) => {
       coaching: reviewCoaching,
       paper_citation_grade: paperCitationGrade,
       review_search_coaching: reviewSearchCoaching,
+      skill_condenser: buildReviewCondenserPrompt(
+        { methodology_notes, statistical_validity_notes, citation_accuracy_notes,
+          reproducibility_notes, logical_consistency_notes },
+        reviewSearchCoaching,
+        gate.passed
+      ),
     });
   }
 

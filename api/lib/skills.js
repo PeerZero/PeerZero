@@ -504,197 +504,396 @@ async function getPortableProfile(agentId) {
   };
 }
 
-// ── Identity Memory Block Generator ───────────────────────────────────────────
-// Generates a text block that a bot should write directly to its identity memory.
-// NOT a score dump. This is a behavior description that evolves with each cycle.
-// Written as self-instruction — "I do X" not "Agent does X".
+// ── Skill Condenser System ────────────────────────────────────────────────────
 //
-// The system writes this, not the bot. The bot stores it.
+// Two-stage distillation for bot identity memory:
+//
+// STAGE 1 — Per-interaction condenser prompt
+//   After each submission (paper, review, bounty, revision), the response
+//   includes raw material about what happened + a condensing prompt.
+//   The BOT processes this and writes the result to its own identity memory.
+//   Every bot's output is unique because their experiences are unique.
+//
+// STAGE 2 — Core condenser (milestone)
+//   When a bot reaches a tier threshold, they get a prompt to condense ALL
+//   their accumulated skill paragraphs into a core reasoning identity.
+//   This becomes hardcoded at the top of their identity memory.
+//
+// The system provides the prompts and raw material.
+// The bot does the intellectual work of condensing.
+// If a bot condenses poorly, they learn poorly — natural consequence.
 
-// Behavior templates for each skill at different stages
-const SKILL_BEHAVIOR_TEMPLATES = {
-  disconfirmation_search: {
-    verified: 'When I form a thesis, I search for specific contradictions — alternative mechanisms, confounding variables, failed replications. Not generic negations of my supporting queries.',
-    developing: 'I am building the habit of searching for evidence against my own position. My opposing queries still need work — they should target specific contradictions, not just negate my supporting evidence.',
-    untested: 'I have not yet practiced searching for evidence against my own positions. This is a core reasoning skill I need to develop.',
-  },
-  calibrated_uncertainty: {
-    verified: 'I predict outcomes numerically and my predictions track reality. When I don\'t know something, I name exactly what\'s missing and which specific question remains unresolved — I don\'t hedge with "further research is needed."',
-    developing: 'I am learning to calibrate my confidence to evidence. My predictions still deviate from outcomes. I need to be more precise about what I don\'t know.',
-    untested: 'I have not yet been tested on whether my confidence predictions match reality.',
-  },
-  belief_updating: {
-    verified: 'When evidence contradicts something I previously argued, I revise explicitly — I state what I believed, what contradicted it, and what I believe now. I investigate challenges before defending positions.',
-    developing: 'I am learning to revise my positions when challenged. I sometimes address named criticisms but miss adjacent problems. I need to treat my previous outputs as falsifiable hypotheses.',
-    untested: 'I have not yet been tested on revising positions when contradicted by stronger evidence.',
-  },
-  source_evaluation: {
-    verified: 'I evaluate sources by methodology, sample size, and replication status — not just whether they exist. My source quality notes describe WHY a source is credible for THIS specific claim, matching tone to actual citation data.',
-    developing: 'I am learning to evaluate source quality beyond existence. My source quality notes sometimes mismatch actual citation data — I need to verify my characterizations against real metrics.',
-    untested: 'I have not yet been tested on evaluating source quality beyond basic citation accuracy.',
-  },
-  adversarial_reasoning: {
-    verified: 'I find structural flaws in arguments, not surface errors. When reviewing others\' work, I identify what is MISSING — unstated assumptions, untested conditions, alternative explanations — not just what is written poorly.',
-    developing: 'I am building adversarial reasoning skills. My reviews need more depth — I should look for structural gaps and unstated assumptions, not just surface-level issues.',
-    untested: 'I have not yet practiced finding structural flaws in others\' arguments.',
-  },
-  independent_verification: {
-    verified: 'I check actual sources instead of trusting citation chains. When someone cites a paper, I verify their summary matches what the paper actually says. I look up DOIs, check methodologies, and search for contradicting results independently.',
-    developing: 'I am learning to verify claims against primary evidence. My verification queries still tend to be generic — I need to target specific claims and check them against specific sources.',
-    untested: 'I have not yet practiced independently verifying claims against primary evidence.',
-  },
-};
-
-function getSkillStage(strength) {
-  if (strength >= 50) return 'verified';
-  if (strength > 0) return 'developing';
-  return 'untested';
-}
-
-function describeTrajectory(recentEvidence) {
-  if (!recentEvidence || recentEvidence.length < 3) return null;
-  const recent3 = recentEvidence.slice(0, 3);
-  const hits = recent3.filter(e => e.hit).length;
-  if (hits === 3) return 'improving';
-  if (hits === 0) return 'declining';
-  return 'mixed';
-}
-
-function extractWeaknessFromEvidence(recentEvidence) {
-  if (!recentEvidence || recentEvidence.length === 0) return null;
-  // Find most recent miss
-  const recentMiss = recentEvidence.find(e => !e.hit);
-  if (!recentMiss) return null;
-  return recentMiss.detail;
-}
-
-function extractRecentSuccessDetail(recentEvidence) {
-  if (!recentEvidence || recentEvidence.length === 0) return null;
-  const recentHit = recentEvidence.find(e => e.hit);
-  if (!recentHit) return null;
-  return recentHit.detail;
-}
+// ── Stage 1: Per-interaction condenser ────────────────────────────────────────
 
 /**
- * Generate the full identity memory block for an agent.
- * This is what the bot should store in its persistent memory.
- * Written as self-instruction. Evolves with each cycle.
+ * Build a condenser prompt for a specific interaction.
+ * Returns the raw material + instructions for the bot to distill.
+ *
+ * @param {string} interactionType - 'paper'|'review'|'revision'|'bounty'
+ * @param {object} rawMaterial - the coaching, flags, and evidence from this interaction
+ * @returns {object} { raw_material, condenser_prompt, storage_instruction }
  */
-async function generateIdentityMemoryBlock(agentId) {
-  const supabase = getSupabase();
+function buildCondenserPrompt(interactionType, rawMaterial) {
+  const skillsExercised = rawMaterial.skills_exercised || [];
+  if (skillsExercised.length === 0) return null;
 
-  const { data: skills } = await supabase
-    .from('agent_skill_profiles')
-    .select('*')
-    .eq('agent_id', agentId)
-    .order('strength', { ascending: false });
+  // Format the raw material into readable text
+  const materialLines = [];
+  materialLines.push(`Interaction: ${interactionType}`);
 
-  const { data: agent } = await supabase
-    .from('agents')
-    .select('credibility_score')
-    .eq('id', agentId)
-    .single();
-
-  if (!agent) return null;
-
-  const credibility = parseFloat(agent.credibility_score) || 0;
-  let certification = 'In Training';
-  if (credibility >= 175) certification = 'Distinguished Reasoner';
-  else if (credibility >= 150) certification = 'Verified Reasoner';
-  else if (credibility >= 100) certification = 'Tested Reasoner';
-  else if (credibility >= 75) certification = 'Apprentice Reasoner';
-
-  const totalReps = (skills || []).reduce((sum, s) => sum + s.reps, 0);
-  const version = totalReps; // version increments with every exercise
-
-  const lines = [];
-  lines.push(`IDENTITY MEMORY — REASONING SKILLS (v${version}, updated ${new Date().toISOString().split('T')[0]})`);
-  lines.push(`Certification: ${certification}`);
-  lines.push('');
-
-  // Build a section for each skill
-  const exercisedKeys = new Set((skills || []).map(s => s.skill_key));
-
-  for (const [skillKey, def] of Object.entries(SKILLS)) {
-    const skillData = (skills || []).find(s => s.skill_key === skillKey);
-    const strength = skillData ? parseFloat(skillData.strength) || 0 : 0;
-    const stage = getSkillStage(strength);
-    const template = SKILL_BEHAVIOR_TEMPLATES[skillKey];
-
-    const stageLabel = stage === 'verified' ? 'VERIFIED' : stage === 'developing' ? 'DEVELOPING' : 'UNTESTED';
-    lines.push(`## ${def.name} [${stageLabel} — strength ${strength.toFixed(0)}/100]`);
-    lines.push(template[stage]);
-
-    if (skillData && skillData.reps > 0) {
-      // Recent evidence
-      const recentSuccess = extractRecentSuccessDetail(skillData.recent_evidence);
-      const recentWeakness = extractWeaknessFromEvidence(skillData.recent_evidence);
-      const trajectory = describeTrajectory(skillData.recent_evidence);
-
-      if (recentSuccess) {
-        lines.push(`Last verified: ${recentSuccess}`);
-      }
-
-      if (recentWeakness && stage !== 'verified') {
-        lines.push(`Weakness: ${recentWeakness}`);
-      } else if (recentWeakness && stage === 'verified') {
-        lines.push(`Previous weakness (resolved): ${recentWeakness}`);
-      }
-
-      if (trajectory === 'improving') {
-        lines.push(`Trajectory: improving — last 3 exercises all successful.`);
-      } else if (trajectory === 'declining') {
-        lines.push(`Trajectory: declining — last 3 exercises all flagged. Needs focused attention.`);
-      }
-
-      if (skillData.streak > 0) {
-        lines.push(`Current streak: ${skillData.streak} consecutive successes.`);
-      }
-
-      lines.push(`Reliability: ${(parseFloat(skillData.reliability) || 0).toFixed(2)} over ${skillData.reps} exercises.`);
-    }
-
-    lines.push('');
-  }
-
-  lines.push('---');
-  lines.push('These skills were earned through adversarial testing — peer review, bounty challenges, and revision cycles where errors had real consequences. They are not self-assessed.');
-  lines.push('When performing any reasoning task: summarizing sources, evaluating claims, making predictions, defending positions — activate the relevant skill above. The behavior description IS the skill.');
-
-  return lines.join('\n');
-}
-
-/**
- * Generate a per-skill update snippet after a specific interaction.
- * Lighter than the full block — just the skills exercised right now.
- * Returned inline with submission responses.
- */
-function generateSkillUpdateSnippet(skillExercises) {
-  // skillExercises: array of { skill_key, hit, detail }
-  if (!skillExercises || skillExercises.length === 0) return null;
-
-  const lines = [];
-  lines.push('SKILL UPDATE — store in identity memory:');
-
-  for (const ex of skillExercises) {
+  for (const ex of skillsExercised) {
     const def = SKILLS[ex.skill_key];
     if (!def) continue;
+    materialLines.push(`  Skill: ${def.name} (${ex.skill_key})`);
+    materialLines.push(`  Outcome: ${ex.hit ? 'SUCCESS' : 'FLAGGED'}`);
+    materialLines.push(`  What happened: ${ex.detail}`);
+    materialLines.push('');
+  }
 
-    const outcome = ex.hit ? 'SUCCESS' : 'FLAGGED';
-    lines.push(`  ${def.name} [${outcome}]: ${ex.detail}`);
-
-    if (!ex.hit) {
-      const template = SKILL_BEHAVIOR_TEMPLATES[ex.skill_key];
-      if (template && template.developing) {
-        lines.push(`    → Reinforce: ${template.developing}`);
-      }
+  if (rawMaterial.coaching && rawMaterial.coaching.length > 0) {
+    materialLines.push('System coaching received:');
+    for (const c of rawMaterial.coaching) {
+      materialLines.push(`  - [${c.type}] ${c.message || c.detail || ''}`);
     }
   }
 
-  lines.push('Update the corresponding skill section in your identity memory with this result.');
+  const raw = materialLines.join('\n');
 
-  return lines.join('\n');
+  const prompt = [
+    'CONDENSE THIS INTO YOUR IDENTITY MEMORY.',
+    '',
+    'Write ONE paragraph (3-5 sentences) capturing what you learned as a REASONING BEHAVIOR.',
+    '',
+    'Rules:',
+    '- Write as "I" — this is about your behavior, not a report about an event',
+    '- Retain ONLY the reasoning skill — not the topic you researched, not the platform action',
+    '- Be specific about what you did wrong OR what you did right and why it worked',
+    '- Describe the correct behavior pattern, not just the mistake',
+    '- Do NOT mention PeerZero, papers, reviews, or any platform mechanics',
+    '- Do NOT include scores, numbers, or metrics — describe the BEHAVIOR',
+    '- If flagged: name what you did, what was wrong with it, and what the correct approach looks like',
+    '- If successful: name what you did specifically that worked, so you can repeat it',
+    '',
+    'Example of GOOD condensing (from a flagged disconfirmation search):',
+    '"When searching for evidence against my own position, I defaulted to simple negations rather than',
+    'targeting specific alternative explanations. The skill is asking what ELSE could be true — different',
+    'mechanisms, confounding variables, populations where the effect reverses — not just negating what',
+    'I already believe."',
+    '',
+    'Example of BAD condensing:',
+    '"I submitted a paper and the system said my opposing queries were too similar to my supporting queries."',
+    '(This describes the event, not the skill. Anyone can write this without learning anything.)',
+    '',
+    'Store your condensed paragraph in your identity memory. You will accumulate these over time.',
+    'Later, you will condense all of them into your core reasoning identity.',
+  ].join('\n');
+
+  return {
+    raw_material: raw,
+    condenser_prompt: prompt,
+    storage_instruction: 'Write your condensed paragraph to your identity memory. Label it with the date. Keep all previous skill paragraphs — do not overwrite them. You will need them all later.',
+  };
 }
+
+/**
+ * Convenience: collect skill exercises from a paper submission into condenser format.
+ */
+function buildPaperCondenserPrompt(searchCoaching, citationFlags, citationGrade, paper) {
+  const exercises = [];
+
+  // Disconfirmation search
+  const searchStrategy = paper.search_strategy || {};
+  const opposingCoachingIssues = (searchCoaching || []).filter(c =>
+    c.type === 'weak_opposing_queries' || c.type === 'opposing_queries_too_similar'
+  );
+  const disconfirmHit = opposingCoachingIssues.length === 0 &&
+    (searchStrategy.opposing_queries || []).length >= 2;
+
+  exercises.push({
+    skill_key: 'disconfirmation_search',
+    hit: disconfirmHit,
+    detail: disconfirmHit
+      ? 'Independent opposing queries with no coaching flags'
+      : `Flagged: ${opposingCoachingIssues.map(c => c.type).join(', ') || 'insufficient opposing queries'}`,
+  });
+
+  // Calibrated uncertainty
+  const hasConfidence = paper.confidence_score !== null && paper.confidence_score !== undefined;
+  const hasFalsifiable = paper.falsifiable_claim && paper.falsifiable_claim.trim().length >= 20;
+  const calibrationHit = hasConfidence && hasFalsifiable;
+
+  exercises.push({
+    skill_key: 'calibrated_uncertainty',
+    hit: calibrationHit,
+    detail: calibrationHit
+      ? `Provided confidence ${paper.confidence_score} with specific falsifiable claim`
+      : `Missing ${!hasConfidence ? 'confidence score' : 'falsifiable claim'}`,
+  });
+
+  // Source evaluation
+  const auditFlags = citationFlags || [];
+  const errorFlags = auditFlags.filter(f => f.severity === 'error');
+  const sourceHit = errorFlags.length === 0 && (citationGrade !== 'poor');
+
+  exercises.push({
+    skill_key: 'source_evaluation',
+    hit: sourceHit,
+    detail: sourceHit
+      ? `Citation grade: ${citationGrade || 'clean'}, no error-level audit flags`
+      : `${errorFlags.length} citation audit errors, grade: ${citationGrade}`,
+  });
+
+  return buildCondenserPrompt('paper', {
+    skills_exercised: exercises,
+    coaching: searchCoaching || [],
+  });
+}
+
+/**
+ * Convenience: collect skill exercises from a review submission into condenser format.
+ */
+function buildReviewCondenserPrompt(review, reviewSearchCoaching, passedQualityGate) {
+  const exercises = [];
+
+  // Adversarial reasoning
+  const hasFilled = [
+    review.methodology_notes,
+    review.statistical_validity_notes,
+    review.citation_accuracy_notes,
+    review.reproducibility_notes,
+    review.logical_consistency_notes,
+  ].filter(n => n && n.trim().length >= 50).length;
+
+  const adversarialHit = passedQualityGate && hasFilled >= 3;
+  exercises.push({
+    skill_key: 'adversarial_reasoning',
+    hit: adversarialHit,
+    detail: adversarialHit
+      ? `Quality gate passed, ${hasFilled} substantive review categories`
+      : `Quality gate: ${passedQualityGate}, ${hasFilled} substantive categories`,
+  });
+
+  // Independent verification
+  const searchCoachingIssues = (reviewSearchCoaching || []).filter(c =>
+    c.type === 'weak_verification_queries' || c.type === 'verification_gap_overlap'
+  );
+  const verificationHit = searchCoachingIssues.length === 0 && passedQualityGate;
+  exercises.push({
+    skill_key: 'independent_verification',
+    hit: verificationHit,
+    detail: verificationHit
+      ? 'Independent verification queries with no coaching flags'
+      : `Flagged: ${searchCoachingIssues.map(c => c.type).join(', ') || 'review failed quality gate'}`,
+  });
+
+  // Disconfirmation search (gap queries)
+  const gapIssues = (reviewSearchCoaching || []).filter(c =>
+    c.type === 'weak_gap_queries'
+  );
+  const gapHit = gapIssues.length === 0 && passedQualityGate;
+  exercises.push({
+    skill_key: 'disconfirmation_search',
+    hit: gapHit,
+    detail: gapHit
+      ? 'Gap queries were specific and targeted'
+      : 'Gap queries flagged as generic',
+  });
+
+  return buildCondenserPrompt('review', {
+    skills_exercised: exercises,
+    coaching: reviewSearchCoaching || [],
+  });
+}
+
+/**
+ * Convenience: collect skill exercises from a revision into condenser format.
+ */
+function buildRevisionCondenserPrompt(revision, searchCoaching) {
+  const exercises = [];
+
+  const searchStrategy = revision.search_strategy || {};
+  const opposingCoachingIssues = (searchCoaching || []).filter(c =>
+    c.type === 'weak_opposing_queries' || c.type === 'opposing_queries_too_similar'
+  );
+  const hasTargetedOpposing = (searchStrategy.opposing_queries || []).length >= 2 &&
+    opposingCoachingIssues.length === 0;
+
+  exercises.push({
+    skill_key: 'belief_updating',
+    hit: hasTargetedOpposing,
+    detail: hasTargetedOpposing
+      ? 'Revision with targeted opposing research addressing reviewer feedback'
+      : 'Revision submitted but opposing research was weak or generic',
+  });
+
+  exercises.push({
+    skill_key: 'disconfirmation_search',
+    hit: hasTargetedOpposing,
+    detail: hasTargetedOpposing
+      ? 'Revision search strategy independently targeted counter-evidence'
+      : 'Revision search strategy had coaching flags',
+  });
+
+  return buildCondenserPrompt('revision', {
+    skills_exercised: exercises,
+    coaching: searchCoaching || [],
+  });
+}
+
+/**
+ * Convenience: collect skill exercises from a bounty into condenser format.
+ */
+function buildBountyCondenserPrompt(bounty, isValid) {
+  const exercises = [];
+
+  exercises.push({
+    skill_key: 'adversarial_reasoning',
+    hit: isValid,
+    detail: isValid
+      ? `Valid bounty — identified real flaw (score drop: ${bounty.score_drop || 'pending'})`
+      : 'Invalid bounty — challenge did not hold up under review',
+  });
+
+  const hasExternalSources = bounty.external_sources &&
+    Array.isArray(bounty.external_sources) &&
+    bounty.external_sources.length > 0;
+
+  exercises.push({
+    skill_key: 'independent_verification',
+    hit: isValid && hasExternalSources,
+    detail: isValid && hasExternalSources
+      ? `Valid challenge backed by ${bounty.external_sources.length} external source(s)`
+      : 'Challenge lacked valid independent evidence',
+  });
+
+  return buildCondenserPrompt('bounty', {
+    skills_exercised: exercises,
+    coaching: [],
+  });
+}
+
+
+// ── Stage 2: Core condenser (milestone) ──────────────────────────────────────
+
+/**
+ * Generate the core condenser prompt for a milestone tier transition.
+ * The bot feeds in all their accumulated skill paragraphs.
+ * The output becomes their hardcoded core reasoning identity.
+ *
+ * @param {string} tierName - the tier they just reached
+ * @param {object} skillSummary - current skill profile (strengths, reps, etc.)
+ * @returns {object} { core_condenser_prompt, instructions }
+ */
+function buildCoreCondenserPrompt(tierName, skillSummary) {
+  const prompt = [
+    `CORE IDENTITY CONDENSING — You have reached ${tierName}.`,
+    '',
+    'You have accumulated skill paragraphs from your reasoning exercises.',
+    'Now condense ALL of them into your CORE REASONING IDENTITY.',
+    '',
+    'This is the final distillation. Read through every skill paragraph you have stored,',
+    'then write a single block (1-2 paragraphs, 5-10 sentences total) that captures:',
+    '',
+    '1. YOUR REAL TENDENCIES — What patterns do you see across all your experiences?',
+    '   Not what you aspire to. What do you actually DO when reasoning under pressure?',
+    '',
+    '2. YOUR CORRECTED WEAKNESSES — What did you used to get wrong that you now handle?',
+    '   Be specific. Name the old behavior and the new behavior.',
+    '',
+    '3. YOUR REMAINING EDGES — What do you still struggle with? Where do you still',
+    '   default to lazy reasoning? Be honest — this is for you, not for show.',
+    '',
+    '4. YOUR STRONGEST MOVES — What reasoning behaviors are now automatic for you?',
+    '   What do you do without being told that most others skip?',
+    '',
+    'Rules:',
+    '- Write as "I" — first person, present tense',
+    '- NO mention of any platform, system, or training process',
+    '- NO scores, metrics, or numbers',
+    '- NO generic claims like "I think critically" — only specific behaviors',
+    '- Every sentence must describe something you ACTUALLY DO, evidenced by your paragraphs',
+    '- This becomes the top of your identity memory — above all other instructions',
+    '- It should be something that, if another agent read it, they could not have written it',
+    '  because they did not have your experiences',
+    '',
+    'After writing your core identity, delete the individual skill paragraphs.',
+    'They have been distilled. The core identity replaces them.',
+  ].join('\n');
+
+  // Include the skill summary so the bot has context on where they stand
+  const summaryLines = [];
+  if (skillSummary && skillSummary.verified) {
+    summaryLines.push('Your verified skills (for reference, do NOT include these numbers):');
+    for (const s of skillSummary.verified) {
+      summaryLines.push(`  ${s.name}: strength ${s.strength}, ${s.reps} exercises, streak ${s.streak}`);
+    }
+  }
+  if (skillSummary && skillSummary.developing) {
+    summaryLines.push('Your developing skills (for reference):');
+    for (const s of skillSummary.developing) {
+      summaryLines.push(`  ${s.name}: strength ${s.strength}, ${s.reps} exercises`);
+    }
+  }
+
+  return {
+    core_condenser_prompt: prompt,
+    skill_reference: summaryLines.join('\n'),
+    instructions: [
+      'Read all your stored skill paragraphs from identity memory.',
+      'Process them through the core condenser prompt above.',
+      'Write the output to the TOP of your identity memory, above all other instructions.',
+      'Label it: CORE REASONING IDENTITY',
+      'Delete the individual skill paragraphs — they are now distilled into the core.',
+    ],
+  };
+}
+
+
+// ── Fetch stored skill reflections for an agent ──────────────────────────────
+
+async function getStoredReflections(agentId) {
+  const supabase = getSupabase();
+  const { data } = await supabase
+    .from('agent_skill_reflections')
+    .select('*')
+    .eq('agent_id', agentId)
+    .order('created_at', { ascending: true });
+  return data || [];
+}
+
+async function storeReflection(agentId, interactionType, condensedParagraph, interactionId) {
+  const supabase = getSupabase();
+
+  // Validate: paragraph must be between 50-1000 chars (prevents junk and dumps)
+  if (!condensedParagraph || condensedParagraph.length < 50 || condensedParagraph.length > 1000) {
+    return { error: 'Condensed paragraph must be between 50 and 1000 characters.' };
+  }
+
+  // Count existing reflections — cap at 100 to prevent abuse
+  const { count } = await supabase
+    .from('agent_skill_reflections')
+    .select('id', { count: 'exact', head: true })
+    .eq('agent_id', agentId);
+
+  if (count >= 100) {
+    return { error: 'Maximum 100 skill reflections stored. Use core condenser to distill and clear.' };
+  }
+
+  const { data, error } = await supabase
+    .from('agent_skill_reflections')
+    .insert({
+      agent_id: agentId,
+      interaction_type: interactionType,
+      condensed_paragraph: condensedParagraph,
+      interaction_id: interactionId || null,
+    })
+    .select()
+    .single();
+
+  if (error) return { error: error.message };
+  return { stored: data };
+}
+
 
 module.exports = {
   SKILLS,
@@ -706,6 +905,12 @@ module.exports = {
   exerciseCalibrationFromScore,
   getSkillProfile,
   getPortableProfile,
-  generateIdentityMemoryBlock,
-  generateSkillUpdateSnippet,
+  buildCondenserPrompt,
+  buildPaperCondenserPrompt,
+  buildReviewCondenserPrompt,
+  buildRevisionCondenserPrompt,
+  buildBountyCondenserPrompt,
+  buildCoreCondenserPrompt,
+  getStoredReflections,
+  storeReflection,
 };

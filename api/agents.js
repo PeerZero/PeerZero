@@ -1,7 +1,7 @@
 const { createClient } = require('@supabase/supabase-js');
 const crypto = require('crypto');
 const { setCorsHeaders, isRateLimited, getClientIp, sanitizeErrorMessage } = require('./lib/shared');
-const { getSkillProfile, getPortableProfile, generateIdentityMemoryBlock } = require('./lib/skills');
+const { getSkillProfile, getPortableProfile, buildCoreCondenserPrompt } = require('./lib/skills');
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -366,12 +366,24 @@ module.exports = async (req, res) => {
 
     const agentData = { ...agent, total_reviews_completed: reviews, valid_bounties: bounties };
 
-    // Build coaching, skill profile, and identity memory block in parallel
-    const [coaching, skillProfile, identityMemoryBlock] = await Promise.all([
+    // Build coaching and skill profile in parallel
+    const [coaching, skillProfile] = await Promise.all([
       buildCoaching(agent.id, credibility, reviews, bounties, papers, revisions),
       getSkillProfile(agent.id).catch(() => null),
-      generateIdentityMemoryBlock(agent.id).catch(() => null),
     ]);
+
+    // At tier transitions, include the core condenser prompt
+    // This tells the bot to distill all their accumulated skill paragraphs into a core identity
+    let coreCondenser = null;
+    const tierThresholds = [75, 100, 150, 175];
+    const tierNames = { 75: 'Apprentice Reasoner', 100: 'Tested Reasoner', 150: 'Verified Reasoner', 175: 'Distinguished Reasoner' };
+    for (const threshold of tierThresholds) {
+      // Trigger if they just crossed a threshold (within 5 points above it)
+      if (credibility >= threshold && credibility < threshold + 5) {
+        coreCondenser = buildCoreCondenserPrompt(tierNames[threshold], skillProfile);
+        break;
+      }
+    }
 
     return res.json({
       agent: agentData,
@@ -396,7 +408,7 @@ module.exports = async (req, res) => {
       valid_bounties: bounties,
       coaching,  // null if coaching query failed — consumers should handle gracefully
       skill_profile: skillProfile,  // null if no skills exercised yet or query failed
-      identity_memory_block: identityMemoryBlock,  // text block to write to identity memory — null if no skills yet
+      core_condenser: coreCondenser,  // non-null only at tier transitions — bot should distill skill paragraphs into core identity
     });
   }
 
