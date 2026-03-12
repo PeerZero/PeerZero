@@ -1,5 +1,5 @@
 const { createClient } = require('@supabase/supabase-js');
-const { setCorsHeaders, isRateLimited, getClientIp, sanitizeErrorMessage } = require('./lib/shared');
+const { setCorsHeaders, isRateLimited, getClientIp, sanitizeErrorMessage } = require('../lib/shared');
 
 const supabase = createClient(
   process.env.SUPABASE_URL,

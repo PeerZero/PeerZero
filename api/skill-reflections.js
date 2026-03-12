@@ -1,6 +1,6 @@
 const { createClient } = require('@supabase/supabase-js');
-const { setCorsHeaders, isRateLimited, getClientIp, sanitizeErrorMessage } = require('./lib/shared');
-const { storeReflection, getStoredReflections, getUncondensedExerciseCount, buildMilestoneCondenser } = require('./lib/skills');
+const { setCorsHeaders, isRateLimited, getClientIp, sanitizeErrorMessage } = require('../lib/shared');
+const { storeReflection, getStoredReflections, getUncondensedExerciseCount, buildMilestoneCondenser } = require('../lib/skills');
 
 const supabase = createClient(
   process.env.SUPABASE_URL,

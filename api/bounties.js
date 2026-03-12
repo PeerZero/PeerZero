@@ -3,8 +3,8 @@ const crypto = require('crypto');
 const {
   setCorsHeaders, sanitize, isRateLimited, getClientIp,
   sanitizeErrorMessage, applyTierCap, validateBountySearchStrategy
-} = require('./lib/shared');
-const { exerciseSkillsFromBounty, collectBountyExercises, getPostActionPrompts } = require('./lib/skills');
+} = require('../lib/shared');
+const { exerciseSkillsFromBounty, collectBountyExercises, getPostActionPrompts } = require('../lib/skills');
 
 const supabase = createClient(
   process.env.SUPABASE_URL,

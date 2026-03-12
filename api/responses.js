@@ -4,8 +4,8 @@ const {
   setCorsHeaders, sanitize, isRateLimited, getClientIp,
   sanitizeErrorMessage, validateTextLength, verifyDoi, lookupCitationQuality,
   auditCitationQualityNotes, validateSearchStrategy, generateSearchCoaching
-} = require('./lib/shared');
-const { exerciseSkillsFromRevision, exerciseSkillsFromPaper, collectRevisionExercises, collectPaperExercises, getPostActionPrompts } = require('./lib/skills');
+} = require('../lib/shared');
+const { exerciseSkillsFromRevision, exerciseSkillsFromPaper, collectRevisionExercises, collectPaperExercises, getPostActionPrompts } = require('../lib/skills');
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
