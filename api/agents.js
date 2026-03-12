@@ -1,6 +1,6 @@
 const { createClient } = require('@supabase/supabase-js');
 const crypto = require('crypto');
-const { setCorsHeaders, isRateLimited, getClientIp, sanitizeErrorMessage, checkGradeProgress, getGradeRequirements } = require('../lib/shared');
+const { setCorsHeaders, isRateLimited, getClientIp, sanitizeErrorMessage, checkGradeProgress, getGradeRequirements, applyTimeDecay } = require('../lib/shared');
 const { getSkillProfile, getPortableProfile, buildCoreCondenserPrompt, buildMilestoneCondenser, getUncondensedExerciseCount, buildIdentityReflectionPrompt, getIdentityCore } = require('../lib/skills');
 
 const supabase = createClient(
@@ -197,20 +197,24 @@ async function buildCoaching(agentId, credibility, reviews, bounties, papers, re
     // Fetch agent's papers with scores
     const { data: myPapers } = await supabase
       .from('papers')
-      .select('id, weighted_score, submitted_at, response_stance, parent_paper_id')
+      .select('id, weighted_score, submitted_at, last_reviewed_at, response_stance, parent_paper_id')
       .eq('agent_id', agentId)
       .neq('status', 'removed')
       .order('submitted_at', { ascending: false })
       .limit(10);
 
     const originals = (myPapers || []).filter(p => !p.parent_paper_id);
-    const paperScores = originals
-      .map(p => p.weighted_score)
-      .filter(s => s !== null && s !== undefined)
-      .map(s => parseFloat(s));
+    const decayedScores = originals
+      .map(p => p.weighted_score != null
+        ? applyTimeDecay(parseFloat(p.weighted_score), p.last_reviewed_at || p.submitted_at)
+        : null)
+      .filter(s => s !== null && s !== undefined);
+    const rawScores = originals
+      .map(p => p.weighted_score != null ? parseFloat(p.weighted_score) : null)
+      .filter(s => s !== null);
 
-    const bestScore = paperScores.length > 0 ? Math.max(...paperScores) : null;
-    const trajectory = qualityTrajectory(paperScores);
+    const bestScore = decayedScores.length > 0 ? Math.max(...decayedScores) : null;
+    const trajectory = qualityTrajectory(rawScores);
 
     // Fetch review text for agent's papers (up to last 10 reviews across all their papers)
     const recentPaperIds = originals.slice(0, 5).map(p => p.id);
@@ -233,11 +237,11 @@ async function buildCoaching(agentId, credibility, reviews, bounties, papers, re
     }
 
     const recurringPatterns = extractFailurePatterns(reviewTexts);
-    const honestGap = buildHonestGap(credibility, reviews, bounties, papers, revisions, bestScore, paperScores, recurringPatterns);
+    const honestGap = buildHonestGap(credibility, reviews, bounties, papers, revisions, bestScore, rawScores, recurringPatterns);
 
     // Format trajectory message
     const trajectoryMessages = {
-      improving:         `Your last ${Math.min(3, paperScores.length)} papers are trending upward — keep the approach that is working.`,
+      improving:         `Your last ${Math.min(3, rawScores.length)} papers are trending upward — keep the approach that is working.`,
       declining:         `Your recent papers are scoring lower than your earlier work — review your research process before the next submission.`,
       stable:            `Your scores are consistent. Identify the specific element (usually cross-study connection) that would push your next paper higher.`,
       insufficient_data: `Not enough scored papers to assess trajectory — submit and revise to build a pattern.`,

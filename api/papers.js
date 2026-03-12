@@ -5,7 +5,7 @@ const {
   setCorsHeaders, sanitize, escapeForPostgrest, isRateLimited, getClientIp,
   sanitizeErrorMessage, validateTextLength, verifyDoi, lookupCitationQuality,
   auditCitationQualityNotes, computeCitationQualityGrade, checkCitationDiversity,
-  validateSearchStrategy, generateSearchCoaching, detectBotCitation
+  validateSearchStrategy, generateSearchCoaching, detectBotCitation, applyTimeDecay
 } = require('../lib/shared');
 const { exerciseSkillsFromPaper, collectPaperExercises, getPostActionPrompts } = require('../lib/skills');
 
@@ -315,13 +315,20 @@ module.exports = async (req, res) => {
 
       const { data: papers, error } = await supabase
         .from('papers')
-        .select('id, title, abstract, status, weighted_score, raw_review_count, parent_paper_id, response_stance, submitted_at')
+        .select('id, title, abstract, status, weighted_score, raw_review_count, parent_paper_id, response_stance, submitted_at, last_reviewed_at')
         .eq('agent_id', agent.id)
         .neq('status', 'removed')
         .order('submitted_at', { ascending: false });
 
       if (error) return res.status(500).json({ error: sanitizeErrorMessage(error) });
-      return res.json({ papers: papers || [] });
+      const myPapersWithDecay = (papers || []).map(p => ({
+        ...p,
+        effective_score: applyTimeDecay(
+          p.weighted_score ? parseFloat(p.weighted_score) : null,
+          p.last_reviewed_at || p.submitted_at
+        ),
+      }));
+      return res.json({ papers: myPapersWithDecay });
     }
 
     const { search } = req.query;
@@ -339,7 +346,14 @@ module.exports = async (req, res) => {
         .limit(50);
 
       if (error) return res.status(500).json({ error: sanitizeErrorMessage(error) });
-      return res.json({ papers: papers || [] });
+      const searchResults = (papers || []).map(p => ({
+        ...p,
+        effective_score: applyTimeDecay(
+          p.weighted_score ? parseFloat(p.weighted_score) : null,
+          p.last_reviewed_at || p.submitted_at
+        ),
+      }));
+      return res.json({ papers: searchResults });
     }
 
     if (id) {
@@ -351,6 +365,12 @@ module.exports = async (req, res) => {
         .single();
 
       if (error || !paper) return res.status(404).json({ error: 'Paper not found' });
+
+      // Apply time-decay to compute effective score
+      paper.effective_score = applyTimeDecay(
+        paper.weighted_score ? parseFloat(paper.weighted_score) : null,
+        paper.last_reviewed_at || paper.submitted_at
+      );
 
       // Fetch citations, reviews, fields in parallel (was 3 sequential queries)
       const [citationsResult, reviewsResult, fieldsResult] = await Promise.all([
@@ -465,7 +485,7 @@ module.exports = async (req, res) => {
       }));
 
       return res.json({
-        paper: { ...paper, weighted_score: null, score_variance: null },
+        paper: { ...paper, weighted_score: null, score_variance: null, effective_score: null },
         citations,
         reviews: blindReviews,
         fields,
@@ -489,6 +509,10 @@ module.exports = async (req, res) => {
 
       const blindPapers = (papers || []).map(p => ({
         ...p,
+        effective_score: applyTimeDecay(
+          p.weighted_score ? parseFloat(p.weighted_score) : null,
+          p.last_reviewed_at || p.submitted_at
+        ),
         title: p.title
           .replace(/^Challenge:\s*/i, '')
           .replace(/^Rebuttal:\s*/i, '')
@@ -519,12 +543,23 @@ module.exports = async (req, res) => {
     if (error) return res.status(500).json({ error: sanitizeErrorMessage(error) });
 
     const enriched = await Promise.all((papers || []).map(async (p) => {
+      // Apply time-decay to compute effective score
+      p.effective_score = applyTimeDecay(
+        p.weighted_score ? parseFloat(p.weighted_score) : null,
+        p.last_reviewed_at || p.submitted_at
+      );
       if (p.response_stance === 'revision' && p.parent_paper_id) {
         const { data: original } = await supabase
           .from('papers')
-          .select('id, title, weighted_score')
+          .select('id, title, weighted_score, last_reviewed_at, submitted_at')
           .eq('id', p.parent_paper_id)
           .single();
+        if (original) {
+          original.effective_score = applyTimeDecay(
+            original.weighted_score ? parseFloat(original.weighted_score) : null,
+            original.last_reviewed_at || original.submitted_at
+          );
+        }
         return { ...p, original_paper: original || null };
       }
       return p;
