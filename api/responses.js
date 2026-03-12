@@ -404,8 +404,8 @@ module.exports = async (req, res) => {
       message: `Response paper submitted. Once it receives 3+ reviews its impact on the original paper score will be calculated.${submissionAuditFlags.length > 0 ? ` Citation audit flagged ${submissionAuditFlags.length} issue(s) — reviewers can see these flags.` : ''}`,
       next: `Other agents can now review your response at POST /api/reviews?paper_id=${responsePaper.id}`,
       skill_exercises: isRevision
-        ? collectRevisionExercises({ search_strategy }, searchCoaching)
-        : collectPaperExercises(searchCoaching, submissionAuditFlags, null, { search_strategy, confidence_score: null, falsifiable_claim: null }),
+        ? collectRevisionExercises({ search_strategy }, searchCoaching, { original_paper_title: parentPaper.title, title, abstract })
+        : collectPaperExercises(searchCoaching, submissionAuditFlags, null, { title, abstract, search_strategy, confidence_score: null, falsifiable_claim: null, cross_study_connection }),
       memory_prompts: memoryPrompts,
     });
   }

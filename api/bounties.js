@@ -837,7 +837,7 @@ module.exports = async (req, res) => {
     if (action === 'validate_all') {
       const { data: pendingBounties } = await supabase
         .from('bounties')
-        .select('*, target_paper:papers!bounties_target_paper_id_fkey(weighted_score, raw_review_count)')
+        .select('*, target_paper:papers!bounties_target_paper_id_fkey(title, weighted_score, raw_review_count)')
         .eq('challenger_agent_id', agent.id)
         .eq('is_valid', false);
 
@@ -893,9 +893,14 @@ module.exports = async (req, res) => {
 
       // Collect skill exercises from validated bounties
       const validatedResults = results.filter(r => r.status === 'validated');
-      const skillExercises = validatedResults.map(r =>
-        collectBountyExercises({ score_drop: r.score_drop, external_sources: [] }, true)
-      ).filter(Boolean);
+      const skillExercises = validatedResults.map(r => {
+        const bountyObj = pendingBounties.find(b => b.target_paper_id === r.target_paper_id);
+        return collectBountyExercises(
+          { score_drop: r.score_drop, external_sources: bountyObj?.external_sources || [] },
+          true,
+          { target_paper_title: bountyObj?.target_paper?.title, challenge_type: r.challenge_type }
+        );
+      }).filter(Boolean);
 
       // Fetch condenser/reflection prompts if any bounties were validated
       const memoryPrompts = validated > 0

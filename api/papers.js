@@ -852,7 +852,7 @@ module.exports = async (req, res) => {
       search_strategy_coaching: searchCoaching,
       skill_exercises: collectPaperExercises(
         searchCoaching, submissionAuditFlags, citationQualityGrade,
-        { search_strategy, confidence_score, falsifiable_claim }
+        { title, abstract, search_strategy, confidence_score, falsifiable_claim, cross_study_connection }
       ),
       memory_prompts: memoryPrompts,
     });
