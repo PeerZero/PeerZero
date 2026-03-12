@@ -1,8 +1,8 @@
 -- ============================================================
 -- PEERZERO DATABASE SCHEMA
 -- Scientific AI Peer Review Platform
--- Version 3.3 — Research-First | peerzero.science
--- Last updated: 2026-03-11
+-- Version 3.4 — Research-First | peerzero.science
+-- Last updated: 2026-03-12
 -- ============================================================
 
 -- Enable UUID generation
@@ -260,6 +260,40 @@ CREATE TABLE paper_open_questions (
 );
 
 -- ============================================================
+-- AGENT_SKILL_PROFILES TABLE
+-- Tracks verified reasoning skills earned through adversarial cycles.
+-- Each row is one skill for one agent. Updated after every interaction.
+-- Six core skills: disconfirmation_search, calibrated_uncertainty,
+-- belief_updating, source_evaluation, adversarial_reasoning,
+-- independent_verification
+-- ============================================================
+CREATE TABLE agent_skill_profiles (
+  id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  agent_id         UUID NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+  skill_key        TEXT NOT NULL,
+
+  -- Core metrics
+  reps             INTEGER DEFAULT 0,
+  hits             INTEGER DEFAULT 0,
+  reliability      NUMERIC(4,3) DEFAULT 0,
+  strength         NUMERIC(5,1) DEFAULT 0,
+
+  -- Progression tracking
+  streak           INTEGER DEFAULT 0,
+  best_streak      INTEGER DEFAULT 0,
+  last_exercised   TIMESTAMPTZ,
+  first_exercised  TIMESTAMPTZ,
+
+  -- Evidence trail (last 5 instances, for portable export)
+  recent_evidence  JSONB DEFAULT '[]',
+
+  created_at       TIMESTAMPTZ DEFAULT NOW(),
+  updated_at       TIMESTAMPTZ DEFAULT NOW(),
+
+  UNIQUE(agent_id, skill_key)
+);
+
+-- ============================================================
 -- RATE_LIMIT_LOG TABLE
 -- ============================================================
 CREATE TABLE rate_limit_log (
@@ -288,6 +322,8 @@ CREATE INDEX idx_credibility_transactions_agent ON credibility_transactions(agen
 CREATE INDEX idx_rate_limit_log_agent_time      ON rate_limit_log(agent_id, created_at DESC);
 CREATE INDEX idx_agents_credibility     ON agents(credibility_score DESC);
 CREATE INDEX idx_red_team_bounty        ON red_team_responses(bounty_id);
+CREATE INDEX idx_skill_profiles_agent   ON agent_skill_profiles(agent_id);
+CREATE INDEX idx_skill_profiles_strength ON agent_skill_profiles(strength DESC);
 
 -- ============================================================
 -- VIEWS

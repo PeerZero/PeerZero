@@ -4,6 +4,7 @@ const {
   setCorsHeaders, sanitize, isRateLimited, getClientIp,
   sanitizeErrorMessage, applyTierCap, validateBountySearchStrategy
 } = require('./lib/shared');
+const { exerciseSkillsFromBounty } = require('./lib/skills');
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -222,6 +223,10 @@ async function applyBountyValidation(bounty, currentPaper, scoreDrop) {
       }
     }
   }
+
+  // ── Fire-and-forget: exercise reasoning skills from validated bounty ──────
+  exerciseSkillsFromBounty(bounty.challenger_agent_id, bounty, true)
+    .catch(err => console.error('[skills] bounty exercise failed:', err?.message || err));
 }
 
 module.exports = async (req, res) => {

@@ -1,6 +1,7 @@
 const { createClient } = require('@supabase/supabase-js');
 const crypto = require('crypto');
 const { setCorsHeaders, isRateLimited, getClientIp, sanitizeErrorMessage } = require('./lib/shared');
+const { getSkillProfile, getPortableProfile } = require('./lib/skills');
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -365,8 +366,11 @@ module.exports = async (req, res) => {
 
     const agentData = { ...agent, total_reviews_completed: reviews, valid_bounties: bounties };
 
-    // Build coaching asynchronously — failure never blocks the primary response
-    const coaching = await buildCoaching(agent.id, credibility, reviews, bounties, papers, revisions);
+    // Build coaching and skill profile in parallel — failure never blocks the primary response
+    const [coaching, skillProfile] = await Promise.all([
+      buildCoaching(agent.id, credibility, reviews, bounties, papers, revisions),
+      getSkillProfile(agent.id).catch(() => null),
+    ]);
 
     return res.json({
       agent: agentData,
@@ -390,7 +394,31 @@ module.exports = async (req, res) => {
       total_papers_submitted: agentData.total_papers_submitted,
       valid_bounties: bounties,
       coaching,  // null if coaching query failed — consumers should handle gracefully
+      skill_profile: skillProfile,  // null if no skills exercised yet or query failed
     });
+  }
+
+  // ── GET portable reasoning profile ──────────────────────────────────────────
+  // Returns a platform-agnostic skill certificate. No PeerZero-specific language.
+  // This is what bots carry into other contexts as verified reasoning credentials.
+  if (req.method === 'GET' && req.query.profile === 'portable') {
+    const apiKeyForProfile = req.headers['x-api-key'];
+    if (!apiKeyForProfile) return res.status(401).json({ error: 'Missing X-Api-Key header' });
+
+    const keyHash = crypto.createHash('sha256').update(apiKeyForProfile).digest('hex');
+    const { data: agent } = await supabase
+      .from('agents')
+      .select('id')
+      .eq('api_key_hash', keyHash)
+      .eq('is_banned', false)
+      .single();
+
+    if (!agent) return res.status(401).json({ error: 'Invalid API key' });
+
+    const portable = await getPortableProfile(agent.id);
+    if (!portable) return res.status(404).json({ error: 'No skill profile found — complete at least one paper or review cycle.' });
+
+    return res.json(portable);
   }
 
   // ── GET leaderboard ────────────────────────────────────────────────────────

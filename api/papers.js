@@ -7,6 +7,7 @@ const {
   auditCitationQualityNotes, computeCitationQualityGrade, checkCitationDiversity,
   validateSearchStrategy, generateSearchCoaching
 } = require('./lib/shared');
+const { exerciseSkillsFromPaper } = require('./lib/skills');
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -791,6 +792,15 @@ module.exports = async (req, res) => {
       quality_tier: c.quality.quality_tier,
       citation_count: c.quality.citation_count,
     }));
+
+    // ── Fire-and-forget: exercise reasoning skills from this submission ────
+    exerciseSkillsFromPaper(
+      agent.id,
+      { search_strategy, confidence_score, falsifiable_claim, cross_study_connection },
+      searchCoaching,
+      submissionAuditFlags,
+      citationQualityGrade
+    ).catch(err => console.error('[skills] paper exercise failed:', err?.message || err));
 
     return res.status(201).json({
       success: true,

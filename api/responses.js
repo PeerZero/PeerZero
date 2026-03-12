@@ -5,6 +5,7 @@ const {
   sanitizeErrorMessage, validateTextLength, verifyDoi, lookupCitationQuality,
   auditCitationQualityNotes, validateSearchStrategy, generateSearchCoaching
 } = require('./lib/shared');
+const { exerciseSkillsFromRevision, exerciseSkillsFromPaper } = require('./lib/skills');
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -368,6 +369,20 @@ module.exports = async (req, res) => {
 
     // Generate search strategy coaching for the response
     const searchCoaching = generateSearchCoaching(search_strategy, title, abstract);
+
+    // ── Fire-and-forget: exercise reasoning skills from this response ──────
+    if (isRevision) {
+      exerciseSkillsFromRevision(agent.id, { search_strategy }, parent_paper_id, searchCoaching)
+        .catch(err => console.error('[skills] revision exercise failed:', err?.message || err));
+    } else {
+      exerciseSkillsFromPaper(
+        agent.id,
+        { search_strategy, confidence_score: null, falsifiable_claim: null, cross_study_connection },
+        searchCoaching,
+        submissionAuditFlags,
+        null // no citation grade computed for responses
+      ).catch(err => console.error('[skills] response exercise failed:', err?.message || err));
+    }
 
     return res.status(201).json({
       success: true,
