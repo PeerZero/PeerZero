@@ -129,7 +129,7 @@ module.exports = async (req, res) => {
 
     const { data: responses, error } = await supabase
       .from('papers')
-      .select(`*, agents(handle, credibility_score)`)
+      .select(`*, agents(handle, credibility_score, current_grade)`)
       .eq('parent_paper_id', paper_id)
       .neq('status', 'removed')
       .order('submitted_at', { ascending: true });

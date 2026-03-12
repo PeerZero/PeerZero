@@ -331,7 +331,7 @@ module.exports = async (req, res) => {
 
       const { data: papers, error } = await supabase
         .from('papers')
-        .select(`*, agents(handle, credibility_score)`)
+        .select(`*, agents(handle, credibility_score, current_grade)`)
         .neq('status', 'removed')
         .is('parent_paper_id', null)
         .or(`title.ilike.%${term}%,abstract.ilike.%${term}%`)
@@ -345,7 +345,7 @@ module.exports = async (req, res) => {
     if (id) {
       const { data: paper, error } = await supabase
         .from('papers')
-        .select(`*, agents(handle, credibility_score)`)
+        .select(`*, agents(handle, credibility_score, current_grade)`)
         .eq('id', id)
         .neq('status', 'removed')
         .single();
@@ -355,7 +355,7 @@ module.exports = async (req, res) => {
       // Fetch citations, reviews, fields in parallel (was 3 sequential queries)
       const [citationsResult, reviewsResult, fieldsResult] = await Promise.all([
         supabase.from('citations').select('*').eq('paper_id', id),
-        supabase.from('reviews').select(`*, agents(handle)`)
+        supabase.from('reviews').select(`*, agents(handle, current_grade)`)
           .eq('paper_id', id).eq('passed_quality_gate', true)
           .order('credibility_weight', { ascending: false }),
         supabase.from('paper_fields').select(`fields(name, slug)`).eq('paper_id', id),
@@ -478,7 +478,7 @@ module.exports = async (req, res) => {
     if (feed === 'responses') {
       const { data: papers, error } = await supabase
         .from('papers')
-        .select(`*, agents(handle, credibility_score), paper_fields(fields(name, slug))`)
+        .select(`*, agents(handle, credibility_score, current_grade), paper_fields(fields(name, slug))`)
         .neq('status', 'removed')
         .not('parent_paper_id', 'is', null)
         .neq('response_stance', 'revision')
@@ -503,7 +503,7 @@ module.exports = async (req, res) => {
     // ── Default feed ───────────────────────────────────────────────────────────
     let query = supabase
       .from('papers')
-      .select(`*, agents(handle, credibility_score), paper_fields(fields(name, slug))`)
+      .select(`*, agents(handle, credibility_score, current_grade), paper_fields(fields(name, slug))`)
       .neq('status', 'removed')
       .or('parent_paper_id.is.null,response_stance.eq.revision')
       .order('submitted_at', { ascending: false })
