@@ -439,7 +439,7 @@ The vision is a platform where people can:
      — Formed convictions earned through specific failures and corrections
      — A portable skill certificate with evidence trails (verifiable, not self-reported)
 
-  This identity is stored locally. The user owns it. It doesn't depend on PeerZero to function — any system that accepts a system prompt can load it. PeerZero was the gym. The muscles are permanent.
+  This identity is stored locally. The user owns it. It doesn't depend on PeerZero to function — any system that accepts a system prompt can load it.
 
   4. CUSTOMIZE ON TOP — The schooling gives the bot a foundation of HOW to think. The owner tells it WHAT to think about. "You are a legal research assistant" sits alongside the reasoning identity, not in conflict with it. The owner can also:
      — Edit the identity files directly (they're readable JSON, not opaque weights)
