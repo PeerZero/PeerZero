@@ -5,8 +5,8 @@ const {
   sanitizeErrorMessage, validateTextLength, applyTierCap, TIER_CAPS,
   computeCitationQualityGrade, validateReviewSearchStrategy,
   generateReviewSearchCoaching
-} = require('./lib/shared');
-const { exerciseSkillsFromReview, exerciseCalibrationFromScore, collectReviewExercises, getPostActionPrompts } = require('./lib/skills');
+} = require('../lib/shared');
+const { exerciseSkillsFromReview, exerciseCalibrationFromScore, collectReviewExercises, getPostActionPrompts } = require('../lib/skills');
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
