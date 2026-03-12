@@ -589,7 +589,8 @@ module.exports = async (req, res) => {
         { methodology_notes, statistical_validity_notes, citation_accuracy_notes,
           reproducibility_notes, logical_consistency_notes },
         reviewSearchCoaching,
-        gate.passed
+        gate.passed,
+        { paper_title: paper.title, paper_abstract: paper.abstract, score: Number(score), overall_assessment }
       ),
       memory_prompts: memoryPrompts,
     });

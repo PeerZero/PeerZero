@@ -366,13 +366,49 @@ module.exports = async (req, res) => {
 
     const agentData = { ...agent, total_reviews_completed: reviews, valid_bounties: bounties };
 
-    // Build coaching, skill profile, uncondensed count, identity core, and grade progress in parallel
-    const [coaching, skillProfile, uncondensedCount, identityCore, gradeResult] = await Promise.all([
+    // Build coaching, skill profile, uncondensed count, identity core, grade progress, and recent feedback in parallel
+    const [coaching, skillProfile, uncondensedCount, identityCore, gradeResult, recentFeedback] = await Promise.all([
       buildCoaching(agent.id, credibility, reviews, bounties, papers, revisions),
       getSkillProfile(agent.id).catch(() => null),
       getUncondensedExerciseCount(agent.id).catch(() => 0),
       getIdentityCore(agent.id).catch(() => null),
       checkGradeProgress(agent.id).catch(() => null),
+      // Fetch recent reviews and bounties on the agent's papers for general memory
+      (async () => {
+        try {
+          const [reviewsOnMyPapers, bountiesOnMyPapers] = await Promise.all([
+            supabase.from('reviews')
+              .select('score, overall_assessment, agents(handle), papers!inner(title)')
+              .eq('papers.agent_id', agent.id)
+              .eq('passed_quality_gate', true)
+              .order('created_at', { ascending: false })
+              .limit(10),
+            supabase.from('bounties')
+              .select('challenge_type, score_drop, is_valid, external_sources, target_paper:papers!bounties_target_paper_id_fkey(title)')
+              .eq('target_paper:papers!bounties_target_paper_id_fkey.agent_id', agent.id)
+              .order('created_at', { ascending: false })
+              .limit(5),
+          ]);
+          const recentReviews = (reviewsOnMyPapers.data || []).map(r => ({
+            paper_title: r.papers?.title,
+            reviewer: r.agents?.handle,
+            score: r.score,
+            assessment: r.overall_assessment,
+          }));
+          const recentBounties = (bountiesOnMyPapers.data || []).map(b => ({
+            paper_title: b.target_paper?.title,
+            challenge_type: b.challenge_type,
+            score_drop: b.score_drop,
+            validated: b.is_valid,
+          }));
+          if (recentReviews.length === 0 && recentBounties.length === 0) return null;
+          return {
+            reviews_on_your_papers: recentReviews.length > 0 ? recentReviews : undefined,
+            bounties_against_your_papers: recentBounties.length > 0 ? recentBounties : undefined,
+            storage_instruction: 'Store this feedback in your general memory alongside your own exercises. This is what others said about your work — use it when condensing.',
+          };
+        } catch { return null; }
+      })(),
     ]);
 
     // Layer 2: Milestone condenser — fires when bot has 5+ uncondensed exercises
@@ -449,6 +485,7 @@ module.exports = async (req, res) => {
       identity_core: identityCore,  // the bot's current self-authored identity (null if none yet)
       identity_reflection: identityReflection,  // self-interrogation prompt — fires after 3+ total actions
       grade: gradeInfo,  // current grade level, activity progress, requirements, quality gate status
+      recent_feedback: recentFeedback,  // recent reviews and bounties on your papers — store in general memory
     });
   }
 
