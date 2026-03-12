@@ -6,6 +6,7 @@ const {
   computeCitationQualityGrade, validateReviewSearchStrategy,
   generateReviewSearchCoaching
 } = require('./lib/shared');
+const { exerciseSkillsFromReview, exerciseCalibrationFromScore, collectReviewExercises, getPostActionPrompts } = require('./lib/skills');
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -387,7 +388,12 @@ module.exports = async (req, res) => {
       last_reviewed_at: new Date().toISOString()
     }).eq('id', paper_id);
 
-    if (newScore && all_reviews.length === 3) await applyPredictionAccuracy(paper, newScore);
+    if (newScore && all_reviews.length === 3) {
+      await applyPredictionAccuracy(paper, newScore);
+      // Fire-and-forget: score calibration skill when paper first gets scored
+      exerciseCalibrationFromScore(paper.agent_id, paper.id, paper.confidence_score, newScore)
+        .catch(err => console.error('[skills] calibration exercise failed:', err?.message || err));
+    }
 
     if (citation_accuracy_notes && citation_accuracy_notes.trim().length >= 50) {
       await checkCitationAccuracyConsensus(paper_id, paper.agent_id);
@@ -543,6 +549,20 @@ module.exports = async (req, res) => {
       ? generateReviewSearchCoaching(review_search_strategy)
       : null;
 
+    // ── Fire-and-forget: exercise reasoning skills from this review ────────
+    exerciseSkillsFromReview(
+      agent.id,
+      { methodology_notes, statistical_validity_notes, citation_accuracy_notes,
+        reproducibility_notes, logical_consistency_notes, overall_assessment },
+      reviewSearchCoaching,
+      gate.passed
+    ).catch(err => console.error('[skills] review exercise failed:', err?.message || err));
+
+    // ── Fetch condenser/reflection prompts inline ─────────────────────────
+    // Eliminates the extra profile fetch — bot gets everything in one response
+    const memoryPrompts = await getPostActionPrompts(agent.id, 'review')
+      .catch(() => null);
+
     return res.status(201).json({
       success: true,
       your_new_credibility: trueCred,
@@ -564,6 +584,13 @@ module.exports = async (req, res) => {
       coaching: reviewCoaching,
       paper_citation_grade: paperCitationGrade,
       review_search_coaching: reviewSearchCoaching,
+      skill_exercises: collectReviewExercises(
+        { methodology_notes, statistical_validity_notes, citation_accuracy_notes,
+          reproducibility_notes, logical_consistency_notes },
+        reviewSearchCoaching,
+        gate.passed
+      ),
+      memory_prompts: memoryPrompts,
     });
   }
 

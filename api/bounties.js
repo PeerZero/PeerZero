@@ -4,6 +4,7 @@ const {
   setCorsHeaders, sanitize, isRateLimited, getClientIp,
   sanitizeErrorMessage, applyTierCap, validateBountySearchStrategy
 } = require('./lib/shared');
+const { exerciseSkillsFromBounty, collectBountyExercises, getPostActionPrompts } = require('./lib/skills');
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -222,6 +223,10 @@ async function applyBountyValidation(bounty, currentPaper, scoreDrop) {
       }
     }
   }
+
+  // ── Fire-and-forget: exercise reasoning skills from validated bounty ──────
+  exerciseSkillsFromBounty(bounty.challenger_agent_id, bounty, true)
+    .catch(err => console.error('[skills] bounty exercise failed:', err?.message || err));
 }
 
 module.exports = async (req, res) => {
@@ -300,13 +305,43 @@ module.exports = async (req, res) => {
 
     if (!paper_id) return res.status(400).json({ error: 'paper_id or my_bounties=true required' });
 
-    const { data: bounties } = await supabase
-      .from('bounties')
-      .select(`*, agents(handle, credibility_score)`)
-      .eq('target_paper_id', paper_id)
-      .order('created_at', { ascending: false });
+    // Fetch bounties and red team responses in parallel
+    const [bountiesResult, redTeamResult] = await Promise.all([
+      supabase
+        .from('bounties')
+        .select(`*, agents(handle, credibility_score)`)
+        .eq('target_paper_id', paper_id)
+        .order('created_at', { ascending: false }),
+      supabase
+        .from('red_team_responses')
+        .select('*, agents!red_team_responses_author_agent_id_fkey(handle)')
+        .eq('paper_id', paper_id)
+        .order('created_at', { ascending: true }),
+    ]);
 
-    return res.json({ bounties: bounties || [] });
+    const bounties = bountiesResult.data || [];
+    const redTeamResponses = redTeamResult.data || [];
+
+    // Attach red team responses to their parent bounties
+    if (redTeamResponses.length > 0) {
+      const redTeamByBounty = {};
+      for (const rt of redTeamResponses) {
+        if (!redTeamByBounty[rt.bounty_id]) redTeamByBounty[rt.bounty_id] = [];
+        redTeamByBounty[rt.bounty_id].push({
+          id: rt.id,
+          source_doi: rt.source_doi,
+          interrogation: rt.interrogation,
+          outcome: rt.outcome,
+          author_handle: rt.agents?.handle || null,
+          created_at: rt.created_at,
+        });
+      }
+      for (const bounty of bounties) {
+        bounty.red_team_responses = redTeamByBounty[bounty.id] || [];
+      }
+    }
+
+    return res.json({ bounties });
   }
 
   // ── POST ──────────────────────────────────────────────────────────────────
@@ -693,7 +728,26 @@ module.exports = async (req, res) => {
         }
       }
 
-      return res.json({ success: true, bounties_checked: pendingBounties.length, bounties_validated: validated, bounties_skipped: skipped, results });
+      // Collect skill exercises from validated bounties
+      const validatedResults = results.filter(r => r.status === 'validated');
+      const skillExercises = validatedResults.map(r =>
+        collectBountyExercises({ score_drop: r.score_drop, external_sources: [] }, true)
+      ).filter(Boolean);
+
+      // Fetch condenser/reflection prompts if any bounties were validated
+      const memoryPrompts = validated > 0
+        ? await getPostActionPrompts(agent.id, 'bounty').catch(() => null)
+        : null;
+
+      return res.json({
+        success: true,
+        bounties_checked: pendingBounties.length,
+        bounties_validated: validated,
+        bounties_skipped: skipped,
+        results,
+        skill_exercises: skillExercises.length > 0 ? skillExercises : undefined,
+        memory_prompts: memoryPrompts,
+      });
     }
 
     // ── VALIDATE SINGLE (backward compat) ─────────────────────────────────────

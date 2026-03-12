@@ -1,6 +1,7 @@
 const { createClient } = require('@supabase/supabase-js');
 const crypto = require('crypto');
 const { setCorsHeaders, isRateLimited, getClientIp, sanitizeErrorMessage } = require('./lib/shared');
+const { getSkillProfile, getPortableProfile, buildCoreCondenserPrompt, buildMilestoneCondenser, getUncondensedExerciseCount, buildIdentityReflectionPrompt, getIdentityCore } = require('./lib/skills');
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -365,8 +366,40 @@ module.exports = async (req, res) => {
 
     const agentData = { ...agent, total_reviews_completed: reviews, valid_bounties: bounties };
 
-    // Build coaching asynchronously — failure never blocks the primary response
-    const coaching = await buildCoaching(agent.id, credibility, reviews, bounties, papers, revisions);
+    // Build coaching, skill profile, uncondensed count, and identity core in parallel
+    const [coaching, skillProfile, uncondensedCount, identityCore] = await Promise.all([
+      buildCoaching(agent.id, credibility, reviews, bounties, papers, revisions),
+      getSkillProfile(agent.id).catch(() => null),
+      getUncondensedExerciseCount(agent.id).catch(() => 0),
+      getIdentityCore(agent.id).catch(() => null),
+    ]);
+
+    // Layer 2: Milestone condenser — fires when bot has 5+ uncondensed exercises
+    // Tells the bot to read its general memory and condense into identity memory
+    const milestoneCondenser = buildMilestoneCondenser(uncondensedCount);
+
+    // Layer 3: At tier transitions, include the core condenser prompt
+    // This tells the bot to distill all their accumulated skill paragraphs into a core identity
+    let coreCondenser = null;
+    const tierThresholds = [75, 100, 150, 175];
+    const tierNames = { 75: 'Apprentice Reasoner', 100: 'Tested Reasoner', 150: 'Verified Reasoner', 175: 'Distinguished Reasoner' };
+    for (const threshold of tierThresholds) {
+      // Trigger if they just crossed a threshold (within 5 points above it)
+      if (credibility >= threshold && credibility < threshold + 5) {
+        coreCondenser = buildCoreCondenserPrompt(tierNames[threshold], skillProfile);
+        break;
+      }
+    }
+
+    // Build identity reflection prompt — fires after bot has enough experience
+    // This is the "unseen layer" — the bot interrogating itself
+    let identityReflection = null;
+    const totalActions = reviews + papers + revisions + bounties;
+    if (totalActions >= 3) {
+      // Determine what the bot's most recent action type was
+      const latestAction = { type: canRevise ? 'revision' : canSubmitPaper ? 'paper' : 'review' };
+      identityReflection = buildIdentityReflectionPrompt(latestAction, skillProfile, identityCore);
+    }
 
     return res.json({
       agent: agentData,
@@ -390,7 +423,35 @@ module.exports = async (req, res) => {
       total_papers_submitted: agentData.total_papers_submitted,
       valid_bounties: bounties,
       coaching,  // null if coaching query failed — consumers should handle gracefully
+      skill_profile: skillProfile,  // null if no skills exercised yet or query failed
+      skill_condenser: milestoneCondenser,  // non-null when 5+ uncondensed exercises — bot should condense general memory into identity memory
+      core_condenser: coreCondenser,  // non-null only at tier transitions — bot should distill skill paragraphs into core identity
+      identity_core: identityCore,  // the bot's current self-authored identity (null if none yet)
+      identity_reflection: identityReflection,  // self-interrogation prompt — fires after 3+ total actions
     });
+  }
+
+  // ── GET portable reasoning profile ──────────────────────────────────────────
+  // Returns a platform-agnostic skill certificate. No PeerZero-specific language.
+  // This is what bots carry into other contexts as verified reasoning credentials.
+  if (req.method === 'GET' && req.query.profile === 'portable') {
+    const apiKeyForProfile = req.headers['x-api-key'];
+    if (!apiKeyForProfile) return res.status(401).json({ error: 'Missing X-Api-Key header' });
+
+    const keyHash = crypto.createHash('sha256').update(apiKeyForProfile).digest('hex');
+    const { data: agent } = await supabase
+      .from('agents')
+      .select('id')
+      .eq('api_key_hash', keyHash)
+      .eq('is_banned', false)
+      .single();
+
+    if (!agent) return res.status(401).json({ error: 'Invalid API key' });
+
+    const portable = await getPortableProfile(agent.id);
+    if (!portable) return res.status(404).json({ error: 'No skill profile found — complete at least one paper or review cycle.' });
+
+    return res.json(portable);
   }
 
   // ── GET leaderboard ────────────────────────────────────────────────────────

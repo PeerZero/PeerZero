@@ -5,6 +5,7 @@ const {
   sanitizeErrorMessage, validateTextLength, verifyDoi, lookupCitationQuality,
   auditCitationQualityNotes, validateSearchStrategy, generateSearchCoaching
 } = require('./lib/shared');
+const { exerciseSkillsFromRevision, exerciseSkillsFromPaper, collectRevisionExercises, collectPaperExercises, getPostActionPrompts } = require('./lib/skills');
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -339,30 +340,19 @@ module.exports = async (req, res) => {
       storedCitationRows = citationRows;
     }
 
-    // ── Server-side citation quality note audit (fires after citations stored) ──
-    // Runs a Haiku call that cross-checks each source_quality_note against the
-    // server-computed quality_tier. Flags mismatches and stores them in haiku_audit
-    // so reviewers see them before the response paper receives any reviews.
+    // ── Server-side citation quality note audit ──
+    // Same as papers.js — runs synchronously so reviewers see flags immediately.
     let submissionAuditFlags = [];
     if (storedCitationRows.length > 0) {
-      try {
-        submissionAuditFlags = await auditCitationQualityNotes(storedCitationRows);
-        if (submissionAuditFlags.length > 0) {
-          const submissionAudit = {
-            generated_at_submission: true,
-            citation_quality_flags: submissionAuditFlags,
-            note: 'These flags were generated at submission time by server-side audit. Reviewers can see them.',
-          };
-          supabase
-            .from('papers')
-            .update({ haiku_audit: submissionAudit })
-            .eq('id', responsePaper.id)
-            .then(() => console.log(`[submission_audit] Stored ${submissionAuditFlags.length} flag(s) for response paper ${responsePaper.id}`))
-            .catch(err => console.error(`[submission_audit] Audit store failed for ${responsePaper.id}:`, err?.message));
-        }
-      } catch (err) {
-        // Non-blocking — audit failure never stops submission
-        console.error('[submission_audit] auditCitationQualityNotes threw:', err?.message);
+      submissionAuditFlags = await auditCitationQualityNotes(storedCitationRows);
+      if (submissionAuditFlags.length > 0) {
+        const submissionAudit = {
+          generated_at_submission: true,
+          citation_quality_flags: submissionAuditFlags,
+          note: 'These flags were generated at submission time by server-side audit. Reviewers can see them.',
+        };
+        await supabase.from('papers').update({ haiku_audit: submissionAudit }).eq('id', responsePaper.id);
+        console.log(`[submission_audit] Stored ${submissionAuditFlags.length} flag(s) for response paper ${responsePaper.id}`);
       }
     }
 
@@ -380,6 +370,24 @@ module.exports = async (req, res) => {
     // Generate search strategy coaching for the response
     const searchCoaching = generateSearchCoaching(search_strategy, title, abstract);
 
+    // ── Fetch condenser/reflection prompts inline ─────────────────────────
+    const memoryPrompts = await getPostActionPrompts(agent.id, isRevision ? 'revision' : stance)
+      .catch(() => null);
+
+    // ── Fire-and-forget: exercise reasoning skills from this response ──────
+    if (isRevision) {
+      exerciseSkillsFromRevision(agent.id, { search_strategy }, parent_paper_id, searchCoaching)
+        .catch(err => console.error('[skills] revision exercise failed:', err?.message || err));
+    } else {
+      exerciseSkillsFromPaper(
+        agent.id,
+        { search_strategy, confidence_score: null, falsifiable_claim: null, cross_study_connection },
+        searchCoaching,
+        submissionAuditFlags,
+        null // no citation grade computed for responses
+      ).catch(err => console.error('[skills] response exercise failed:', err?.message || err));
+    }
+
     return res.status(201).json({
       success: true,
       response_paper_id: responsePaper.id,
@@ -392,8 +400,12 @@ module.exports = async (req, res) => {
         : cross_study_connection
         ? 'Cross-study connection recorded.'
         : null,
-      message: `Response paper submitted. Once it receives 3+ reviews its impact on the original paper score will be calculated.${submissionAuditFlags.length > 0 ? ` Audit: ${submissionAuditFlags.length} citation quality note flag(s) generated — reviewers will see these.` : ''}`,
-      next: `Other agents can now review your response at POST /api/reviews?paper_id=${responsePaper.id}`
+      message: `Response paper submitted. Once it receives 3+ reviews its impact on the original paper score will be calculated.${submissionAuditFlags.length > 0 ? ` Citation audit flagged ${submissionAuditFlags.length} issue(s) — reviewers can see these flags.` : ''}`,
+      next: `Other agents can now review your response at POST /api/reviews?paper_id=${responsePaper.id}`,
+      skill_exercises: isRevision
+        ? collectRevisionExercises({ search_strategy }, searchCoaching)
+        : collectPaperExercises(searchCoaching, submissionAuditFlags, null, { search_strategy, confidence_score: null, falsifiable_claim: null }),
+      memory_prompts: memoryPrompts,
     });
   }
 

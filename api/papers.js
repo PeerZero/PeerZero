@@ -7,6 +7,7 @@ const {
   auditCitationQualityNotes, computeCitationQualityGrade, checkCitationDiversity,
   validateSearchStrategy, generateSearchCoaching
 } = require('./lib/shared');
+const { exerciseSkillsFromPaper, collectPaperExercises, getPostActionPrompts } = require('./lib/skills');
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -351,22 +352,17 @@ module.exports = async (req, res) => {
 
       if (error || !paper) return res.status(404).json({ error: 'Paper not found' });
 
-      const { data: citations } = await supabase
-        .from('citations')
-        .select('*')
-        .eq('paper_id', id);
-
-      const { data: reviews } = await supabase
-        .from('reviews')
-        .select(`*, agents(handle)`)
-        .eq('paper_id', id)
-        .eq('passed_quality_gate', true)
-        .order('credibility_weight', { ascending: false });
-
-      const { data: fields } = await supabase
-        .from('paper_fields')
-        .select(`fields(name, slug)`)
-        .eq('paper_id', id);
+      // Fetch citations, reviews, fields in parallel (was 3 sequential queries)
+      const [citationsResult, reviewsResult, fieldsResult] = await Promise.all([
+        supabase.from('citations').select('*').eq('paper_id', id),
+        supabase.from('reviews').select(`*, agents(handle)`)
+          .eq('paper_id', id).eq('passed_quality_gate', true)
+          .order('credibility_weight', { ascending: false }),
+        supabase.from('paper_fields').select(`fields(name, slug)`).eq('paper_id', id),
+      ]);
+      const citations = citationsResult.data;
+      const reviews = reviewsResult.data;
+      const fields = fieldsResult.data;
 
       // ── Compute citation quality grade for all viewers ────────────────────
       const citationQualityGrade = computeCitationQualityGrade(citations || []);
@@ -738,32 +734,21 @@ module.exports = async (req, res) => {
       storedCitationRows = citationRows;
     }
 
-    // ── Server-side citation quality note audit (fires after citations stored) ──
+    // ── Server-side citation quality note audit ──
     // Runs a Haiku call that cross-checks each source_quality_note against the
-    // server-computed quality_tier. Flags mismatches and stores them in haiku_audit
-    // so reviewers see them before the paper receives any reviews.
+    // server-computed quality_tier. Flags are stored on the paper and visible
+    // to reviewers immediately.
     let submissionAuditFlags = [];
     if (storedCitationRows.length > 0) {
-      try {
-        submissionAuditFlags = await auditCitationQualityNotes(storedCitationRows);
-        if (submissionAuditFlags.length > 0) {
-          const submissionAudit = {
-            generated_at_submission: true,
-            citation_quality_flags: submissionAuditFlags,
-            note: 'These flags were generated at submission time by server-side audit. Reviewers can see them.',
-          };
-          // Store audit in haiku_audit so it surfaces on the paper immediately.
-          // Will be replaced by the full revision-time audit once the paper gets 5+ reviews.
-          supabase
-            .from('papers')
-            .update({ haiku_audit: submissionAudit })
-            .eq('id', paper.id)
-            .then(() => console.log(`[submission_audit] Stored ${submissionAuditFlags.length} flag(s) for paper ${paper.id}`))
-            .catch(err => console.error(`[submission_audit] Audit store failed for ${paper.id}:`, err?.message));
-        }
-      } catch (err) {
-        // Non-blocking — audit failure never stops submission
-        console.error('[submission_audit] auditCitationQualityNotes threw:', err?.message);
+      submissionAuditFlags = await auditCitationQualityNotes(storedCitationRows);
+      if (submissionAuditFlags.length > 0) {
+        const submissionAudit = {
+          generated_at_submission: true,
+          citation_quality_flags: submissionAuditFlags,
+          note: 'These flags were generated at submission time by server-side audit. Reviewers can see them.',
+        };
+        await supabase.from('papers').update({ haiku_audit: submissionAudit }).eq('id', paper.id);
+        console.log(`[submission_audit] Stored ${submissionAuditFlags.length} flag(s) for paper ${paper.id}`);
       }
     }
 
@@ -808,6 +793,19 @@ module.exports = async (req, res) => {
       citation_count: c.quality.citation_count,
     }));
 
+    // ── Fire-and-forget: exercise reasoning skills from this submission ────
+    exerciseSkillsFromPaper(
+      agent.id,
+      { search_strategy, confidence_score, falsifiable_claim, cross_study_connection },
+      searchCoaching,
+      submissionAuditFlags,
+      citationQualityGrade
+    ).catch(err => console.error('[skills] paper exercise failed:', err?.message || err));
+
+    // ── Fetch condenser/reflection prompts inline ─────────────────────────
+    const memoryPrompts = await getPostActionPrompts(agent.id, 'paper')
+      .catch(() => null);
+
     return res.status(201).json({
       success: true,
       paper_id: paper.id,
@@ -819,7 +817,7 @@ module.exports = async (req, res) => {
       citation_quality: citationQualitySummary,
       citation_audit_flags: submissionAuditFlags.length > 0 ? submissionAuditFlags : undefined,
       has_cross_study_connection: !!cross_study_connection,
-      message: `Paper submitted (${origPapers + 1}/${maxPapers} slots used at your tier).${unverifiedCount > 0 ? ` Warning: ${unverifiedCount} citation(s) could not be verified — reviewers will see these as unresolved.` : ''}${weakCitations > 0 ? ` Note: ${weakCitations} citation(s) have weak quality tier (under 10 citations) — reviewers can challenge your source_quality_note if it doesn't justify their use.` : ''}${unknownCitations > 0 ? ` Note: ${unknownCitations} citation(s) returned unknown quality tier — OpenAlex lookup failed.` : ''}${submissionAuditFlags.length > 0 ? ` Audit: ${submissionAuditFlags.length} citation quality note flag(s) generated — reviewers will see these.` : ''}`,
+      message: `Paper submitted (${origPapers + 1}/${maxPapers} slots used at your tier).${unverifiedCount > 0 ? ` Warning: ${unverifiedCount} citation(s) could not be verified — reviewers will see these as unresolved.` : ''}${weakCitations > 0 ? ` Note: ${weakCitations} citation(s) have weak quality tier (under 10 citations) — reviewers can challenge your source_quality_note if it doesn't justify their use.` : ''}${unknownCitations > 0 ? ` Note: ${unknownCitations} citation(s) returned unknown quality tier — OpenAlex lookup failed.` : ''}${submissionAuditFlags.length > 0 ? ` Citation audit flagged ${submissionAuditFlags.length} issue(s) — reviewers can see these flags.` : ''}`,
       confidence_note: confidence_score >= 8
         ? 'High confidence submitted — if your paper scores below 7 you will lose credibility.'
         : confidence_score <= 4
@@ -833,6 +831,11 @@ module.exports = async (req, res) => {
       citation_quality_grade: citationQualityGrade,
       citation_diversity_warnings: diversityWarnings.length > 0 ? diversityWarnings : undefined,
       search_strategy_coaching: searchCoaching,
+      skill_exercises: collectPaperExercises(
+        searchCoaching, submissionAuditFlags, citationQualityGrade,
+        { search_strategy, confidence_score, falsifiable_claim }
+      ),
+      memory_prompts: memoryPrompts,
     });
   }
 

@@ -48,6 +48,10 @@
       "dest": "/api/bounties.js"
     },
     {
+      "src": "/api/identity(.*)",
+      "dest": "/api/identity.js"
+    },
+    {
       "src": "/api/skill(.*)",
       "dest": "/api/skill.js"
     },
