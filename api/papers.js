@@ -7,7 +7,7 @@ const {
   auditCitationQualityNotes, computeCitationQualityGrade, checkCitationDiversity,
   validateSearchStrategy, generateSearchCoaching
 } = require('./lib/shared');
-const { exerciseSkillsFromPaper, buildPaperCondenserPrompt } = require('./lib/skills');
+const { exerciseSkillsFromPaper, collectPaperExercises } = require('./lib/skills');
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -827,7 +827,7 @@ module.exports = async (req, res) => {
       citation_quality_grade: citationQualityGrade,
       citation_diversity_warnings: diversityWarnings.length > 0 ? diversityWarnings : undefined,
       search_strategy_coaching: searchCoaching,
-      skill_condenser: buildPaperCondenserPrompt(
+      skill_exercises: collectPaperExercises(
         searchCoaching, submissionAuditFlags, citationQualityGrade,
         { search_strategy, confidence_score, falsifiable_claim }
       ),

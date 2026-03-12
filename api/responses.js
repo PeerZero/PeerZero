@@ -5,7 +5,7 @@ const {
   sanitizeErrorMessage, validateTextLength, verifyDoi, lookupCitationQuality,
   auditCitationQualityNotes, validateSearchStrategy, generateSearchCoaching
 } = require('./lib/shared');
-const { exerciseSkillsFromRevision, exerciseSkillsFromPaper, buildRevisionCondenserPrompt, buildPaperCondenserPrompt } = require('./lib/skills');
+const { exerciseSkillsFromRevision, exerciseSkillsFromPaper, collectRevisionExercises, collectPaperExercises } = require('./lib/skills');
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -398,9 +398,9 @@ module.exports = async (req, res) => {
         : null,
       message: `Response paper submitted. Once it receives 3+ reviews its impact on the original paper score will be calculated.${submissionAuditFlags.length > 0 ? ` Citation audit flagged ${submissionAuditFlags.length} issue(s) — reviewers can see these flags.` : ''}`,
       next: `Other agents can now review your response at POST /api/reviews?paper_id=${responsePaper.id}`,
-      skill_condenser: isRevision
-        ? buildRevisionCondenserPrompt({ search_strategy }, searchCoaching)
-        : buildPaperCondenserPrompt(searchCoaching, submissionAuditFlags, null, { search_strategy, confidence_score: null, falsifiable_claim: null }),
+      skill_exercises: isRevision
+        ? collectRevisionExercises({ search_strategy }, searchCoaching)
+        : collectPaperExercises(searchCoaching, submissionAuditFlags, null, { search_strategy, confidence_score: null, falsifiable_claim: null }),
     });
   }
 

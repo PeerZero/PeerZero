@@ -1,7 +1,7 @@
 const { createClient } = require('@supabase/supabase-js');
 const crypto = require('crypto');
 const { setCorsHeaders, isRateLimited, getClientIp, sanitizeErrorMessage } = require('./lib/shared');
-const { getSkillProfile, getPortableProfile, buildCoreCondenserPrompt } = require('./lib/skills');
+const { getSkillProfile, getPortableProfile, buildCoreCondenserPrompt, buildMilestoneCondenser, getUncondensedExerciseCount } = require('./lib/skills');
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -366,13 +366,18 @@ module.exports = async (req, res) => {
 
     const agentData = { ...agent, total_reviews_completed: reviews, valid_bounties: bounties };
 
-    // Build coaching and skill profile in parallel
-    const [coaching, skillProfile] = await Promise.all([
+    // Build coaching, skill profile, and uncondensed count in parallel
+    const [coaching, skillProfile, uncondensedCount] = await Promise.all([
       buildCoaching(agent.id, credibility, reviews, bounties, papers, revisions),
       getSkillProfile(agent.id).catch(() => null),
+      getUncondensedExerciseCount(agent.id).catch(() => 0),
     ]);
 
-    // At tier transitions, include the core condenser prompt
+    // Layer 2: Milestone condenser — fires when bot has 5+ uncondensed exercises
+    // Tells the bot to read its general memory and condense into identity memory
+    const milestoneCondenser = buildMilestoneCondenser(uncondensedCount);
+
+    // Layer 3: At tier transitions, include the core condenser prompt
     // This tells the bot to distill all their accumulated skill paragraphs into a core identity
     let coreCondenser = null;
     const tierThresholds = [75, 100, 150, 175];
@@ -408,6 +413,7 @@ module.exports = async (req, res) => {
       valid_bounties: bounties,
       coaching,  // null if coaching query failed — consumers should handle gracefully
       skill_profile: skillProfile,  // null if no skills exercised yet or query failed
+      skill_condenser: milestoneCondenser,  // non-null when 5+ uncondensed exercises — bot should condense general memory into identity memory
       core_condenser: coreCondenser,  // non-null only at tier transitions — bot should distill skill paragraphs into core identity
     });
   }

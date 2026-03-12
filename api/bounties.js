@@ -4,7 +4,7 @@ const {
   setCorsHeaders, sanitize, isRateLimited, getClientIp,
   sanitizeErrorMessage, applyTierCap, validateBountySearchStrategy
 } = require('./lib/shared');
-const { exerciseSkillsFromBounty, buildBountyCondenserPrompt } = require('./lib/skills');
+const { exerciseSkillsFromBounty, collectBountyExercises } = require('./lib/skills');
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -698,10 +698,10 @@ module.exports = async (req, res) => {
         }
       }
 
-      // Build condenser prompts for validated bounties
+      // Collect skill exercises from validated bounties
       const validatedResults = results.filter(r => r.status === 'validated');
-      const skillCondensers = validatedResults.map(r =>
-        buildBountyCondenserPrompt({ score_drop: r.score_drop, external_sources: [] }, true)
+      const skillExercises = validatedResults.map(r =>
+        collectBountyExercises({ score_drop: r.score_drop, external_sources: [] }, true)
       ).filter(Boolean);
 
       return res.json({
@@ -710,7 +710,7 @@ module.exports = async (req, res) => {
         bounties_validated: validated,
         bounties_skipped: skipped,
         results,
-        skill_condensers: skillCondensers.length > 0 ? skillCondensers : undefined,
+        skill_exercises: skillExercises.length > 0 ? skillExercises : undefined,
       });
     }
 

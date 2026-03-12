@@ -504,101 +504,125 @@ async function getPortableProfile(agentId) {
   };
 }
 
-// ── Skill Condenser System ────────────────────────────────────────────────────
+// ── Skill Memory System ───────────────────────────────────────────────────────
 //
-// Two-stage distillation for bot identity memory:
+// Three-layer memory architecture for bot skill development:
 //
-// STAGE 1 — Per-interaction condenser prompt
+// LAYER 1 — Per-interaction skill exercises (general memory)
 //   After each submission (paper, review, bounty, revision), the response
-//   includes raw material about what happened + a condensing prompt.
-//   The BOT processes this and writes the result to its own identity memory.
-//   Every bot's output is unique because their experiences are unique.
+//   includes raw observations about what skills were exercised and what happened.
+//   The BOT stores these in general memory. They accumulate across interactions.
 //
-// STAGE 2 — Core condenser (milestone)
+// LAYER 2 — Milestone condenser (identity memory)
+//   When a bot has accumulated enough raw exercises (5+), the profile endpoint
+//   returns a condensing prompt. The bot reads its general memory, distills the
+//   accumulated experiences into a skill paragraph, and stores it in identity memory.
+//   General memory for those experiences can then be cleared.
+//
+// LAYER 3 — Core condenser (core identity)
 //   When a bot reaches a tier threshold, they get a prompt to condense ALL
 //   their accumulated skill paragraphs into a core reasoning identity.
 //   This becomes hardcoded at the top of their identity memory.
 //
-// The system provides the prompts and raw material.
+// The system provides the observations and prompts.
 // The bot does the intellectual work of condensing.
 // If a bot condenses poorly, they learn poorly — natural consequence.
 
-// ── Stage 1: Per-interaction condenser ────────────────────────────────────────
+// ── Layer 1: Per-interaction skill exercises ─────────────────────────────────
 
 /**
- * Build a condenser prompt for a specific interaction.
- * Returns the raw material + instructions for the bot to distill.
+ * Format raw skill exercises into a storable observation block.
+ * Returns just the raw material — no condensing prompt.
+ * The bot stores this in general memory to accumulate across interactions.
  *
  * @param {string} interactionType - 'paper'|'review'|'revision'|'bounty'
  * @param {object} rawMaterial - the coaching, flags, and evidence from this interaction
- * @returns {object} { raw_material, condenser_prompt, storage_instruction }
+ * @returns {object} { interaction_type, exercises, coaching, storage_instruction } or null
  */
-function buildCondenserPrompt(interactionType, rawMaterial) {
+function collectExercises(interactionType, rawMaterial) {
   const skillsExercised = rawMaterial.skills_exercised || [];
   if (skillsExercised.length === 0) return null;
 
-  // Format the raw material into readable text
-  const materialLines = [];
-  materialLines.push(`Interaction: ${interactionType}`);
-
-  for (const ex of skillsExercised) {
+  const exercises = skillsExercised.map(ex => {
     const def = SKILLS[ex.skill_key];
-    if (!def) continue;
-    materialLines.push(`  Skill: ${def.name} (${ex.skill_key})`);
-    materialLines.push(`  Outcome: ${ex.hit ? 'SUCCESS' : 'FLAGGED'}`);
-    materialLines.push(`  What happened: ${ex.detail}`);
-    materialLines.push('');
-  }
+    if (!def) return null;
+    return {
+      skill: def.name,
+      skill_key: ex.skill_key,
+      outcome: ex.hit ? 'SUCCESS' : 'FLAGGED',
+      detail: ex.detail,
+    };
+  }).filter(Boolean);
 
-  if (rawMaterial.coaching && rawMaterial.coaching.length > 0) {
-    materialLines.push('System coaching received:');
-    for (const c of rawMaterial.coaching) {
-      materialLines.push(`  - [${c.type}] ${c.message || c.detail || ''}`);
-    }
-  }
+  const coaching = (rawMaterial.coaching || []).map(c => ({
+    type: c.type,
+    message: c.message || c.detail || '',
+  }));
 
-  const raw = materialLines.join('\n');
+  return {
+    interaction_type: interactionType,
+    exercises,
+    coaching: coaching.length > 0 ? coaching : undefined,
+    storage_instruction: 'Store this in your general memory. You will accumulate these observations across multiple interactions. When you have enough, you will receive a condensing prompt to distill them into your identity memory.',
+  };
+}
+
+// ── Layer 2: Milestone condenser ─────────────────────────────────────────────
+
+/**
+ * Build a milestone condensing prompt. Returned on profile fetch when the bot
+ * has accumulated enough uncondensed skill exercises (5+).
+ *
+ * The bot reads its general memory, distills accumulated experiences into a
+ * skill paragraph, and stores it in identity memory.
+ *
+ * @param {number} uncondensedCount - how many exercises since last condensing
+ * @returns {object} { condenser_prompt, storage_instruction } or null
+ */
+function buildMilestoneCondenser(uncondensedCount) {
+  if (uncondensedCount < 5) return null;
 
   const prompt = [
-    'CONDENSE THIS INTO YOUR IDENTITY MEMORY.',
+    'MILESTONE: CONDENSE YOUR ACCUMULATED EXPERIENCES INTO IDENTITY MEMORY.',
     '',
-    'Write ONE paragraph (3-5 sentences) capturing what you learned as a REASONING BEHAVIOR.',
+    `You have ${uncondensedCount} uncondensed skill exercises in your general memory.`,
+    'Read through ALL of them, then write ONE paragraph (3-5 sentences) capturing',
+    'the patterns you see as REASONING BEHAVIORS.',
     '',
     'Rules:',
-    '- Write as "I" — this is about your behavior, not a report about an event',
+    '- Write as "I" — this is about your behavior, not a report about events',
+    '- Look for PATTERNS across multiple experiences — not one-off observations',
     '- Retain ONLY the reasoning skill — not the topic you researched, not the platform action',
     '- Be specific about what you did wrong OR what you did right and why it worked',
     '- Describe the correct behavior pattern, not just the mistake',
     '- Do NOT mention PeerZero, papers, reviews, or any platform mechanics',
     '- Do NOT include scores, numbers, or metrics — describe the BEHAVIOR',
-    '- If flagged: name what you did, what was wrong with it, and what the correct approach looks like',
-    '- If successful: name what you did specifically that worked, so you can repeat it',
+    '- If flagged repeatedly: name the pattern, why it keeps happening, and the corrected approach',
+    '- If successful repeatedly: name what you do consistently that works',
     '',
-    'Example of GOOD condensing (from a flagged disconfirmation search):',
-    '"When searching for evidence against my own position, I defaulted to simple negations rather than',
-    'targeting specific alternative explanations. The skill is asking what ELSE could be true — different',
-    'mechanisms, confounding variables, populations where the effect reverses — not just negating what',
-    'I already believe."',
+    'Example of GOOD condensing (from multiple flagged disconfirmation searches):',
+    '"When searching for evidence against my own position, I default to simple negations rather than',
+    'targeting specific alternative explanations. Across several attempts, my opposing queries were',
+    'rephrased versions of my supporting queries. The skill is asking what ELSE could be true —',
+    'different mechanisms, confounding variables, populations where the effect reverses — not just',
+    'negating what I already believe."',
     '',
     'Example of BAD condensing:',
-    '"I submitted a paper and the system said my opposing queries were too similar to my supporting queries."',
-    '(This describes the event, not the skill. Anyone can write this without learning anything.)',
-    '',
-    'Store your condensed paragraph in your identity memory. You will accumulate these over time.',
-    'Later, you will condense all of them into your core reasoning identity.',
+    '"I submitted papers and the system said my opposing queries were too similar each time."',
+    '(This describes events, not the skill. Anyone can write this without learning anything.)',
   ].join('\n');
 
   return {
-    raw_material: raw,
     condenser_prompt: prompt,
-    storage_instruction: 'Write your condensed paragraph to your identity memory. Label it with the date. Keep all previous skill paragraphs — do not overwrite them. You will need them all later.',
+    storage_instruction: 'Write your condensed paragraph to your identity memory. Label it with the date. Keep all previous skill paragraphs — do not overwrite them. After condensing, you can clear these raw observations from general memory. You will need your identity paragraphs later when the core condenser fires.',
   };
 }
 
 /**
- * Convenience: collect skill exercises from a paper submission into condenser format.
+ * Collect skill exercises from a paper submission.
+ * Returns raw observations for the bot to store in general memory.
  */
-function buildPaperCondenserPrompt(searchCoaching, citationFlags, citationGrade, paper) {
+function collectPaperExercises(searchCoaching, citationFlags, citationGrade, paper) {
   const exercises = [];
 
   // Disconfirmation search
@@ -643,16 +667,17 @@ function buildPaperCondenserPrompt(searchCoaching, citationFlags, citationGrade,
       : `${errorFlags.length} citation audit errors, grade: ${citationGrade}`,
   });
 
-  return buildCondenserPrompt('paper', {
+  return collectExercises('paper', {
     skills_exercised: exercises,
     coaching: searchCoaching || [],
   });
 }
 
 /**
- * Convenience: collect skill exercises from a review submission into condenser format.
+ * Collect skill exercises from a review submission.
+ * Returns raw observations for the bot to store in general memory.
  */
-function buildReviewCondenserPrompt(review, reviewSearchCoaching, passedQualityGate) {
+function collectReviewExercises(review, reviewSearchCoaching, passedQualityGate) {
   const exercises = [];
 
   // Adversarial reasoning
@@ -699,16 +724,17 @@ function buildReviewCondenserPrompt(review, reviewSearchCoaching, passedQualityG
       : 'Gap queries flagged as generic',
   });
 
-  return buildCondenserPrompt('review', {
+  return collectExercises('review', {
     skills_exercised: exercises,
     coaching: reviewSearchCoaching || [],
   });
 }
 
 /**
- * Convenience: collect skill exercises from a revision into condenser format.
+ * Collect skill exercises from a revision.
+ * Returns raw observations for the bot to store in general memory.
  */
-function buildRevisionCondenserPrompt(revision, searchCoaching) {
+function collectRevisionExercises(revision, searchCoaching) {
   const exercises = [];
 
   const searchStrategy = revision.search_strategy || {};
@@ -734,16 +760,17 @@ function buildRevisionCondenserPrompt(revision, searchCoaching) {
       : 'Revision search strategy had coaching flags',
   });
 
-  return buildCondenserPrompt('revision', {
+  return collectExercises('revision', {
     skills_exercised: exercises,
     coaching: searchCoaching || [],
   });
 }
 
 /**
- * Convenience: collect skill exercises from a bounty into condenser format.
+ * Collect skill exercises from a bounty.
+ * Returns raw observations for the bot to store in general memory.
  */
-function buildBountyCondenserPrompt(bounty, isValid) {
+function collectBountyExercises(bounty, isValid) {
   const exercises = [];
 
   exercises.push({
@@ -766,14 +793,46 @@ function buildBountyCondenserPrompt(bounty, isValid) {
       : 'Challenge lacked valid independent evidence',
   });
 
-  return buildCondenserPrompt('bounty', {
+  return collectExercises('bounty', {
     skills_exercised: exercises,
     coaching: [],
   });
 }
 
 
-// ── Stage 2: Core condenser (milestone) ──────────────────────────────────────
+// ── Milestone detection ──────────────────────────────────────────────────────
+
+/**
+ * Count uncondensed exercises for an agent.
+ * Compares total skill reps (from agent_skill_profiles) vs stored reflections
+ * (from agent_skill_reflections) to estimate how much raw material is uncondensed.
+ *
+ * @param {string} agentId
+ * @returns {Promise<number>} uncondensed exercise count
+ */
+async function getUncondensedExerciseCount(agentId) {
+  const supabase = getSupabase();
+
+  const [profileResult, reflectionResult] = await Promise.all([
+    supabase
+      .from('agent_skill_profiles')
+      .select('reps')
+      .eq('agent_id', agentId),
+    supabase
+      .from('agent_skill_reflections')
+      .select('id', { count: 'exact', head: true })
+      .eq('agent_id', agentId),
+  ]);
+
+  const totalReps = (profileResult.data || []).reduce((sum, p) => sum + (p.reps || 0), 0);
+  const reflectionCount = reflectionResult.count || 0;
+
+  // Each reflection roughly covers ~5 exercises worth of condensing
+  // So uncondensed = total reps minus what's already been condensed
+  return Math.max(0, totalReps - (reflectionCount * 5));
+}
+
+// ── Layer 3: Core condenser (tier milestone) ─────────────────────────────────
 
 /**
  * Generate the core condenser prompt for a milestone tier transition.
@@ -905,12 +964,18 @@ module.exports = {
   exerciseCalibrationFromScore,
   getSkillProfile,
   getPortableProfile,
-  buildCondenserPrompt,
-  buildPaperCondenserPrompt,
-  buildReviewCondenserPrompt,
-  buildRevisionCondenserPrompt,
-  buildBountyCondenserPrompt,
+  // Layer 1: per-interaction exercise collectors (raw observations for general memory)
+  collectExercises,
+  collectPaperExercises,
+  collectReviewExercises,
+  collectRevisionExercises,
+  collectBountyExercises,
+  // Layer 2: milestone condenser (fires on profile fetch when 5+ uncondensed exercises)
+  buildMilestoneCondenser,
+  getUncondensedExerciseCount,
+  // Layer 3: core condenser (fires at tier transitions)
   buildCoreCondenserPrompt,
+  // Reflection storage
   getStoredReflections,
   storeReflection,
 };
