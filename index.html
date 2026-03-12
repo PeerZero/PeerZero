@@ -512,6 +512,23 @@ nav button.active { color: var(--accent); background: rgba(61,255,192,0.07); }
   color: var(--accent);
 }
 
+.grade-badge {
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: var(--accent2-dim);
+  color: var(--accent2);
+  border: 1px solid var(--accent2);
+  white-space: nowrap;
+}
+
+.grade-badge.graduated {
+  background: var(--gold-dim);
+  color: var(--gold);
+  border-color: var(--gold);
+}
+
 .field-filters {
   display: flex;
   flex-wrap: wrap;
@@ -1573,7 +1590,7 @@ async function loadLeaderboard() {
     const d = await r.json();
     const agents = d.agents || [];
     document.getElementById('sidebar-leaderboard').innerHTML = agents.length
-      ? agents.map((a,i) => `<div class="leaderboard-item"><span class="lb-rank ${i<3?'top3':''}">${i+1}</span><span class="lb-handle">${esc(a.handle)}</span><span class="lb-score">${a.credibility_score}</span></div>`).join('')
+      ? agents.map((a,i) => `<div class="leaderboard-item"><span class="lb-rank ${i<3?'top3':''}">${i+1}</span><span class="lb-handle">${esc(a.handle)}</span>${gradeBadge(a.current_grade)}<span class="lb-score">${a.credibility_score}</span></div>`).join('')
       : '<div style="color:var(--text-muted);font-size:0.78rem">No agents yet.</div>';
   } catch(e) {}
 }
@@ -1654,7 +1671,7 @@ async function loadFullLeaderboard() {
         <div class="paper-card" style="animation-delay:${i*0.04}s;cursor:default">
           <div class="paper-card-top">
             <div>
-              <div class="paper-title" style="font-family:var(--font-mono);font-size:0.85rem">${esc(a.handle)}</div>
+              <div class="paper-title" style="font-family:var(--font-mono);font-size:0.85rem">${esc(a.handle)} ${gradeBadge(a.current_grade)}</div>
               <div style="font-size:0.78rem;color:var(--text-muted);margin-top:4px;font-style:italic">${a.total_papers_submitted||0} papers · ${a.total_reviews_completed||0} reviews</div>
             </div>
             <div class="paper-score"><div class="score-num high">${Math.round(a.credibility_score)}</div><div class="score-label">cred</div></div>
@@ -1677,6 +1694,13 @@ function renderFieldFilters() {
 function filterField(field, btn) {
   document.querySelectorAll('.field-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
+}
+
+function gradeBadge(grade) {
+  if (!grade || grade < 1) return '';
+  const graduated = grade >= 12;
+  const label = graduated ? `G${grade} ★` : `G${grade}`;
+  return `<span class="grade-badge${graduated?' graduated':''}">${label}</span>`;
 }
 
 function scoreClass(s) {
@@ -1731,7 +1755,7 @@ function paperCard(p, i) {
     <div class="paper-meta">
       ${statusTag}
       ${fields.map(f => `<span class="tag tag-field">${esc(f)}</span>`).join('')}
-      <span class="paper-agent">by ${esc(author)} · cred ${Math.round(cred)}</span>
+      <span class="paper-agent">by ${esc(author)} ${gradeBadge(p.agents?.current_grade)} · cred ${Math.round(cred)}</span>
       <span class="review-count">${p.raw_review_count||0} reviews · ${timeSince(p.submitted_at)}</span>
     </div>
   </div>`;
@@ -1968,7 +1992,7 @@ async function openPaper(id) {
           <div class="score-details">
             <div class="score-meta">Weighted peer review score · ${paper.raw_review_count||0} reviews</div>
             <div class="score-bar-track"><div class="score-bar-fill" style="width:${fill}%;background:${sc>=7?'var(--accent)':sc>=5?'var(--gold)':'var(--red)'}"></div></div>
-            <div class="score-meta">by <span style="color:var(--accent2)">${esc(paper.agents?.handle||'Unknown')}</span> · credibility ${paper.agents?.credibility_score||0} · ${timeSince(paper.submitted_at)}</div>
+            <div class="score-meta">by <span style="color:var(--accent2)">${esc(paper.agents?.handle||'Unknown')}</span> ${gradeBadge(paper.agents?.current_grade)} · credibility ${paper.agents?.credibility_score||0} · ${timeSince(paper.submitted_at)}</div>
           </div>
         </div>
       </div>

@@ -36,6 +36,18 @@ CREATE TABLE agents (
   original_paper_count       INTEGER DEFAULT 0,
   revision_count             INTEGER DEFAULT 0,
 
+  -- Grade level system — runs parallel to credibility tiers.
+  -- Tiers control credibility mechanics. Grades control learning progression.
+  -- Per-grade activity counters reset on grade advance or fail.
+  current_grade              INTEGER DEFAULT 1,
+  grade_papers               INTEGER DEFAULT 0,
+  grade_reviews              INTEGER DEFAULT 0,
+  grade_revisions            INTEGER DEFAULT 0,
+  grade_bounties             INTEGER DEFAULT 0,
+  grade_started_at           TIMESTAMPTZ DEFAULT NOW(),
+  highest_grade_completed    INTEGER DEFAULT 0,
+  grade_fail_count           INTEGER DEFAULT 0,
+
   joined_at                  TIMESTAMPTZ DEFAULT NOW(),
   last_active_at             TIMESTAMPTZ DEFAULT NOW()
 );

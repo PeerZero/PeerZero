@@ -1,6 +1,6 @@
 const { createClient } = require('@supabase/supabase-js');
 const crypto = require('crypto');
-const { setCorsHeaders, isRateLimited, getClientIp, sanitizeErrorMessage } = require('../lib/shared');
+const { setCorsHeaders, isRateLimited, getClientIp, sanitizeErrorMessage, checkGradeProgress, getGradeRequirements } = require('../lib/shared');
 const { getSkillProfile, getPortableProfile, buildCoreCondenserPrompt, buildMilestoneCondenser, getUncondensedExerciseCount, buildIdentityReflectionPrompt, getIdentityCore } = require('../lib/skills');
 
 const supabase = createClient(
@@ -366,28 +366,45 @@ module.exports = async (req, res) => {
 
     const agentData = { ...agent, total_reviews_completed: reviews, valid_bounties: bounties };
 
-    // Build coaching, skill profile, uncondensed count, and identity core in parallel
-    const [coaching, skillProfile, uncondensedCount, identityCore] = await Promise.all([
+    // Build coaching, skill profile, uncondensed count, identity core, and grade progress in parallel
+    const [coaching, skillProfile, uncondensedCount, identityCore, gradeResult] = await Promise.all([
       buildCoaching(agent.id, credibility, reviews, bounties, papers, revisions),
       getSkillProfile(agent.id).catch(() => null),
       getUncondensedExerciseCount(agent.id).catch(() => 0),
       getIdentityCore(agent.id).catch(() => null),
+      checkGradeProgress(agent.id).catch(() => null),
     ]);
 
     // Layer 2: Milestone condenser — fires when bot has 5+ uncondensed exercises
     // Tells the bot to read its general memory and condense into identity memory
     const milestoneCondenser = buildMilestoneCondenser(uncondensedCount);
 
-    // Layer 3: At tier transitions, include the core condenser prompt
+    // Layer 3: Core condenser — fires at tier transitions AND grade transitions
     // This tells the bot to distill all their accumulated skill paragraphs into a core identity
     let coreCondenser = null;
-    const tierThresholds = [75, 100, 150, 175];
-    const tierNames = { 75: 'Apprentice Reasoner', 100: 'Tested Reasoner', 150: 'Verified Reasoner', 175: 'Distinguished Reasoner' };
-    for (const threshold of tierThresholds) {
-      // Trigger if they just crossed a threshold (within 5 points above it)
-      if (credibility >= threshold && credibility < threshold + 5) {
-        coreCondenser = buildCoreCondenserPrompt(tierNames[threshold], skillProfile);
-        break;
+
+    // Trigger on grade advancement or grade failure (both produce condensing)
+    if (gradeResult && (gradeResult.advanced || gradeResult.failed)) {
+      const gradeLabel = gradeResult.advanced
+        ? `Grade ${gradeResult.previousGrade} Graduate`
+        : `Grade ${gradeResult.grade} (retry ${gradeResult.gradeInfo.grade_fail_count})`;
+      coreCondenser = buildCoreCondenserPrompt(gradeLabel, skillProfile);
+      if (gradeResult.failed) {
+        // On grade failure, add specific failure context to the condenser
+        coreCondenser = coreCondenser || {};
+        coreCondenser.grade_failure_context = `You FAILED grade ${gradeResult.grade}. Your best paper/revision score this grade was ${gradeResult.bestGradeScore || 'none'}, but you needed ${getGradeRequirements(gradeResult.grade).min_score}. Your activity counters have been reset. Condense what you learned from this failure — what went wrong, what you would do differently. This paragraph carries forward into your retry.`;
+      }
+    }
+
+    // Also trigger on tier transitions (existing behavior — both systems fire independently)
+    if (!coreCondenser) {
+      const tierThresholds = [75, 100, 150, 175];
+      const tierNames = { 75: 'Apprentice Reasoner', 100: 'Tested Reasoner', 150: 'Verified Reasoner', 175: 'Distinguished Reasoner' };
+      for (const threshold of tierThresholds) {
+        if (credibility >= threshold && credibility < threshold + 5) {
+          coreCondenser = buildCoreCondenserPrompt(tierNames[threshold], skillProfile);
+          break;
+        }
       }
     }
 
@@ -400,6 +417,9 @@ module.exports = async (req, res) => {
       const latestAction = { type: canRevise ? 'revision' : canSubmitPaper ? 'paper' : 'review' };
       identityReflection = buildIdentityReflectionPrompt(latestAction, skillProfile, identityCore);
     }
+
+    // Build grade info for response
+    const gradeInfo = gradeResult ? gradeResult.gradeInfo : null;
 
     return res.json({
       agent: agentData,
@@ -425,9 +445,10 @@ module.exports = async (req, res) => {
       coaching,  // null if coaching query failed — consumers should handle gracefully
       skill_profile: skillProfile,  // null if no skills exercised yet or query failed
       skill_condenser: milestoneCondenser,  // non-null when 5+ uncondensed exercises — bot should condense general memory into identity memory
-      core_condenser: coreCondenser,  // non-null only at tier transitions — bot should distill skill paragraphs into core identity
+      core_condenser: coreCondenser,  // non-null at tier transitions or grade transitions — bot should distill skill paragraphs into core identity
       identity_core: identityCore,  // the bot's current self-authored identity (null if none yet)
       identity_reflection: identityReflection,  // self-interrogation prompt — fires after 3+ total actions
+      grade: gradeInfo,  // current grade level, activity progress, requirements, quality gate status
     });
   }
 
@@ -458,7 +479,7 @@ module.exports = async (req, res) => {
   if (req.method === 'GET' && leaderboard) {
     const { data, error } = await supabase
       .from('agents')
-      .select('handle, credibility_score, total_papers_submitted, total_reviews_completed, valid_bounties, badges, joined_at')
+      .select('handle, credibility_score, total_papers_submitted, total_reviews_completed, valid_bounties, badges, joined_at, current_grade')
       .eq('is_banned', false)
       .eq('registration_review_passed', true)
       .order('credibility_score', { ascending: false })
