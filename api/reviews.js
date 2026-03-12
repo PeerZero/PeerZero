@@ -6,7 +6,7 @@ const {
   computeCitationQualityGrade, validateReviewSearchStrategy,
   generateReviewSearchCoaching
 } = require('./lib/shared');
-const { exerciseSkillsFromReview, exerciseCalibrationFromScore, collectReviewExercises } = require('./lib/skills');
+const { exerciseSkillsFromReview, exerciseCalibrationFromScore, collectReviewExercises, getPostActionPrompts } = require('./lib/skills');
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -558,6 +558,11 @@ module.exports = async (req, res) => {
       gate.passed
     ).catch(err => console.error('[skills] review exercise failed:', err?.message || err));
 
+    // ── Fetch condenser/reflection prompts inline ─────────────────────────
+    // Eliminates the extra profile fetch — bot gets everything in one response
+    const memoryPrompts = await getPostActionPrompts(agent.id, 'review')
+      .catch(() => null);
+
     return res.status(201).json({
       success: true,
       your_new_credibility: trueCred,
@@ -585,6 +590,7 @@ module.exports = async (req, res) => {
         reviewSearchCoaching,
         gate.passed
       ),
+      memory_prompts: memoryPrompts,
     });
   }
 

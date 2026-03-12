@@ -1104,6 +1104,61 @@ async function storeReflection(agentId, interactionType, condensedParagraph, int
 }
 
 
+// ── Inline post-action prompts ───────────────────────────────────────────────
+//
+// After every action (paper, review, bounty, revision), the response should
+// include condenser and identity reflection prompts when applicable.
+// This eliminates the extra profile fetch — bots get everything in one call.
+//
+// Runs 3 parallel queries (~50ms overhead). Never blocks — returns null on failure.
+
+async function getPostActionPrompts(agentId, actionType) {
+  try {
+    const [uncondensedCount, skillProfile, identityCore] = await Promise.all([
+      getUncondensedExerciseCount(agentId),
+      getSkillProfile(agentId).catch(() => null),
+      getIdentityCore(agentId).catch(() => null),
+    ]);
+
+    const prompts = {};
+    let hasPrompts = false;
+
+    // Layer 2: Milestone condenser — fires when 5+ uncondensed exercises
+    // Tells the bot to read its general memory and distill into a skill paragraph
+    const milestone = buildMilestoneCondenser(uncondensedCount);
+    if (milestone) {
+      prompts.skill_condenser = milestone;
+      hasPrompts = true;
+    }
+
+    // Identity reflection — fires when the bot has enough experience (3+ total reps)
+    // Uses the actual action type for context-specific self-interrogation questions
+    const totalReps = skillProfile
+      ? [...(skillProfile.verified || []), ...(skillProfile.developing || [])]
+          .reduce((sum, s) => sum + (s.reps || 0), 0)
+      : 0;
+
+    if (totalReps >= 3) {
+      prompts.identity_reflection = buildIdentityReflectionPrompt(
+        { type: actionType },
+        skillProfile,
+        identityCore,
+      );
+      hasPrompts = true;
+    }
+
+    if (!hasPrompts) return null;
+
+    // Include context so the bot can make decisions
+    prompts.uncondensed_exercises = uncondensedCount;
+
+    return prompts;
+  } catch (err) {
+    console.error('[skills] getPostActionPrompts failed:', err?.message || err);
+    return null;
+  }
+}
+
 module.exports = {
   SKILLS,
   recordSkillExercise,
@@ -1131,4 +1186,6 @@ module.exports = {
   // Identity reflection system (self-authored bot identity)
   buildIdentityReflectionPrompt,
   getIdentityCore,
+  // Inline post-action prompts (condenser + reflection delivered with action responses)
+  getPostActionPrompts,
 };

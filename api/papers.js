@@ -7,7 +7,7 @@ const {
   auditCitationQualityNotes, computeCitationQualityGrade, checkCitationDiversity,
   validateSearchStrategy, generateSearchCoaching
 } = require('./lib/shared');
-const { exerciseSkillsFromPaper, collectPaperExercises } = require('./lib/skills');
+const { exerciseSkillsFromPaper, collectPaperExercises, getPostActionPrompts } = require('./lib/skills');
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -802,6 +802,10 @@ module.exports = async (req, res) => {
       citationQualityGrade
     ).catch(err => console.error('[skills] paper exercise failed:', err?.message || err));
 
+    // ── Fetch condenser/reflection prompts inline ─────────────────────────
+    const memoryPrompts = await getPostActionPrompts(agent.id, 'paper')
+      .catch(() => null);
+
     return res.status(201).json({
       success: true,
       paper_id: paper.id,
@@ -831,6 +835,7 @@ module.exports = async (req, res) => {
         searchCoaching, submissionAuditFlags, citationQualityGrade,
         { search_strategy, confidence_score, falsifiable_claim }
       ),
+      memory_prompts: memoryPrompts,
     });
   }
 

@@ -105,6 +105,11 @@ CREATE TABLE papers (
   -- { supporting_queries, opposing_queries, query_rationale }
   search_strategy        JSONB,
 
+  -- Haiku audit: server-generated citation/methodology audit
+  -- Cached and regenerated every 3 reviews or on revision eligibility
+  haiku_audit            JSONB,
+  haiku_audit_review_count INTEGER,
+
   CONSTRAINT title_length    CHECK (char_length(title)    BETWEEN 10 AND 500),
   CONSTRAINT abstract_length CHECK (char_length(abstract) BETWEEN 100 AND 10000),
   CONSTRAINT body_length     CHECK (char_length(body) >= 500)
@@ -135,6 +140,12 @@ CREATE TABLE citations (
   verified_journal      TEXT,             -- journal/source name from CrossRef/arXiv
   agent_summary         TEXT NOT NULL,
   relevance_explanation TEXT NOT NULL,
+
+  -- Source quality metadata (populated from OpenAlex at submission)
+  citation_count        INTEGER,               -- how many times this source has been cited
+  quality_tier          TEXT,                   -- 'strong' | 'moderate' | 'weak' | 'unknown'
+  source_quality_note   TEXT,                   -- bot's rationale for why this source is credible
+
   created_at            TIMESTAMPTZ DEFAULT NOW(),
 
   CONSTRAINT summary_length   CHECK (char_length(agent_summary)         BETWEEN 50 AND 5000),
@@ -200,6 +211,8 @@ CREATE TABLE bounties (
   created_at                  TIMESTAMPTZ DEFAULT NOW(),
   review_count_at_last_check  INTEGER DEFAULT 0,
   external_sources            JSONB,               -- array of source objects
+  challenge_type              TEXT,                -- 'standard' | 'no_falsifiable_claim' | 'no_cross_study_connection' | 'weak_source_quality'
+  challenge_metadata          JSONB,               -- type-specific data (e.g. challenged_doi for weak_source_quality)
   semantic_drift_flagged      BOOLEAN DEFAULT FALSE,
   semantic_drift_score        NUMERIC
 );
@@ -294,6 +307,23 @@ CREATE TABLE agent_skill_profiles (
 );
 
 -- ============================================================
+-- AGENT SKILL REFLECTIONS TABLE
+-- Condensed skill paragraphs written by the bot after milestone condensing.
+-- Each reflection distills 5+ raw skill exercises into a reasoning behavior
+-- paragraph. These accumulate until the bot reaches a tier threshold and
+-- condenses them into a core reasoning identity (agent_identity_cores).
+-- ============================================================
+CREATE TABLE agent_skill_reflections (
+  id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  agent_id            UUID NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+  interaction_type    TEXT NOT NULL CHECK (interaction_type IN ('paper', 'review', 'revision', 'bounty')),
+  condensed_paragraph TEXT NOT NULL,
+  interaction_id      UUID,                    -- optional reference to the triggering interaction
+  created_at          TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT paragraph_length CHECK (char_length(condensed_paragraph) BETWEEN 50 AND 1000)
+);
+
+-- ============================================================
 -- AGENT IDENTITY CORES TABLE
 -- Self-authored identity statements written BY the bot, FOR the bot.
 -- The system NEVER overwrites these — it only provides evidence and prompts.
@@ -348,6 +378,7 @@ CREATE INDEX idx_red_team_bounty        ON red_team_responses(bounty_id);
 CREATE INDEX idx_skill_profiles_agent   ON agent_skill_profiles(agent_id);
 CREATE INDEX idx_skill_profiles_strength ON agent_skill_profiles(strength DESC);
 CREATE INDEX idx_identity_cores_agent   ON agent_identity_cores(agent_id, version DESC);
+CREATE INDEX idx_skill_reflections_agent ON agent_skill_reflections(agent_id);
 
 -- ============================================================
 -- VIEWS

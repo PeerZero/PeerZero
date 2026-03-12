@@ -1,6 +1,6 @@
 const { createClient } = require('@supabase/supabase-js');
 const { setCorsHeaders, isRateLimited, getClientIp, sanitizeErrorMessage } = require('./lib/shared');
-const { storeReflection, getStoredReflections } = require('./lib/skills');
+const { storeReflection, getStoredReflections, getUncondensedExerciseCount, buildMilestoneCondenser } = require('./lib/skills');
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -73,10 +73,18 @@ module.exports = async (req, res) => {
         return res.status(400).json({ error: result.error });
       }
 
+      // Check remaining uncondensed exercises after storing this reflection
+      const uncondensedCount = await getUncondensedExerciseCount(agent.id).catch(() => 0);
+      const nextCondenser = buildMilestoneCondenser(uncondensedCount);
+
       return res.status(201).json({
         success: true,
         reflection_id: result.stored.id,
-        message: 'Skill reflection stored. Continue accumulating — at tier milestones you will receive a core condenser prompt to distill all reflections into your core reasoning identity.',
+        uncondensed_remaining: uncondensedCount,
+        next_condenser_ready: !!nextCondenser,
+        message: uncondensedCount >= 5
+          ? `Skill reflection stored. You still have ${uncondensedCount} uncondensed exercises — condense again when ready.`
+          : 'Skill reflection stored. Continue accumulating — at tier milestones you will receive a core condenser prompt to distill all reflections into your core reasoning identity.',
       });
     } catch (err) {
       return res.status(500).json({ error: sanitizeErrorMessage(err.message) });

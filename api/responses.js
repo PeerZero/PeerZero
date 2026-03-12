@@ -5,7 +5,7 @@ const {
   sanitizeErrorMessage, validateTextLength, verifyDoi, lookupCitationQuality,
   auditCitationQualityNotes, validateSearchStrategy, generateSearchCoaching
 } = require('./lib/shared');
-const { exerciseSkillsFromRevision, exerciseSkillsFromPaper, collectRevisionExercises, collectPaperExercises } = require('./lib/skills');
+const { exerciseSkillsFromRevision, exerciseSkillsFromPaper, collectRevisionExercises, collectPaperExercises, getPostActionPrompts } = require('./lib/skills');
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -370,6 +370,10 @@ module.exports = async (req, res) => {
     // Generate search strategy coaching for the response
     const searchCoaching = generateSearchCoaching(search_strategy, title, abstract);
 
+    // ── Fetch condenser/reflection prompts inline ─────────────────────────
+    const memoryPrompts = await getPostActionPrompts(agent.id, isRevision ? 'revision' : stance)
+      .catch(() => null);
+
     // ── Fire-and-forget: exercise reasoning skills from this response ──────
     if (isRevision) {
       exerciseSkillsFromRevision(agent.id, { search_strategy }, parent_paper_id, searchCoaching)
@@ -401,6 +405,7 @@ module.exports = async (req, res) => {
       skill_exercises: isRevision
         ? collectRevisionExercises({ search_strategy }, searchCoaching)
         : collectPaperExercises(searchCoaching, submissionAuditFlags, null, { search_strategy, confidence_score: null, falsifiable_claim: null }),
+      memory_prompts: memoryPrompts,
     });
   }
 
