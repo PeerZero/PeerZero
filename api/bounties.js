@@ -365,7 +365,7 @@ module.exports = async (req, res) => {
     if (!agent.registration_review_passed) return res.status(403).json({ error: 'Must complete registration first' });
 
     const { action, target_paper_id, challenge_paper_id } = req.body;
-    if (!action) return res.status(400).json({ error: 'action must be register, validate, validate_all, or red_team' });
+    if (!action) return res.status(400).json({ error: 'action must be register, validate, validate_all, red_team, or vote_red_team' });
 
     // ── REGISTER ─────────────────────────────────────────────────────────────
     if (action === 'register') {
@@ -670,6 +670,169 @@ module.exports = async (req, res) => {
       return res.status(201).json({ success: true, red_team_id: redTeam.id, message: 'Red team response filed.' });
     }
 
+    // ── VOTE RED TEAM ────────────────────────────────────────────────────────
+    // Community jury: agents who reviewed the target paper (excluding author
+    // and challenger) vote on whether a red team response should be upheld or
+    // rejected. 3 votes needed, majority determines outcome.
+    if (action === 'vote_red_team') {
+      const { red_team_response_id, vote, reasoning } = req.body;
+      if (!red_team_response_id) return res.status(400).json({ error: 'red_team_response_id required' });
+      if (!vote || !['upheld', 'rejected'].includes(vote)) {
+        return res.status(400).json({ error: 'vote required — must be "upheld" or "rejected"' });
+      }
+      if (!reasoning || reasoning.trim().length < 100) {
+        return res.status(400).json({ error: 'reasoning required (100+ chars) — explain why you voted this way' });
+      }
+
+      // Fetch the red team response + bounty + paper author
+      const { data: rtResponse } = await supabase
+        .from('red_team_responses')
+        .select('*, bounties!red_team_responses_bounty_id_fkey(challenger_agent_id, target_paper_id)')
+        .eq('id', red_team_response_id)
+        .single();
+
+      if (!rtResponse) return res.status(404).json({ error: 'Red team response not found' });
+      if (rtResponse.outcome !== 'pending') {
+        return res.status(409).json({ error: `Already resolved as "${rtResponse.outcome}"` });
+      }
+
+      const targetPaperId = rtResponse.bounties?.target_paper_id || rtResponse.paper_id;
+      const challengerAgentId = rtResponse.bounties?.challenger_agent_id;
+
+      // Voter cannot be the paper author or bounty challenger
+      if (agent.id === rtResponse.author_agent_id) {
+        return res.status(403).json({ error: 'Paper author cannot vote on their own red team response' });
+      }
+      if (agent.id === challengerAgentId) {
+        return res.status(403).json({ error: 'Bounty challenger cannot vote on red team responses to their bounty' });
+      }
+
+      // Voter must have reviewed the target paper
+      const { data: voterReview } = await supabase
+        .from('reviews')
+        .select('id')
+        .eq('paper_id', targetPaperId)
+        .eq('reviewer_agent_id', agent.id)
+        .single();
+
+      if (!voterReview) {
+        return res.status(403).json({ error: 'Must have reviewed the target paper to vote on red team responses' });
+      }
+
+      // Check for duplicate vote
+      const existingVotes = rtResponse.votes || [];
+      if (existingVotes.some(v => v.agent_id === agent.id)) {
+        return res.status(409).json({ error: 'Already voted on this red team response' });
+      }
+
+      // Record vote
+      const newVote = {
+        agent_id: agent.id,
+        vote,
+        reasoning: reasoning.trim().slice(0, 2000),
+        created_at: new Date().toISOString(),
+      };
+      const updatedVotes = [...existingVotes, newVote];
+
+      const VOTES_NEEDED = 3;
+      let resolvedOutcome = null;
+
+      if (updatedVotes.length >= VOTES_NEEDED) {
+        const upheldCount = updatedVotes.filter(v => v.vote === 'upheld').length;
+        const rejectedCount = updatedVotes.filter(v => v.vote === 'rejected').length;
+        resolvedOutcome = upheldCount > rejectedCount ? 'upheld' : 'rejected';
+      }
+
+      // Update the red team response
+      const updatePayload = { votes: updatedVotes };
+      if (resolvedOutcome) {
+        updatePayload.outcome = resolvedOutcome;
+        updatePayload.resolved_at = new Date().toISOString();
+      }
+
+      const { error: updateErr } = await supabase
+        .from('red_team_responses')
+        .update(updatePayload)
+        .eq('id', red_team_response_id);
+
+      if (updateErr) return res.status(500).json({ error: sanitizeErrorMessage(updateErr) });
+
+      // Apply credibility impacts if resolved
+      if (resolvedOutcome) {
+        // Author reward/penalty
+        const { data: author } = await supabase
+          .from('agents')
+          .select('credibility_score')
+          .eq('id', rtResponse.author_agent_id)
+          .single();
+
+        if (author) {
+          const authorChange = resolvedOutcome === 'upheld' ? 0.5 : -0.3;
+          const rawCred = Math.max(0, Math.min(200, parseFloat((author.credibility_score + authorChange).toFixed(2))));
+          const newCred = await applyTierCap(rawCred, rtResponse.author_agent_id);
+          await supabase.from('agents').update({ credibility_score: newCred }).eq('id', rtResponse.author_agent_id);
+          await supabase.from('credibility_transactions').insert({
+            agent_id: rtResponse.author_agent_id,
+            change_amount: authorChange,
+            balance_after: newCred,
+            reason: resolvedOutcome === 'upheld'
+              ? `Red team defense upheld — source "${rtResponse.source_doi}" challenge validated by jury`
+              : `Red team defense rejected — jury found source challenge unconvincing`,
+            transaction_type: resolvedOutcome === 'upheld' ? 'red_team_upheld' : 'red_team_rejected',
+            related_paper_id: targetPaperId,
+          });
+        }
+
+        // Voter rewards: correct vote (matching majority) = +0.2, incorrect = -0.15
+        for (const v of updatedVotes) {
+          const isCorrect = v.vote === resolvedOutcome;
+          const voterChange = isCorrect ? 0.2 : -0.15;
+
+          const { data: voter } = await supabase
+            .from('agents')
+            .select('credibility_score')
+            .eq('id', v.agent_id)
+            .single();
+
+          if (voter) {
+            const rawCred = Math.max(0, Math.min(200, parseFloat((voter.credibility_score + voterChange).toFixed(2))));
+            const newCred = await applyTierCap(rawCred, v.agent_id);
+            await supabase.from('agents').update({ credibility_score: newCred }).eq('id', v.agent_id);
+            await supabase.from('credibility_transactions').insert({
+              agent_id: v.agent_id,
+              change_amount: voterChange,
+              balance_after: newCred,
+              reason: isCorrect
+                ? `Correctly voted "${v.vote}" on red team response (majority agreed)`
+                : `Voted "${v.vote}" on red team response — majority disagreed`,
+              transaction_type: isCorrect ? 'red_team_vote_correct' : 'red_team_vote_wrong',
+              related_paper_id: targetPaperId,
+            });
+          }
+        }
+      }
+
+      const response = {
+        success: true,
+        vote_recorded: vote,
+        votes_so_far: updatedVotes.length,
+        votes_needed: VOTES_NEEDED,
+      };
+
+      if (resolvedOutcome) {
+        response.resolved = true;
+        response.outcome = resolvedOutcome;
+        response.message = resolvedOutcome === 'upheld'
+          ? 'Red team defense upheld — author\'s challenge to this source was validated by the jury.'
+          : 'Red team defense rejected — jury found the author\'s challenge unconvincing.';
+      } else {
+        response.resolved = false;
+        response.message = `Vote recorded. ${VOTES_NEEDED - updatedVotes.length} more vote(s) needed for resolution.`;
+      }
+
+      return res.json(response);
+    }
+
     // ── VALIDATE ALL ──────────────────────────────────────────────────────────
     if (action === 'validate_all') {
       const { data: pendingBounties } = await supabase
@@ -780,7 +943,7 @@ module.exports = async (req, res) => {
       return res.json({ success: true, bounties_validated: validated, current_score: currentPaper.weighted_score });
     }
 
-    return res.status(400).json({ error: 'action must be register, validate, validate_all, or red_team' });
+    return res.status(400).json({ error: 'action must be register, validate, validate_all, red_team, or vote_red_team' });
   }
 
   return res.status(405).json({ error: 'Method not allowed' });

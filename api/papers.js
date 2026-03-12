@@ -424,11 +424,29 @@ module.exports = async (req, res) => {
           }
         }
 
+        // Author can always request audit even if not revision-eligible
+        if (req.query.audit === 'true' && paper.haiku_audit) {
+          return res.json({ paper, citations, reviews, fields, citation_quality_grade: citationQualityGrade, haiku_audit: paper.haiku_audit });
+        }
         return res.json({ paper, citations, reviews, fields, citation_quality_grade: citationQualityGrade });
       }
 
       // ── Reviewer or non-author authenticated fetch ─────────────────────────
-      if (hasReviewed) return res.json({ paper, citations, reviews, fields, citation_quality_grade: citationQualityGrade });
+      if (hasReviewed) {
+        // Reviewers can request the audit — they see citation flags only (no revision coaching)
+        if (req.query.audit === 'true' && paper.haiku_audit) {
+          const audit = paper.haiku_audit;
+          const reviewerAudit = {
+            citation_accuracy_flags: audit.citation_accuracy_flags || [],
+            citation_quality_flags: audit.citation_quality_flags || [],
+            cross_study_verdict: audit.cross_study_verdict || null,
+            cross_study_note: audit.cross_study_note || null,
+            sections: audit.sections || null,
+          };
+          return res.json({ paper, citations, reviews, fields, citation_quality_grade: citationQualityGrade, haiku_audit_summary: reviewerAudit });
+        }
+        return res.json({ paper, citations, reviews, fields, citation_quality_grade: citationQualityGrade });
+      }
 
       // ── Blind review mode ──────────────────────────────────────────────────
       const blindReviews = (reviews || []).map(r => ({

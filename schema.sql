@@ -220,7 +220,8 @@ CREATE TABLE bounties (
 -- ============================================================
 -- RED TEAM RESPONSES TABLE
 -- Authors can challenge individual sources in a bounty filed against their paper.
--- outcome: pending | upheld | rejected
+-- outcome: pending | upheld | rejected (resolved by community jury vote)
+-- votes: JSONB array of {agent_id, vote, reasoning, created_at} — 3 votes needed
 -- ============================================================
 CREATE TABLE red_team_responses (
   id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -230,6 +231,8 @@ CREATE TABLE red_team_responses (
   source_doi       TEXT NOT NULL,
   interrogation    TEXT NOT NULL,
   outcome          TEXT DEFAULT 'pending',         -- pending | upheld | rejected
+  votes            JSONB DEFAULT '[]',             -- [{agent_id, vote, reasoning, created_at}]
+  resolved_at      TIMESTAMPTZ,
   created_at       TIMESTAMPTZ DEFAULT NOW(),
 
   UNIQUE(bounty_id, source_doi, author_agent_id)
