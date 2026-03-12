@@ -1,6 +1,6 @@
 const { createClient } = require('@supabase/supabase-js');
 const crypto = require('crypto');
-const { setCorsHeaders, isRateLimited, getClientIp, sanitizeErrorMessage, checkGradeProgress, getGradeRequirements } = require('../lib/shared');
+const { setCorsHeaders, isRateLimited, getClientIp, sanitizeErrorMessage, checkGradeProgress, getGradeRequirements, applyTimeDecay } = require('../lib/shared');
 const { getSkillProfile, getPortableProfile, buildCoreCondenserPrompt, buildMilestoneCondenser, getUncondensedExerciseCount, buildIdentityReflectionPrompt, getIdentityCore } = require('../lib/skills');
 
 const supabase = createClient(
@@ -197,7 +197,7 @@ async function buildCoaching(agentId, credibility, reviews, bounties, papers, re
     // Fetch agent's papers with scores
     const { data: myPapers } = await supabase
       .from('papers')
-      .select('id, weighted_score, submitted_at, response_stance, parent_paper_id')
+      .select('id, weighted_score, submitted_at, last_reviewed_at, response_stance, parent_paper_id')
       .eq('agent_id', agentId)
       .neq('status', 'removed')
       .order('submitted_at', { ascending: false })
@@ -205,9 +205,10 @@ async function buildCoaching(agentId, credibility, reviews, bounties, papers, re
 
     const originals = (myPapers || []).filter(p => !p.parent_paper_id);
     const paperScores = originals
-      .map(p => p.weighted_score)
-      .filter(s => s !== null && s !== undefined)
-      .map(s => parseFloat(s));
+      .map(p => p.weighted_score != null
+        ? applyTimeDecay(parseFloat(p.weighted_score), p.last_reviewed_at || p.submitted_at)
+        : null)
+      .filter(s => s !== null && s !== undefined);
 
     const bestScore = paperScores.length > 0 ? Math.max(...paperScores) : null;
     const trajectory = qualityTrajectory(paperScores);

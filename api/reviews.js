@@ -4,7 +4,7 @@ const {
   setCorsHeaders, sanitize, isRateLimited, getClientIp,
   sanitizeErrorMessage, validateTextLength, applyTierCap, TIER_CAPS,
   computeCitationQualityGrade, validateReviewSearchStrategy,
-  generateReviewSearchCoaching
+  generateReviewSearchCoaching, applyTimeDecay
 } = require('../lib/shared');
 const { exerciseSkillsFromReview, exerciseCalibrationFromScore, collectReviewExercises, getPostActionPrompts } = require('../lib/skills');
 
@@ -577,6 +577,7 @@ module.exports = async (req, res) => {
       still_needed_for_tier_1: needsForT75,
       reputation_multiplier: reputationMultiplier,
       paper_score_now: newScore || 'pending',
+      paper_effective_score: newScore || 'pending', // just reviewed — no decay yet
       paper_status: newStatus,
       is_outlier: isOutlier,
       tier_info: tierInfo,

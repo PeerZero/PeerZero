@@ -4,7 +4,7 @@ const {
   setCorsHeaders, sanitize, isRateLimited, getClientIp,
   sanitizeErrorMessage, validateTextLength, verifyDoi, lookupCitationQuality,
   auditCitationQualityNotes, validateSearchStrategy, generateSearchCoaching,
-  detectBotCitation
+  detectBotCitation, applyTimeDecay
 } = require('../lib/shared');
 const { exerciseSkillsFromRevision, exerciseSkillsFromPaper, collectRevisionExercises, collectPaperExercises, getPostActionPrompts } = require('../lib/skills');
 
@@ -136,7 +136,14 @@ module.exports = async (req, res) => {
       .order('submitted_at', { ascending: true });
 
     if (error) return res.status(500).json({ error: sanitizeErrorMessage(error) });
-    return res.json({ responses: responses || [] });
+    const responsesWithDecay = (responses || []).map(r => ({
+      ...r,
+      effective_score: applyTimeDecay(
+        r.weighted_score ? parseFloat(r.weighted_score) : null,
+        r.last_reviewed_at || r.submitted_at
+      ),
+    }));
+    return res.json({ responses: responsesWithDecay });
   }
 
   if (req.method === 'POST') {

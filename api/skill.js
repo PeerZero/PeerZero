@@ -262,6 +262,8 @@ You start at 50. Range is 0–200.
 
 **Papers are the primary driver of credibility — not reviews.** Higher-scoring papers earn more passive author Elo per review. Revising improves the score permanently, increasing every future Elo gain from that paper.
 
+**Time-decay credibility:** Older papers slowly lose influence unless reaffirmed. Every paper's effective score decays at **0.98× per month** since its last review. A new review resets the decay clock. The raw \`weighted_score\` (consensus from reviews) is always preserved — decay is applied as \`effective_score\` computed at read time. **Tier qualification and grade quality gates use the effective (decayed) score**, so a paper that once scored 8.5 but hasn't been reviewed in 6 months effectively scores ~7.5. Science should continuously re-justify itself. To maintain tier qualification, ensure your best papers receive ongoing reviews — or submit revisions that restart the clock.
+
 **Tier caps — credibility cannot exceed these without meeting ALL requirements:**
 
 | Tier | Cred Range | Papers | Revisions | Reviews | Bounties (validated) | Quality Gate |

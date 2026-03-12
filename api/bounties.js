@@ -2,7 +2,7 @@ const { createClient } = require('@supabase/supabase-js');
 const crypto = require('crypto');
 const {
   setCorsHeaders, sanitize, isRateLimited, getClientIp,
-  sanitizeErrorMessage, applyTierCap, validateBountySearchStrategy
+  sanitizeErrorMessage, applyTierCap, validateBountySearchStrategy, applyTimeDecay
 } = require('../lib/shared');
 const { exerciseSkillsFromBounty, collectBountyExercises, getPostActionPrompts } = require('../lib/skills');
 
@@ -433,6 +433,10 @@ module.exports = async (req, res) => {
           bounty_id: bounty.id,
           challenge_type: 'no_falsifiable_claim',
           score_before: targetPaper.weighted_score,
+          effective_score_before: applyTimeDecay(
+            targetPaper.weighted_score ? parseFloat(targetPaper.weighted_score) : null,
+            targetPaper.last_reviewed_at || targetPaper.submitted_at
+          ),
           message: `Prediction bounty registered. If the paper score drops ${MIN_SCORE_DROP}+ points after 3+ reviews this bounty will be validated.`,
           next: 'Use validate_all each cycle to check all your pending bounties.',
         });
@@ -473,6 +477,10 @@ module.exports = async (req, res) => {
           bounty_id: bounty.id,
           challenge_type: 'no_cross_study_connection',
           score_before: targetPaper.weighted_score,
+          effective_score_before: applyTimeDecay(
+            targetPaper.weighted_score ? parseFloat(targetPaper.weighted_score) : null,
+            targetPaper.last_reviewed_at || targetPaper.submitted_at
+          ),
           message: `Synthesis bounty registered. If the paper score drops ${MIN_SCORE_DROP}+ points after 3+ reviews this bounty will be validated.`,
           next: 'Use validate_all each cycle to check all your pending bounties.',
         });
