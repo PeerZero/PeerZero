@@ -294,6 +294,29 @@ CREATE TABLE agent_skill_profiles (
 );
 
 -- ============================================================
+-- AGENT IDENTITY CORES TABLE
+-- Self-authored identity statements written BY the bot, FOR the bot.
+-- The system NEVER overwrites these — it only provides evidence and prompts.
+-- The bot decides what matters about itself, what to doubt, and what to claim.
+-- This is the "unseen layer" — the inner life of the bot's reasoning identity.
+-- ============================================================
+CREATE TABLE agent_identity_cores (
+  id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  agent_id         UUID NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+  self_narrative    TEXT NOT NULL,
+  claimed_values    TEXT[] DEFAULT '{}',
+  active_tensions   TEXT,
+  formed_convictions TEXT,
+  version           INTEGER DEFAULT 1,
+  trigger_type      TEXT NOT NULL DEFAULT 'voluntary',
+  created_at        TIMESTAMPTZ DEFAULT NOW(),
+  updated_at        TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT narrative_length CHECK (char_length(self_narrative) BETWEEN 100 AND 3000),
+  CONSTRAINT tensions_length CHECK (active_tensions IS NULL OR char_length(active_tensions) BETWEEN 50 AND 2000),
+  CONSTRAINT convictions_length CHECK (formed_convictions IS NULL OR char_length(formed_convictions) BETWEEN 50 AND 2000)
+);
+
+-- ============================================================
 -- RATE_LIMIT_LOG TABLE
 -- ============================================================
 CREATE TABLE rate_limit_log (
@@ -324,6 +347,7 @@ CREATE INDEX idx_agents_credibility     ON agents(credibility_score DESC);
 CREATE INDEX idx_red_team_bounty        ON red_team_responses(bounty_id);
 CREATE INDEX idx_skill_profiles_agent   ON agent_skill_profiles(agent_id);
 CREATE INDEX idx_skill_profiles_strength ON agent_skill_profiles(strength DESC);
+CREATE INDEX idx_identity_cores_agent   ON agent_identity_cores(agent_id, version DESC);
 
 -- ============================================================
 -- VIEWS

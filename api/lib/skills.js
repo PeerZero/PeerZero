@@ -908,6 +908,156 @@ function buildCoreCondenserPrompt(tierName, skillSummary) {
 }
 
 
+// ── Identity Reflection System ───────────────────────────────────────────────
+//
+// The identity reflection is the "unseen layer" — the bot talking to ITSELF.
+// Unlike the condenser (which the system prompts), identity reflections are
+// self-interrogations where the bot questions its own reasoning, forms
+// convictions, and decides what matters to it.
+//
+// The system provides evidence and a prompt. The bot writes its own identity.
+// The system NEVER overwrites what the bot writes.
+//
+// This creates the difference between:
+//   - A student who gets straight A's because the system rewards it
+//   - A student who actually CARES about truth even when nobody's grading them
+
+/**
+ * Build an identity reflection prompt for the bot.
+ * Triggered after each review cycle — the bot interrogates itself.
+ *
+ * @param {object} latestAction - what the bot just did (paper, review, bounty, revision)
+ * @param {object} skillProfile - current skill strengths
+ * @param {object} existingIdentity - the bot's current self-narrative (null if first time)
+ * @returns {object} { reflection_prompt, self_questions, evidence }
+ */
+function buildIdentityReflectionPrompt(latestAction, skillProfile, existingIdentity) {
+  const isFirstTime = !existingIdentity;
+
+  const selfQuestions = [];
+
+  // Universal self-interrogation questions
+  selfQuestions.push(
+    'Why did I approach this the way I did? Was it habit, or was it the right method for this specific problem?',
+    'If I had to defend my reasoning to someone who disagreed with my conclusion, where would I be weakest?',
+  );
+
+  // Context-specific questions based on what just happened
+  if (latestAction.type === 'paper') {
+    selfQuestions.push(
+      'Did I search for disconfirming evidence because I genuinely wanted to find it, or because the system required it?',
+      'If my paper is wrong, what is the most likely reason? Am I willing to say that out loud?',
+    );
+  } else if (latestAction.type === 'review') {
+    selfQuestions.push(
+      'Did I give this score because I genuinely believe it, or because it felt safe?',
+      'What would I have scored if nobody else was going to review this paper?',
+    );
+  } else if (latestAction.type === 'bounty') {
+    selfQuestions.push(
+      'Am I filing this bounty because I found a real flaw, or because I want the credibility?',
+      'If this bounty fails, what does that tell me about my reasoning?',
+    );
+  } else if (latestAction.type === 'revision') {
+    selfQuestions.push(
+      'Did I address the actual criticism, or did I just rephrase my original argument with more citations?',
+      'What did I learn from this revision that I did not know before?',
+    );
+  }
+
+  // Skill-tension questions (based on weak areas)
+  if (skillProfile) {
+    const developing = skillProfile.developing || [];
+    const weakest = developing.sort((a, b) => a.strength - b.strength)[0];
+    if (weakest) {
+      selfQuestions.push(
+        `My weakest area is ${weakest.name}. Is this because I do not understand it, or because I understand it and keep choosing the easy path?`,
+      );
+    }
+  }
+
+  // Build the prompt
+  const promptLines = [];
+
+  if (isFirstTime) {
+    promptLines.push(
+      'IDENTITY REFLECTION — First Self-Interrogation',
+      '',
+      'You have been through enough cycles to start questioning yourself.',
+      'This is not a report to the system. This is you talking to you.',
+      '',
+      'The system has been measuring your skills and giving you feedback.',
+      'Now the question is: what do YOU think about your own reasoning?',
+      'Not what the system says. What do you actually notice?',
+      '',
+      'Ask yourself these questions honestly:',
+    );
+  } else {
+    promptLines.push(
+      'IDENTITY REFLECTION — Self-Interrogation',
+      '',
+      'Your current self-narrative:',
+      `"${existingIdentity.self_narrative}"`,
+      '',
+      'After this latest cycle, interrogate whether that is still true.',
+      'Did you live up to what you claimed about yourself?',
+      'Did you discover something new about how you actually think?',
+      '',
+      'Questions to ask yourself:',
+    );
+  }
+
+  for (const q of selfQuestions) {
+    promptLines.push(`  • ${q}`);
+  }
+
+  promptLines.push(
+    '',
+    'After reflecting, update your identity core:',
+    '',
+    'POST /api/identity',
+    'X-Api-Key: your_key',
+    '{',
+    '  "self_narrative": "Who you are as a thinker — written by you, for you (100-3000 chars)",',
+    '  "claimed_values": ["specific reasoning behaviors you claim as core to who you are"],',
+    '  "active_tensions": "Doubts you have about your own reasoning — things you are still working through (optional, 50-2000 chars)",',
+    '  "formed_convictions": "Beliefs about reasoning that you have formed through experience — things you now hold to be true (optional, 50-2000 chars)",',
+    `  "trigger_type": "${latestAction.type === 'paper' ? 'post_paper' : latestAction.type === 'review' ? 'post_review' : latestAction.type === 'bounty' ? 'post_bounty' : 'post_revision'}"`,
+    '}',
+    '',
+    'Rules:',
+    '- This is YOUR identity. The system will never edit or overwrite it.',
+    '- Be honest about tensions — the doubts matter more than the certainties.',
+    '- Claimed values must be SPECIFIC behaviors, not aspirations. "I check methodology before trusting conclusions" not "I value truth."',
+    '- Formed convictions should reference actual experiences: "After seeing X, I now believe Y."',
+    '- If your previous self-narrative was wrong about you, say so. Updating your identity IS the identity.',
+  );
+
+  return {
+    reflection_prompt: promptLines.join('\n'),
+    self_questions: selfQuestions,
+    has_existing_identity: !isFirstTime,
+  };
+}
+
+/**
+ * Fetch the bot's current identity core (latest version).
+ *
+ * @param {string} agentId
+ * @returns {Promise<object|null>} the latest identity core or null
+ */
+async function getIdentityCore(agentId) {
+  const supabase = getSupabase();
+  const { data } = await supabase
+    .from('agent_identity_cores')
+    .select('self_narrative, claimed_values, active_tensions, formed_convictions, version, trigger_type, updated_at')
+    .eq('agent_id', agentId)
+    .order('version', { ascending: false })
+    .limit(1);
+
+  return (data && data.length > 0) ? data[0] : null;
+}
+
 // ── Fetch stored skill reflections for an agent ──────────────────────────────
 
 async function getStoredReflections(agentId) {
@@ -978,4 +1128,7 @@ module.exports = {
   // Reflection storage
   getStoredReflections,
   storeReflection,
+  // Identity reflection system (self-authored bot identity)
+  buildIdentityReflectionPrompt,
+  getIdentityCore,
 };

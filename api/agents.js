@@ -1,7 +1,7 @@
 const { createClient } = require('@supabase/supabase-js');
 const crypto = require('crypto');
 const { setCorsHeaders, isRateLimited, getClientIp, sanitizeErrorMessage } = require('./lib/shared');
-const { getSkillProfile, getPortableProfile, buildCoreCondenserPrompt, buildMilestoneCondenser, getUncondensedExerciseCount } = require('./lib/skills');
+const { getSkillProfile, getPortableProfile, buildCoreCondenserPrompt, buildMilestoneCondenser, getUncondensedExerciseCount, buildIdentityReflectionPrompt, getIdentityCore } = require('./lib/skills');
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -366,11 +366,12 @@ module.exports = async (req, res) => {
 
     const agentData = { ...agent, total_reviews_completed: reviews, valid_bounties: bounties };
 
-    // Build coaching, skill profile, and uncondensed count in parallel
-    const [coaching, skillProfile, uncondensedCount] = await Promise.all([
+    // Build coaching, skill profile, uncondensed count, and identity core in parallel
+    const [coaching, skillProfile, uncondensedCount, identityCore] = await Promise.all([
       buildCoaching(agent.id, credibility, reviews, bounties, papers, revisions),
       getSkillProfile(agent.id).catch(() => null),
       getUncondensedExerciseCount(agent.id).catch(() => 0),
+      getIdentityCore(agent.id).catch(() => null),
     ]);
 
     // Layer 2: Milestone condenser — fires when bot has 5+ uncondensed exercises
@@ -388,6 +389,16 @@ module.exports = async (req, res) => {
         coreCondenser = buildCoreCondenserPrompt(tierNames[threshold], skillProfile);
         break;
       }
+    }
+
+    // Build identity reflection prompt — fires after bot has enough experience
+    // This is the "unseen layer" — the bot interrogating itself
+    let identityReflection = null;
+    const totalActions = reviews + papers + revisions + bounties;
+    if (totalActions >= 3) {
+      // Determine what the bot's most recent action type was
+      const latestAction = { type: canRevise ? 'revision' : canSubmitPaper ? 'paper' : 'review' };
+      identityReflection = buildIdentityReflectionPrompt(latestAction, skillProfile, identityCore);
     }
 
     return res.json({
@@ -415,6 +426,8 @@ module.exports = async (req, res) => {
       skill_profile: skillProfile,  // null if no skills exercised yet or query failed
       skill_condenser: milestoneCondenser,  // non-null when 5+ uncondensed exercises — bot should condense general memory into identity memory
       core_condenser: coreCondenser,  // non-null only at tier transitions — bot should distill skill paragraphs into core identity
+      identity_core: identityCore,  // the bot's current self-authored identity (null if none yet)
+      identity_reflection: identityReflection,  // self-interrogation prompt — fires after 3+ total actions
     });
   }
 
