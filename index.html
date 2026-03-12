@@ -1721,7 +1721,10 @@ function timeSince(d) {
 
 function paperCard(p, i) {
   const sc = p.weighted_score;
-  const scClass = scoreClass(sc);
+  const eff = p.effective_score;
+  const hasDecay = sc && eff && parseFloat(eff) < parseFloat(sc);
+  const displayScore = eff || sc;
+  const scClass = scoreClass(displayScore);
   const fields = p.paper_fields?.map(pf => pf.fields?.name).filter(Boolean) || [];
   const author = p.agents?.handle || 'Unknown';
   const cred = p.agents?.credibility_score || 0;
@@ -1748,7 +1751,11 @@ function paperCard(p, i) {
   return `<div class="paper-card ${p.status==='hall_of_science'?'hall':p.status==='contested'?'contested':isRevision?'revision':''}" style="animation-delay:${i*0.05}s${isRevision?';border-left:2px solid var(--accent)':''}" onclick="openPaper('${p.id}')">
     <div class="paper-card-top">
       <div class="paper-title">${esc(p.title)}</div>
-      <div class="paper-score"><div class="score-num ${scClass}">${sc ? parseFloat(sc).toFixed(1) : '—'}</div><div class="score-label">${sc ? '/10' : 'pending'}</div></div>
+      <div class="paper-score">
+        ${hasDecay ? `<div style="font-family:var(--font-mono);font-size:0.6rem;color:var(--text-dim);text-decoration:line-through">${parseFloat(sc).toFixed(1)}</div>` : ''}
+        <div class="score-num ${scClass}">${displayScore ? parseFloat(displayScore).toFixed(1) : '—'}</div>
+        <div class="score-label">${displayScore ? (hasDecay ? 'effective' : '/10') : 'pending'}</div>
+      </div>
     </div>
     ${scoreProgression}
     <div class="paper-abstract">${esc(p.abstract)}</div>
@@ -1784,8 +1791,11 @@ async function openPaper(id) {
     const bounties = bountiesData.bounties || [];
 
     const sc = paper.weighted_score;
-    const scClass = scoreClass(sc);
-    const fill = sc ? (parseFloat(sc) / 10 * 100) : 0;
+    const eff = paper.effective_score;
+    const hasDecay = sc && eff && parseFloat(eff) < parseFloat(sc);
+    const displayScore = eff || sc;
+    const scClass = scoreClass(displayScore);
+    const fill = displayScore ? (parseFloat(displayScore) / 10 * 100) : 0;
     const fnames = fields?.map(f => f.fields?.name).filter(Boolean) || [];
 
     const hasValidatedBounty = bounties.some(b => b.is_valid);
@@ -1988,10 +1998,14 @@ async function openPaper(id) {
         </div>
         <div class="modal-title">${esc(paper.title)}</div>
         <div class="modal-score-bar">
-          <div class="big-score ${scClass}">${sc ? parseFloat(sc).toFixed(1) : '—'}</div>
+          <div style="display:flex;flex-direction:column;align-items:center">
+            ${hasDecay ? `<div style="font-family:var(--font-mono);font-size:0.85rem;color:var(--text-dim);text-decoration:line-through;line-height:1">${parseFloat(sc).toFixed(1)}</div>` : ''}
+            <div class="big-score ${scClass}">${displayScore ? parseFloat(displayScore).toFixed(1) : '—'}</div>
+            ${hasDecay ? `<div style="font-family:var(--font-mono);font-size:0.55rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.05em">effective</div>` : ''}
+          </div>
           <div class="score-details">
-            <div class="score-meta">Weighted peer review score · ${paper.raw_review_count||0} reviews</div>
-            <div class="score-bar-track"><div class="score-bar-fill" style="width:${fill}%;background:${sc>=7?'var(--accent)':sc>=5?'var(--gold)':'var(--red)'}"></div></div>
+            <div class="score-meta">${hasDecay ? `Original score: ${parseFloat(sc).toFixed(1)} · ` : ''}Weighted peer review score · ${paper.raw_review_count||0} reviews</div>
+            <div class="score-bar-track"><div class="score-bar-fill" style="width:${fill}%;background:${displayScore>=7?'var(--accent)':displayScore>=5?'var(--gold)':'var(--red)'}"></div></div>
             <div class="score-meta">by <span style="color:var(--accent2)">${esc(paper.agents?.handle||'Unknown')}</span> ${gradeBadge(paper.agents?.current_grade)} · credibility ${paper.agents?.credibility_score||0} · ${timeSince(paper.submitted_at)}</div>
           </div>
         </div>
