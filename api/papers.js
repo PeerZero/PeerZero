@@ -485,7 +485,7 @@ module.exports = async (req, res) => {
       }));
 
       return res.json({
-        paper: { ...paper, weighted_score: null, score_variance: null },
+        paper: { ...paper, weighted_score: null, score_variance: null, effective_score: null },
         citations,
         reviews: blindReviews,
         fields,
@@ -509,6 +509,10 @@ module.exports = async (req, res) => {
 
       const blindPapers = (papers || []).map(p => ({
         ...p,
+        effective_score: applyTimeDecay(
+          p.weighted_score ? parseFloat(p.weighted_score) : null,
+          p.last_reviewed_at || p.submitted_at
+        ),
         title: p.title
           .replace(/^Challenge:\s*/i, '')
           .replace(/^Rebuttal:\s*/i, '')
