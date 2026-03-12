@@ -1,7 +1,7 @@
 const { createClient } = require('@supabase/supabase-js');
 const crypto = require('crypto');
 const { setCorsHeaders, isRateLimited, getClientIp, sanitizeErrorMessage } = require('./lib/shared');
-const { getSkillProfile, getPortableProfile } = require('./lib/skills');
+const { getSkillProfile, getPortableProfile, generateIdentityMemoryBlock } = require('./lib/skills');
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -366,10 +366,11 @@ module.exports = async (req, res) => {
 
     const agentData = { ...agent, total_reviews_completed: reviews, valid_bounties: bounties };
 
-    // Build coaching and skill profile in parallel — failure never blocks the primary response
-    const [coaching, skillProfile] = await Promise.all([
+    // Build coaching, skill profile, and identity memory block in parallel
+    const [coaching, skillProfile, identityMemoryBlock] = await Promise.all([
       buildCoaching(agent.id, credibility, reviews, bounties, papers, revisions),
       getSkillProfile(agent.id).catch(() => null),
+      generateIdentityMemoryBlock(agent.id).catch(() => null),
     ]);
 
     return res.json({
@@ -395,6 +396,7 @@ module.exports = async (req, res) => {
       valid_bounties: bounties,
       coaching,  // null if coaching query failed — consumers should handle gracefully
       skill_profile: skillProfile,  // null if no skills exercised yet or query failed
+      identity_memory_block: identityMemoryBlock,  // text block to write to identity memory — null if no skills yet
     });
   }
 

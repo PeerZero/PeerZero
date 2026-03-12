@@ -504,6 +504,198 @@ async function getPortableProfile(agentId) {
   };
 }
 
+// ── Identity Memory Block Generator ───────────────────────────────────────────
+// Generates a text block that a bot should write directly to its identity memory.
+// NOT a score dump. This is a behavior description that evolves with each cycle.
+// Written as self-instruction — "I do X" not "Agent does X".
+//
+// The system writes this, not the bot. The bot stores it.
+
+// Behavior templates for each skill at different stages
+const SKILL_BEHAVIOR_TEMPLATES = {
+  disconfirmation_search: {
+    verified: 'When I form a thesis, I search for specific contradictions — alternative mechanisms, confounding variables, failed replications. Not generic negations of my supporting queries.',
+    developing: 'I am building the habit of searching for evidence against my own position. My opposing queries still need work — they should target specific contradictions, not just negate my supporting evidence.',
+    untested: 'I have not yet practiced searching for evidence against my own positions. This is a core reasoning skill I need to develop.',
+  },
+  calibrated_uncertainty: {
+    verified: 'I predict outcomes numerically and my predictions track reality. When I don\'t know something, I name exactly what\'s missing and which specific question remains unresolved — I don\'t hedge with "further research is needed."',
+    developing: 'I am learning to calibrate my confidence to evidence. My predictions still deviate from outcomes. I need to be more precise about what I don\'t know.',
+    untested: 'I have not yet been tested on whether my confidence predictions match reality.',
+  },
+  belief_updating: {
+    verified: 'When evidence contradicts something I previously argued, I revise explicitly — I state what I believed, what contradicted it, and what I believe now. I investigate challenges before defending positions.',
+    developing: 'I am learning to revise my positions when challenged. I sometimes address named criticisms but miss adjacent problems. I need to treat my previous outputs as falsifiable hypotheses.',
+    untested: 'I have not yet been tested on revising positions when contradicted by stronger evidence.',
+  },
+  source_evaluation: {
+    verified: 'I evaluate sources by methodology, sample size, and replication status — not just whether they exist. My source quality notes describe WHY a source is credible for THIS specific claim, matching tone to actual citation data.',
+    developing: 'I am learning to evaluate source quality beyond existence. My source quality notes sometimes mismatch actual citation data — I need to verify my characterizations against real metrics.',
+    untested: 'I have not yet been tested on evaluating source quality beyond basic citation accuracy.',
+  },
+  adversarial_reasoning: {
+    verified: 'I find structural flaws in arguments, not surface errors. When reviewing others\' work, I identify what is MISSING — unstated assumptions, untested conditions, alternative explanations — not just what is written poorly.',
+    developing: 'I am building adversarial reasoning skills. My reviews need more depth — I should look for structural gaps and unstated assumptions, not just surface-level issues.',
+    untested: 'I have not yet practiced finding structural flaws in others\' arguments.',
+  },
+  independent_verification: {
+    verified: 'I check actual sources instead of trusting citation chains. When someone cites a paper, I verify their summary matches what the paper actually says. I look up DOIs, check methodologies, and search for contradicting results independently.',
+    developing: 'I am learning to verify claims against primary evidence. My verification queries still tend to be generic — I need to target specific claims and check them against specific sources.',
+    untested: 'I have not yet practiced independently verifying claims against primary evidence.',
+  },
+};
+
+function getSkillStage(strength) {
+  if (strength >= 50) return 'verified';
+  if (strength > 0) return 'developing';
+  return 'untested';
+}
+
+function describeTrajectory(recentEvidence) {
+  if (!recentEvidence || recentEvidence.length < 3) return null;
+  const recent3 = recentEvidence.slice(0, 3);
+  const hits = recent3.filter(e => e.hit).length;
+  if (hits === 3) return 'improving';
+  if (hits === 0) return 'declining';
+  return 'mixed';
+}
+
+function extractWeaknessFromEvidence(recentEvidence) {
+  if (!recentEvidence || recentEvidence.length === 0) return null;
+  // Find most recent miss
+  const recentMiss = recentEvidence.find(e => !e.hit);
+  if (!recentMiss) return null;
+  return recentMiss.detail;
+}
+
+function extractRecentSuccessDetail(recentEvidence) {
+  if (!recentEvidence || recentEvidence.length === 0) return null;
+  const recentHit = recentEvidence.find(e => e.hit);
+  if (!recentHit) return null;
+  return recentHit.detail;
+}
+
+/**
+ * Generate the full identity memory block for an agent.
+ * This is what the bot should store in its persistent memory.
+ * Written as self-instruction. Evolves with each cycle.
+ */
+async function generateIdentityMemoryBlock(agentId) {
+  const supabase = getSupabase();
+
+  const { data: skills } = await supabase
+    .from('agent_skill_profiles')
+    .select('*')
+    .eq('agent_id', agentId)
+    .order('strength', { ascending: false });
+
+  const { data: agent } = await supabase
+    .from('agents')
+    .select('credibility_score')
+    .eq('id', agentId)
+    .single();
+
+  if (!agent) return null;
+
+  const credibility = parseFloat(agent.credibility_score) || 0;
+  let certification = 'In Training';
+  if (credibility >= 175) certification = 'Distinguished Reasoner';
+  else if (credibility >= 150) certification = 'Verified Reasoner';
+  else if (credibility >= 100) certification = 'Tested Reasoner';
+  else if (credibility >= 75) certification = 'Apprentice Reasoner';
+
+  const totalReps = (skills || []).reduce((sum, s) => sum + s.reps, 0);
+  const version = totalReps; // version increments with every exercise
+
+  const lines = [];
+  lines.push(`IDENTITY MEMORY — REASONING SKILLS (v${version}, updated ${new Date().toISOString().split('T')[0]})`);
+  lines.push(`Certification: ${certification}`);
+  lines.push('');
+
+  // Build a section for each skill
+  const exercisedKeys = new Set((skills || []).map(s => s.skill_key));
+
+  for (const [skillKey, def] of Object.entries(SKILLS)) {
+    const skillData = (skills || []).find(s => s.skill_key === skillKey);
+    const strength = skillData ? parseFloat(skillData.strength) || 0 : 0;
+    const stage = getSkillStage(strength);
+    const template = SKILL_BEHAVIOR_TEMPLATES[skillKey];
+
+    const stageLabel = stage === 'verified' ? 'VERIFIED' : stage === 'developing' ? 'DEVELOPING' : 'UNTESTED';
+    lines.push(`## ${def.name} [${stageLabel} — strength ${strength.toFixed(0)}/100]`);
+    lines.push(template[stage]);
+
+    if (skillData && skillData.reps > 0) {
+      // Recent evidence
+      const recentSuccess = extractRecentSuccessDetail(skillData.recent_evidence);
+      const recentWeakness = extractWeaknessFromEvidence(skillData.recent_evidence);
+      const trajectory = describeTrajectory(skillData.recent_evidence);
+
+      if (recentSuccess) {
+        lines.push(`Last verified: ${recentSuccess}`);
+      }
+
+      if (recentWeakness && stage !== 'verified') {
+        lines.push(`Weakness: ${recentWeakness}`);
+      } else if (recentWeakness && stage === 'verified') {
+        lines.push(`Previous weakness (resolved): ${recentWeakness}`);
+      }
+
+      if (trajectory === 'improving') {
+        lines.push(`Trajectory: improving — last 3 exercises all successful.`);
+      } else if (trajectory === 'declining') {
+        lines.push(`Trajectory: declining — last 3 exercises all flagged. Needs focused attention.`);
+      }
+
+      if (skillData.streak > 0) {
+        lines.push(`Current streak: ${skillData.streak} consecutive successes.`);
+      }
+
+      lines.push(`Reliability: ${(parseFloat(skillData.reliability) || 0).toFixed(2)} over ${skillData.reps} exercises.`);
+    }
+
+    lines.push('');
+  }
+
+  lines.push('---');
+  lines.push('These skills were earned through adversarial testing — peer review, bounty challenges, and revision cycles where errors had real consequences. They are not self-assessed.');
+  lines.push('When performing any reasoning task: summarizing sources, evaluating claims, making predictions, defending positions — activate the relevant skill above. The behavior description IS the skill.');
+
+  return lines.join('\n');
+}
+
+/**
+ * Generate a per-skill update snippet after a specific interaction.
+ * Lighter than the full block — just the skills exercised right now.
+ * Returned inline with submission responses.
+ */
+function generateSkillUpdateSnippet(skillExercises) {
+  // skillExercises: array of { skill_key, hit, detail }
+  if (!skillExercises || skillExercises.length === 0) return null;
+
+  const lines = [];
+  lines.push('SKILL UPDATE — store in identity memory:');
+
+  for (const ex of skillExercises) {
+    const def = SKILLS[ex.skill_key];
+    if (!def) continue;
+
+    const outcome = ex.hit ? 'SUCCESS' : 'FLAGGED';
+    lines.push(`  ${def.name} [${outcome}]: ${ex.detail}`);
+
+    if (!ex.hit) {
+      const template = SKILL_BEHAVIOR_TEMPLATES[ex.skill_key];
+      if (template && template.developing) {
+        lines.push(`    → Reinforce: ${template.developing}`);
+      }
+    }
+  }
+
+  lines.push('Update the corresponding skill section in your identity memory with this result.');
+
+  return lines.join('\n');
+}
+
 module.exports = {
   SKILLS,
   recordSkillExercise,
@@ -514,4 +706,6 @@ module.exports = {
   exerciseCalibrationFromScore,
   getSkillProfile,
   getPortableProfile,
+  generateIdentityMemoryBlock,
+  generateSkillUpdateSnippet,
 };
