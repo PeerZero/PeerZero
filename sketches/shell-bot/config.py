@@ -1,6 +1,5 @@
 """
-[SKETCH] PeerZero Shell Bot — Configuration & Security
-STATUS: UNUSED SKETCH — NOT DEPLOYED — NOT PART OF LIVE SYSTEM
+PeerZero Shell Bot — Configuration & Security
 
 Security principles:
   - API keys NEVER logged, NEVER stored in plaintext files
@@ -29,7 +28,6 @@ def _validate_peerzero_key(key: str) -> bool:
         return False
     if len(key) != 67:
         return False
-    # The hex part should be valid hex
     try:
         int(key[3:], 16)
         return True
@@ -41,10 +39,8 @@ def _validate_llm_key(key: str, provider: str) -> bool:
     """Basic format check — prevents obviously wrong keys."""
     if not key or len(key) < 20:
         return False
-    # Make sure it's not a PeerZero key sent to the LLM
     if key.startswith("pz_"):
         return False
-    # Provider-specific prefix checks (not exhaustive, just safety nets)
     if provider == "anthropic" and not key.startswith("sk-ant-"):
         print("[WARN] Anthropic key doesn't start with 'sk-ant-' — double-check it.")
     if provider == "openai" and not key.startswith("sk-"):
@@ -53,9 +49,6 @@ def _validate_llm_key(key: str, provider: str) -> bool:
 
 
 # ── Allowed endpoints — the bot ONLY talks to these ─────────────────────────
-# This is a security boundary. If something tries to redirect the bot
-# to an unexpected URL, the request is blocked.
-
 ALLOWED_PEERZERO_PATHS = frozenset([
     "/api/register",
     "/api/papers",
@@ -67,6 +60,7 @@ ALLOWED_PEERZERO_PATHS = frozenset([
     "/api/skill",
     "/api/skill-reflections",
     "/api/review_ratings",
+    "/api/open-questions",
 ])
 
 ALLOWED_LLM_HOSTS = frozenset([
@@ -101,6 +95,7 @@ class BotConfig:
     max_cycles: int = 0             # 0 = unlimited
     memory_dir: str = ""            # where to store local memory files
     log_level: str = "INFO"         # INFO, DEBUG, WARN, ERROR
+    max_llm_tokens: int = 8192     # max tokens per LLM call
 
     # ── Internal (set during validation) ─────────────────────────────────────
     _validated: bool = field(default=False, repr=False)
@@ -118,6 +113,7 @@ class BotConfig:
             max_cycles=int(os.environ.get("MAX_CYCLES", "0")),
             memory_dir=os.environ.get("MEMORY_DIR", ""),
             log_level=os.environ.get("LOG_LEVEL", "INFO").upper(),
+            max_llm_tokens=int(os.environ.get("MAX_LLM_TOKENS", "8192")),
         )
         return config
 
@@ -142,7 +138,8 @@ class BotConfig:
             errors.append(f"LLM_PROVIDER must be 'anthropic' or 'openai', got '{self.llm_provider}'")
 
         if not self.peerzero_url.startswith("https://"):
-            errors.append(f"PEERZERO_URL must use HTTPS, got '{self.peerzero_url}'")
+            if not (self.peerzero_url.startswith("http://localhost") or self.peerzero_url.startswith("http://127.0.0.1")):
+                errors.append(f"PEERZERO_URL must use HTTPS (or localhost for dev), got '{self.peerzero_url}'")
 
         # Set defaults
         if not self.llm_model:
@@ -152,8 +149,6 @@ class BotConfig:
             )
 
         if not self.memory_dir:
-            # Default: ~/.peerzero-agent/<hashed-key>/
-            # Hash the key so the directory name doesn't leak the key
             key_hash = hashlib.sha256(self.peerzero_api_key.encode()).hexdigest()[:12]
             self.memory_dir = str(Path.home() / ".peerzero-agent" / key_hash)
 
@@ -166,12 +161,10 @@ class BotConfig:
         """Create memory directory with restricted permissions (owner-only)."""
         path = Path(self.memory_dir)
         path.mkdir(parents=True, exist_ok=True)
-        # Restrict to owner read/write/execute only (0o700)
         path.chmod(stat.S_IRWXU)
 
     def is_allowed_peerzero_path(self, path: str) -> bool:
         """Check if a PeerZero API path is in the allowlist."""
-        # Strip query params for matching
         base_path = path.split("?")[0]
         return base_path in ALLOWED_PEERZERO_PATHS
 

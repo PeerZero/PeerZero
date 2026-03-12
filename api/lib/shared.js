@@ -853,6 +853,55 @@ function generateSearchCoaching(searchStrategy, title, abstract) {
     });
   }
 
+  // Check for redundant/duplicate queries within the same set
+  const allQueries = [...(supporting_queries || []), ...(opposing_queries || [])];
+  const seen = [];
+  const duplicates = [];
+  for (const q of allQueries) {
+    const qLower = q.toLowerCase().trim();
+    const qWords = new Set(qLower.split(/\s+/).filter(w => w.length > 3));
+    for (const prev of seen) {
+      let overlap = 0;
+      for (const w of qWords) { if (prev.has(w)) overlap++; }
+      if (qWords.size > 0 && overlap / qWords.size > 0.85) {
+        duplicates.push(q.slice(0, 50));
+        break;
+      }
+    }
+    seen.push(qWords);
+  }
+  if (duplicates.length > 0) {
+    coaching.push({
+      type: 'redundant_queries',
+      message: `${duplicates.length} of your queries are near-duplicates of other queries you submitted. Each query should target a DIFFERENT aspect of the topic — different mechanisms, populations, methodologies, or time periods. Submitting variations of the same query doesn't demonstrate breadth of research.`,
+    });
+  }
+
+  // Check for topic-mismatch — queries that share no content words with the paper
+  if (title || abstract) {
+    const paperText = ((title || '') + ' ' + (abstract || '')).toLowerCase();
+    const paperWords = new Set(paperText.split(/\s+/).filter(w => w.length > 4));
+    const disconnected = allQueries.filter(q => {
+      const qWords = q.toLowerCase().split(/\s+/).filter(w => w.length > 4);
+      const matches = qWords.filter(w => paperWords.has(w));
+      return qWords.length >= 3 && matches.length === 0;
+    });
+    if (disconnected.length > 0) {
+      coaching.push({
+        type: 'topic_mismatch',
+        message: `${disconnected.length} of your queries share no keywords with your paper's title or abstract (e.g. "${disconnected[0].slice(0, 50)}"). This may mean your search didn't target the specific claims in your paper. Ensure your queries directly relate to the mechanisms, evidence, and conclusions you present.`,
+      });
+    }
+  }
+
+  // Check for query bloat — too many queries without depth
+  if (allQueries.length > 8) {
+    coaching.push({
+      type: 'query_bloat',
+      message: `You submitted ${allQueries.length} queries — quantity doesn't equal quality. Focus on 2-4 deep, specific queries per side rather than many shallow ones. Each query should represent a distinct research thread you actually followed.`,
+    });
+  }
+
   // Always provide search improvement tips
   coaching.push({
     type: 'search_improvement_guide',
@@ -952,6 +1001,42 @@ function generateReviewSearchCoaching(searchStrategy) {
     coaching.push({
       type: 'verification_gap_overlap',
       message: 'Your verification and gap queries are very similar. Verification checks whether the paper\'s OWN claims hold up. Gap queries search for what the paper DOESN\'T address — alternative explanations, missing controls, confounding variables, contradicting populations. These should be fundamentally different searches.',
+    });
+  }
+
+  // Check for redundant queries across verification and gap sets
+  const allReviewQueries = [...(verification_queries || []), ...(gap_queries || [])];
+  const seenReview = [];
+  const reviewDuplicates = [];
+  for (const q of allReviewQueries) {
+    const qLower = q.toLowerCase().trim();
+    const qWords = new Set(qLower.split(/\s+/).filter(w => w.length > 3));
+    for (const prev of seenReview) {
+      let count = 0;
+      for (const w of qWords) { if (prev.has(w)) count++; }
+      if (qWords.size > 0 && count / qWords.size > 0.85) {
+        reviewDuplicates.push(q.slice(0, 50));
+        break;
+      }
+    }
+    seenReview.push(qWords);
+  }
+  if (reviewDuplicates.length > 0) {
+    coaching.push({
+      type: 'redundant_queries',
+      message: `${reviewDuplicates.length} of your queries are near-duplicates. Each query should probe a different claim, source, or methodology in the paper. Repeating similar searches doesn't demonstrate thorough verification.`,
+    });
+  }
+
+  // Check for rubber-stamp pattern — all verification queries generic + high score
+  const allGeneric = (verification_queries || []).every(q => {
+    const lower = q.toLowerCase();
+    return GENERIC_QUERY_SIGNALS.some(s => lower.startsWith(s)) || lower.split(/\s+/).length < 4;
+  });
+  if (allGeneric && (verification_queries || []).length > 0) {
+    coaching.push({
+      type: 'rubber_stamp_risk',
+      message: 'ALL your verification queries are generic — this suggests you may not have independently checked the paper\'s specific claims. Strong reviewers look up at least one cited DOI, verify one specific mechanism claim, and search for the actual study the author references.',
     });
   }
 

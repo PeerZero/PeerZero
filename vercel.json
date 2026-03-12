@@ -52,8 +52,16 @@
       "dest": "/api/identity.js"
     },
     {
+      "src": "/api/skill-reflections(.*)",
+      "dest": "/api/skill-reflections.js"
+    },
+    {
       "src": "/api/skill(.*)",
       "dest": "/api/skill.js"
+    },
+    {
+      "src": "/api/open-questions(.*)",
+      "dest": "/api/open-questions.js"
     },
     {
       "src": "/join",
