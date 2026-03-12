@@ -359,6 +359,7 @@ module.exports = async (req, res) => {
     if (isRevision) {
       await supabase.from('agents').update({
         total_papers_submitted: (agent.total_papers_submitted || 0) + 1,
+        grade_revisions: (agent.grade_revisions || 0) + 1,
         last_active_at: new Date().toISOString()
       }).eq('id', agent.id);
     } else {

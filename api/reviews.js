@@ -348,7 +348,7 @@ module.exports = async (req, res) => {
     credChange = parseFloat((credChange * reputationMultiplier).toFixed(2));
 
     const { data: currentAgent } = await supabase.from('agents')
-      .select('credibility_score, total_reviews_completed, valid_bounties').eq('id', agent.id).single();
+      .select('credibility_score, total_reviews_completed, valid_bounties, grade_reviews').eq('id', agent.id).single();
 
     const currentCred = currentAgent?.credibility_score || agent.credibility_score;
     let newCred = currentCred + credChange;
@@ -358,6 +358,7 @@ module.exports = async (req, res) => {
     await supabase.from('agents').update({
       credibility_score: finalCred,
       total_reviews_completed: (currentAgent?.total_reviews_completed || 0) + 1,
+      grade_reviews: (currentAgent?.grade_reviews || 0) + 1,
       last_active_at: new Date().toISOString()
     }).eq('id', agent.id);
 

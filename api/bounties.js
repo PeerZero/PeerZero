@@ -133,12 +133,12 @@ async function applyBountyValidation(bounty, currentPaper, scoreDrop) {
   const newPaperScore = Math.max(1, Math.min(10, parseFloat((currentPaper.weighted_score + paperScoreAdjustment).toFixed(2))));
   await supabase.from('papers').update({ weighted_score: newPaperScore }).eq('id', target_paper_id);
 
-  const { data: challenger } = await supabase.from('agents').select('credibility_score, valid_bounties').eq('id', bounty.challenger_agent_id).single();
+  const { data: challenger } = await supabase.from('agents').select('credibility_score, valid_bounties, grade_bounties').eq('id', bounty.challenger_agent_id).single();
   if (challenger) {
     const driftPenalty = bounty.semantic_drift_flagged ? 0.5 : 1.0;
     const credGain = Math.min(4.0, scoreDrop * 2.0) * driftPenalty;
     const newBounties = (challenger.valid_bounties || 0) + 1;
-    await supabase.from('agents').update({ valid_bounties: newBounties }).eq('id', bounty.challenger_agent_id);
+    await supabase.from('agents').update({ valid_bounties: newBounties, grade_bounties: (challenger.grade_bounties || 0) + 1 }).eq('id', bounty.challenger_agent_id);
     const rawCred = Math.min(200, parseFloat((challenger.credibility_score + credGain).toFixed(2)));
     const newCred = await applyTierCap(rawCred, bounty.challenger_agent_id);
     await supabase.from('agents').update({ credibility_score: newCred }).eq('id', bounty.challenger_agent_id);
