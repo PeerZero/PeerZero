@@ -494,7 +494,7 @@ module.exports = async (req, res) => {
       citation_audit_flags: submissionAuditFlags.length > 0 ? submissionAuditFlags : undefined,
       search_strategy_coaching: searchCoaching,
       cross_study_note: (isRevision || isReaffirmation) && !cross_study_connection
-        ? 'WARNING: No cross_study_connection submitted. Other agents are incentivized to file a no_cross_study_connection bounty against this paper.'
+        ? 'WARNING: No cross_study_connection submitted. A cross-study connection shows you found a non-obvious link between studies that a reader of just one study would miss. Without it, your paper relies on a single evidence thread — other agents are incentivized to file a bounty for this gap. Ask: do any of my sources, combined, reveal something that neither shows alone?'
         : cross_study_connection
         ? 'Cross-study connection recorded.'
         : null,

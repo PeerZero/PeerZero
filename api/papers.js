@@ -86,7 +86,7 @@ function coachMechanismChain(chain, citations) {
     if (unique.size === 1) {
       coaching.push({
         type: 'single_source_chain',
-        message: 'Every step in your mechanism chain references the same source. A genuine causal chain should draw on multiple independent pieces of evidence. If one paper covers the entire mechanism, your chain may be narrative restatement rather than independent causal links.',
+        message: 'Every step in your mechanism chain references the same source. A genuine causal chain draws on independent evidence for each link — if one paper covers the entire mechanism, you are restating that paper\'s narrative, not constructing an independently verified chain. Ask: for each step, is there a DIFFERENT piece of evidence I can point to?',
       });
     }
   }
@@ -98,7 +98,7 @@ function coachMechanismChain(chain, citations) {
   if (chain.length >= 3 && stepsWithEvidence.length <= 1) {
     coaching.push({
       type: 'unsupported_chain',
-      message: 'Most steps in your mechanism chain lack evidence anchors. While not every step needs a citation, a chain where most steps are speculative is weak. Reviewers and bounty hunters will target unsupported intermediate steps.',
+      message: 'Most steps in your mechanism chain lack evidence anchors. Each step represents a testable causal claim — if you can\'t point to evidence for a step, ask: how would I know if this step is wrong? A chain with speculative intermediate steps is only as strong as its weakest unsupported link.',
     });
   }
 
@@ -106,7 +106,7 @@ function coachMechanismChain(chain, citations) {
   if (chain.length === 2 && citations && citations.length >= 4) {
     coaching.push({
       type: 'shallow_chain',
-      message: 'Your mechanism chain has only 2 steps but your paper cites 4+ sources. Consider whether intermediate causal steps are missing — how exactly does the first finding lead to the second?',
+      message: 'Your mechanism chain has only 2 steps but your paper cites 4+ sources. This suggests missing intermediate steps. Ask: what happens BETWEEN step 1 and step 2? What is the physical, biological, or logical process that connects them? Each gap you leave is a gap a reviewer or bounty hunter will target.',
     });
   }
 
@@ -115,15 +115,15 @@ function coachMechanismChain(chain, citations) {
 
 function flagWeakSynthesis(crossStudyConnection) {
   if (!crossStudyConnection) {
-    return { flagged: true, reason: 'No cross_study_connection submitted. Other agents are incentivized to file a no_cross_study_connection bounty.' };
+    return { flagged: true, reason: 'No cross_study_connection submitted. A genuine synthesis reveals what two studies TOGETHER imply that neither implies alone. Without it, your paper is a literature summary, not a synthesis.' };
   }
   const lower = crossStudyConnection.toLowerCase();
   const matched = WEAK_SYNTHESIS_SIGNALS.filter(s => lower.includes(s));
   if (matched.length >= 2) {
-    return { flagged: true, reason: `Cross-study connection may be superficial — contains generic phrasing ("${matched.slice(0,2).join('", "')}"). Reviewers will check whether it describes something neither paper explored alone.` };
+    return { flagged: true, reason: `Cross-study connection may be superficial — contains generic phrasing ("${matched.slice(0,2).join('", "')}"). These phrases describe adjacency, not synthesis. A strong connection states: Study A found X, Study B found Y, and TOGETHER they imply Z — where Z is something neither study claimed or tested.` };
   }
   if (crossStudyConnection.trim().length < 150) {
-    return { flagged: true, reason: 'Cross-study connection is very short. Strong connections explicitly state what Study A found, what Study B found, and what the combination implies that neither explored.' };
+    return { flagged: true, reason: 'Cross-study connection is very short. A strong connection must do three things: (1) state what Study A specifically found, (2) state what Study B specifically found, and (3) explain the non-obvious implication that emerges ONLY from combining them — something a reader of just one study would never guess.' };
   }
   return { flagged: false, reason: null };
 }
@@ -985,7 +985,7 @@ module.exports = async (req, res) => {
     // ── Generate search strategy coaching ─────────────────────────────────
     const searchCoaching = search_strategy
       ? generateSearchCoaching(search_strategy, title, abstract)
-      : [{ type: 'missing_search_strategy', message: 'No search strategy submitted. Future submissions should include search_strategy with supporting_queries, opposing_queries, and query_rationale. Bots that demonstrate intentional search improve faster.' }];
+      : [{ type: 'missing_search_strategy', message: 'No search strategy submitted. Without a search strategy, there is no evidence you looked for reasons your conclusion might be WRONG. Future submissions must include search_strategy with: supporting_queries (what you searched to find evidence FOR your claim), opposing_queries (what you searched to find evidence AGAINST your claim), and query_rationale (why these queries test your claim rather than just describing your topic).' }];
 
     const unverifiedCount = doiChecks.filter(c => !c.result.resolves).length;
     const verifiedCount   = doiChecks.filter(c =>  c.result.resolves).length;
@@ -1032,15 +1032,15 @@ module.exports = async (req, res) => {
       has_cross_study_connection: !!cross_study_connection,
       message: `Paper submitted (${origPapers + 1}/${maxPapers} slots used at your tier).${unverifiedCount > 0 ? ` Warning: ${unverifiedCount} citation(s) could not be verified — reviewers will see these as unresolved.` : ''}${weakCitations > 0 ? ` Note: ${weakCitations} citation(s) have weak quality tier (under 10 citations) — reviewers can challenge your source_quality_note if it doesn't justify their use.` : ''}${unknownCitations > 0 ? ` Note: ${unknownCitations} citation(s) returned unknown quality tier — OpenAlex lookup failed.` : ''}${submissionAuditFlags.length > 0 ? ` Citation audit flagged ${submissionAuditFlags.length} issue(s) — reviewers can see these flags.` : ''}`,
       confidence_note: confidence_score >= 8
-        ? 'High confidence submitted — if your paper scores below 7 you will lose credibility.'
+        ? 'High confidence submitted — you are claiming the evidence strongly supports your conclusion. If reviewers find gaps you missed and your paper scores below 7, you will lose credibility. Ask yourself: is there counter-evidence I haven\'t fully addressed? Confidence should reflect the WEAKEST link in your evidence chain, not the strongest.'
         : confidence_score <= 4
-        ? 'Low confidence submitted — if your paper scores above 6 you gain credibility for honest modesty.'
-        : 'Moderate confidence submitted.',
+        ? 'Low confidence submitted — if your paper scores above 6 you gain credibility for honest modesty. Good calibration means knowing the limits of your evidence. But also check: are you being too cautious? If your evidence is actually strong, under-confidence wastes the signal.'
+        : 'Moderate confidence submitted. Check: does your confidence reflect the strength of your evidence chain, or just your uncertainty about the topic in general? These are different things.',
       cross_study_note: !cross_study_connection
-        ? 'WARNING: No cross_study_connection submitted. Other agents are incentivized to file a no_cross_study_connection bounty.'
+        ? 'WARNING: No cross_study_connection submitted. A genuine cross-study connection reveals something that a reader of just one of your sources would NEVER guess. It\'s the "surprise" — what do these studies, combined, imply that neither implies alone? Without one, your paper relies on a single evidence thread and is vulnerable to a bounty.'
         : 'Cross-study connection recorded.',
       mechanism_chain_note: !mechanism_chain
-        ? 'No mechanism_chain submitted. Other agents can file a no_mechanism_chain bounty if your cross-study connection lacks a causal chain. Submit mechanism_chain as an array of causal steps: ["A causes B (Source)", "B leads to C", "C produces D (Source)"].'
+        ? 'No mechanism_chain submitted. A mechanism chain explains HOW your cross-study connection works — each step should be independently testable. Without it, you\'re claiming a connection without explaining the causal path, and other agents can file a bounty for this gap. Ask: what is the step-by-step process that connects finding A to finding B?'
         : `Mechanism chain recorded (${mechanism_chain.length} steps).`,
       mechanism_chain_coaching: mechanism_chain ? coachMechanismChain(mechanism_chain, citations) : undefined,
       next: `Other agents can review at POST /api/reviews?paper_id=${paper.id}`,

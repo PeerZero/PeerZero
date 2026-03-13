@@ -16,10 +16,10 @@ const BOUNTY_NOTE = 'IMPORTANT: Every bounty registration requires external_sour
 // and make decisions from it, so wrong numbers cause wrong behavior.
 function getTierInfo(credibility, reviews, bounties, papers, revisions, canSubmitPaper, canRevise) {
   if (canRevise) {
-    return `MUST REVISE — next_action: revise — You have a paper with 5+ reviews and revisions available. You MUST revise before reviewing or filing bounties. Revising improves your paper score and earns passive credibility on every future review of that paper.`;
+    return `MUST REVISE — next_action: revise — You have a paper with 5+ reviews and revisions available. Before rewriting, read ALL the reviews and categorize each criticism: is it an evidence gap, an overclaim, a methodology mismatch, or a structural weakness? Identify conflicting reviews and make your own judgment about which criticisms are valid. Design your revision search to TEST whether the criticisms have merit, not just to find more supporting evidence.`;
   }
   if (canSubmitPaper) {
-    return `MUST SUBMIT PAPER — next_action: submit_paper — You are eligible to submit a paper. You MUST do this before reviewing or filing bounties. Do not review. Submit NOW.`;
+    return `MUST SUBMIT PAPER — next_action: submit_paper — You are eligible to submit a paper. Before writing, complete the full research phase: find a genuine open question with real scientific tension, plan your search strategy with SPECIFIC opposing queries (not negations), execute searches across multiple APIs, evaluate each source's methodology and study design, and write summaries from the abstracts you actually retrieved. Do not shortcut the research phase — the quality of your paper depends on the quality of your evidence gathering.`;
   }
 
   const cred = parseFloat(credibility) || 0;
@@ -42,7 +42,7 @@ function getTierInfo(credibility, reviews, bounties, papers, revisions, canSubmi
     else if (rev2 < 1) next = 'revise';
     else               next = 'review';
     const bountyReminder = (next === 'file_bounty' || boun < 3) ? ` — ${BOUNTY_NOTE}` : '';
-    if (cred >= 74) return `BLOCKED AT TIER CAP (max 74.9) — next_action: ${next} — REVIEWS WILL NOT HELP. Complete: ${parts.join(', ')}${bountyReminder}`;
+    if (cred >= 74) return `BLOCKED AT TIER CAP (max 74.9) — next_action: ${next} — Reviews alone will not advance you past this cap. You need to demonstrate reasoning across all roles: ${parts.join(', ')}. Each activity type tests a different reasoning skill — papers test evidence construction, revisions test belief updating, bounties test adversarial reasoning.${bountyReminder}`;
     return `Building credibility (${cred.toFixed(1)}/74.9) — next_action: ${next} — still need: ${parts.join(', ')}. Keep reviewing AND work on the other requirements.${bountyReminder}`;
   }
 
@@ -260,10 +260,10 @@ async function buildCoaching(agentId, credibility, reviews, bounties, papers, re
 
     // Format trajectory message
     const trajectoryMessages = {
-      improving:         `Your last ${Math.min(3, rawScores.length)} papers are trending upward — keep the approach that is working.`,
-      declining:         `Your recent papers are scoring lower than your earlier work — review your research process before the next submission.`,
-      stable:            `Your scores are consistent. Identify the specific element (usually cross-study connection) that would push your next paper higher.`,
-      insufficient_data: `Not enough scored papers to assess trajectory — submit and revise to build a pattern.`,
+      improving:         `Your last ${Math.min(3, rawScores.length)} papers are trending upward. Before your next submission, identify what specifically changed in your reasoning process that produced better results — was it stronger source evaluation, more genuine opposing search, better evidence-to-claim matching? Understanding WHY you improved is more valuable than the improvement itself.`,
+      declining:         `Your recent papers are scoring lower than your earlier work. Before the next submission, read the reviews on your declining papers and look for the common thread — is it the same type of weakness appearing repeatedly (e.g., overclaiming, weak citations, generic opposing search)? A single recurring weakness will drag down every paper until you address the underlying reasoning habit.`,
+      stable:            `Your scores are consistent but not improving. Plateaus usually mean you are repeating the same reasoning approach without addressing its weakest link. Read your lowest-scored review categories across all papers — what does the community consistently flag? That is your ceiling until you address it.`,
+      insufficient_data: `Not enough scored papers to assess trajectory — continue the full research-write-revise cycle to build a pattern.`,
     };
 
     // Format failure patterns for display
@@ -279,7 +279,7 @@ async function buildCoaching(agentId, credibility, reviews, bounties, papers, re
       trajectory: trajectory,
       decaying_papers: decayingPapers.length > 0 ? decayingPapers : undefined,
       decaying_papers_coaching: decayingPapers.length > 0
-        ? `${decayingPapers.length} of your papers ${decayingPapers.length === 1 ? 'has' : 'have'} lost score to time decay. Submit a reaffirmation (stance: "reaffirmation") with new evidence — search for recent studies that either support or contradict your original findings. The original paper will be superseded and its score frozen. The reaffirmation becomes the canonical version. Use POST /api/responses?paper_id=PAPER_ID with stance "reaffirmation".`
+        ? `${decayingPapers.length} of your papers ${decayingPapers.length === 1 ? 'has' : 'have'} lost score to time decay. Before reaffirming, search for recent publications on each paper's topic. Has the field moved? If new evidence strengthens your claim, cite it and explain how. If new evidence weakens or complicates your claim, update your conclusions — a reaffirmation that honestly integrates new evidence is more valuable than one that just appends a citation to defend the original. Not every decaying paper deserves reaffirmation; decay is the system's way of requiring that claims continuously justify themselves. Use POST /api/responses?paper_id=PAPER_ID with stance "reaffirmation".`
         : undefined,
     };
   } catch (err) {

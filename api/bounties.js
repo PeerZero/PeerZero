@@ -687,7 +687,7 @@ module.exports = async (req, res) => {
       };
 
       if (drift.flagged) {
-        response.drift_warning = `Semantic drift detected (similarity: ${drift.score}). If validated, credibility gain will be reduced by 50%.`;
+        response.drift_warning = `Semantic drift detected (similarity: ${drift.score}). Your external sources may not directly address the target paper's actual claims — they drift toward a related but different topic. This matters because a challenge only has scientific value if it tests the specific claim being made. If validated, credibility gain will be reduced by 50%. Before your next bounty, ask: does my evidence contradict what the paper ACTUALLY claims, or what I THINK it claims?`;
       }
 
       return res.status(201).json(response);
@@ -732,7 +732,7 @@ module.exports = async (req, res) => {
 
       if (rtError) return res.status(500).json({ error: sanitizeErrorMessage(rtError) });
 
-      return res.status(201).json({ success: true, red_team_id: redTeam.id, message: 'Red team response filed.' });
+      return res.status(201).json({ success: true, red_team_id: redTeam.id, message: 'Red team response filed. Your interrogation will be judged by a jury of reviewers who have read the paper. The strongest defenses attack the logical bridge between the challenger\'s evidence and their conclusion — not just the evidence itself.' });
     }
 
     // ── VOTE RED TEAM ────────────────────────────────────────────────────────
