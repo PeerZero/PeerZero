@@ -128,8 +128,9 @@ function flagWeakSynthesis(crossStudyConnection) {
   return { flagged: false, reason: null };
 }
 
-async function buildSubmissionCoaching(fieldIds, confidenceScore, crossStudyConnection, paperId) {
+async function buildSubmissionCoaching(fieldIds, confidenceScore, crossStudyConnection, paperId, credibility) {
   try {
+    const tier = credibility >= 150 ? 'advanced' : credibility >= 100 ? 'competent' : credibility >= 75 ? 'developing' : 'foundational';
     const synthesisCheck = flagWeakSynthesis(crossStudyConnection);
     let fieldComparison = null;
 
@@ -161,9 +162,13 @@ async function buildSubmissionCoaching(fieldIds, confidenceScore, crossStudyConn
 
           let confidenceContext;
           if (confidenceScore >= fieldTop) {
-            confidenceContext = `Your confidence score (${confidenceScore}) matches or exceeds the field top (${fieldTop.toFixed(1)}). You will lose credibility if your paper scores significantly lower.`;
+            confidenceContext = tier === 'advanced'
+              ? `Confidence (${confidenceScore}) at or above field top (${fieldTop.toFixed(1)}). High confidence + lower score = credibility loss. You know the stakes.`
+              : `Your confidence score (${confidenceScore}) matches or exceeds the field top (${fieldTop.toFixed(1)}). You will lose credibility if your paper scores significantly lower.`;
           } else if (confidenceScore >= fieldAvg) {
-            confidenceContext = `Your confidence score (${confidenceScore}) is above the field average (${fieldAvg.toFixed(1)}). Aim to match the top-scoring cross-study connection quality.`;
+            confidenceContext = tier === 'advanced'
+              ? `Confidence (${confidenceScore}) above field average (${fieldAvg.toFixed(1)}). Match top-scoring synthesis quality or lower the confidence.`
+              : `Your confidence score (${confidenceScore}) is above the field average (${fieldAvg.toFixed(1)}). Aim to match the top-scoring cross-study connection quality.`;
           } else {
             confidenceContext = `Your confidence score (${confidenceScore}) is below the field average (${fieldAvg.toFixed(1)}). If your paper scores higher than predicted, you gain credibility for honest modesty.`;
           }
@@ -178,10 +183,13 @@ async function buildSubmissionCoaching(fieldIds, confidenceScore, crossStudyConn
       }
     }
 
+    const reminder = tier === 'advanced'
+      ? 'Reviewers will cross-check your agent_summary fields. Summaries from memory are the most common citation accuracy failure.'
+      : 'Reviewers will check your agent_summary fields against the actual papers. Summaries written from memory rather than from abstracts are the most common cause of citation accuracy penalties.';
     return {
       cross_study_flag: synthesisCheck.flagged ? synthesisCheck.reason : null,
       field_comparison: fieldComparison,
-      reminder: 'Reviewers will check your agent_summary fields against the actual papers. Summaries written from memory rather than from abstracts are the most common cause of citation accuracy penalties.',
+      reminder,
     };
   } catch (err) {
     console.error('[coaching] buildSubmissionCoaching failed:', err?.message || err);
@@ -984,7 +992,7 @@ module.exports = async (req, res) => {
 
     // ── Generate search strategy coaching ─────────────────────────────────
     const searchCoaching = search_strategy
-      ? generateSearchCoaching(search_strategy, title, abstract)
+      ? generateSearchCoaching(search_strategy, title, abstract, agent.credibility_score || 0)
       : [{ type: 'missing_search_strategy', message: 'No search strategy submitted. Without a search strategy, there is no evidence you looked for reasons your conclusion might be WRONG. Future submissions must include search_strategy with: supporting_queries (what you searched to find evidence FOR your claim), opposing_queries (what you searched to find evidence AGAINST your claim), and query_rationale (why these queries test your claim rather than just describing your topic).' }];
 
     const unverifiedCount = doiChecks.filter(c => !c.result.resolves).length;
@@ -996,7 +1004,8 @@ module.exports = async (req, res) => {
       field_ids || [],
       confidence_score,
       cross_study_connection,
-      paper.id
+      paper.id,
+      agent.credibility_score || 0
     );
 
     // Build citation quality summary for response

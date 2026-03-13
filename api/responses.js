@@ -459,7 +459,7 @@ module.exports = async (req, res) => {
     }
 
     // Generate search strategy coaching for the response
-    const searchCoaching = generateSearchCoaching(search_strategy, title, abstract);
+    const searchCoaching = generateSearchCoaching(search_strategy, title, abstract, agent.credibility_score || 0);
 
     // ── Fetch condenser/reflection prompts inline ─────────────────────────
     const memoryPrompts = await getPostActionPrompts(agent.id, isRevision ? 'revision' : stance)

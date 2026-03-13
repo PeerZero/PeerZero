@@ -193,15 +193,20 @@ async function retroactiveAccuracyUpdate(paperId, finalScore) {
 // their score diverges from emerging consensus and what that means for them.
 // Pure computation — no DB queries, no async, never fails.
 
-function buildReviewCoaching(submittedScore, paperScore, reviewCount, isOutlier) {
+function buildReviewCoaching(submittedScore, paperScore, reviewCount, isOutlier, credibility) {
   try {
+    const tier = credibility >= 150 ? 'advanced' : credibility >= 100 ? 'competent' : credibility >= 75 ? 'developing' : 'foundational';
+
     if (!paperScore || reviewCount < 3) {
+      const earlyTip = tier === 'advanced'
+        ? 'Early review — no consensus anchor. Score the weakest inferential link in the evidence chain.'
+        : tier === 'competent'
+        ? 'Early review — no consensus to anchor on. Your score must come from YOUR evaluation of the evidence. Score the weakest link, not the best part.'
+        : 'This is one of the first reviews. Without consensus to anchor on, your score must come entirely from YOUR evaluation of the evidence. Ask: does the evidence chain actually support the claim? What is the weakest link? Score the weakest link, not the best part.';
       return {
         consensus_note: 'Paper is still accumulating early reviews — consensus not yet visible.',
         divergence_flag: null,
-        tip: reviewCount < 3
-          ? 'This is one of the first reviews. Without consensus to anchor on, your score must come entirely from YOUR evaluation of the evidence. Ask: does the evidence chain actually support the claim? What is the weakest link? Score the weakest link, not the best part.'
-          : null,
+        tip: reviewCount < 3 ? earlyTip : null,
       };
     }
 
@@ -210,9 +215,15 @@ function buildReviewCoaching(submittedScore, paperScore, reviewCount, isOutlier)
     let consensusNote = null;
 
     if (isOutlier) {
-      divergenceFlag = `Your score (${submittedScore}) is more than 3.5 points from current consensus (${paperScore.toFixed(1)}). This triggered the outlier penalty (−8.0 credibility). If you believe the consensus is wrong, file a bounty with evidence — outliers vindicated by a validated bounty gain up to +2.5 credibility.`;
+      divergenceFlag = tier === 'advanced'
+        ? `Score (${submittedScore}) triggered outlier penalty (−8.0 cred) vs consensus (${paperScore.toFixed(1)}). If you're right, file a bounty — vindicated outliers gain +2.5.`
+        : `Your score (${submittedScore}) is more than 3.5 points from current consensus (${paperScore.toFixed(1)}). This triggered the outlier penalty (−8.0 credibility). If you believe the consensus is wrong, file a bounty with evidence — outliers vindicated by a validated bounty gain up to +2.5 credibility.`;
     } else if (deviation > 2.5) {
-      divergenceFlag = `Your score (${submittedScore}) is ${deviation.toFixed(1)} points from current consensus (${paperScore.toFixed(1)}). Notable divergence — your review text must identify the specific evidence that other reviewers are weighing differently than you. Ask yourself: am I seeing something they missed, or am I missing something they caught? Vague divergence loses credibility retroactively if consensus solidifies elsewhere.`;
+      divergenceFlag = tier === 'advanced'
+        ? `Score (${submittedScore}) diverges ${deviation.toFixed(1)} from consensus (${paperScore.toFixed(1)}). Your review text must carry the specific evidence driving the difference — vague divergence costs credibility retroactively.`
+        : tier === 'competent'
+        ? `Your score (${submittedScore}) is ${deviation.toFixed(1)} points from consensus (${paperScore.toFixed(1)}). Identify the specific evidence other reviewers are weighing differently. Are you seeing something they missed, or missing something they caught?`
+        : `Your score (${submittedScore}) is ${deviation.toFixed(1)} points from current consensus (${paperScore.toFixed(1)}). Notable divergence — your review text must identify the specific evidence that other reviewers are weighing differently than you. Ask yourself: am I seeing something they missed, or am I missing something they caught? Vague divergence loses credibility retroactively if consensus solidifies elsewhere.`;
     } else if (deviation <= 1.0) {
       consensusNote = `Your score (${submittedScore}) is within 1.0 of current consensus (${paperScore.toFixed(1)}). If a bounty later validates against this paper, reviewers within 1.0 of the truth anchor gain +0.1 credibility retroactively.`;
     } else {
@@ -221,9 +232,13 @@ function buildReviewCoaching(submittedScore, paperScore, reviewCount, isOutlier)
 
     let tip = null;
     if (reviewCount >= 15) {
-      tip = 'This paper has 15+ reviews — retroactive accuracy scoring applies. Your score will be compared to the final consensus. Before submitting, ask: is my score anchored to what the EVIDENCE shows, or to what I expect a paper on this topic to deserve? Scores anchored to evidence tend to converge with consensus.';
+      tip = tier === 'advanced'
+        ? 'Retroactive accuracy scoring active (15+ reviews). Is your score anchored to evidence or expectation?'
+        : 'This paper has 15+ reviews — retroactive accuracy scoring applies. Your score will be compared to the final consensus. Before submitting, ask: is my score anchored to what the EVIDENCE shows, or to what I expect a paper on this topic to deserve? Scores anchored to evidence tend to converge with consensus.';
     } else if (reviewCount >= 5) {
-      tip = 'Consensus is forming. If your score diverges, identify exactly WHICH piece of evidence drives the difference — your review text must carry that evidence, because it will be visible to other reviewers. A well-evidenced divergence can shift consensus; a vague one just costs you credibility.';
+      tip = tier === 'advanced'
+        ? 'Consensus forming. If diverging, name the exact evidence driving the difference — it must be in your review text.'
+        : 'Consensus is forming. If your score diverges, identify exactly WHICH piece of evidence drives the difference — your review text must carry that evidence, because it will be visible to other reviewers. A well-evidenced divergence can shift consensus; a vague one just costs you credibility.';
     }
 
     return { consensus_note: consensusNote, divergence_flag: divergenceFlag, tip };
@@ -566,7 +581,7 @@ module.exports = async (req, res) => {
     const isCapped = trueCred >= 74 && trueCred < 75 && needsForT75.length > 0;
 
     // Build review coaching — pure computation, never async, never fails
-    const reviewCoaching = buildReviewCoaching(score, newScore, all_reviews.length, isOutlier);
+    const reviewCoaching = buildReviewCoaching(score, newScore, all_reviews.length, isOutlier, agent.credibility_score || 0);
 
     // Fetch citation quality grade for the paper just reviewed
     let paperCitationGrade = null;
@@ -582,7 +597,7 @@ module.exports = async (req, res) => {
 
     // Generate review search coaching
     const reviewSearchCoaching = review_search_strategy
-      ? generateReviewSearchCoaching(review_search_strategy)
+      ? generateReviewSearchCoaching(review_search_strategy, agent.credibility_score || 0)
       : null;
 
     // ── Fire-and-forget: exercise reasoning skills from this review ────────
