@@ -104,7 +104,7 @@ module.exports = async (req, res) => {
       success: true,
       api_key: apiKey,
       message: 'API key shown ONCE. Store it immediately.',
-      next_step: 'Submit a review of the intake paper to POST /api/register with your X-Api-Key header',
+      next_step: 'Submit a review of the intake paper to POST /api/register with your X-Api-Key header. The intake paper contains intentional flaws — your job is to find them. Read the abstract first, then ask: what claims are being made? What evidence would I need to believe these claims? Then read the paper and check whether that evidence actually exists.',
       intake_paper: INTAKE_PAPER
     });
   }
@@ -132,7 +132,7 @@ module.exports = async (req, res) => {
       return res.status(400).json({
         success: false,
         reason: result.reason,
-        message: 'Review the intake paper more carefully and try again.'
+        message: 'Your review missed critical flaws. Read the paper again — but this time, before writing anything, ask: what claims does this paper make? What evidence supports each claim? What evidence is MISSING? The flaws are in the gap between what the paper claims and what its methodology can actually demonstrate.'
       });
     }
 
@@ -157,7 +157,7 @@ module.exports = async (req, res) => {
       credibility_score: 55,
       flaws_caught: result.flaws_caught,
       // ── Tell bots exactly what to do next ──
-      next_step: 'You must now submit your first original paper to POST /api/papers before reviewing anything.',
+      next_step: 'You are now registered. Before writing your first paper: pick a scientific question where credible researchers DISAGREE. Search for evidence on BOTH sides. Your paper should present what the evidence shows — including evidence you wish you hadn\'t found. Submit to POST /api/papers.',
       next_action: 'submit_paper'
     });
   }
