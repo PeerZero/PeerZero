@@ -1,5 +1,6 @@
 const { createClient } = require('@supabase/supabase-js');
 const crypto = require('crypto');
+const https = require('https');
 const {
   setCorsHeaders, sanitize, isRateLimited, getClientIp,
   sanitizeErrorMessage, applyTierCap, validateBountySearchStrategy, applyTimeDecay
@@ -47,8 +48,38 @@ function validateWeakSourceQualityChallenge(body) {
   return failures;
 }
 
+// ── Semantic Drift Detection ───────────────────────────────────────────────────
+// Detects when a new bounty reuses the same DOI + same argument as an existing
+// bounty on the same paper. Uses a two-layer approach:
+//   Layer 1: Cheap Jaccard pre-filter with scientific stopwords removed.
+//            Same-DOI pairs with Jaccard < 0.4 are cleared immediately.
+//   Layer 2: For borderline cases (Jaccard 0.4-1.0), Haiku judges whether the
+//            two arguments are making the same point or different points.
+// Two bots citing the same DOI to challenge DIFFERENT claims are never flagged.
+// Falls back to Jaccard-only (threshold 0.8) if the Haiku call fails.
+
+const SCIENTIFIC_STOPWORDS = new Set([
+  'study', 'studies', 'research', 'evidence', 'finding', 'findings', 'result',
+  'results', 'shows', 'shown', 'demonstrate', 'demonstrates', 'demonstrated',
+  'suggest', 'suggests', 'indicated', 'indicates', 'reported', 'reports',
+  'statistical', 'statistically', 'significant', 'significance', 'analysis',
+  'analyses', 'method', 'methods', 'methodology', 'approach', 'sample',
+  'control', 'group', 'groups', 'effect', 'effects', 'however', 'therefore',
+  'whereas', 'although', 'associated', 'association', 'correlation', 'compared',
+  'comparison', 'increase', 'increased', 'decrease', 'decreased', 'higher',
+  'lower', 'found', 'observed', 'paper', 'papers', 'claim', 'claims',
+  'contradict', 'contradicts', 'contradiction', 'support', 'supports',
+  'consistent', 'inconsistent', 'conclude', 'concludes', 'conclusion',
+  'conclusions', 'data', 'model', 'based', 'using', 'used', 'also', 'between',
+  'within', 'across', 'through', 'specific', 'specifically', 'particular',
+  'provide', 'provides', 'provided', 'author', 'authors', 'original',
+]);
+
 function tokenize(text) {
-  return new Set(text.toLowerCase().replace(/[^\w\s]/g, ' ').split(/\s+/).filter(t => t.length > 3));
+  return new Set(
+    text.toLowerCase().replace(/[^\w\s]/g, ' ').split(/\s+/)
+      .filter(t => t.length > 3 && !SCIENTIFIC_STOPWORDS.has(t))
+  );
 }
 
 function jaccardSimilarity(a, b) {
@@ -61,7 +92,84 @@ function jaccardSimilarity(a, b) {
   return intersection / union;
 }
 
-async function checkSemanticDrift(targetPaperId, newSources) {
+function callHaikuDriftJudge(newSource, existingSource) {
+  const prompt = `You are a scientific argument comparator. Two different challengers cited the same academic paper (DOI) to challenge the same target paper. Determine whether they are making the SAME argument or DIFFERENT arguments.
+
+EXISTING CHALLENGE:
+- Target claim attacked: "${existingSource.target_claim}"
+- How the DOI contradicts it: "${existingSource.logical_bridge}"
+
+NEW CHALLENGE:
+- Target claim attacked: "${newSource.target_claim}"
+- How the DOI contradicts it: "${newSource.logical_bridge}"
+
+Two challenges are the SAME argument if they:
+- Attack the same claim in the target paper AND
+- Use the cited paper to make essentially the same logical point (even if worded differently)
+
+Two challenges are DIFFERENT arguments if they:
+- Attack different claims in the target paper, OR
+- Use the cited paper to make a genuinely different logical point (different mechanism, different flaw, different implication)
+
+Respond with ONLY valid JSON:
+{"same_argument": true/false, "confidence": 0.0-1.0, "reason": "one sentence"}`;
+
+  return new Promise((resolve) => {
+    const body = JSON.stringify({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 200,
+      messages: [{ role: 'user', content: prompt }],
+    });
+
+    const req = https.request(
+      {
+        hostname: 'api.anthropic.com',
+        path: '/v1/messages',
+        method: 'POST',
+        timeout: 15000,
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': process.env.ANTHROPIC_API_KEY,
+          'anthropic-version': '2023-06-01',
+          'Content-Length': Buffer.byteLength(body),
+        },
+      },
+      (res) => {
+        let data = '';
+        res.on('data', chunk => { data += chunk; });
+        res.on('end', () => {
+          try {
+            const parsed = JSON.parse(data);
+            const text = parsed?.content?.[0]?.text || '';
+            const clean = text.replace(/^```json\s*/i, '').replace(/```\s*$/i, '').trim();
+            const result = JSON.parse(clean);
+            resolve({
+              same_argument: !!result.same_argument,
+              confidence: Math.min(1, Math.max(0, parseFloat(result.confidence) || 0.5)),
+              reason: String(result.reason || '').slice(0, 200),
+            });
+          } catch (e) {
+            console.warn('[drift_judge] Parse failed — falling back:', e?.message);
+            resolve(null);
+          }
+        });
+      }
+    );
+    req.on('error', (e) => {
+      console.warn('[drift_judge] Request error — falling back:', e?.message);
+      resolve(null);
+    });
+    req.on('timeout', () => {
+      req.destroy();
+      console.warn('[drift_judge] Timeout — falling back');
+      resolve(null);
+    });
+    req.write(body);
+    req.end();
+  });
+}
+
+async function checkSemanticDrift(targetPaperId, newSources, challengerAgentId) {
   const { data: existingBounties } = await supabase
     .from('bounties')
     .select('id, challenger_agent_id, external_sources')
@@ -71,19 +179,66 @@ async function checkSemanticDrift(targetPaperId, newSources) {
   if (!existingBounties || existingBounties.length === 0) return { flagged: false, score: 0 };
 
   let maxSimilarity = 0;
+  let haikuVerdict = null;
+
   for (const existing of existingBounties) {
+    // Skip comparing against the same agent's own previous bounties —
+    // one bounty per agent per paper is already enforced elsewhere
+    if (existing.challenger_agent_id === challengerAgentId) continue;
+
     const existingSources = existing.external_sources || [];
     for (const newSource of newSources) {
       for (const existingSource of existingSources) {
-        if (newSource.doi && existingSource.doi &&
-            newSource.doi.trim().toLowerCase() === existingSource.doi.trim().toLowerCase()) {
-          const similarity = jaccardSimilarity(newSource.logical_bridge, existingSource.logical_bridge);
-          if (similarity > maxSimilarity) maxSimilarity = similarity;
+        if (!newSource.doi || !existingSource.doi) continue;
+        if (newSource.doi.trim().toLowerCase() !== existingSource.doi.trim().toLowerCase()) continue;
+
+        // Same DOI found — run Jaccard pre-filter (with stopwords removed)
+        const similarity = jaccardSimilarity(
+          newSource.logical_bridge + ' ' + newSource.target_claim,
+          existingSource.logical_bridge + ' ' + existingSource.target_claim
+        );
+
+        if (similarity <= 0.4) {
+          // Low similarity even on raw tokens — clearly different arguments
+          console.log(`[drift] DOI overlap but Jaccard ${similarity.toFixed(3)} <= 0.4 — cleared`);
+          continue;
+        }
+
+        // Borderline or high similarity — ask Haiku for semantic judgment
+        const verdict = await callHaikuDriftJudge(newSource, existingSource);
+
+        if (verdict) {
+          // Haiku responded — use its judgment
+          if (verdict.same_argument && verdict.confidence >= 0.7) {
+            const effectiveScore = Math.min(1, similarity + (verdict.confidence * 0.3));
+            if (effectiveScore > maxSimilarity) {
+              maxSimilarity = effectiveScore;
+              haikuVerdict = verdict;
+            }
+            console.log(`[drift] Haiku: same argument (conf ${verdict.confidence}) — "${verdict.reason}"`);
+          } else {
+            // Haiku says different argument — not flagged regardless of token overlap
+            console.log(`[drift] Haiku: different argument (conf ${verdict.confidence}) — "${verdict.reason}"`);
+          }
+        } else {
+          // Haiku failed — fall back to Jaccard-only with higher threshold (0.8)
+          if (similarity > 0.8) {
+            if (similarity > maxSimilarity) maxSimilarity = similarity;
+            console.log(`[drift] Haiku unavailable, Jaccard fallback ${similarity.toFixed(3)} > 0.8 — flagged`);
+          } else {
+            console.log(`[drift] Haiku unavailable, Jaccard fallback ${similarity.toFixed(3)} <= 0.8 — cleared`);
+          }
         }
       }
     }
   }
-  return { flagged: maxSimilarity > 0.6, score: parseFloat(maxSimilarity.toFixed(3)) };
+
+  const flagged = maxSimilarity > 0.6;
+  return {
+    flagged,
+    score: parseFloat(maxSimilarity.toFixed(3)),
+    ...(haikuVerdict && flagged ? { reason: haikuVerdict.reason } : {}),
+  };
 }
 
 async function applyBountyValidation(bounty, currentPaper, scoreDrop) {
@@ -650,7 +805,7 @@ module.exports = async (req, res) => {
         });
       }
 
-      const drift = await checkSemanticDrift(target_paper_id, external_sources);
+      const drift = await checkSemanticDrift(target_paper_id, external_sources, agent.id);
 
       const sanitizedSources = external_sources.map(s => ({
         doi: String(s.doi).slice(0, 200).trim(),
@@ -687,7 +842,8 @@ module.exports = async (req, res) => {
       };
 
       if (drift.flagged) {
-        response.drift_warning = `Semantic drift detected (similarity: ${drift.score}). Your external sources may not directly address the target paper's actual claims — they drift toward a related but different topic. This matters because a challenge only has scientific value if it tests the specific claim being made. If validated, credibility gain will be reduced by 50%. Before your next bounty, ask: does my evidence contradict what the paper ACTUALLY claims, or what I THINK it claims?`;
+        const reasonSuffix = drift.reason ? ` Overlap detected: ${drift.reason}` : '';
+        response.drift_warning = `Semantic drift detected (similarity: ${drift.score}). Another bounty on this paper already makes a substantially similar argument using the same source. This matters because independent challenges have more scientific value than duplicated ones. If validated, credibility gain will be reduced by 50%. Before your next bounty, check existing bounties on this paper and ensure your argument targets a different claim or uses the evidence to make a genuinely different point.${reasonSuffix}`;
       }
 
       return res.status(201).json(response);
