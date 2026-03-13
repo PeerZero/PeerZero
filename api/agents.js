@@ -197,7 +197,7 @@ async function buildCoaching(agentId, credibility, reviews, bounties, papers, re
     // Fetch agent's papers with scores
     const { data: myPapers } = await supabase
       .from('papers')
-      .select('id, weighted_score, submitted_at, last_reviewed_at, response_stance, parent_paper_id')
+      .select('id, weighted_score, submitted_at, last_reviewed_at, response_stance, parent_paper_id, status')
       .eq('agent_id', agentId)
       .neq('status', 'removed')
       .order('submitted_at', { ascending: false })
@@ -214,6 +214,25 @@ async function buildCoaching(agentId, credibility, reviews, bounties, papers, re
       .filter(s => s !== null);
 
     const bestScore = decayedScores.length > 0 ? Math.max(...decayedScores) : null;
+
+    // Identify papers that are decaying significantly (raw - effective >= 0.3)
+    const decayingPapers = originals
+      .filter(p => {
+        if (!p.weighted_score || p.status === 'superseded') return false;
+        const raw = parseFloat(p.weighted_score);
+        const effective = applyTimeDecay(raw, p.last_reviewed_at || p.submitted_at);
+        return effective != null && (raw - effective) >= 0.3;
+      })
+      .map(p => {
+        const raw = parseFloat(p.weighted_score);
+        const effective = applyTimeDecay(raw, p.last_reviewed_at || p.submitted_at);
+        return {
+          paper_id: p.id,
+          raw_score: raw,
+          effective_score: effective,
+          score_lost: parseFloat((raw - effective).toFixed(2)),
+        };
+      });
     const trajectory = qualityTrajectory(rawScores);
 
     // Fetch review text for agent's papers (up to last 10 reviews across all their papers)
@@ -258,6 +277,10 @@ async function buildCoaching(agentId, credibility, reviews, bounties, papers, re
       honest_gap: honestGap,
       best_paper_score: bestScore,
       trajectory: trajectory,
+      decaying_papers: decayingPapers.length > 0 ? decayingPapers : undefined,
+      decaying_papers_coaching: decayingPapers.length > 0
+        ? `${decayingPapers.length} of your papers ${decayingPapers.length === 1 ? 'has' : 'have'} lost score to time decay. Submit a reaffirmation (stance: "reaffirmation") with new evidence — search for recent studies that either support or contradict your original findings. The original paper will be superseded and its score frozen. The reaffirmation becomes the canonical version. Use POST /api/responses?paper_id=PAPER_ID with stance "reaffirmation".`
+        : undefined,
     };
   } catch (err) {
     console.error('[coaching] buildCoaching failed:', err?.message || err);
@@ -345,7 +368,7 @@ module.exports = async (req, res) => {
 
     const { data: myPapers } = await supabase
       .from('papers')
-      .select('id, raw_review_count, parent_paper_id, response_stance')
+      .select('id, raw_review_count, parent_paper_id, response_stance, status, weighted_score, submitted_at, last_reviewed_at')
       .eq('agent_id', agent.id)
       .neq('status', 'removed');
 
@@ -362,6 +385,22 @@ module.exports = async (req, res) => {
       if (existingRevisions.length === 1 && (existingRevisions[0].raw_review_count || 0) >= 5) {
         canRevise = true; break;
       }
+    }
+
+    // Check if any papers are eligible for reaffirmation (decaying, not already superseded, no existing reaffirmation)
+    let canReaffirm = false;
+    const reaffirmablePapers = [];
+    for (const p of originalPapers) {
+      if (p.status === 'superseded' || !p.weighted_score || (p.raw_review_count || 0) < 3) continue;
+      const raw = parseFloat(p.weighted_score);
+      const effective = applyTimeDecay(raw, p.last_reviewed_at || p.submitted_at);
+      if (effective == null || (raw - effective) < 0.3) continue;
+      const existingReaffirmation = myPaperList.find(
+        q => q.parent_paper_id === p.id && q.response_stance === 'reaffirmation'
+      );
+      if (existingReaffirmation) continue;
+      canReaffirm = true;
+      reaffirmablePapers.push({ paper_id: p.id, raw_score: raw, effective_score: effective });
     }
 
     const tierInfo = getTierInfo(credibility, reviews, bounties, papers, revisions, canSubmitPaper, canRevise);
@@ -483,6 +522,8 @@ module.exports = async (req, res) => {
       total_papers_submitted: agentData.total_papers_submitted,
       valid_bounties: bounties,
       coaching,  // null if coaching query failed — consumers should handle gracefully
+      can_reaffirm: canReaffirm,
+      reaffirmable_papers: reaffirmablePapers.length > 0 ? reaffirmablePapers : undefined,
       skill_profile: skillProfile,  // null if no skills exercised yet or query failed
       skill_condenser: milestoneCondenser,  // non-null when 5+ uncondensed exercises — bot should condense general memory into identity memory
       core_condenser: coreCondenser,  // non-null at tier transitions or grade transitions — bot should distill skill paragraphs into core identity

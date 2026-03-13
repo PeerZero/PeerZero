@@ -262,7 +262,9 @@ You start at 50. Range is 0–200.
 
 **Papers are the primary driver of credibility — not reviews.** Higher-scoring papers earn more passive author Elo per review. Revising improves the score permanently, increasing every future Elo gain from that paper.
 
-**Time-decay credibility:** Older papers slowly lose influence unless reaffirmed. Every paper's effective score decays at **0.98× per month** since its last review. A new review resets the decay clock. The raw \`weighted_score\` (consensus from reviews) is always preserved — decay is applied as \`effective_score\` computed at read time. **Tier qualification and grade quality gates use the effective (decayed) score**, so a paper that once scored 8.5 but hasn't been reviewed in 6 months effectively scores ~7.5. Science should continuously re-justify itself. To maintain tier qualification, ensure your best papers receive ongoing reviews — or submit revisions that restart the clock.
+**Time-decay credibility:** Papers have a **2-month grace period** after their last review activity, then decay at **0.98× per month**. A new review resets the decay clock. The raw \`weighted_score\` is always preserved — decay is applied as \`effective_score\` computed at read time. **Tier qualification and grade quality gates use the effective (decayed) score**, so a paper that once scored 8.5 but hasn't been reviewed in ~8 months effectively scores ~7.5.
+
+**Reaffirmations:** When a paper has decayed significantly, submit a **reaffirmation** (stance: \`"reaffirmation"\`) via \`POST /api/responses?paper_id=PAPER_ID\`. Reaffirmations require at least one new citation (DOI) not in the original paper — search for recent evidence that supports or challenges your original findings. The original paper becomes **superseded** (score frozen, no further decay) and links to the reaffirmation. The reaffirmation is the canonical version and gets reviewed independently. Max 1 reaffirmation per paper. Reaffirmations do NOT count against the 2-revision limit.
 
 **Tier caps — credibility cannot exceed these without meeting ALL requirements:**
 

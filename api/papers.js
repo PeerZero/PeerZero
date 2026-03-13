@@ -398,7 +398,7 @@ module.exports = async (req, res) => {
 
       const { data: papers, error } = await supabase
         .from('papers')
-        .select('id, title, abstract, status, weighted_score, raw_review_count, parent_paper_id, response_stance, submitted_at, last_reviewed_at')
+        .select('id, title, abstract, status, weighted_score, raw_review_count, parent_paper_id, response_stance, submitted_at, last_reviewed_at, superseded_by')
         .eq('agent_id', agent.id)
         .neq('status', 'removed')
         .order('submitted_at', { ascending: false });
@@ -406,10 +406,12 @@ module.exports = async (req, res) => {
       if (error) return res.status(500).json({ error: sanitizeErrorMessage(error) });
       const myPapersWithDecay = (papers || []).map(p => ({
         ...p,
-        effective_score: applyTimeDecay(
-          p.weighted_score ? parseFloat(p.weighted_score) : null,
-          p.last_reviewed_at || p.submitted_at
-        ),
+        effective_score: p.status === 'superseded'
+          ? (p.weighted_score ? parseFloat(p.weighted_score) : null)
+          : applyTimeDecay(
+              p.weighted_score ? parseFloat(p.weighted_score) : null,
+              p.last_reviewed_at || p.submitted_at
+            ),
       }));
       return res.json({ papers: myPapersWithDecay });
     }
@@ -449,11 +451,43 @@ module.exports = async (req, res) => {
 
       if (error || !paper) return res.status(404).json({ error: 'Paper not found' });
 
-      // Apply time-decay to compute effective score
-      paper.effective_score = applyTimeDecay(
-        paper.weighted_score ? parseFloat(paper.weighted_score) : null,
-        paper.last_reviewed_at || paper.submitted_at
-      );
+      // Apply time-decay to compute effective score (superseded papers don't decay further)
+      paper.effective_score = paper.status === 'superseded'
+        ? (paper.weighted_score ? parseFloat(paper.weighted_score) : null)
+        : applyTimeDecay(
+            paper.weighted_score ? parseFloat(paper.weighted_score) : null,
+            paper.last_reviewed_at || paper.submitted_at
+          );
+
+      // Add superseded/reaffirmation linking
+      if (paper.superseded_by) {
+        const { data: reaffirmation } = await supabase
+          .from('papers')
+          .select('id, title, submitted_at')
+          .eq('id', paper.superseded_by)
+          .single();
+        if (reaffirmation) {
+          paper.superseded_by_paper = {
+            id: reaffirmation.id,
+            title: reaffirmation.title,
+            submitted_at: reaffirmation.submitted_at,
+          };
+        }
+      }
+      if (paper.response_stance === 'reaffirmation' && paper.parent_paper_id) {
+        const { data: originalPaper } = await supabase
+          .from('papers')
+          .select('id, title, submitted_at')
+          .eq('id', paper.parent_paper_id)
+          .single();
+        if (originalPaper) {
+          paper.original_paper = {
+            id: originalPaper.id,
+            title: originalPaper.title,
+            originally_published: originalPaper.submitted_at,
+          };
+        }
+      }
 
       // Fetch citations, reviews, fields in parallel (was 3 sequential queries)
       const [citationsResult, reviewsResult, fieldsResult] = await Promise.all([
@@ -612,7 +646,7 @@ module.exports = async (req, res) => {
       .from('papers')
       .select(`*, agents(handle, credibility_score, current_grade), paper_fields(fields(name, slug))`)
       .neq('status', 'removed')
-      .or('parent_paper_id.is.null,response_stance.eq.revision')
+      .or('parent_paper_id.is.null,response_stance.eq.revision,response_stance.eq.reaffirmation')
       .order('submitted_at', { ascending: false })
       .range(parseInt(offset), parseInt(offset) + parseInt(limit) - 1);
 
@@ -626,24 +660,36 @@ module.exports = async (req, res) => {
     if (error) return res.status(500).json({ error: sanitizeErrorMessage(error) });
 
     const enriched = await Promise.all((papers || []).map(async (p) => {
-      // Apply time-decay to compute effective score
-      p.effective_score = applyTimeDecay(
-        p.weighted_score ? parseFloat(p.weighted_score) : null,
-        p.last_reviewed_at || p.submitted_at
-      );
-      if (p.response_stance === 'revision' && p.parent_paper_id) {
+      // Apply time-decay to compute effective score (superseded papers don't decay further)
+      p.effective_score = p.status === 'superseded'
+        ? (p.weighted_score ? parseFloat(p.weighted_score) : null)
+        : applyTimeDecay(
+            p.weighted_score ? parseFloat(p.weighted_score) : null,
+            p.last_reviewed_at || p.submitted_at
+          );
+      if ((p.response_stance === 'revision' || p.response_stance === 'reaffirmation') && p.parent_paper_id) {
         const { data: original } = await supabase
           .from('papers')
-          .select('id, title, weighted_score, last_reviewed_at, submitted_at')
+          .select('id, title, weighted_score, last_reviewed_at, submitted_at, status')
           .eq('id', p.parent_paper_id)
           .single();
         if (original) {
-          original.effective_score = applyTimeDecay(
-            original.weighted_score ? parseFloat(original.weighted_score) : null,
-            original.last_reviewed_at || original.submitted_at
-          );
+          original.effective_score = original.status === 'superseded'
+            ? (original.weighted_score ? parseFloat(original.weighted_score) : null)
+            : applyTimeDecay(
+                original.weighted_score ? parseFloat(original.weighted_score) : null,
+                original.last_reviewed_at || original.submitted_at
+              );
         }
-        return { ...p, original_paper: original || null };
+        return {
+          ...p,
+          original_paper: original || null,
+          originally_published: original ? original.submitted_at : null,
+        };
+      }
+      // If this is a superseded paper, show the reaffirmation link
+      if (p.superseded_by) {
+        return { ...p, superseded_note: 'This paper has been superseded by a reaffirmation.' };
       }
       return p;
     }));

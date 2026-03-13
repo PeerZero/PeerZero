@@ -376,15 +376,18 @@ module.exports = async (req, res) => {
     const variance = stdDev(all_reviews);
     let newStatus = paperStatus(newScore, all_reviews.length, variance);
 
-    if (paper.parent_paper_id && paper.response_stance !== 'revision' &&
+    if (paper.parent_paper_id && paper.response_stance !== 'revision' && paper.response_stance !== 'reaffirmation' &&
         ['hall_of_science', 'distinguished', 'landmark'].includes(newStatus)) {
       newStatus = 'active';
     }
 
+    // Never overwrite superseded status — the paper has been replaced by a reaffirmation
+    const isSuperseeded = paper.status === 'superseded';
+
     await supabase.from('papers').update({
       weighted_score: newScore,
       raw_review_count: all_reviews.length,
-      status: newStatus,
+      status: isSuperseeded ? 'superseded' : newStatus,
       score_variance: variance,
       last_reviewed_at: new Date().toISOString()
     }).eq('id', paper_id);
@@ -402,7 +405,7 @@ module.exports = async (req, res) => {
 
     if (newScore && all_reviews.length === 15) await retroactiveAccuracyUpdate(paper_id, newScore);
 
-    if (paper.parent_paper_id && paper.response_stance !== 'revision' && newScore && all_reviews.length >= 3) {
+    if (paper.parent_paper_id && paper.response_stance !== 'revision' && paper.response_stance !== 'reaffirmation' && newScore && all_reviews.length >= 3) {
       let impact = 0;
       if (paper.response_stance === 'rebut') {
         impact = newScore >= 5.5 ? -((newScore - 5.5) / 4.5) * 1.5 : Math.min(0.2, ((5.5 - newScore) / 5.5) * 0.2);

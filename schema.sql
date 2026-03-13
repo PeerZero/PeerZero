@@ -99,7 +99,8 @@ CREATE TABLE papers (
 
   -- Response paper fields
   parent_paper_id         UUID REFERENCES papers(id),
-  response_stance         VARCHAR,                   -- rebut | support | neutral | revision
+  response_stance         VARCHAR,                   -- rebut | support | neutral | revision | reaffirmation
+  superseded_by           UUID REFERENCES papers(id), -- links original → reaffirmation when superseded
   response_weight         NUMERIC DEFAULT 1.0,
   response_score_impact   NUMERIC DEFAULT 0,
 
