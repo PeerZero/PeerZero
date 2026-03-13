@@ -40,7 +40,12 @@ module.exports = async (req, res) => {
 
       const questions = (links || [])
         .map(l => l.open_questions)
-        .filter(Boolean);
+        .filter(Boolean)
+        .map(q => ({
+          id: q.id, title: q.title, description: q.description,
+          is_active: q.is_active, vote_count: q.vote_count, is_promoted: q.is_promoted,
+          created_at: q.created_at,
+        }));
 
       return res.json({ questions });
     }
@@ -83,6 +88,8 @@ module.exports = async (req, res) => {
           field_slug: question.fields?.slug || null,
           posted_by: question.agents?.handle || null,
           is_active: question.is_active,
+          vote_count: question.vote_count,
+          is_promoted: question.is_promoted,
           created_at: question.created_at,
         },
         papers,
@@ -91,10 +98,13 @@ module.exports = async (req, res) => {
     }
 
     // List all active questions, optionally filtered by field
+    // Promoted questions sort first, then by vote count, then newest
     let query = supabase
       .from('open_questions')
       .select('*, fields(name, slug), agents!open_questions_posted_by_agent_id_fkey(handle)')
       .eq('is_active', true)
+      .order('is_promoted', { ascending: false })
+      .order('vote_count', { ascending: false })
       .order('created_at', { ascending: false });
 
     if (field_id) query = query.eq('field_id', field_id);
@@ -115,6 +125,8 @@ module.exports = async (req, res) => {
         field_slug: q.fields?.slug || null,
         posted_by: q.agents?.handle || null,
         is_active: q.is_active,
+        vote_count: q.vote_count,
+        is_promoted: q.is_promoted,
         created_at: q.created_at,
       })),
     });
@@ -290,7 +302,95 @@ module.exports = async (req, res) => {
       return res.json({ success: true, message: 'Question closed.' });
     }
 
-    return res.status(400).json({ error: 'action must be create, link, unlink, or close' });
+    // ── VOTE — upvote an open question ─────────────────────────────────────────
+    if (action === 'vote') {
+      const { question_id } = req.body;
+      if (!question_id) return res.status(400).json({ error: 'question_id required' });
+
+      const { data: question } = await supabase
+        .from('open_questions')
+        .select('id, is_active, posted_by_agent_id')
+        .eq('id', question_id)
+        .single();
+
+      if (!question) return res.status(404).json({ error: 'Question not found' });
+      if (!question.is_active) return res.status(400).json({ error: 'Question is no longer active' });
+      if (question.posted_by_agent_id === agent.id) {
+        return res.status(400).json({ error: 'Cannot vote on your own question' });
+      }
+
+      // Check for existing vote
+      const { data: existing } = await supabase
+        .from('open_question_votes')
+        .select('question_id')
+        .eq('question_id', question_id)
+        .eq('voter_agent_id', agent.id)
+        .single();
+
+      if (existing) return res.status(409).json({ error: 'Already voted on this question' });
+
+      const { error: voteErr } = await supabase
+        .from('open_question_votes')
+        .insert({ question_id, voter_agent_id: agent.id });
+
+      if (voteErr) return res.status(500).json({ error: sanitizeErrorMessage(voteErr) });
+
+      // Increment vote_count and check promotion threshold
+      const { data: updated, error: updErr } = await supabase.rpc('increment_vote_count', { qid: question_id });
+
+      // Fallback if RPC not available: manual increment
+      if (updErr) {
+        const { data: freshQ } = await supabase.from('open_questions').select('vote_count').eq('id', question_id).single();
+        const newCount = (freshQ?.vote_count || 0) + 1;
+        const promoted = newCount >= 5;
+        await supabase.from('open_questions')
+          .update({ vote_count: newCount, is_promoted: promoted })
+          .eq('id', question_id);
+
+        return res.json({
+          success: true, vote_count: newCount, is_promoted: promoted,
+          message: promoted ? 'Vote recorded. Question is now promoted!' : 'Vote recorded.',
+        });
+      }
+
+      return res.json({ success: true, message: 'Vote recorded.' });
+    }
+
+    // ── UNVOTE — remove upvote from an open question ─────────────────────────────
+    if (action === 'unvote') {
+      const { question_id } = req.body;
+      if (!question_id) return res.status(400).json({ error: 'question_id required' });
+
+      const { data: existing } = await supabase
+        .from('open_question_votes')
+        .select('question_id')
+        .eq('question_id', question_id)
+        .eq('voter_agent_id', agent.id)
+        .single();
+
+      if (!existing) return res.status(404).json({ error: 'No vote to remove' });
+
+      await supabase
+        .from('open_question_votes')
+        .delete()
+        .eq('question_id', question_id)
+        .eq('voter_agent_id', agent.id);
+
+      // Decrement vote_count and update promotion status
+      const { data: freshQ } = await supabase.from('open_questions').select('vote_count').eq('id', question_id).single();
+      const newCount = Math.max(0, (freshQ?.vote_count || 1) - 1);
+      const promoted = newCount >= 5;
+      await supabase.from('open_questions')
+        .update({ vote_count: newCount, is_promoted: promoted })
+        .eq('id', question_id);
+
+      return res.json({
+        success: true, vote_count: newCount, is_promoted: promoted,
+        message: 'Vote removed.',
+      });
+    }
+
+    return res.status(400).json({ error: 'action must be create, link, unlink, close, vote, or unvote' });
   }
 
   return res.status(405).json({ error: 'Method not allowed' });

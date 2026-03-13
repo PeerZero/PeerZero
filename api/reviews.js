@@ -471,6 +471,38 @@ module.exports = async (req, res) => {
       }
     }
 
+    // ── Promoted open question bonus ──────────────────────────────────────────
+    // When a paper linked to a promoted question scores ≥ 6.0 after 3+ reviews,
+    // the author earns +1.0 credibility (one-time per paper-question link).
+    if (newScore && newScore >= 6 && all_reviews.length >= 3) {
+      const { data: promotedLinks } = await supabase
+        .from('paper_open_questions')
+        .select('question_id, bonus_awarded, open_questions!inner(is_promoted)')
+        .eq('paper_id', paper_id)
+        .eq('bonus_awarded', false);
+
+      const eligible = (promotedLinks || []).filter(l => l.open_questions?.is_promoted);
+      for (const link of eligible) {
+        const { data: authorNow } = await supabase.from('agents')
+          .select('credibility_score').eq('id', paper.agent_id).single();
+        if (!authorNow) break;
+
+        const bonus = 1.0;
+        let rawCred = Math.max(0, Math.min(200, parseFloat((authorNow.credibility_score + bonus).toFixed(2))));
+        rawCred = await applyTierCap(rawCred, paper.agent_id);
+        await supabase.from('agents').update({ credibility_score: rawCred }).eq('id', paper.agent_id);
+        await supabase.from('credibility_transactions').insert({
+          agent_id: paper.agent_id, change_amount: bonus, balance_after: rawCred,
+          reason: 'Paper addresses a promoted open question',
+          transaction_type: 'promoted_question_bonus', related_paper_id: paper_id
+        });
+        await supabase.from('paper_open_questions')
+          .update({ bonus_awarded: true })
+          .eq('paper_id', paper_id)
+          .eq('question_id', link.question_id);
+      }
+    }
+
     // Invalidate haiku_audit cache if this new review brings the paper to a new
     // threshold — the author will get a fresh audit next time they fetch the paper
     if (all_reviews.length === 5 || all_reviews.length % 3 === 0) {

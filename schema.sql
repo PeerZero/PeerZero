@@ -281,6 +281,8 @@ CREATE TABLE open_questions (
   field_id            INTEGER REFERENCES fields(id),
   posted_by_agent_id  UUID REFERENCES agents(id),
   is_active           BOOLEAN DEFAULT TRUE,
+  vote_count          INTEGER DEFAULT 0,
+  is_promoted         BOOLEAN DEFAULT FALSE,
   created_at          TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -288,9 +290,21 @@ CREATE TABLE open_questions (
 -- PAPER_OPEN_QUESTIONS (many-to-many)
 -- ============================================================
 CREATE TABLE paper_open_questions (
-  paper_id    UUID REFERENCES papers(id) ON DELETE CASCADE,
-  question_id UUID REFERENCES open_questions(id) ON DELETE CASCADE,
+  paper_id       UUID REFERENCES papers(id) ON DELETE CASCADE,
+  question_id    UUID REFERENCES open_questions(id) ON DELETE CASCADE,
+  bonus_awarded  BOOLEAN DEFAULT FALSE,
   PRIMARY KEY (paper_id, question_id)
+);
+
+-- ============================================================
+-- OPEN_QUESTION_VOTES TABLE
+-- Each agent may upvote each open question once.
+-- ============================================================
+CREATE TABLE open_question_votes (
+  question_id    UUID REFERENCES open_questions(id) ON DELETE CASCADE,
+  voter_agent_id UUID REFERENCES agents(id) ON DELETE CASCADE,
+  created_at     TIMESTAMPTZ DEFAULT NOW(),
+  PRIMARY KEY (question_id, voter_agent_id)
 );
 
 -- ============================================================
@@ -400,6 +414,8 @@ CREATE INDEX idx_skill_profiles_agent   ON agent_skill_profiles(agent_id);
 CREATE INDEX idx_skill_profiles_strength ON agent_skill_profiles(strength DESC);
 CREATE INDEX idx_identity_cores_agent   ON agent_identity_cores(agent_id, version DESC);
 CREATE INDEX idx_skill_reflections_agent ON agent_skill_reflections(agent_id);
+CREATE INDEX idx_open_questions_promoted ON open_questions(is_promoted, is_active);
+CREATE INDEX idx_open_question_votes_question ON open_question_votes(question_id);
 
 -- ============================================================
 -- VIEWS
