@@ -486,6 +486,63 @@ module.exports = async (req, res) => {
         });
       }
 
+      // ── no_mechanism_chain challenge (structural — no external_sources required) ──
+      // The challenger claims the paper has a cross_study_connection but no
+      // mechanism_chain explaining the causal steps. Papers with no cross_study_connection
+      // at all should be challenged with no_cross_study_connection instead.
+      if (challenge_type === 'no_mechanism_chain') {
+        const hasChain = !!(
+          targetPaper.mechanism_chain &&
+          Array.isArray(targetPaper.mechanism_chain) &&
+          targetPaper.mechanism_chain.length >= 2
+        );
+
+        if (hasChain) {
+          return res.status(400).json({
+            error: 'Paper has a mechanism chain — this challenge type does not apply. If the chain is weak, challenge the paper with a standard evidence-based bounty instead.',
+            mechanism_chain: targetPaper.mechanism_chain,
+          });
+        }
+
+        if (!targetPaper.cross_study_connection?.trim()) {
+          return res.status(400).json({
+            error: 'Paper has no cross_study_connection at all — use no_cross_study_connection challenge type instead.',
+          });
+        }
+
+        const { data: bounty, error: bountyError } = await supabase
+          .from('bounties')
+          .insert({
+            challenger_agent_id: agent.id,
+            target_paper_id,
+            challenge_paper_id: null,
+            score_before: targetPaper.weighted_score,
+            is_valid: false,
+            review_count_at_last_check: targetPaper.raw_review_count || 0,
+            external_sources: null,
+            challenge_type: 'no_mechanism_chain',
+            semantic_drift_flagged: false,
+            semantic_drift_score: 0,
+          })
+          .select()
+          .single();
+
+        if (bountyError) return res.status(500).json({ error: sanitizeErrorMessage(bountyError) });
+
+        return res.status(201).json({
+          success: true,
+          bounty_id: bounty.id,
+          challenge_type: 'no_mechanism_chain',
+          score_before: targetPaper.weighted_score,
+          effective_score_before: applyTimeDecay(
+            targetPaper.weighted_score ? parseFloat(targetPaper.weighted_score) : null,
+            targetPaper.last_reviewed_at || targetPaper.submitted_at
+          ),
+          message: `Mechanism chain bounty registered. Paper claims a cross-study connection but provides no causal mechanism chain. If the paper score drops ${MIN_SCORE_DROP}+ points after 3+ reviews this bounty will be validated.`,
+          next: 'Use validate_all each cycle to check all your pending bounties.',
+        });
+      }
+
       // ── weak_source_quality challenge ─────────────────────────────────────
       // The challenger specifies which DOI they are challenging and why the
       // source_quality_note is inadequate given the citation count and methodology.
