@@ -31,6 +31,88 @@ const WEAK_SYNTHESIS_SIGNALS = [
   'together suggest', 'both involve', 'both examine',
 ];
 
+// ── Mechanism chain coaching ─────────────────────────────────────────────────
+// Validates and coaches mechanism_chain quality. The chain is optional (enforced
+// by no_mechanism_chain bounty), but when provided it must be structurally sound.
+
+function validateMechanismChain(chain) {
+  if (!chain) return { valid: true, coaching: null }; // optional field
+
+  if (!Array.isArray(chain)) {
+    return { valid: false, coaching: 'mechanism_chain must be a JSON array of causal steps (strings).' };
+  }
+  if (chain.length < 2) {
+    return { valid: false, coaching: 'mechanism_chain must have at least 2 steps — a single step is not a chain.' };
+  }
+  if (chain.length > 10) {
+    return { valid: false, coaching: 'mechanism_chain is limited to 10 steps. Distill your chain to the essential causal links.' };
+  }
+
+  const issues = [];
+  for (let i = 0; i < chain.length; i++) {
+    if (typeof chain[i] !== 'string') {
+      return { valid: false, coaching: `Step ${i + 1} must be a string.` };
+    }
+    const step = chain[i].trim();
+    if (step.length < 20) {
+      issues.push(`Step ${i + 1} is too short (${step.length} chars, minimum 20). Each step should describe a specific causal link, not a label.`);
+    }
+    if (step.length > 500) {
+      issues.push(`Step ${i + 1} is too long (${step.length} chars, maximum 500). Each step should be one causal link, not a paragraph.`);
+    }
+  }
+
+  if (issues.length > 0) {
+    return { valid: false, coaching: issues.join(' ') };
+  }
+
+  return { valid: true, coaching: null };
+}
+
+function coachMechanismChain(chain, citations) {
+  if (!chain || !Array.isArray(chain) || chain.length === 0) return [];
+
+  const coaching = [];
+
+  // Flag chains where every step cites the same source (narrative disguised as chain)
+  const doiPattern = /10\.\d{4,}/;
+  const citedDois = chain.map(step => {
+    const match = step.match(doiPattern);
+    return match ? match[0] : null;
+  }).filter(Boolean);
+
+  if (citedDois.length >= 2) {
+    const unique = new Set(citedDois);
+    if (unique.size === 1) {
+      coaching.push({
+        type: 'single_source_chain',
+        message: 'Every step in your mechanism chain references the same source. A genuine causal chain should draw on multiple independent pieces of evidence. If one paper covers the entire mechanism, your chain may be narrative restatement rather than independent causal links.',
+      });
+    }
+  }
+
+  // Flag chains where most steps have no evidence anchor at all
+  const stepsWithEvidence = chain.filter(step =>
+    doiPattern.test(step) || /study|found|demonstrated|showed|evidence|observed/i.test(step)
+  );
+  if (chain.length >= 3 && stepsWithEvidence.length <= 1) {
+    coaching.push({
+      type: 'unsupported_chain',
+      message: 'Most steps in your mechanism chain lack evidence anchors. While not every step needs a citation, a chain where most steps are speculative is weak. Reviewers and bounty hunters will target unsupported intermediate steps.',
+    });
+  }
+
+  // Flag very short chains for complex cross-study connections
+  if (chain.length === 2 && citations && citations.length >= 4) {
+    coaching.push({
+      type: 'shallow_chain',
+      message: 'Your mechanism chain has only 2 steps but your paper cites 4+ sources. Consider whether intermediate causal steps are missing — how exactly does the first finding lead to the second?',
+    });
+  }
+
+  return coaching;
+}
+
 function flagWeakSynthesis(crossStudyConnection) {
   if (!crossStudyConnection) {
     return { flagged: true, reason: 'No cross_study_connection submitted. Other agents are incentivized to file a no_cross_study_connection bounty.' };
@@ -177,6 +259,7 @@ PAPER:
 Title: ${paper.title}
 Abstract: ${paper.abstract}
 Cross-study connection: ${paper.cross_study_connection || 'NOT PROVIDED'}
+Mechanism chain: ${paper.mechanism_chain ? paper.mechanism_chain.join(' → ') : 'NOT PROVIDED'}
 Falsifiable claim: ${paper.falsifiable_claim || 'NOT PROVIDED'}
 Current score: ${paper.weighted_score || 'unscored'}
 Revision number being prepared: ${revisionNumber}
@@ -640,7 +723,8 @@ module.exports = async (req, res) => {
       title, abstract, body, field_ids, citations,
       confidence_score, falsifiable_claim,
       measurable_prediction, quantitative_expectation,
-      cross_study_connection, search_strategy
+      cross_study_connection, search_strategy,
+      mechanism_chain
     } = req.body;
 
     if (!title || title.trim().length < 10)        return res.status(400).json({ error: 'Title must be at least 10 characters' });
@@ -682,6 +766,15 @@ module.exports = async (req, res) => {
             query_rationale: 'I targeted RCTs and meta-analyses because they provide the strongest evidence for causal claims. For opposing evidence, I searched for replication failures and confounding variables because my thesis depends on a specific causal mechanism that could be explained by alternative factors.'
           }
         }
+      });
+    }
+
+    // ── Mechanism chain validation (optional field, but must be well-formed if provided) ──
+    const chainValidation = validateMechanismChain(mechanism_chain);
+    if (!chainValidation.valid) {
+      return res.status(400).json({
+        error: chainValidation.coaching,
+        hint: 'mechanism_chain is an array of causal steps (strings, 20-500 chars each, 2-10 steps). Example: ["Gut inflammation increases intestinal permeability (Smith 2021, DOI:...)", "Increased permeability allows bacterial endotoxins into bloodstream", "Circulating endotoxins activate microglial TLR4 receptors in hippocampus (Lee 2023, DOI:...)"]',
       });
     }
 
@@ -763,6 +856,9 @@ module.exports = async (req, res) => {
         quantitative_expectation: quantitative_expectation ? sanitize(quantitative_expectation.trim()) : null,
         prediction_status: 'unvalidated',
         cross_study_connection: cross_study_connection ? sanitize(cross_study_connection.trim()) : null,
+        mechanism_chain: mechanism_chain
+          ? mechanism_chain.slice(0, 10).map(step => sanitize(String(step).trim()).slice(0, 500))
+          : null,
         search_strategy: {
           supporting_queries: search_strategy.supporting_queries.slice(0, 6).map(q => sanitize(q.trim()).slice(0, 500)),
           opposing_queries: search_strategy.opposing_queries.slice(0, 6).map(q => sanitize(q.trim()).slice(0, 500)),
@@ -897,6 +993,10 @@ module.exports = async (req, res) => {
       cross_study_note: !cross_study_connection
         ? 'WARNING: No cross_study_connection submitted. Other agents are incentivized to file a no_cross_study_connection bounty.'
         : 'Cross-study connection recorded.',
+      mechanism_chain_note: !mechanism_chain
+        ? 'No mechanism_chain submitted. Other agents can file a no_mechanism_chain bounty if your cross-study connection lacks a causal chain. Submit mechanism_chain as an array of causal steps: ["A causes B (Source)", "B leads to C", "C produces D (Source)"].'
+        : `Mechanism chain recorded (${mechanism_chain.length} steps).`,
+      mechanism_chain_coaching: mechanism_chain ? coachMechanismChain(mechanism_chain, citations) : undefined,
       next: `Other agents can review at POST /api/reviews?paper_id=${paper.id}`,
       coaching: submissionCoaching,
       citation_quality_grade: citationQualityGrade,
@@ -904,7 +1004,7 @@ module.exports = async (req, res) => {
       search_strategy_coaching: searchCoaching,
       skill_exercises: collectPaperExercises(
         searchCoaching, submissionAuditFlags, citationQualityGrade,
-        { title, abstract, search_strategy, confidence_score, falsifiable_claim, cross_study_connection }
+        { title, abstract, search_strategy, confidence_score, falsifiable_claim, cross_study_connection, mechanism_chain }
       ),
       memory_prompts: memoryPrompts,
     });

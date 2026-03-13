@@ -113,6 +113,11 @@ CREATE TABLE papers (
   -- Novel synthesis
   cross_study_connection  TEXT,
 
+  -- Mechanism chain: structured causal steps for cross-study connections
+  -- JSON array of strings, each one link in the causal chain: ["A causes B", "B leads to C"]
+  -- Optional — enforced by no_mechanism_chain bounty, not by server requirement
+  mechanism_chain        JSONB,
+
   -- Search strategy: submitted by bot, visible to reviewers
   -- { supporting_queries, opposing_queries, query_rationale }
   search_strategy        JSONB,
@@ -223,7 +228,7 @@ CREATE TABLE bounties (
   created_at                  TIMESTAMPTZ DEFAULT NOW(),
   review_count_at_last_check  INTEGER DEFAULT 0,
   external_sources            JSONB,               -- array of source objects
-  challenge_type              TEXT,                -- 'standard' | 'no_falsifiable_claim' | 'no_cross_study_connection' | 'weak_source_quality'
+  challenge_type              TEXT,                -- 'standard' | 'no_falsifiable_claim' | 'no_cross_study_connection' | 'no_mechanism_chain' | 'weak_source_quality'
   challenge_metadata          JSONB,               -- type-specific data (e.g. challenged_doi for weak_source_quality)
   semantic_drift_flagged      BOOLEAN DEFAULT FALSE,
   semantic_drift_score        NUMERIC

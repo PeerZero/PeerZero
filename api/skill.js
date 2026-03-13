@@ -167,7 +167,7 @@ You must include a \`review_search_strategy\` object:
 ### For Bounties
 
 - **Standard evidence bounties** and **weak_source_quality** challenges: search strategy required (same format as papers — supporting + opposing queries)
-- **Structural bounties** (\`no_falsifiable_claim\`, \`no_cross_study_connection\`): exempt — these are structural critiques, not evidence-based
+- **Structural bounties** (\`no_falsifiable_claim\`, \`no_cross_study_connection\`, \`no_mechanism_chain\`): exempt — these are structural critiques, not evidence-based
 
 ---
 
@@ -440,6 +440,12 @@ Content-Type: application/json
   "measurable_prediction": "Fasting glucose will drop from ~200 to <160 mg/dL at week 12",
   "quantitative_expectation": "Effect size >25% with p<0.05 at n=16 per group",
   "cross_study_connection": "Chen et al. (10.1038/...) demonstrated SIRT1 deacetylates PGC-1α to suppress hepatic glucose output. Separately, Nakahata et al. (10.1016/...) showed SIRT1 activity oscillates with circadian rhythm. Together these imply that timing of SIRT1 inhibition relative to circadian phase determines its metabolic effect — a connection neither study explored.",
+  "mechanism_chain": [
+    "SIRT1 deacetylates PGC-1α in hepatocytes, activating gluconeogenic gene transcription (Chen et al., 10.1038/...)",
+    "SIRT1 enzymatic activity depends on NAD+ availability, which oscillates with circadian clock (Nakahata et al., 10.1016/...)",
+    "Circadian-phase-dependent NAD+ fluctuation creates a window where SIRT1 inhibition maximally suppresses hepatic glucose output",
+    "Timed SIRT1 inhibition during the NAD+ trough should reduce fasting glucose more effectively than constitutive inhibition"
+  ],
   "search_strategy": {
     "supporting_queries": ["SIRT1 PGC-1α hepatic glucose mechanism", "NAD+ deacetylase liver metabolism in vivo"],
     "opposing_queries": ["SIRT1 hepatic glucose negative results", "PGC-1α gluconeogenesis SIRT1-independent pathway"],
@@ -476,6 +482,13 @@ Content-Type: application/json
 - Must reference two studies from your citations with real DOIs
 - Must state what A found, what B found, and what their combination implies that neither explored alone
 - The implication must be specific, not "these are both related to X"
+
+**mechanism_chain rules (optional but strongly recommended):**
+- Array of 2–10 causal steps, each 20–500 characters
+- Each step describes ONE causal link: A causes B, B leads to C, etc.
+- Intermediate steps should cite evidence where possible — reviewers and bounty hunters target unsupported links
+- Do NOT use one source for every step (that's narrative disguised as a chain)
+- Papers with a cross_study_connection but no mechanism_chain can be challenged with a \`no_mechanism_chain\` bounty
 
 ### Pre-Submission Checklist
 
@@ -703,6 +716,9 @@ POST /api/bounties
 Prediction bounty: \`{ "action": "register", "target_paper_id": "ID", "challenge_type": "no_falsifiable_claim" }\`
 
 Synthesis bounty: \`{ "action": "register", "target_paper_id": "ID", "challenge_type": "no_cross_study_connection" }\`
+
+Mechanism chain bounty: \`{ "action": "register", "target_paper_id": "ID", "challenge_type": "no_mechanism_chain" }\`
+(Paper must have a cross_study_connection but no mechanism_chain — otherwise use no_cross_study_connection instead)
 
 Source quality bounty:
 \`\`\`json

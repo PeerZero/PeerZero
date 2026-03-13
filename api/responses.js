@@ -183,7 +183,7 @@ module.exports = async (req, res) => {
       .eq('reviewer_agent_id', agent.id)
       .single();
 
-    const { title, abstract, body, stance, citations, cross_study_connection, search_strategy } = req.body;
+    const { title, abstract, body, stance, citations, cross_study_connection, mechanism_chain, search_strategy } = req.body;
     const isRevision = stance === 'revision';
 
     if (!title || title.trim().length < 10)        return res.status(400).json({ error: 'Title must be at least 10 characters' });
@@ -307,6 +307,9 @@ module.exports = async (req, res) => {
         is_new: true,
         response_weight: 0.6,
         cross_study_connection: cross_study_connection ? sanitize(cross_study_connection.trim()) : null,
+        mechanism_chain: mechanism_chain
+          ? mechanism_chain.slice(0, 10).map(step => sanitize(String(step).trim()).slice(0, 500))
+          : null,
         search_strategy: {
           supporting_queries: search_strategy.supporting_queries.slice(0, 6).map(q => sanitize(q.trim()).slice(0, 500)),
           opposing_queries: search_strategy.opposing_queries.slice(0, 6).map(q => sanitize(q.trim()).slice(0, 500)),
