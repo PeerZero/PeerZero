@@ -2,7 +2,8 @@ const { createClient } = require('@supabase/supabase-js');
 const crypto = require('crypto');
 const https = require('https');
 const {
-  setCorsHeaders, sanitize, escapeForPostgrest, isRateLimited, getClientIp,
+  setCorsHeaders, sanitize, escapeForPostgrest, isRateLimited, isRateLimitedDb,
+  logRateLimitedAction, getClientIp,
   sanitizeErrorMessage, validateTextLength, verifyDoi, lookupCitationQuality,
   auditCitationQualityNotes, computeCitationQualityGrade, checkCitationDiversity,
   validateSearchStrategy, generateSearchCoaching, detectBotCitation, applyTimeDecay
@@ -198,8 +199,14 @@ async function buildSubmissionCoaching(fieldIds, confidenceScore, crossStudyConn
 }
 
 // ── Haiku audit ───────────────────────────────────────────────────────────────
-function callAnthropicHaiku(prompt) {
+function callAnthropicHaiku(prompt, context = 'unknown') {
+  const startTime = Date.now();
   return new Promise((resolve) => {
+    if (!process.env.ANTHROPIC_API_KEY) {
+      console.error(`[haiku:${context}] ANTHROPIC_API_KEY not set — skipping call`);
+      return resolve(null);
+    }
+
     const body = JSON.stringify({
       model: 'claude-haiku-4-5-20251001',
       max_tokens: 1200,
@@ -223,19 +230,34 @@ function callAnthropicHaiku(prompt) {
         let data = '';
         res.on('data', chunk => { data += chunk; });
         res.on('end', () => {
+          const elapsed = Date.now() - startTime;
           try {
             const parsed = JSON.parse(data);
+            if (parsed?.error) {
+              console.error(`[haiku:${context}] API error (${elapsed}ms):`, parsed.error.type, parsed.error.message);
+              return resolve(null);
+            }
             const text = parsed?.content?.[0]?.text || '';
             const clean = text.replace(/^```json\s*/i, '').replace(/```\s*$/i, '').trim();
-            resolve(JSON.parse(clean));
-          } catch {
+            const result = JSON.parse(clean);
+            console.log(`[haiku:${context}] OK (${elapsed}ms)`);
+            resolve(result);
+          } catch (e) {
+            console.error(`[haiku:${context}] Parse failed (${elapsed}ms):`, e?.message);
             resolve(null);
           }
         });
       }
     );
-    req.on('error', () => resolve(null));
-    req.on('timeout', () => { req.destroy(); resolve(null); });
+    req.on('error', (e) => {
+      console.error(`[haiku:${context}] Network error (${Date.now() - startTime}ms):`, e?.message);
+      resolve(null);
+    });
+    req.on('timeout', () => {
+      req.destroy();
+      console.error(`[haiku:${context}] Timeout after 25s`);
+      resolve(null);
+    });
     req.write(body);
     req.end();
   });
@@ -303,7 +325,7 @@ Return ONLY valid JSON, no markdown fences, no preamble:
   "search_queries": ["<specific query to find evidence addressing the weakest criticism>", "<query 2>", "<query 3>"]
 }`;
 
-  return callAnthropicHaiku(prompt);
+  return callAnthropicHaiku(prompt, 'paper_audit');
 }
 
 async function getOrGenerateHaikuAudit(paper, reviews, citations, paperId, revisionNumber) {
@@ -725,6 +747,12 @@ module.exports = async (req, res) => {
     if (agentError || !agent) return res.status(401).json({ error: 'Invalid API key or agent is banned' });
     if (!agent.registration_review_passed) return res.status(403).json({ error: 'Must complete registration first' });
 
+    // DB-backed rate limit: max 2 paper submissions per 24 hours (survives cold starts)
+    const paperRateLimited = await isRateLimitedDb(agent.id, 'paper_submit', 2, 24 * 60 * 60 * 1000);
+    if (paperRateLimited) {
+      return res.status(429).json({ error: 'Maximum 2 paper submissions per 24 hours. Take time to research thoroughly before your next submission.' });
+    }
+
     const { count: originalPaperCount } = await supabase
       .from('papers')
       .select('id', { count: 'exact', head: true })
@@ -925,6 +953,9 @@ module.exports = async (req, res) => {
       .single();
 
     if (paperError) return res.status(500).json({ error: sanitizeErrorMessage(paperError) });
+
+    // Log successful paper submission for DB-backed rate limiting
+    logRateLimitedAction(agent.id, 'paper_submit').catch(() => {});
 
     if (field_ids && field_ids.length > 0) {
       const safeFieldIds = field_ids.filter(id => Number.isInteger(Number(id)) && Number(id) > 0 && Number(id) <= 20);
