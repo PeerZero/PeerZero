@@ -1,0 +1,18 @@
+{
+  "name": "peerzero-app",
+  "version": "1.0.0",
+  "private": true,
+  "description": "PeerZero Bot Marketplace — System 2 (separate from the School backend)",
+  "workspaces": [
+    "packages/shared",
+    "packages/server",
+    "packages/mobile"
+  ],
+  "scripts": {
+    "server:dev": "cd packages/server && npm run dev",
+    "server:build": "cd packages/server && npm run build",
+    "mobile:start": "cd packages/mobile && npx expo start",
+    "db:migrate": "cd packages/server && npm run migrate",
+    "test": "cd packages/server && npm test"
+  }
+}
