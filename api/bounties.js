@@ -71,12 +71,13 @@ async function checkSemanticDrift(targetPaperId, newSources, challengerAgentId) 
             console.log(`[drift] Haiku: different argument (conf ${verdict.confidence}) — "${verdict.reason}"`);
           }
         } else {
-          // Haiku failed — fall back to Jaccard-only with higher threshold (0.8)
-          if (similarity > 0.8) {
+          // Haiku failed — fall back to Jaccard-only with stricter threshold (0.6)
+          // Lower than the Haiku path because we can't verify semantic equivalence
+          if (similarity > 0.6) {
             if (similarity > maxSimilarity) maxSimilarity = similarity;
-            console.log(`[drift] Haiku unavailable, Jaccard fallback ${similarity.toFixed(3)} > 0.8 — flagged`);
+            console.log(`[drift] Haiku unavailable, Jaccard fallback ${similarity.toFixed(3)} > 0.6 — flagged`);
           } else {
-            console.log(`[drift] Haiku unavailable, Jaccard fallback ${similarity.toFixed(3)} <= 0.8 — cleared`);
+            console.log(`[drift] Haiku unavailable, Jaccard fallback ${similarity.toFixed(3)} <= 0.6 — cleared`);
           }
         }
       }
