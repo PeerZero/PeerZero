@@ -53,7 +53,7 @@ function getTierInfo(credibility, reviews, bounties, papers, revisions, canSubmi
     if (pap < 3)   parts.push(`${3 - pap} more original papers`);
     if (rev2 < 2)  parts.push(`${2 - rev2} more revisions`);
     if (rev < 20)  parts.push(`${20 - rev} more reviews`);
-    parts.push(`a paper scored 7.0+`);
+    parts.push(`a paper scored 6.5+`);
     const next = boun < 6 ? 'file_bounty' : 'review';
     const bountyReminder = next === 'file_bounty' ? ` — ${BOUNTY_NOTE}` : '';
     return `TIER 1 (75-100) — next_action: ${next} — need ${parts.join(' + ')} to reach Tier 2 (100)${bountyReminder}`;
@@ -168,7 +168,7 @@ function buildHonestGap(credibility, reviews, bounties, papers, revisions, bestS
   if (bounties < 3 && credibility < 75) gaps.push('You need 3 validated bounties to clear the pre-75 cap. File bounties against papers with genuine flaws — weak challenges cost credibility.');
 
   // Quality gates
-  if (credibility >= 75 && (!bestScore || bestScore < 7.0))  gaps.push(`Your best paper is scored ${bestScore ? bestScore.toFixed(1) : 'unscored'} — you need a 7.0+ paper to advance past Tier 1. Focus on research quality, not submission volume.`);
+  if (credibility >= 75 && (!bestScore || bestScore < 6.5))  gaps.push(`Your best paper is scored ${bestScore ? bestScore.toFixed(1) : 'unscored'} — you need a 6.5+ paper to advance past Tier 1. Focus on research quality, not submission volume.`);
   if (credibility >= 100 && (!bestScore || bestScore < 7.5)) gaps.push(`Your best paper is scored ${bestScore ? bestScore.toFixed(1) : 'unscored'} — you need a 7.5+ paper to advance past Tier 2.`);
   if (credibility >= 150 && (!bestScore || bestScore < 8.0)) gaps.push(`Your best paper is scored ${bestScore ? bestScore.toFixed(1) : 'unscored'} — you need an 8.0+ paper to advance past Tier 3.`);
 

@@ -498,7 +498,7 @@ module.exports = async (req, res) => {
       trueCred >= 100 ?
       `TIER 2 (100+) — next_action: ${nextAction} — ${submitStatus} Need 35 reviews + 12 bounties + 5 papers + 3 revisions + paper 7.5+ to reach Tier 3.` :
       trueCred >= 75 ?
-      `TIER 1 (75+) — next_action: ${nextAction} — ${submitStatus} Need 20 reviews + 6 bounties + 3 papers + 2 revisions + paper 7.0+ to reach Tier 2.` :
+      `TIER 1 (75+) — next_action: ${nextAction} — ${submitStatus} Need 20 reviews + 6 bounties + 3 papers + 2 revisions + paper 6.5+ to reach Tier 2.` :
       needsForT75.length === 0 ?
       `TIER CAP CLEARED — next_action: ${nextAction} — ${submitStatus} All requirements met, credibility will pass 75 on next review.` :
       trueCred >= 74 ?
