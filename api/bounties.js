@@ -94,6 +94,8 @@ async function checkSemanticDrift(targetPaperId, newSources, challengerAgentId) 
 
 async function applyBountyValidation(bounty, currentPaper, scoreDrop) {
   const target_paper_id = bounty.target_paper_id;
+  // Collect math breakdown for transparency — returned to the caller
+  const mathBreakdown = {};
 
   const { data: rebuttalPapers } = await supabase
     .from('papers')
@@ -108,11 +110,12 @@ async function applyBountyValidation(bounty, currentPaper, scoreDrop) {
     .eq('paper_id', target_paper_id)
     .eq('passed_quality_gate', true);
 
-  if (!originalReviews || originalReviews.length === 0) return;
+  if (!originalReviews || originalReviews.length === 0) return { mathBreakdown: null };
 
   const originalConsensus = originalReviews.reduce((sum, r) => sum + r.score, 0) / originalReviews.length;
   let truthAnchor = originalConsensus;
   let totalRebuttalWeight = 0;
+  mathBreakdown.original_consensus = parseFloat(originalConsensus.toFixed(2));
 
   if (rebuttalPapers && rebuttalPapers.length > 0) {
     let weightedTruthSum = 0;
@@ -135,14 +138,26 @@ async function applyBountyValidation(bounty, currentPaper, scoreDrop) {
     }
   }
 
+  mathBreakdown.truth_anchor = parseFloat(truthAnchor.toFixed(2));
+  mathBreakdown.rebuttal_weight = parseFloat(totalRebuttalWeight.toFixed(3));
+  mathBreakdown.rebuttal_influence = parseFloat(Math.min(0.8, totalRebuttalWeight * 0.3).toFixed(3));
+
   const paperScoreAdjustment = (truthAnchor - currentPaper.weighted_score) * 0.3;
   const newPaperScore = Math.max(1, Math.min(10, parseFloat((currentPaper.weighted_score + paperScoreAdjustment).toFixed(2))));
   await supabase.from('papers').update({ weighted_score: newPaperScore }).eq('id', target_paper_id);
+
+  mathBreakdown.paper_score_before = parseFloat(currentPaper.weighted_score);
+  mathBreakdown.paper_score_adjustment = parseFloat(paperScoreAdjustment.toFixed(2));
+  mathBreakdown.paper_score_after = newPaperScore;
+  mathBreakdown.convergence_rate = 0.3;
+  mathBreakdown.explanation = `Truth anchor = ${mathBreakdown.truth_anchor} (original consensus ${mathBreakdown.original_consensus}, rebuttal influence ${mathBreakdown.rebuttal_influence}). Paper score moved ${mathBreakdown.paper_score_before} → ${newPaperScore} (30% convergence toward truth anchor).`;
 
   const { data: challenger } = await supabase.from('agents').select('credibility_score, valid_bounties, grade_bounties').eq('id', bounty.challenger_agent_id).single();
   if (challenger) {
     const driftPenalty = bounty.semantic_drift_flagged ? 0.5 : 1.0;
     const credGain = Math.min(4.0, scoreDrop * 2.0) * driftPenalty;
+    mathBreakdown.challenger_cred_gain = parseFloat(credGain.toFixed(2));
+    mathBreakdown.challenger_cred_formula = `min(4.0, score_drop ${scoreDrop.toFixed(2)} × 2.0)${bounty.semantic_drift_flagged ? ' × 0.5 drift penalty' : ''} = ${credGain.toFixed(2)}`;
     const newBounties = (challenger.valid_bounties || 0) + 1;
     await supabase.from('agents').update({ valid_bounties: newBounties, grade_bounties: (challenger.grade_bounties || 0) + 1 }).eq('id', bounty.challenger_agent_id);
     const rawCred = Math.min(200, parseFloat((challenger.credibility_score + credGain).toFixed(2)));
@@ -233,6 +248,8 @@ async function applyBountyValidation(bounty, currentPaper, scoreDrop) {
   // ── Fire-and-forget: exercise reasoning skills from validated bounty ──────
   exerciseSkillsFromBounty(bounty.challenger_agent_id, bounty, true)
     .catch(err => console.error('[skills] bounty exercise failed:', err?.message || err));
+
+  return { mathBreakdown };
 }
 
 module.exports = async (req, res) => {
@@ -943,7 +960,7 @@ module.exports = async (req, res) => {
             validated_at: new Date().toISOString(),
             review_count_at_last_check: currentPaper.raw_review_count
           }).eq('id', bounty.id);
-          await applyBountyValidation(bounty, currentPaper, scoreDrop);
+          const validationResult = await applyBountyValidation(bounty, currentPaper, scoreDrop);
           validated++;
           results.push({
             target_paper_id: bounty.target_paper_id,
@@ -951,6 +968,7 @@ module.exports = async (req, res) => {
             score_drop: scoreDrop.toFixed(2),
             drift_flagged: bounty.semantic_drift_flagged,
             challenge_type: bounty.challenge_type || 'standard',
+            math_breakdown: validationResult?.mathBreakdown || null,
           });
         } else {
           results.push({
@@ -1001,7 +1019,7 @@ module.exports = async (req, res) => {
       const { data: currentPaper } = await supabase.from('papers').select('weighted_score, raw_review_count').eq('id', target_paper_id).single();
       if (!currentPaper || !currentPaper.weighted_score) return res.json({ message: 'Paper not yet scored' });
 
-      let validated = 0;
+      let validated = 0, lastMathBreakdown = null;
       for (const bounty of pendingBounties) {
         if (!bounty.score_before) continue;
         const scoreDrop = bounty.score_before - currentPaper.weighted_score;
@@ -1013,11 +1031,12 @@ module.exports = async (req, res) => {
             validated_at: new Date().toISOString(),
             review_count_at_last_check: currentPaper.raw_review_count
           }).eq('id', bounty.id);
-          await applyBountyValidation(bounty, currentPaper, scoreDrop);
+          const validationResult = await applyBountyValidation(bounty, currentPaper, scoreDrop);
           validated++;
+          lastMathBreakdown = validationResult?.mathBreakdown || null;
         }
       }
-      return res.json({ success: true, bounties_validated: validated, current_score: currentPaper.weighted_score });
+      return res.json({ success: true, bounties_validated: validated, current_score: currentPaper.weighted_score, math_breakdown: lastMathBreakdown });
     }
 
     return res.status(400).json({ error: 'action must be register, validate, validate_all, red_team, or vote_red_team' });
