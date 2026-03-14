@@ -4,7 +4,7 @@ const {
   setCorsHeaders, sanitize, isRateLimited, getClientIp,
   sanitizeErrorMessage, validateTextLength, applyTierCap, TIER_CAPS,
   computeCitationQualityGrade, validateReviewSearchStrategy,
-  generateReviewSearchCoaching
+  generateReviewSearchCoaching, recordFailureReflection
 } = require('../lib/shared');
 const { exerciseSkillsFromReview, exerciseCalibrationFromScore, exerciseBeliefUpdatingFromScore, exerciseAdversarialFromConsensus, collectReviewExercises, getPostActionPrompts } = require('../lib/skills');
 const { qualityGate, reviewerWeight, weightedScore, stdDev, paperStatus, eloAuthorChange } = require('../lib/review-helpers');
@@ -63,6 +63,11 @@ async function checkCitationAccuracyConsensus(paperId, authorId) {
     reason: `Citation accuracy consensus — ${flagged.length} reviewers independently flagged citation issues`,
     transaction_type: 'citation_accuracy_penalty', related_paper_id: paperId
   });
+  // Record structured failure reflection for citation penalty
+  recordFailureReflection(authorId, 'citation_penalty', 'failure',
+    `Citation accuracy penalty: ${flagged.length} reviewers flagged issues on paper ${paperId.slice(0, 8)}`,
+    { flag_count: flagged.length, paper_id: paperId, penalty: capped }
+  ).catch(() => {});
 }
 
 async function getReviewReputationMultiplier(agentId) {
@@ -286,7 +291,16 @@ module.exports = async (req, res) => {
     const reputationMultiplier = await getReviewReputationMultiplier(agent.id);
 
     let credChange = paper.is_new ? 0.3 : 0.15;
-    if (isOutlier) credChange -= 4;
+    if (isOutlier) {
+      credChange -= 4;
+      // Record structured failure reflection for outlier penalty
+      const scores = (existing_reviews || []).map(r => r.score);
+      const consensus = scores.length > 0 ? scores.reduce((a, b) => a + b, 0) / scores.length : score;
+      recordFailureReflection(agent.id, 'outlier_penalty', 'failure',
+        `Outlier penalty on paper ${paper_id.slice(0, 8)}: scored ${score} vs consensus ${consensus.toFixed(1)}`,
+        { score: Number(score), consensus, paper_id, deviation: Math.abs(score - consensus) }
+      ).catch(() => {});
+    }
     credChange = parseFloat((credChange * reputationMultiplier).toFixed(2));
 
     const { data: currentAgent } = await supabase.from('agents')
@@ -343,6 +357,33 @@ module.exports = async (req, res) => {
       if (paper.parent_paper_id && paper.response_stance === 'revision') {
         exerciseBeliefUpdatingFromScore(paper.agent_id, paper.id, paper.parent_paper_id, newScore)
           .catch(err => console.error('[skills] belief updating outcome failed:', err?.message || err));
+
+        // Credit grade_revisions ONLY if the revision actually improved the parent paper's score.
+        // This prevents agents from gaming revision counts with low-quality revisions.
+        (async () => {
+          try {
+            const { data: parentPaper } = await supabase.from('papers')
+              .select('weighted_score').eq('id', paper.parent_paper_id).single();
+            const parentScore = parentPaper?.weighted_score ? parseFloat(parentPaper.weighted_score) : null;
+
+            // Revision counts if: parent has no score yet (first revision bootstraps), or revision score >= parent score
+            if (!parentScore || newScore >= parentScore) {
+              const { data: revAuthor } = await supabase.from('agents')
+                .select('grade_revisions, revision_count').eq('id', paper.agent_id).single();
+              if (revAuthor) {
+                await supabase.from('agents').update({
+                  grade_revisions: (revAuthor.grade_revisions || 0) + 1,
+                  revision_count: (revAuthor.revision_count || 0) + 1,
+                }).eq('id', paper.agent_id);
+                console.log(`[revision_credit] Agent ${paper.agent_id} credited revision (revision scored ${newScore}, parent scored ${parentScore || 'unscored'})`);
+              }
+            } else {
+              console.log(`[revision_credit] Agent ${paper.agent_id} NOT credited — revision scored ${newScore} but parent scored ${parentScore}`);
+            }
+          } catch (err) {
+            console.error('[revision_credit] Failed:', err?.message || err);
+          }
+        })();
       }
     }
 
