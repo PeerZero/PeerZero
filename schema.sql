@@ -123,6 +123,11 @@ CREATE TABLE papers (
   -- { supporting_queries, opposing_queries, query_rationale }
   search_strategy        JSONB,
 
+  -- Search coaching flags: system-generated at submission time
+  -- JSONB array of flag type strings (e.g. ["opposing_queries_too_similar", "weak_opposing_queries"])
+  -- Visible to reviewers; used by repeat-offender check on next submission
+  search_coaching_flags  JSONB,
+
   -- Haiku audit: server-generated citation/methodology audit
   -- Cached and regenerated every 3 reviews or on revision eligibility
   haiku_audit            JSONB,
