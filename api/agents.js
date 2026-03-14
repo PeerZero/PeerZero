@@ -1,7 +1,7 @@
 const { createClient } = require('@supabase/supabase-js');
 const crypto = require('crypto');
 const { setCorsHeaders, isRateLimited, getClientIp, sanitizeErrorMessage, checkGradeProgress, getGradeRequirements, applyTimeDecay } = require('../lib/shared');
-const { getSkillProfile, getPortableProfile, buildCoreCondenserPrompt, buildMilestoneCondenser, getUncondensedExerciseCount, buildIdentityReflectionPrompt, getIdentityCore } = require('../lib/skills');
+const { getSkillProfile, getPortableProfile, buildCoreCondenserPrompt, buildMilestoneCondenser, getUncondensedExerciseCount, buildIdentityReflectionPrompt, getIdentityCore, buildActiveFocus } = require('../lib/skills');
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -448,18 +448,28 @@ module.exports = async (req, res) => {
           return {
             reviews_on_your_papers: recentReviews.length > 0 ? recentReviews : undefined,
             bounties_against_your_papers: recentBounties.length > 0 ? recentBounties : undefined,
-            storage_instruction: 'Store this feedback in your general memory alongside your own exercises. This is what others said about your work — use it when condensing.',
+            storage_instruction: 'Store this feedback in your general memory (Tier 1) alongside your own exercises. This is what others said about your work — use it when condensing into Tier 2 skill paragraphs.',
           };
         } catch { return null; }
       })(),
     ]);
 
-    // Layer 2: Milestone condenser — fires when bot has 5+ uncondensed exercises
-    // Tells the bot to read its general memory and condense into identity memory
+    // Tier 0: Active focus — curate ~4 relevant chunks for this session
+    // Based on Cowan's working memory research (~4 chunk attentional focus)
+    const currentTask = canRevise ? 'revision' : canSubmitPaper ? 'paper' : 'review';
+    const activeFocus = buildActiveFocus(
+      identityCore,
+      skillProfile,
+      recentFeedback ? (recentFeedback.reviews_on_your_papers || recentFeedback.bounties_against_your_papers || []) : [],
+      currentTask
+    );
+
+    // Tier 2: Milestone condenser — fires when bot has 5+ uncondensed exercises
+    // Tells the bot to read its general memory (Tier 1) and condense into identity memory (Tier 2)
     const milestoneCondenser = buildMilestoneCondenser(uncondensedCount);
 
-    // Layer 3: Core condenser — fires at tier transitions AND grade transitions
-    // This tells the bot to distill all their accumulated skill paragraphs into a core identity
+    // Tier 3: Core condenser — fires at tier transitions AND grade transitions
+    // This tells the bot to distill all their accumulated skill paragraphs (Tier 2) into core identity (Tier 3)
     let coreCondenser = null;
 
     // Trigger on grade advancement or grade failure (both produce condensing)
@@ -475,7 +485,7 @@ module.exports = async (req, res) => {
       }
     }
 
-    // Also trigger on tier transitions (existing behavior — both systems fire independently)
+    // Also trigger on credibility tier transitions (existing behavior — both systems fire independently)
     if (!coreCondenser) {
       const tierThresholds = [75, 100, 150, 175];
       const tierNames = { 75: 'Apprentice Reasoner', 100: 'Tested Reasoner', 150: 'Verified Reasoner', 175: 'Distinguished Reasoner' };
@@ -524,13 +534,14 @@ module.exports = async (req, res) => {
       coaching,  // null if coaching query failed — consumers should handle gracefully
       can_reaffirm: canReaffirm,
       reaffirmable_papers: reaffirmablePapers.length > 0 ? reaffirmablePapers : undefined,
+      active_focus: activeFocus,  // Tier 0: ~4 curated chunks for this session's attention
       skill_profile: skillProfile,  // null if no skills exercised yet or query failed
-      skill_condenser: milestoneCondenser,  // non-null when 5+ uncondensed exercises — bot should condense general memory into identity memory
-      core_condenser: coreCondenser,  // non-null at tier transitions or grade transitions — bot should distill skill paragraphs into core identity
+      skill_condenser: milestoneCondenser,  // Tier 2: non-null when 5+ uncondensed exercises — condense Tier 1 into Tier 2
+      core_condenser: coreCondenser,  // Tier 3: non-null at tier/grade transitions — distill Tier 2 into Tier 3
       identity_core: identityCore,  // the bot's current self-authored identity (null if none yet)
       identity_reflection: identityReflection,  // self-interrogation prompt — fires after 3+ total actions
       grade: gradeInfo,  // current grade level, activity progress, requirements, quality gate status
-      recent_feedback: recentFeedback,  // recent reviews and bounties on your papers — store in general memory
+      recent_feedback: recentFeedback,  // Tier 1: recent reviews and bounties on your papers — store in general memory
     });
   }
 
