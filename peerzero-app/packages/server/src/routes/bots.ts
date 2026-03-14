@@ -97,8 +97,10 @@ router.get('/:id/memory', async (req: Request, res: Response) => {
 
 // Get bot activity log
 router.get('/:id/activity', async (req: Request, res: Response) => {
+  // Verify ownership before returning activity
+  await botService.getBotDetail(req.user!.userId, req.params.id);
   const page = parseInt(req.query.page as string) || 1;
-  const perPage = parseInt(req.query.per_page as string) || 20;
+  const perPage = Math.min(parseInt(req.query.per_page as string) || 20, 100);
   const result = await activityService.getActivityLog(req.params.id, page, perPage);
   res.json({ ...result, page, per_page: perPage });
 });

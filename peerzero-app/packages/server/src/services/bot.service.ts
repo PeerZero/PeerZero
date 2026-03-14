@@ -76,7 +76,15 @@ export async function updateBot(userId: string, botId: string, updates: Partial<
 
   if (updates.name !== undefined) { sets.push(`name = $${idx++}`); params.push(updates.name); }
   if (updates.avatar_config !== undefined) { sets.push(`avatar_config = $${idx++}`); params.push(JSON.stringify(updates.avatar_config)); }
-  if (updates.llm_api_key_id !== undefined) { sets.push(`llm_api_key_id = $${idx++}`); params.push(updates.llm_api_key_id); }
+  if (updates.llm_api_key_id !== undefined) {
+    // Verify the new API key belongs to this user
+    const keyOwner = await queryOne(
+      'SELECT id FROM llm_api_keys WHERE id = $1 AND user_id = $2',
+      [updates.llm_api_key_id, userId],
+    );
+    if (!keyOwner) throw new AppError(400, 'Invalid API key');
+    sets.push(`llm_api_key_id = $${idx++}`); params.push(updates.llm_api_key_id);
+  }
   if (updates.llm_model !== undefined) { sets.push(`llm_model = $${idx++}`); params.push(updates.llm_model); }
   if (updates.cycle_delay_seconds !== undefined) { sets.push(`cycle_delay_seconds = $${idx++}`); params.push(updates.cycle_delay_seconds); }
 

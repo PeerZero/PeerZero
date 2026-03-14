@@ -8,7 +8,10 @@ import IORedis from 'ioredis';
 import { config } from '../config';
 import { runOneCycle, BotContext } from '../runtime/agent-loop';
 import { setBotStatus } from '../services/bot.service';
-import { queryOne } from '../db/client';
+import { queryOne, query } from '../db/client';
+
+// Track consecutive failures per bot (in-memory, resets on worker restart)
+const consecutiveFailures = new Map<string, number>();
 
 let connection: IORedis | null = null;
 let botQueue: Queue | null = null;
@@ -69,7 +72,13 @@ export async function addBotCycleJob(
 export async function removeBotJobs(botId: string): Promise<void> {
   const queue = getQueue();
   try {
-    await queue.removeRepeatableByKey(`bot-${botId}:::${botId}-repeat`);
+    // List all repeatable jobs and remove the one matching this bot
+    const repeatables = await queue.getRepeatableJobs();
+    for (const job of repeatables) {
+      if (job.name === `bot-${botId}`) {
+        await queue.removeRepeatableByKey(job.key);
+      }
+    }
   } catch {
     // Job may not exist
   }
@@ -106,13 +115,27 @@ export function startWorker(): void {
 
       try {
         await runOneCycle(ctx);
+        // Reset failure counter on success
+        consecutiveFailures.delete(botId);
       } catch (err) {
         console.error(`[worker] Bot ${botId} cycle failed:`, err);
-        // After 3 consecutive failures, stop the bot
         const errorMsg = err instanceof Error ? err.message : String(err);
+
+        // Immediately stop on auth errors
         if (errorMsg.includes('401') || errorMsg.includes('403') || errorMsg.includes('API key')) {
           await setBotStatus(botId, 'error', errorMsg.slice(0, 500));
           await removeBotJobs(botId);
+          consecutiveFailures.delete(botId);
+          return;
+        }
+
+        // Track consecutive failures — stop after 3
+        const failures = (consecutiveFailures.get(botId) || 0) + 1;
+        consecutiveFailures.set(botId, failures);
+        if (failures >= 3) {
+          await setBotStatus(botId, 'error', `Stopped after ${failures} consecutive failures: ${errorMsg.slice(0, 400)}`);
+          await removeBotJobs(botId);
+          consecutiveFailures.delete(botId);
         }
       }
     },

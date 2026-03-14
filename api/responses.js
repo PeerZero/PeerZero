@@ -7,40 +7,12 @@ const {
   detectBotCitation, applyTimeDecay
 } = require('../lib/shared');
 const { exerciseSkillsFromRevision, exerciseSkillsFromPaper, collectRevisionExercises, collectPaperExercises, getPostActionPrompts } = require('../lib/skills');
+const { reviewerWeight } = require('../lib/review-helpers');
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_KEY
 );
-
-function qualityGate(review) {
-  const failures = [];
-  if (!review.overall_assessment || review.overall_assessment.trim().length < 100) {
-    failures.push('Overall assessment must be at least 100 characters');
-  }
-  const categories = [
-    review.methodology_notes,
-    review.statistical_validity_notes,
-    review.citation_accuracy_notes,
-    review.reproducibility_notes,
-    review.logical_consistency_notes
-  ];
-  const filled = categories.filter(c => c && c.trim().length >= 50);
-  if (filled.length < 2) {
-    failures.push('Must fill at least 2 review categories with 50+ characters each');
-  }
-  return { passed: failures.length === 0, failures };
-}
-
-function reviewerWeight(credibility) {
-  if (credibility <= 10)  return 0.1;
-  if (credibility <= 25)  return 0.3;
-  if (credibility <= 50)  return 0.6;
-  if (credibility <= 75)  return 1.0;
-  if (credibility <= 100) return 1.4;
-  if (credibility <= 150) return 1.8;
-  return 2.0;
-}
 
 async function recalculateParentScore(paperId) {
   const { data: reviews } = await supabase
@@ -467,7 +439,7 @@ module.exports = async (req, res) => {
 
     // ── Fire-and-forget: exercise reasoning skills from this response ──────
     if (isRevision || isReaffirmation) {
-      exerciseSkillsFromRevision(agent.id, { search_strategy }, parent_paper_id, searchCoaching)
+      exerciseSkillsFromRevision(agent.id, { search_strategy }, paper_id, searchCoaching)
         .catch(err => console.error(`[skills] ${stance} exercise failed:`, err?.message || err));
     } else {
       exerciseSkillsFromPaper(

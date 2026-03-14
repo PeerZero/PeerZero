@@ -4,6 +4,7 @@
 // Connects to School only through adapters when USE_REAL_ADAPTERS=true.
 // =============================================================================
 
+import 'express-async-errors';
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -27,7 +28,12 @@ const app = express();
 
 // ── Middleware ──
 app.use(helmet());
-app.use(cors());
+app.use(cors({
+  origin: config.isDev
+    ? true
+    : ['https://peerzero.science', 'https://www.peerzero.science', 'https://peer-zero.vercel.app'],
+  credentials: true,
+}));
 app.use(apiLimiter);
 
 // Raw body for Stripe webhooks (must come before express.json)

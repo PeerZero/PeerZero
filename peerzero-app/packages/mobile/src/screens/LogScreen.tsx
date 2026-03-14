@@ -24,17 +24,24 @@ export default function LogScreen({ route }: any) {
   const [refreshing, setRefreshing] = useState(false);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const loadPage = useCallback(async (p: number, append = false) => {
+    if (loading) return;
+    setLoading(true);
     try {
+      setError(null);
       const result = await botsApi.activity(botId, p) as { data: ActivityEntry[]; has_more: boolean };
       setEntries(prev => append ? [...prev, ...result.data] : result.data);
       setHasMore(result.has_more);
       setPage(p);
-    } catch {
-      // Silent fail
+    } catch (err: any) {
+      if (!append) setError(err?.message || 'Failed to load activity');
+    } finally {
+      setLoading(false);
     }
-  }, [botId]);
+  }, [botId, loading]);
 
   useFocusEffect(useCallback(() => { loadPage(1); }, [loadPage]));
 
@@ -85,7 +92,7 @@ export default function LogScreen({ route }: any) {
         onEndReachedThreshold={0.5}
         ListEmptyComponent={
           <View style={styles.empty}>
-            <Text style={styles.emptyText}>No activity yet. Start your bot to see the log!</Text>
+            <Text style={styles.emptyText}>{error || 'No activity yet. Start your bot to see the log!'}</Text>
           </View>
         }
       />

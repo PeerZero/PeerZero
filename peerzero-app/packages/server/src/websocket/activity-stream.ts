@@ -8,6 +8,7 @@ import { Server } from 'http';
 import jwt from 'jsonwebtoken';
 import { config } from '../config';
 import { JwtPayload } from '../middleware/auth';
+import { queryOne } from '../db/client';
 
 interface ConnectedClient {
   ws: WebSocket;
@@ -36,6 +37,16 @@ export function setupWebSocket(server: Server): void {
       payload = jwt.verify(token, config.jwtSecret) as JwtPayload;
     } catch {
       ws.close(4002, 'Invalid token');
+      return;
+    }
+
+    // Verify the user owns this bot before allowing subscription
+    const bot = await queryOne<{ id: string }>(
+      'SELECT id FROM bots WHERE id = $1 AND user_id = $2',
+      [botId, payload.userId],
+    );
+    if (!bot) {
+      ws.close(4003, 'Bot not found or not owned by user');
       return;
     }
 

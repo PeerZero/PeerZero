@@ -33,7 +33,8 @@ module.exports = async (req, res) => {
   if (isRateLimited(clientIp, 60, 60000)) {
     return res.status(429).json({ error: 'Too many requests. Please wait a moment.' });
   }
-  if (isRateLimited(`key:${apiKey.slice(0,16)}`, 30, 60000)) {
+  const rateKeyHash = crypto.createHash('sha256').update(apiKey).digest('hex');
+  if (isRateLimited(`key:${rateKeyHash}`, 30, 60000)) {
     return res.status(429).json({ error: 'Too many requests. Please wait a moment.' });
   }
 
