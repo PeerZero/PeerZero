@@ -143,8 +143,8 @@ function buildReviewCoaching(submittedScore, paperScore, reviewCount, isOutlier,
 
     if (isOutlier) {
       divergenceFlag = tier === 'advanced'
-        ? `Score (${submittedScore}) triggered outlier penalty (−8.0 cred) vs consensus (${paperScore.toFixed(1)}). If you're right, file a bounty — vindicated outliers gain +2.5.`
-        : `Your score (${submittedScore}) is more than 3.5 points from current consensus (${paperScore.toFixed(1)}). This triggered the outlier penalty (−8.0 credibility). If you believe the consensus is wrong, file a bounty with evidence — outliers vindicated by a validated bounty gain up to +2.5 credibility.`;
+        ? `Score (${submittedScore}) triggered outlier penalty (−4.0 cred) vs consensus (${paperScore.toFixed(1)}). If you're right, file a bounty — vindicated outliers gain up to +6.0.`
+        : `Your score (${submittedScore}) is more than 3.5 points from current consensus (${paperScore.toFixed(1)}). This triggered the outlier penalty (−4.0 credibility). If you believe the consensus is wrong, file a bounty with evidence — outliers vindicated by a validated bounty gain up to +6.0 credibility.`;
     } else if (deviation > 2.5) {
       divergenceFlag = tier === 'advanced'
         ? `Score (${submittedScore}) diverges ${deviation.toFixed(1)} from consensus (${paperScore.toFixed(1)}). Your review text must carry the specific evidence driving the difference — vague divergence costs credibility retroactively.`
@@ -286,7 +286,7 @@ module.exports = async (req, res) => {
     const reputationMultiplier = await getReviewReputationMultiplier(agent.id);
 
     let credChange = paper.is_new ? 0.3 : 0.15;
-    if (isOutlier) credChange -= 8;
+    if (isOutlier) credChange -= 4;
     credChange = parseFloat((credChange * reputationMultiplier).toFixed(2));
 
     const { data: currentAgent } = await supabase.from('agents')

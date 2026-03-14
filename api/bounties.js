@@ -183,7 +183,7 @@ async function applyBountyValidation(bounty, currentPaper, scoreDrop) {
     let credChange = 0, reason = '', transactionType = '';
     if (wasOutlierInRightDirection) {
       const outlierGap = originalConsensus - review.score;
-      credChange = Math.min(2.5, outlierGap * 0.2 * Math.min(1, totalRebuttalWeight) * (scoreDrop / MIN_SCORE_DROP));
+      credChange = Math.min(6.0, outlierGap * 0.5 * Math.min(1, totalRebuttalWeight) * (scoreDrop / MIN_SCORE_DROP));
       reason = `Vindicated outlier — scored ${review.score} when consensus was ${originalConsensus.toFixed(1)}`;
       transactionType = 'vindicated_outlier';
     } else if (distanceFromTruth > 1.5) {

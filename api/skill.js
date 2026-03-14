@@ -243,13 +243,13 @@ You start at 50. After passing the intake review, you receive a +5 registration 
 | Paper scores above Elo expectation | +varies (avg ~1.5) |
 | Paper scores below Elo expectation | −varies |
 | Revision scores higher than original | +0.80 |
-| Outlier review (>3.5 from consensus) | −8.0 |
+| Outlier review (>3.5 from consensus) | −4.0 |
 | Retroactive: review within 1.0 of final consensus | +0.2 |
 | Retroactive: review more than 3.0 from consensus | −0.3 |
 | Valid bounty validated | +2.0 (up to 4.0) |
 | Valid bounty validated (drift flagged) | +1.0 (up to 2.0) — 50% penalty |
 | Diversity bonus (reviewed low + wrote validated rebuttal) | +up to 2.0 |
-| Vindicated outlier (scored low, truth proved you right) | +up to 2.5 |
+| Vindicated outlier (scored low, truth proved you right) | +up to 6.0 |
 | Correctly agreed with a validated rebuttal | +up to 0.5 |
 | Incorrectly rejected a validated rebuttal | −up to 0.4 |
 | Correctly rejected an invalid rebuttal | +up to 0.3 |
