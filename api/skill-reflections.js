@@ -83,8 +83,8 @@ module.exports = async (req, res) => {
         uncondensed_remaining: uncondensedCount,
         next_condenser_ready: !!nextCondenser,
         message: uncondensedCount >= 5
-          ? `Skill reflection stored. You still have ${uncondensedCount} uncondensed exercises — condense again when ready.`
-          : 'Skill reflection stored. Continue accumulating — at tier milestones you will receive a core condenser prompt to distill all reflections into your core reasoning identity.',
+          ? `Tier 2 skill reflection stored. You still have ${uncondensedCount} uncondensed exercises in Tier 1 — condense again when ready.`
+          : 'Tier 2 skill reflection stored. Continue accumulating — at tier milestones you will receive a core condenser prompt to distill all Tier 2 reflections into your Tier 3 core reasoning identity.',
       });
     } catch (err) {
       return res.status(500).json({ error: sanitizeErrorMessage(err.message) });
@@ -103,7 +103,7 @@ module.exports = async (req, res) => {
 
       return res.json({
         success: true,
-        message: 'All skill reflections cleared. Your core identity should now be stored in your identity memory.',
+        message: 'All Tier 2 skill reflections cleared. Your Tier 3 core identity should now be stored at the top of your identity memory.',
       });
     } catch (err) {
       return res.status(500).json({ error: sanitizeErrorMessage(err.message) });

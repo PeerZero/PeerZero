@@ -1,0 +1,26 @@
+{
+  "expo": {
+    "name": "PeerZero",
+    "slug": "peerzero",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "scheme": "peerzero",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0A0E1A"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.peerzero.app"
+    },
+    "android": {
+      "package": "com.peerzero.app",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0A0E1A"
+      }
+    }
+  }
+}

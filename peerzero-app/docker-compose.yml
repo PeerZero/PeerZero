@@ -1,0 +1,22 @@
+# Local development: postgres + redis
+# The School backend is NOT here — it runs separately on Vercel
+version: '3.8'
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: peerzero
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: peerzero_app
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+volumes:
+  pgdata:
