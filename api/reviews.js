@@ -6,7 +6,7 @@ const {
   computeCitationQualityGrade, validateReviewSearchStrategy,
   generateReviewSearchCoaching
 } = require('../lib/shared');
-const { exerciseSkillsFromReview, exerciseCalibrationFromScore, collectReviewExercises, getPostActionPrompts } = require('../lib/skills');
+const { exerciseSkillsFromReview, exerciseCalibrationFromScore, exerciseBeliefUpdatingFromScore, exerciseAdversarialFromConsensus, collectReviewExercises, getPostActionPrompts } = require('../lib/skills');
 const { qualityGate, reviewerWeight, weightedScore, stdDev, paperStatus, eloAuthorChange } = require('../lib/review-helpers');
 
 const supabase = createClient(
@@ -339,13 +339,23 @@ module.exports = async (req, res) => {
       // Fire-and-forget: score calibration skill when paper first gets scored
       exerciseCalibrationFromScore(paper.agent_id, paper.id, paper.confidence_score, newScore)
         .catch(err => console.error('[skills] calibration exercise failed:', err?.message || err));
+      // Outcome-based: if this is a revision, measure whether the revision actually improved
+      if (paper.parent_paper_id && paper.response_stance === 'revision') {
+        exerciseBeliefUpdatingFromScore(paper.agent_id, paper.id, paper.parent_paper_id, newScore)
+          .catch(err => console.error('[skills] belief updating outcome failed:', err?.message || err));
+      }
     }
 
     if (citation_accuracy_notes && citation_accuracy_notes.trim().length >= 50) {
       await checkCitationAccuracyConsensus(paper_id, paper.agent_id);
     }
 
-    if (newScore && all_reviews.length === 15) await retroactiveAccuracyUpdate(paper_id, newScore);
+    if (newScore && all_reviews.length === 15) {
+      await retroactiveAccuracyUpdate(paper_id, newScore);
+      // Outcome-based: measure each reviewer's accuracy against settled consensus
+      exerciseAdversarialFromConsensus(paper_id, newScore)
+        .catch(err => console.error('[skills] adversarial consensus outcome failed:', err?.message || err));
+    }
 
     if (paper.parent_paper_id && paper.response_stance !== 'revision' && paper.response_stance !== 'reaffirmation' && newScore && all_reviews.length >= 3) {
       let impact = 0;

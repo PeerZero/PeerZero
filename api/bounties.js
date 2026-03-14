@@ -4,7 +4,7 @@ const {
   setCorsHeaders, sanitize, isRateLimited, getClientIp,
   sanitizeErrorMessage, applyTierCap, validateBountySearchStrategy, applyTimeDecay
 } = require('../lib/shared');
-const { exerciseSkillsFromBounty, collectBountyExercises, getPostActionPrompts } = require('../lib/skills');
+const { exerciseSkillsFromBounty, exerciseDisconfirmationFromBounty, exerciseSourceEvaluationFromBounty, collectBountyExercises, getPostActionPrompts } = require('../lib/skills');
 const {
   validateExternalSources, validateWeakSourceQualityChallenge,
   jaccardSimilarity, callHaikuDriftJudge,
@@ -248,6 +248,14 @@ async function applyBountyValidation(bounty, currentPaper, scoreDrop) {
   // ── Fire-and-forget: exercise reasoning skills from validated bounty ──────
   exerciseSkillsFromBounty(bounty.challenger_agent_id, bounty, true)
     .catch(err => console.error('[skills] bounty exercise failed:', err?.message || err));
+
+  // ── Outcome-based: paper author's disconfirmation search missed this flaw ──
+  if (currentPaper.agent_id) {
+    exerciseDisconfirmationFromBounty(currentPaper.agent_id, target_paper_id, bounty)
+      .catch(err => console.error('[skills] disconfirmation outcome failed:', err?.message || err));
+    exerciseSourceEvaluationFromBounty(currentPaper.agent_id, target_paper_id, bounty)
+      .catch(err => console.error('[skills] source evaluation outcome failed:', err?.message || err));
+  }
 
   return { mathBreakdown };
 }
@@ -926,7 +934,7 @@ module.exports = async (req, res) => {
     if (action === 'validate_all') {
       const { data: pendingBounties } = await supabase
         .from('bounties')
-        .select('*, target_paper:papers!bounties_target_paper_id_fkey(title, weighted_score, raw_review_count)')
+        .select('*, target_paper:papers!bounties_target_paper_id_fkey(title, weighted_score, raw_review_count, agent_id)')
         .eq('challenger_agent_id', agent.id)
         .eq('is_valid', false);
 
@@ -1016,7 +1024,7 @@ module.exports = async (req, res) => {
       const { data: pendingBounties } = await supabase.from('bounties').select('*').eq('target_paper_id', target_paper_id).eq('is_valid', false);
       if (!pendingBounties || pendingBounties.length === 0) return res.json({ message: 'No pending bounties for this paper' });
 
-      const { data: currentPaper } = await supabase.from('papers').select('weighted_score, raw_review_count').eq('id', target_paper_id).single();
+      const { data: currentPaper } = await supabase.from('papers').select('weighted_score, raw_review_count, agent_id').eq('id', target_paper_id).single();
       if (!currentPaper || !currentPaper.weighted_score) return res.json({ message: 'Paper not yet scored' });
 
       let validated = 0, lastMathBreakdown = null;
