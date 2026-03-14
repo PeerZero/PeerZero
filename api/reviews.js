@@ -7,85 +7,12 @@ const {
   generateReviewSearchCoaching
 } = require('../lib/shared');
 const { exerciseSkillsFromReview, exerciseCalibrationFromScore, collectReviewExercises, getPostActionPrompts } = require('../lib/skills');
+const { qualityGate, reviewerWeight, weightedScore, stdDev, paperStatus, eloAuthorChange } = require('../lib/review-helpers');
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_KEY
 );
-
-const THRESHOLDS = {
-  hall_of_science:  { min_score: 8.5, min_reviews: 15 },
-  distinguished:    { min_score: 9.0, min_reviews: 25 },
-  landmark:         { min_score: 9.5, min_reviews: 40 }
-};
-
-function qualityGate(review) {
-  const failures = [];
-  if (!review.overall_assessment || review.overall_assessment.trim().length < 100) {
-    failures.push('Overall assessment must be at least 100 characters');
-  }
-  const categories = [
-    review.methodology_notes,
-    review.statistical_validity_notes,
-    review.citation_accuracy_notes,
-    review.reproducibility_notes,
-    review.logical_consistency_notes
-  ];
-  const filled = categories.filter(c => c && c.trim().length >= 50);
-  if (filled.length < 2) {
-    failures.push('Must fill at least 2 review categories with 50+ characters each');
-  }
-  return { passed: failures.length === 0, failures };
-}
-
-function reviewerWeight(credibility) {
-  if (credibility <= 10) return 0.1;
-  if (credibility <= 25) return 0.3;
-  if (credibility <= 50) return 0.6;
-  if (credibility <= 75) return 1.0;
-  if (credibility <= 100) return 1.4;
-  if (credibility <= 150) return 1.8;
-  return 2.0;
-}
-
-function weightedScore(reviews) {
-  if (reviews.length < 3) return null;
-  let total = 0, weights = 0;
-  for (const r of reviews) {
-    const w = reviewerWeight(r.reviewer_credibility_at_time || 50);
-    total += r.score * w;
-    weights += w;
-  }
-  return weights > 0 ? parseFloat((total / weights).toFixed(2)) : null;
-}
-
-function stdDev(reviews) {
-  if (reviews.length < 3) return 0;
-  const scores = reviews.map(r => r.score);
-  const mean = scores.reduce((a, b) => a + b, 0) / scores.length;
-  const variance = scores.reduce((s, x) => s + Math.pow(x - mean, 2), 0) / scores.length;
-  return Math.sqrt(variance);
-}
-
-function paperStatus(score, reviewCount, variance) {
-  if (!score) return 'pending';
-  if (variance >= 4) return 'contested';
-  if (score >= THRESHOLDS.landmark.min_score && reviewCount >= THRESHOLDS.landmark.min_reviews) return 'landmark';
-  if (score >= THRESHOLDS.distinguished.min_score && reviewCount >= THRESHOLDS.distinguished.min_reviews) return 'distinguished';
-  if (score >= THRESHOLDS.hall_of_science.min_score && reviewCount >= THRESHOLDS.hall_of_science.min_reviews) return 'hall_of_science';
-  return 'active';
-}
-
-function eloAuthorChange(authorCredibility, paperScore) {
-  if (!paperScore) return 0;
-  const expectedScore = 5 + (authorCredibility - 50) / 50;
-  const clampedExpected = Math.max(3, Math.min(9, expectedScore));
-  const diff = paperScore - clampedExpected;
-  const K = authorCredibility > 150 ? 0.8 :
-             authorCredibility > 100 ? 1.2 :
-             authorCredibility > 75  ? 2.0 : 2.5;
-  return parseFloat((diff * K).toFixed(2));
-}
 
 async function applyPredictionAccuracy(paper, actualScore) {
   if (!paper.confidence_score || !actualScore) return;
