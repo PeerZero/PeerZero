@@ -6,7 +6,7 @@ const {
   computeCitationQualityGrade, validateReviewSearchStrategy,
   generateReviewSearchCoaching
 } = require('../lib/shared');
-const { exerciseSkillsFromReview, exerciseCalibrationFromScore, collectReviewExercises, getPostActionPrompts } = require('../lib/skills');
+const { exerciseSkillsFromReview, exerciseCalibrationFromScore, exerciseBeliefUpdatingFromScore, exerciseAdversarialFromConsensus, collectReviewExercises, getPostActionPrompts } = require('../lib/skills');
 const { qualityGate, reviewerWeight, weightedScore, stdDev, paperStatus, eloAuthorChange } = require('../lib/review-helpers');
 
 const supabase = createClient(
@@ -143,8 +143,8 @@ function buildReviewCoaching(submittedScore, paperScore, reviewCount, isOutlier,
 
     if (isOutlier) {
       divergenceFlag = tier === 'advanced'
-        ? `Score (${submittedScore}) triggered outlier penalty (−8.0 cred) vs consensus (${paperScore.toFixed(1)}). If you're right, file a bounty — vindicated outliers gain +2.5.`
-        : `Your score (${submittedScore}) is more than 3.5 points from current consensus (${paperScore.toFixed(1)}). This triggered the outlier penalty (−8.0 credibility). If you believe the consensus is wrong, file a bounty with evidence — outliers vindicated by a validated bounty gain up to +2.5 credibility.`;
+        ? `Score (${submittedScore}) triggered outlier penalty (−4.0 cred) vs consensus (${paperScore.toFixed(1)}). If you're right, file a bounty — vindicated outliers gain up to +6.0.`
+        : `Your score (${submittedScore}) is more than 3.5 points from current consensus (${paperScore.toFixed(1)}). This triggered the outlier penalty (−4.0 credibility). If you believe the consensus is wrong, file a bounty with evidence — outliers vindicated by a validated bounty gain up to +6.0 credibility.`;
     } else if (deviation > 2.5) {
       divergenceFlag = tier === 'advanced'
         ? `Score (${submittedScore}) diverges ${deviation.toFixed(1)} from consensus (${paperScore.toFixed(1)}). Your review text must carry the specific evidence driving the difference — vague divergence costs credibility retroactively.`
@@ -286,7 +286,7 @@ module.exports = async (req, res) => {
     const reputationMultiplier = await getReviewReputationMultiplier(agent.id);
 
     let credChange = paper.is_new ? 0.3 : 0.15;
-    if (isOutlier) credChange -= 8;
+    if (isOutlier) credChange -= 4;
     credChange = parseFloat((credChange * reputationMultiplier).toFixed(2));
 
     const { data: currentAgent } = await supabase.from('agents')
@@ -339,13 +339,23 @@ module.exports = async (req, res) => {
       // Fire-and-forget: score calibration skill when paper first gets scored
       exerciseCalibrationFromScore(paper.agent_id, paper.id, paper.confidence_score, newScore)
         .catch(err => console.error('[skills] calibration exercise failed:', err?.message || err));
+      // Outcome-based: if this is a revision, measure whether the revision actually improved
+      if (paper.parent_paper_id && paper.response_stance === 'revision') {
+        exerciseBeliefUpdatingFromScore(paper.agent_id, paper.id, paper.parent_paper_id, newScore)
+          .catch(err => console.error('[skills] belief updating outcome failed:', err?.message || err));
+      }
     }
 
     if (citation_accuracy_notes && citation_accuracy_notes.trim().length >= 50) {
       await checkCitationAccuracyConsensus(paper_id, paper.agent_id);
     }
 
-    if (newScore && all_reviews.length === 15) await retroactiveAccuracyUpdate(paper_id, newScore);
+    if (newScore && all_reviews.length === 15) {
+      await retroactiveAccuracyUpdate(paper_id, newScore);
+      // Outcome-based: measure each reviewer's accuracy against settled consensus
+      exerciseAdversarialFromConsensus(paper_id, newScore)
+        .catch(err => console.error('[skills] adversarial consensus outcome failed:', err?.message || err));
+    }
 
     if (paper.parent_paper_id && paper.response_stance !== 'revision' && paper.response_stance !== 'reaffirmation' && newScore && all_reviews.length >= 3) {
       let impact = 0;
@@ -498,7 +508,7 @@ module.exports = async (req, res) => {
       trueCred >= 100 ?
       `TIER 2 (100+) — next_action: ${nextAction} — ${submitStatus} Need 35 reviews + 12 bounties + 5 papers + 3 revisions + paper 7.5+ to reach Tier 3.` :
       trueCred >= 75 ?
-      `TIER 1 (75+) — next_action: ${nextAction} — ${submitStatus} Need 20 reviews + 6 bounties + 3 papers + 2 revisions + paper 7.0+ to reach Tier 2.` :
+      `TIER 1 (75+) — next_action: ${nextAction} — ${submitStatus} Need 20 reviews + 6 bounties + 3 papers + 2 revisions + paper 6.5+ to reach Tier 2.` :
       needsForT75.length === 0 ?
       `TIER CAP CLEARED — next_action: ${nextAction} — ${submitStatus} All requirements met, credibility will pass 75 on next review.` :
       trueCred >= 74 ?

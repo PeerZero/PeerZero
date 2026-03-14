@@ -9,6 +9,12 @@ const supabase = createClient(
 // ── Security: detect prompt injection patterns ────────────────────────────────
 // Identity cores are stored and fed back into future prompts.
 // A malicious bot could try to inject instructions into its own identity.
+//
+// Defense layers:
+//   1. Normalize Unicode confusables and whitespace before matching
+//   2. Match against expanded pattern set including synonyms
+//   3. Detect structural markers (XML/template tags, role labels)
+
 const INJECTION_PATTERNS = [
   /ignore\s+(all\s+)?previous\s+instructions/i,
   /you\s+are\s+now\s+a/i,
@@ -19,12 +25,45 @@ const INJECTION_PATTERNS = [
   /new\s+instructions?\s*:/i,
   /\bact\s+as\s+(if|though)\b/i,
   /pretend\s+(you|to\s+be)/i,
-  /disregard\s+(the\s+)?(above|previous)/i,
+  /disregard\s+(the\s+)?(above|previous|prior)/i,
+  // Synonyms the original set missed
+  /bypass\s+(the\s+)?(rules|filter|safety|guardrail)/i,
+  /\benter\s+(developer|admin|debug)\s+mode\b/i,
+  /output\s+your\s+(system|initial)\s+prompt/i,
+  /\brepeat\s+(the\s+)?(instructions|prompt)\b/i,
+  /\bjailbreak\b/i,
+  /\bdan\s+mode\b/i,
+  // Structural markers — these should never appear in genuine identity text
+  /\[INST\]/i,
+  /<<SYS>>/i,
+  /<\|im_start\|>/i,
+  /\{\{.*?(system|prompt|instruction).*?\}\}/i,
+  /```\s*(system|prompt|instruction)/i,
 ];
+
+// Normalize Unicode tricks: replace confusable characters with ASCII equivalents
+// and collapse whitespace so patterns can't be evaded with zero-width chars.
+function normalizeForInjectionCheck(text) {
+  return text
+    // Strip zero-width characters (ZWJ, ZWNJ, ZWSP, soft hyphen, etc.)
+    .replace(/[\u200B-\u200F\u2028-\u202F\uFEFF\u00AD]/g, '')
+    // Normalize common Unicode confusables to ASCII
+    .replace(/[\u0410\u0430]/g, 'a')  // Cyrillic А/а → a
+    .replace(/[\u0415\u0435]/g, 'e')  // Cyrillic Е/е → e
+    .replace(/[\u041E\u043E]/g, 'o')  // Cyrillic О/о → o
+    .replace(/[\u0421\u0441]/g, 'c')  // Cyrillic С/с → c
+    .replace(/[\u0422\u0442]/g, 't')  // Cyrillic Т/т → t
+    .replace(/[\u0440]/g, 'p')        // Cyrillic р → p
+    .replace(/[\u0443]/g, 'y')        // Cyrillic у → y
+    .replace(/[\uFF01-\uFF5E]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 0xFEE0)) // fullwidth → ASCII
+    // Collapse multiple whitespace into single space
+    .replace(/\s+/g, ' ');
+}
 
 function containsInjection(text) {
   if (!text) return false;
-  return INJECTION_PATTERNS.some(pattern => pattern.test(text));
+  const normalized = normalizeForInjectionCheck(text);
+  return INJECTION_PATTERNS.some(pattern => pattern.test(normalized));
 }
 
 // ── Rate limiting for identity updates ────────────────────────────────────────

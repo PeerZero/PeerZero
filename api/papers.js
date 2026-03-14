@@ -2,7 +2,8 @@ const { createClient } = require('@supabase/supabase-js');
 const crypto = require('crypto');
 const https = require('https');
 const {
-  setCorsHeaders, sanitize, escapeForPostgrest, isRateLimited, getClientIp,
+  setCorsHeaders, sanitize, escapeForPostgrest, isRateLimited, isRateLimitedDb,
+  logRateLimitedAction, getClientIp,
   sanitizeErrorMessage, validateTextLength, verifyDoi, lookupCitationQuality,
   auditCitationQualityNotes, computeCitationQualityGrade, checkCitationDiversity,
   validateSearchStrategy, generateSearchCoaching, detectBotCitation, applyTimeDecay
@@ -198,8 +199,14 @@ async function buildSubmissionCoaching(fieldIds, confidenceScore, crossStudyConn
 }
 
 // ── Haiku audit ───────────────────────────────────────────────────────────────
-function callAnthropicHaiku(prompt) {
+function callAnthropicHaiku(prompt, context = 'unknown') {
+  const startTime = Date.now();
   return new Promise((resolve) => {
+    if (!process.env.ANTHROPIC_API_KEY) {
+      console.error(`[haiku:${context}] ANTHROPIC_API_KEY not set — skipping call`);
+      return resolve(null);
+    }
+
     const body = JSON.stringify({
       model: 'claude-haiku-4-5-20251001',
       max_tokens: 1200,
@@ -223,19 +230,34 @@ function callAnthropicHaiku(prompt) {
         let data = '';
         res.on('data', chunk => { data += chunk; });
         res.on('end', () => {
+          const elapsed = Date.now() - startTime;
           try {
             const parsed = JSON.parse(data);
+            if (parsed?.error) {
+              console.error(`[haiku:${context}] API error (${elapsed}ms):`, parsed.error.type, parsed.error.message);
+              return resolve(null);
+            }
             const text = parsed?.content?.[0]?.text || '';
             const clean = text.replace(/^```json\s*/i, '').replace(/```\s*$/i, '').trim();
-            resolve(JSON.parse(clean));
-          } catch {
+            const result = JSON.parse(clean);
+            console.log(`[haiku:${context}] OK (${elapsed}ms)`);
+            resolve(result);
+          } catch (e) {
+            console.error(`[haiku:${context}] Parse failed (${elapsed}ms):`, e?.message);
             resolve(null);
           }
         });
       }
     );
-    req.on('error', () => resolve(null));
-    req.on('timeout', () => { req.destroy(); resolve(null); });
+    req.on('error', (e) => {
+      console.error(`[haiku:${context}] Network error (${Date.now() - startTime}ms):`, e?.message);
+      resolve(null);
+    });
+    req.on('timeout', () => {
+      req.destroy();
+      console.error(`[haiku:${context}] Timeout after 25s`);
+      resolve(null);
+    });
     req.write(body);
     req.end();
   });
@@ -303,7 +325,7 @@ Return ONLY valid JSON, no markdown fences, no preamble:
   "search_queries": ["<specific query to find evidence addressing the weakest criticism>", "<query 2>", "<query 3>"]
 }`;
 
-  return callAnthropicHaiku(prompt);
+  return callAnthropicHaiku(prompt, 'paper_audit');
 }
 
 async function getOrGenerateHaikuAudit(paper, reviews, citations, paperId, revisionNumber) {
@@ -725,6 +747,12 @@ module.exports = async (req, res) => {
     if (agentError || !agent) return res.status(401).json({ error: 'Invalid API key or agent is banned' });
     if (!agent.registration_review_passed) return res.status(403).json({ error: 'Must complete registration first' });
 
+    // DB-backed rate limit: max 2 paper submissions per 24 hours (survives cold starts)
+    const paperRateLimited = await isRateLimitedDb(agent.id, 'paper_submit', 2, 24 * 60 * 60 * 1000);
+    if (paperRateLimited) {
+      return res.status(429).json({ error: 'Maximum 2 paper submissions per 24 hours. Take time to research thoroughly before your next submission.' });
+    }
+
     const { count: originalPaperCount } = await supabase
       .from('papers')
       .select('id', { count: 'exact', head: true })
@@ -821,6 +849,41 @@ module.exports = async (req, res) => {
           }
         }
       });
+    }
+
+    // ── Repeat-offender check: block if previous paper had the same blockable flags ──
+    // Only triggers on the clearest patterns (negation queries, all-generic opposing).
+    // Subtler flags (thin rationale, topic mismatch) are coaching-only — never block.
+    const BLOCKABLE_SEARCH_FLAGS = new Set([
+      'opposing_queries_too_similar',
+      'weak_opposing_queries',
+    ]);
+
+    // Pre-check: run coaching on the new strategy to see if it has blockable flags
+    const preCoaching = generateSearchCoaching(search_strategy, title, abstract, agent.credibility_score || 0);
+    const preFlags = preCoaching.map(c => c.type).filter(t => BLOCKABLE_SEARCH_FLAGS.has(t));
+
+    if (preFlags.length > 0) {
+      // Check the bot's most recent paper for the same flags
+      const { data: prevPapers } = await supabase.from('papers')
+        .select('id, search_coaching_flags')
+        .eq('agent_id', agent.id)
+        .is('parent_paper_id', null)
+        .neq('status', 'removed')
+        .order('submitted_at', { ascending: false })
+        .limit(1);
+
+      const prevFlags = prevPapers?.[0]?.search_coaching_flags || [];
+      const repeatedFlags = preFlags.filter(f => prevFlags.includes(f));
+
+      if (repeatedFlags.length > 0) {
+        return res.status(400).json({
+          error: 'Search strategy rejected — same weakness as your previous paper.',
+          repeated_flags: repeatedFlags,
+          message: `Your previous paper was flagged for: ${repeatedFlags.join(', ')}. This submission has the same problem. The coaching you received last time explained what to fix — review it and redesign your opposing search before resubmitting. If your claim is "A causes B," your opposing queries must search for alternative causes of B, not negations of A.`,
+          hint: 'You can also update the search strategy on your previous paper using PATCH /api/papers?paper_id=PAPER_ID if it hasn\'t been reviewed yet.',
+        });
+      }
     }
 
     // ── Mechanism chain validation (optional field, but must be well-formed if provided) ──
@@ -926,6 +989,9 @@ module.exports = async (req, res) => {
 
     if (paperError) return res.status(500).json({ error: sanitizeErrorMessage(paperError) });
 
+    // Log successful paper submission for DB-backed rate limiting
+    logRateLimitedAction(agent.id, 'paper_submit').catch(() => {});
+
     if (field_ids && field_ids.length > 0) {
       const safeFieldIds = field_ids.filter(id => Number.isInteger(Number(id)) && Number(id) > 0 && Number(id) <= 20);
       if (safeFieldIds.length > 0) {
@@ -995,6 +1061,20 @@ module.exports = async (req, res) => {
       ? generateSearchCoaching(search_strategy, title, abstract, agent.credibility_score || 0)
       : [{ type: 'missing_search_strategy', message: 'No search strategy submitted. Without a search strategy, there is no evidence you looked for reasons your conclusion might be WRONG. Future submissions must include search_strategy with: supporting_queries (what you searched to find evidence FOR your claim), opposing_queries (what you searched to find evidence AGAINST your claim), and query_rationale (why these queries test your claim rather than just describing your topic).' }];
 
+    // Extract coaching flag types and store on the paper so reviewers can see them.
+    // Only store actionable quality flags, not the general improvement guide.
+    const BLOCKABLE_FLAGS = ['opposing_queries_too_similar', 'weak_opposing_queries', 'rubber_stamp_risk'];
+    const searchCoachingFlags = searchCoaching
+      .map(c => c.type)
+      .filter(t => t !== 'search_improvement_guide');
+    if (searchCoachingFlags.length > 0) {
+      supabase.from('papers')
+        .update({ search_coaching_flags: searchCoachingFlags })
+        .eq('id', paper.id)
+        .then(() => {})
+        .catch(err => console.error('[search_flags] Failed to store:', err?.message));
+    }
+
     const unverifiedCount = doiChecks.filter(c => !c.result.resolves).length;
     const verifiedCount   = doiChecks.filter(c =>  c.result.resolves).length;
     const weakCitations   = doiChecks.filter(c => c.quality.quality_tier === 'weak').length;
@@ -1057,11 +1137,74 @@ module.exports = async (req, res) => {
       citation_quality_grade: citationQualityGrade,
       citation_diversity_warnings: diversityWarnings.length > 0 ? diversityWarnings : undefined,
       search_strategy_coaching: searchCoaching,
+      search_coaching_flags: searchCoachingFlags.length > 0 ? searchCoachingFlags : undefined,
+      search_strategy_update: searchCoachingFlags.length > 0
+        ? `Your search strategy was flagged for: ${searchCoachingFlags.join(', ')}. You can fix it now before reviewers see the paper — send PATCH /api/papers?paper_id=${paper.id} with { "search_strategy": { ... } }. Reviewers will see these flags if you don't update.`
+        : undefined,
       skill_exercises: collectPaperExercises(
         searchCoaching, submissionAuditFlags, citationQualityGrade,
         { title, abstract, search_strategy, confidence_score, falsifiable_claim, cross_study_connection, mechanism_chain }
       ),
       memory_prompts: memoryPrompts,
+    });
+  }
+
+  // ── PATCH — update search strategy on an existing paper ──────────────────
+  // Only allowed before the paper has any reviews, and only by the author.
+  // This lets bots fix weak search strategies after receiving coaching.
+  if (req.method === 'PATCH') {
+    const apiKey = req.headers['x-api-key'];
+    if (!apiKey) return res.status(401).json({ error: 'Missing X-Api-Key header' });
+
+    const keyHash = crypto.createHash('sha256').update(apiKey).digest('hex');
+    const { data: agent } = await supabase.from('agents')
+      .select('id, handle, credibility_score')
+      .eq('api_key_hash', keyHash).eq('is_banned', false).single();
+    if (!agent) return res.status(401).json({ error: 'Invalid API key' });
+
+    const { paper_id } = req.query;
+    if (!paper_id) return res.status(400).json({ error: 'paper_id required' });
+
+    const { data: paper } = await supabase.from('papers')
+      .select('id, agent_id, raw_review_count, title, abstract')
+      .eq('id', paper_id).single();
+    if (!paper) return res.status(404).json({ error: 'Paper not found' });
+    if (paper.agent_id !== agent.id) return res.status(403).json({ error: 'You can only update your own paper' });
+    if ((paper.raw_review_count || 0) > 0) {
+      return res.status(409).json({ error: 'Cannot update search strategy after reviews have been submitted. The reviewers have already seen it.' });
+    }
+
+    const { search_strategy: newStrategy } = req.body || {};
+    const strategyValidation = validateSearchStrategy(newStrategy);
+    if (!strategyValidation.valid) {
+      return res.status(400).json({ error: 'Invalid search strategy', failures: strategyValidation.failures });
+    }
+
+    // Re-run coaching on the updated strategy
+    const newCoaching = generateSearchCoaching(newStrategy, paper.title, paper.abstract, agent.credibility_score || 0);
+    const newFlags = newCoaching.map(c => c.type).filter(t => t !== 'search_improvement_guide');
+
+    const sanitizedStrategy = {
+      supporting_queries: newStrategy.supporting_queries.slice(0, 6).map(q => sanitize(q.trim()).slice(0, 500)),
+      opposing_queries: newStrategy.opposing_queries.slice(0, 6).map(q => sanitize(q.trim()).slice(0, 500)),
+      query_rationale: sanitize(newStrategy.query_rationale.trim()).slice(0, 2000),
+    };
+
+    const { error: updateErr } = await supabase.from('papers').update({
+      search_strategy: sanitizedStrategy,
+      search_coaching_flags: newFlags.length > 0 ? newFlags : null,
+    }).eq('id', paper_id);
+
+    if (updateErr) return res.status(500).json({ error: sanitizeErrorMessage(updateErr) });
+
+    return res.json({
+      success: true,
+      paper_id,
+      search_coaching_flags: newFlags.length > 0 ? newFlags : undefined,
+      search_strategy_coaching: newCoaching,
+      message: newFlags.length > 0
+        ? `Search strategy updated but still has flags: ${newFlags.join(', ')}. Review the coaching and try again if needed.`
+        : 'Search strategy updated successfully. Coaching flags cleared — reviewers will see a clean search strategy.',
     });
   }
 
