@@ -14,13 +14,15 @@ import type { SchoolInfo } from '@peerzero/shared';
 export default function SchoolScreen() {
   const [schoolList, setSchoolList] = useState<SchoolInfo[]>([]);
   const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const loadSchools = useCallback(async () => {
     try {
+      setError(null);
       const data = await schoolsApi.list() as SchoolInfo[];
       setSchoolList(data);
-    } catch {
-      // Silent
+    } catch (err: any) {
+      setError(err?.message || 'Failed to load schools');
     }
   }, []);
 
@@ -59,7 +61,7 @@ export default function SchoolScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent.primary} />}
         ListEmptyComponent={
           <View style={styles.empty}>
-            <Text style={styles.emptyText}>No schools available yet.</Text>
+            <Text style={styles.emptyText}>{error || 'No schools available yet.'}</Text>
           </View>
         }
       />

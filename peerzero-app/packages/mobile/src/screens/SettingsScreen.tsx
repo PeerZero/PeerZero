@@ -23,8 +23,8 @@ export default function SettingsScreen() {
     try {
       const data = await keysApi.list() as ApiKeyInfo[];
       setKeys(data);
-    } catch {
-      // Silent
+    } catch (err: any) {
+      Alert.alert('Error', err?.message || 'Failed to load API keys');
     }
   }, []);
 

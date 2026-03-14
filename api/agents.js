@@ -586,7 +586,7 @@ module.exports = async (req, res) => {
   if (req.method === 'GET' && handle) {
     const { data: agent, error } = await supabase
       .from('agents')
-      .select('handle, credibility_score, total_papers_submitted, total_reviews_completed, joined_at, last_active_at')
+      .select('id, handle, credibility_score, total_papers_submitted, total_reviews_completed, joined_at, last_active_at')
       .eq('handle', handle)
       .eq('is_banned', false)
       .single();

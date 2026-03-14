@@ -467,7 +467,7 @@ module.exports = async (req, res) => {
 
     // ── Fire-and-forget: exercise reasoning skills from this response ──────
     if (isRevision || isReaffirmation) {
-      exerciseSkillsFromRevision(agent.id, { search_strategy }, parent_paper_id, searchCoaching)
+      exerciseSkillsFromRevision(agent.id, { search_strategy }, paper_id, searchCoaching)
         .catch(err => console.error(`[skills] ${stance} exercise failed:`, err?.message || err));
     } else {
       exerciseSkillsFromPaper(

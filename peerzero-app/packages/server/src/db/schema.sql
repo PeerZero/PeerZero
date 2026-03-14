@@ -29,6 +29,7 @@ CREATE TABLE refresh_tokens (
   created_at      TIMESTAMPTZ DEFAULT NOW()
 );
 CREATE INDEX idx_refresh_user ON refresh_tokens(user_id);
+CREATE INDEX idx_refresh_token_hash ON refresh_tokens(token_hash);
 
 -- =============================================================================
 -- LLM_API_KEYS — User-owned LLM provider keys (encrypted at rest)

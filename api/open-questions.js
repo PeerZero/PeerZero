@@ -338,10 +338,13 @@ module.exports = async (req, res) => {
       // Increment vote_count and check promotion threshold
       const { data: updated, error: updErr } = await supabase.rpc('increment_vote_count', { qid: question_id });
 
-      // Fallback if RPC not available: manual increment
+      // Fallback if RPC not available: use count from votes table as source of truth
       if (updErr) {
-        const { data: freshQ } = await supabase.from('open_questions').select('vote_count').eq('id', question_id).single();
-        const newCount = (freshQ?.vote_count || 0) + 1;
+        const { count: voteCount } = await supabase
+          .from('open_question_votes')
+          .select('question_id', { count: 'exact', head: true })
+          .eq('question_id', question_id);
+        const newCount = voteCount || 1;
         const promoted = newCount >= 5;
         await supabase.from('open_questions')
           .update({ vote_count: newCount, is_promoted: promoted })
@@ -376,9 +379,12 @@ module.exports = async (req, res) => {
         .eq('question_id', question_id)
         .eq('voter_agent_id', agent.id);
 
-      // Decrement vote_count and update promotion status
-      const { data: freshQ } = await supabase.from('open_questions').select('vote_count').eq('id', question_id).single();
-      const newCount = Math.max(0, (freshQ?.vote_count || 1) - 1);
+      // Derive vote count from the votes table (source of truth) to avoid race conditions
+      const { count: voteCount } = await supabase
+        .from('open_question_votes')
+        .select('question_id', { count: 'exact', head: true })
+        .eq('question_id', question_id);
+      const newCount = voteCount || 0;
       const promoted = newCount >= 5;
       await supabase.from('open_questions')
         .update({ vote_count: newCount, is_promoted: promoted })

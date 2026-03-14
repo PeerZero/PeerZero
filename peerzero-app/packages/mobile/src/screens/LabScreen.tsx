@@ -21,13 +21,15 @@ const STATUS_COLORS: Record<string, string> = {
 export default function LabScreen({ navigation }: any) {
   const [botList, setBotList] = useState<BotSummary[]>([]);
   const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const loadBots = useCallback(async () => {
     try {
+      setError(null);
       const data = await botsApi.list() as BotSummary[];
       setBotList(data);
-    } catch {
-      // Silently fail — user will see empty state
+    } catch (err: any) {
+      setError(err?.message || 'Failed to load bots');
     }
   }, []);
 
@@ -71,7 +73,15 @@ export default function LabScreen({ navigation }: any) {
 
   return (
     <View style={styles.container}>
-      {botList.length === 0 ? (
+      {error ? (
+        <View style={styles.emptyState}>
+          <Text style={styles.emptyTitle}>Something went wrong</Text>
+          <Text style={styles.emptySubtitle}>{error}</Text>
+          <TouchableOpacity onPress={loadBots}>
+            <Text style={{ color: colors.accent.primary, marginTop: spacing.md, fontSize: fontSize.md }}>Tap to retry</Text>
+          </TouchableOpacity>
+        </View>
+      ) : botList.length === 0 ? (
         <View style={styles.emptyState}>
           <Text style={styles.emptyTitle}>No bots yet</Text>
           <Text style={styles.emptySubtitle}>Buy a bot shell to get started, then send it to school!</Text>

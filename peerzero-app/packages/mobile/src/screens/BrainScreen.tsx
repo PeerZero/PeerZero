@@ -25,18 +25,26 @@ export default function BrainScreen({ route }: any) {
   const { botId } = route.params;
   const [memory, setMemory] = useState<MemorySnapshot | null>(null);
   const [expandedTier, setExpandedTier] = useState<TierKey | null>(0);
+  const [error, setError] = useState<string | null>(null);
 
   useFocusEffect(
     useCallback(() => {
       (async () => {
         try {
+          setError(null);
           const data = await botsApi.memory(botId) as MemorySnapshot;
           setMemory(data);
-        } catch {
-          // Silent fail
+        } catch (err: any) {
+          setError(err?.message || 'Failed to load memory');
         }
       })();
     }, [botId]),
+  );
+
+  if (error) return (
+    <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+      <Text style={{ color: colors.text.secondary, fontSize: fontSize.md }}>{error}</Text>
+    </View>
   );
 
   if (!memory) return <View style={styles.container} />;
