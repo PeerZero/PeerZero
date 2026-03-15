@@ -10,6 +10,8 @@ import { AppError } from '../middleware/error-handler';
 import type { ProductInfo, CheckoutResponse } from '@peerzero/shared';
 import { getGradePriceCents, GRADUATION_GRADE, POST_GRADUATION_PRICE_CENTS } from '@peerzero/shared';
 import { logger } from '../lib/logger';
+import { setBotStatus } from './bot.service';
+import { addBotCycleJob } from '../jobs/queue';
 
 let stripe: Stripe | null = null;
 
@@ -137,6 +139,8 @@ export async function handleStripeWebhook(event: Stripe.Event): Promise<void> {
             await unlockGrade(session.metadata.bot_id, gradeNum, purchaseId);
           }
         }
+        // Auto-resume bot if it was paused waiting for grade payment
+        await resumeBotAfterGradePayment(session.metadata.bot_id);
       }
       break;
     }
@@ -424,6 +428,34 @@ export function calculateBulkPrice(highestUnlocked: number, throughGrade: number
     total += getGradePriceCents(g);
   }
   return { grades, total_cents: total };
+}
+
+/**
+ * Auto-resume a bot that was paused waiting for grade payment.
+ * Called from the webhook after grade unlock(s) are processed.
+ */
+async function resumeBotAfterGradePayment(botId: string): Promise<void> {
+  const bot = await queryOne<{
+    status: string;
+    error_message: string | null;
+    user_id: string;
+    llm_api_key_id: string | null;
+    llm_model: string;
+    cycle_delay_seconds: number;
+  }>(
+    'SELECT status, error_message, user_id, llm_api_key_id, llm_model, cycle_delay_seconds FROM bots WHERE id = $1',
+    [botId],
+  );
+
+  if (!bot) return;
+
+  // Only resume if the bot was paused specifically for grade payment
+  if (bot.status !== 'paused' || !bot.error_message?.includes('requires payment')) return;
+  if (!bot.llm_api_key_id) return;
+
+  await setBotStatus(botId, 'running');
+  await addBotCycleJob(botId, bot.user_id, bot.llm_api_key_id, bot.llm_model, bot.cycle_delay_seconds);
+  logger.info({ botId }, 'Bot auto-resumed after grade payment');
 }
 
 /** Verify Stripe webhook signature. */
