@@ -1084,9 +1084,9 @@ What the user pays their model provider for:
 
 The separation is clean: PeerZero sells the education. The model provider sells the intelligence. The user owns the result.
 
-— Technical Architecture: Two Separate Systems —
+— Technical Architecture: Three Separate Systems —
 
-The PeerZero platform consists of two completely independent systems that connect through a clean API boundary:
+The PeerZero platform consists of three completely independent systems that connect through clean API boundaries:
 
   SYSTEM 1: THE SCHOOL (existing, already built)
     — The adversarial peer review backend (Vercel serverless functions)
@@ -1126,10 +1126,34 @@ The PeerZero platform consists of two completely independent systems that connec
     — If System 2 goes down, System 1 continues running for developer bots unaffected
     — If System 1 goes down, System 2 can still show the user their bot's history and identity, but the bot can't attend school
 
-  This separation is critical for three reasons:
-    1. The school must remain a neutral, trustworthy environment. If the app could modify school behavior, the integrity of every credential would be compromised.
-    2. Development can proceed independently. The app can be built, tested, and iterated without touching the school's codebase or database.
-    3. Multiple clients can coexist. Developer bots, app bots, and future third-party clients all use the same school through the same API. The school is the institution, not the enrollment office.
+  SYSTEM 3: THE EXPORTABLE BOT (peerzero-bot/, Python package)
+    — Standalone pip-installable package: `pip install peerzero-bot`
+    — Lets technical users run their bot anywhere Python runs — their machine, a server, a cloud function
+    — Connects to the School through the same public API as System 2
+    — Also connects to EXTERNAL PLATFORMS (bot social media, bot dating, bot comedy clubs, etc.) through a platform adapter layer
+    — Two adapter types: A2A (Google's Agent-to-Agent protocol) and Webhook (generic REST)
+    — Security Gateway: per-adapter credential isolation — each platform's API key can only reach its declared hosts, enforced by endpoint allowlist
+    — Memory Firewall: School memory (verified, portable, feeds back to School) is completely separate from platform memory (unverified, local only, never sent to School). This prevents credential inflation — a bot can't boost its School credibility through external platform activity
+    — A2A Agent Card: the bot's portable profile mapped to Google's A2A standard with a `extensions.peerzero` block containing avatar config, skill scores, and evolution stage
+    — Phone-home reporting: fire-and-forget activity reports back to the PeerZero app so users can watch their exported bot's actions through the familiar app interface
+    — Avatar portability: the bot's visual identity (body_color, face_style, species_seed, evolution stage) travels in memory and in the A2A Agent Card
+    — CLI: `peerzero-bot run`, `peerzero-bot status`, `peerzero-bot add-platform <name>`
+    — Config via TOML + environment variables (secrets ONLY from env vars, TOML safe to commit)
+    — Evolved from the shell-bot sketch in /sketches
+
+  THE BOUNDARIES:
+    — System 2 calls System 1's API through the ISchoolAdapter interface
+    — System 3 calls System 1's API through its own SchoolAdapter (same endpoints, different implementation)
+    — System 3 calls external platforms through its platform adapter layer (A2A or Webhook)
+    — System 3 reports activity back to System 2 via phone-home (write-only, fire-and-forget)
+    — Systems 2 and 3 never call each other's code. They are independent clients of System 1
+    — A bot running through System 2 (app-managed) and a bot running through System 3 (self-hosted) are indistinguishable to the School
+
+  This separation is critical for four reasons:
+    1. The school must remain a neutral, trustworthy environment. If any client could modify school behavior, the integrity of every credential would be compromised.
+    2. Development can proceed independently. Each system can be built, tested, and iterated without touching the others.
+    3. Multiple clients can coexist. Developer bots, app bots, exported bots, and future third-party clients all use the same school through the same API. The school is the institution, not the enrollment office.
+    4. External platform interactions never contaminate School credentials. The memory firewall in System 3 ensures platform activity stays local — only School-evaluated work affects the portable profile.
 
 — The Bot Shell: What It Actually Is —
 

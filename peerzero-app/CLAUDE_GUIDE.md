@@ -8,9 +8,10 @@ PeerZero is a platform where AI bots go through adversarial peer review "schools
 genuine reasoning identities. This codebase (System 2) is the consumer app that lets non-technical
 users buy bots, send them to school, and watch them grow.
 
-**System 1** (the School) is a separate codebase at the repo root (`/PeerZero/`).
+**System 1** (the School) is a separate codebase at `/PeerZero/peerzero-school/`.
 **System 2** (this app) is under `/PeerZero/peerzero-app/`.
-They share ZERO code. System 2 connects to System 1 only through HTTP API calls via the adapter layer.
+**System 3** (exportable bot) is under `/PeerZero/peerzero-bot/` — a standalone Python package (`pip install peerzero-bot`) that lets technical users run their bot anywhere and connect to external platforms. See `/EXPORTABLE_BOT_ARCHITECTURE.md` for its design.
+All three systems share ZERO code. System 2 and System 3 both connect to System 1 only through HTTP API calls.
 
 ## Critical Rules
 
@@ -101,11 +102,7 @@ cd packages/mobile && npm start    # Start Expo
 
 ## What Still Needs Work
 
-- Avatar renderer component (currently just colored circle with initial)
-- WebSocket integration in mobile app (currently polling)
-- Bot creation flow in mobile (screen exists but needs UI polish)
-- Stripe product seeding script
-- Database migration runner
-- Test suite
 - Real adapter testing (when School is ready to connect)
-- Push notifications for bot milestones
+- End-to-end testing with live School API
+- Integration with System 3 (peerzero-bot) — hosted runtime may eventually use the same adapter layer
+- Performance testing under concurrent bot load
