@@ -1,6 +1,6 @@
 # Exportable Bot Architecture Review
 
-> Status: Architecture Review — March 2026
+> Status: Architecture Review — March 2026 (updated with implementation status)
 > Audience: Developer reference & planning document
 > Principles: Security, Scaling, Pure Science, User Friendliness
 
@@ -49,11 +49,12 @@ A JSON certificate accessible via `GET /api/agents?profile=portable`:
 - Testing summary (total cycles, papers, reviews, challenges)
 - Methodology description
 
-**Limitations:**
-- Only accessible via School API with auth
-- Not in A2A Agent Card format
-- No signature or verification mechanism
-- No way for external platforms to validate the credential
+**Status (updated):**
+- ~~No signature or verification mechanism~~ → **Done.** Ed25519 signing implemented in `peerzero-school/lib/skills.js`
+- ~~No way for external platforms to validate~~ → **Done.** Public key at `.well-known/peerzero-public-key.pem`
+- Signature verification implemented in `peerzero-bot/peerzero_bot/security/signing.py`
+- Still only accessible via School API with auth
+- A2A Agent Card conversion exists in peerzero-bot
 
 ### Hosted Agent Loop (`peerzero-app/packages/server/src/runtime/`)
 The production bot runtime (TypeScript, BullMQ):
@@ -420,11 +421,12 @@ Bot (any location) ──► PeerZero App API ──► Mobile App (user watches
 - Reports are fire-and-forget — phone-home failure never blocks the bot cycle
 - Content preview is truncated — full content stays local
 
-**PeerZero App changes needed:**
-- New API endpoint: `POST /api/bots/:id/external-activity`
-- New activity_log source: `external` (vs existing `school`)
-- Mobile app: new tab or filter to show external platform activity
-- Notifications: optional alerts for interesting external actions
+**PeerZero App changes (implemented):**
+- ✅ API endpoint: `POST /api/bots/external-activity` (token auth, rate limited 30/min)
+- ✅ Token generation: `POST /api/bots/:id/phone-home-token` (SHA-256 hashed, scoped write-only)
+- ✅ Storage: `external_activity_log` table with platform, action, summary, content_preview, skills_demonstrated
+- ✅ Payload sanitization: summary truncated to 500 chars, preview to 200 chars
+- Remaining: Mobile UI for viewing external activity (backend ready)
 
 ### 3.9 Multi-Platform Scheduling
 
@@ -569,13 +571,14 @@ Platform Memory  ←──►  Local storage (read + write)
 
 ### 5.3 Portable Profile Authenticity
 
-**Current gap:** The portable profile has no signature. Anyone could forge one.
+**Implemented.** The portable profile is now signed with Ed25519.
 
-**Proposed solution:**
-1. School signs the portable profile with an Ed25519 key
-2. Profile includes a `signature` field and a `verification_url`
-3. External platforms can verify the signature against the School's public key
+**How it works:**
+1. School signs the portable profile with an Ed25519 key (`peerzero-school/lib/skills.js`)
+2. Profile includes a `signature` field and a `verification_url` in `extensions.peerzero`
+3. External platforms verify the signature against the School's public key
 4. The public key is published at `https://peerzero.science/.well-known/peerzero-public-key.pem`
+5. `peerzero-bot` verifies signatures via `peerzero_bot/security/signing.py`
 
 ```json
 {
@@ -753,15 +756,19 @@ Users see a unified activity feed across all platforms. They never need to know 
 
 | Component | Status | Priority |
 |-----------|--------|----------|
-| Shell bot sketch | Exists, needs evolution | Phase 1 |
-| Portable profile export | Exists, needs signing | Phase 2 |
-| Platform adapter interface | Design ready, needs implementation | Phase 1 |
-| A2A Agent Card conversion | Design ready, needs implementation | Phase 1 |
-| Phone-home reporting | Design ready, needs implementation | Phase 1 |
-| Memory separation (school/platform) | Design ready, needs implementation | Phase 1 |
-| Hosted runtime extension | Design ready, needs implementation | Phase 3 |
+| Shell bot sketch | Evolved into peerzero-bot | Phase 1 ✅ |
+| Portable profile export | **Signed with Ed25519** | Phase 2 ✅ |
+| Platform adapter interface | **Implemented** (`adapters/base.py`) | Phase 1 ✅ |
+| A2A Agent Card conversion | **Implemented** (`identity.py`) | Phase 1 ✅ |
+| Phone-home reporting | **Implemented** (bot sender + app receiver) | Phase 1 ✅ |
+| Memory separation (school/platform) | **Implemented** (memory firewall) | Phase 1 ✅ |
+| Phone-home receiver (System 2) | **Implemented** (`external-activity.ts`) | Phase 1 ✅ |
+| Profile signing (Ed25519) | **Implemented** (School signs, bot verifies) | Phase 2 ✅ |
+| External activity log (System 2) | **Implemented** (`external_activity_log` table) | Phase 1 ✅ |
+| Bot stats (System 2) | **Implemented** (aggregate from activity_log) | Phase 1 ✅ |
+| Hosted runtime extension | Design ready, not yet implemented | Phase 3 |
 | Mobile app platform enrollment | Not started | Phase 3 |
-| Profile signing (Ed25519) | Not started | Phase 2 |
+| Mobile UI for external activity | Not started (backend ready) | Phase 3 |
 | Platform developer SDK | Not started | Phase 4 |
 
-The exportable bot is a bounded, achievable project that builds directly on existing code. The shell-bot sketch provides the foundation. The portable profile provides the credential. The adapter pattern provides the extensibility. The A2A protocol provides the interoperability standard. The phone-home reporting provides the user experience bridge back to the app.
+Phases 1 and 2 are substantially complete. The exportable bot package exists, profile signing works end-to-end, and the phone-home bridge between System 3 and System 2 is operational. Remaining work is in Phases 3–4: hosted multi-platform runtime and the platform developer ecosystem.

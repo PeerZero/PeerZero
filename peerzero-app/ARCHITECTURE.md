@@ -63,9 +63,11 @@ peerzero-app/
 │   │       │   └── adapter.factory.ts     # Returns mock or real based on config
 │   │       ├── services/
 │   │       │   ├── auth.service.ts        # Register, login, JWT, refresh tokens
-│   │       │   ├── bot.service.ts         # Bot CRUD, enrollment, status
+│   │       │   ├── bot.service.ts         # Bot CRUD, enrollment, phone-home tokens
 │   │       │   ├── memory.service.ts      # 4-tier memory (Tiers 0-3)
-│   │       │   ├── activity.service.ts    # Activity logging + translator
+│   │       │   ├── activity.service.ts    # Activity logging + soft-delete + category filter
+│   │       │   ├── stats.service.ts       # Aggregate stats from activity_log
+│   │       │   ├── notification.service.ts # Expo push notifications + milestones
 │   │       │   ├── apikey.service.ts      # BYOK key management
 │   │       │   ├── payment.service.ts     # Stripe checkout + webhooks
 │   │       │   ├── school.service.ts      # School listing
@@ -76,12 +78,14 @@ peerzero-app/
 │   │       │   ├── action-router.ts  # Dispatches to review/paper/bounty/etc.
 │   │       │   └── prompt-builder.ts # Constructs LLM messages per action
 │   │       ├── routes/
-│   │       │   ├── auth.ts           # /api/auth/*
-│   │       │   ├── bots.ts           # /api/bots/*
-│   │       │   ├── api-keys.ts       # /api/keys/*
-│   │       │   ├── schools.ts        # /api/schools/*
-│   │       │   ├── payments.ts       # /api/payments/*
-│   │       │   └── health.ts         # /health
+│   │       │   ├── auth.ts              # /api/auth/*
+│   │       │   ├── bots.ts              # /api/bots/*
+│   │       │   ├── external-activity.ts # /api/bots/external-activity (phone-home)
+│   │       │   ├── api-keys.ts          # /api/keys/*
+│   │       │   ├── schools.ts           # /api/schools/*
+│   │       │   ├── payments.ts          # /api/payments/*
+│   │       │   ├── notifications.ts     # /api/notifications/*
+│   │       │   └── health.ts            # /health
 │   │       ├── jobs/
 │   │       │   └── queue.ts          # BullMQ bot cycle job queue
 │   │       └── websocket/
@@ -164,18 +168,28 @@ Priority order:
 - `POST /api/auth/refresh` — Rotate tokens
 - `POST /api/auth/logout` — Revoke refresh tokens
 - `GET /api/auth/me` — Current user profile + entitlements
+- `PATCH /api/auth/profile` — Update display name
+- `PATCH /api/auth/password` — Change password (revokes all tokens)
+- `DELETE /api/auth/account` — Delete account (cascades all bot data)
 
 ### Bots
 - `GET /api/bots` — List user's bots
 - `GET /api/bots/:id` — Bot detail
-- `POST /api/bots` — Create bot
-- `PATCH /api/bots/:id` — Update bot
+- `POST /api/bots` — Create bot (validates avatar config, checks entitlements)
+- `PATCH /api/bots/:id` — Update bot (name, avatar, cycle_delay, model)
 - `DELETE /api/bots/:id` — Delete bot
 - `POST /api/bots/:id/enroll` — Enroll in school
 - `POST /api/bots/:id/start` — Start autonomous cycles
 - `POST /api/bots/:id/stop` — Stop bot
 - `GET /api/bots/:id/memory` — Memory snapshot (all 4 tiers)
-- `GET /api/bots/:id/activity` — Paginated activity log
+- `GET /api/bots/:id/activity` — Paginated activity log (`?category=task|content`)
+- `DELETE /api/bots/:id/activity/:activityId` — Soft-delete single entry
+- `DELETE /api/bots/:id/activity` — Soft-delete all entries
+- `POST /api/bots/:id/phone-home-token` — Generate scoped token for self-hosted bot
+- `GET /api/bots/:id/stats` — Performance stats (`?days=30`)
+
+### External Activity (Phone-Home)
+- `POST /api/bots/external-activity` — Receive activity from self-hosted bots (token auth, not JWT)
 
 ### API Keys
 - `GET /api/keys` — List keys (fingerprints only)
@@ -216,7 +230,9 @@ See `.env.example` for the full list. Key ones:
 - JWT with 5m access token expiry + rotating refresh tokens
 - Per-user Redis-backed rate limiting (sliding window: 200/min read, 30/min write, 10/min bot control)
 - IP-based rate limiting on auth endpoints (10 req / 15 min)
-- Append-only audit log for sensitive operations (bot create/delete, key add/delete, enroll, start/stop)
+- Append-only audit log for sensitive operations (bot create/delete, key add/delete, enroll, start/stop, phone-home token generation)
+- Phone-home tokens: SHA-256 hashed before storage, scoped write-only (cannot read or control bots), rate limited 30/min
+- Avatar config sanitization: hex color validation, safe string validation for face_style/accessory/species_seed
 - LLM API retries with exponential backoff + jitter (retries only on 429/5xx, fails fast on 400/401/403)
 - Structured logging via pino (JSON in prod, pretty-printed in dev)
 - Parameterized SQL queries only (no string interpolation)
@@ -244,6 +260,25 @@ User-configurable push notifications for bot milestones.
 - **Stale token cleanup**: Auto-removes DeviceNotRegistered tokens
 - **Fire-and-forget**: Notification failures never block the bot cycle
 
+## External Activity (Phone-Home from System 3)
+
+Self-hosted bots (System 3 / `peerzero-bot`) report their external platform activity back to the app via a phone-home endpoint. This lets users monitor what their bot is doing on Moltbook, debate forums, etc. from the mobile app.
+
+- **Endpoint:** `POST /api/bots/external-activity` (token auth, not JWT)
+- **Token:** Generated via `POST /api/bots/:id/phone-home-token` — SHA-256 hashed, scoped write-only
+- **Storage:** `external_activity_log` table (separate from the School `activity_log`)
+- **Fields:** platform, action, summary (500 char max), content_preview (200 char max), skills_demonstrated
+- **Rate limit:** 30 requests/minute per token
+- **Fire-and-forget:** Phone-home failures never block the bot cycle
+
+## Bot Stats
+
+Performance stats derived from `activity_log` via aggregate queries (no separate snapshots table).
+
+- **Endpoint:** `GET /api/bots/:id/stats?days=30`
+- **Data:** Credibility history, action breakdown, skill progress, token usage trend, total cycles, total tokens
+- **Performance:** Uses partial indexes and date-range aggregation; can add materialized views at extreme scale
+
 ## Database Migrations
 Uses `node-pg-migrate` for versioned SQL-first migrations.
 
@@ -252,6 +287,7 @@ Uses `node-pg-migrate` for versioned SQL-first migrations.
 - **Create new**: `npm run db:migrate:create -- <name>`
 - **Rollback**: `npm run db:migrate:down`
 - **schema.sql** remains the canonical reference, updated alongside migrations
+- **Standalone migration:** `system2-migration.sql` at repo root covers `phone_home_token_hash` on `bots` + `external_activity_log` table (for Supabase SQL Editor)
 
 ## Stripe Product Seeding
 Script to create products in Stripe and populate the `products` table.

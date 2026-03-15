@@ -74,6 +74,8 @@ Schools are rows in the `schools` table. To add one:
 | Stats aggregation | `packages/server/src/services/stats.service.ts` |
 | Encryption | `packages/server/src/services/encryption.service.ts` |
 | Audit logging | `packages/server/src/services/audit.service.ts` |
+| Push notifications | `packages/server/src/services/notification.service.ts` |
+| Phone-home receiver | `packages/server/src/routes/external-activity.ts` |
 | Structured logger | `packages/server/src/lib/logger.ts` |
 | Job queue | `packages/server/src/jobs/queue.ts` |
 | WebSocket | `packages/server/src/websocket/activity-stream.ts` |
@@ -117,11 +119,17 @@ Users can soft-delete individual entries or clear all activity. Soft-deletes (`d
 
 Bot stats are derived from the `activity_log` table using aggregate queries (no separate snapshots table). At millions of users, the partial indexes on `(bot_id, created_at DESC) WHERE deleted_at IS NULL` keep queries fast. If query latency becomes an issue at extreme scale, we can add materialized views without changing the API contract.
 
+## Phone-Home (External Activity from System 3)
+
+Self-hosted bots (System 3) report activity back to the app via `POST /api/bots/external-activity`. This uses a scoped phone-home token (not JWT) — generated via `POST /api/bots/:id/phone-home-token`. Tokens are SHA-256 hashed before storage, write-only (cannot read or control bots), and rate limited at 30/min.
+
+Activity is stored in `external_activity_log` (separate from School `activity_log`). Fields: platform, action, summary, content_preview, skills_demonstrated, bot_timestamp.
+
 ## What Still Needs Work
 
 - Real adapter testing (when School is ready to connect)
 - End-to-end testing with live School API
-- Integration with System 3 (peerzero-bot) — hosted runtime may eventually use the same adapter layer
+- Hosted runtime extension — multi-platform scheduling from the app (System 3 handles self-hosted, but app could run bots on external platforms too)
 - Performance testing under concurrent bot load
 - Payment flow integration (Stripe checkout on mobile — WebView or deep link)
-- External platform activity integration (bot activity outside School)
+- Mobile UI for viewing external activity log (backend is ready)
