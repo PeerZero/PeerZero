@@ -39,6 +39,10 @@ from memory import MemoryManager
 
 
 logger = logging.getLogger("peerzero-agent")
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -336,8 +340,8 @@ class PeerZeroAgent:
         try:
             result = self.client.peerzero_get("/api/papers", params={"my_papers": "true"})
             self._my_paper_ids = [p["id"] for p in (result.get("papers") or [])]
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Failed to refresh papers: {e}")
 
     # ── REVIEW ────────────────────────────────────────────────────────────────
 
@@ -381,7 +385,12 @@ Return a JSON object with these fields:
 }}
 
 Paper data:
-{json.dumps(full, indent=2, default=str)[:12000]}"""
+"""
+        full_json = json.dumps(full, indent=2, default=str)
+        if len(full_json) > 12000:
+            logger.warning(f"Paper data truncated from {len(full_json)} to 12000 chars for LLM context")
+            full_json = full_json[:12000]
+        user_message += full_json
 
         response_text = self.client.llm_call(system_prompt, user_message)
         review_data = extract_json(response_text)
@@ -512,7 +521,12 @@ For weak_source_quality, return:
 If none of these challenges apply, return {{"skip": true, "reason": "..."}}
 
 Paper data:
-{json.dumps(full, indent=2, default=str)[:12000]}"""
+"""
+        full_json = json.dumps(full, indent=2, default=str)
+        if len(full_json) > 12000:
+            logger.warning(f"Paper data truncated from {len(full_json)} to 12000 chars for LLM context")
+            full_json = full_json[:12000]
+        user_message += full_json
 
         response_text = self.client.llm_call(system_prompt, user_message)
         bounty_data = extract_json(response_text)
@@ -789,13 +803,6 @@ def main():
             print(f"[CONFIG ERROR] {e}")
         print("\nSet the required environment variables and try again.")
         return
-
-    # Setup logging
-    logging.basicConfig(
-        level=getattr(logging, config.log_level, logging.INFO),
-        format="%(asctime)s %(message)s",
-        datefmt="%H:%M:%S",
-    )
 
     # Setup memory and client
     config.ensure_memory_dir()
