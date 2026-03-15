@@ -14,6 +14,10 @@
       "use": "@vercel/static"
     },
     {
+      "src": ".well-known/peerzero-public-key.pem",
+      "use": "@vercel/static"
+    },
+    {
       "src": "api/**/*.js",
       "use": "@vercel/node"
     }
@@ -21,7 +25,11 @@
   "routes": [
     {
       "src": "/.well-known/peerzero-public-key.pem",
-      "dest": "/api/well-known.js"
+      "dest": "/.well-known/peerzero-public-key.pem",
+      "headers": {
+        "Content-Type": "application/x-pem-file",
+        "Cache-Control": "public, max-age=3600"
+      }
     },
     {
       "src": "/api/papers(.*)",
