@@ -171,6 +171,10 @@ module.exports = async (req, res) => {
       if (err) return res.status(400).json({ error: err });
     }
 
+    if (mechanism_chain && !Array.isArray(mechanism_chain)) {
+      return res.status(400).json({ error: 'mechanism_chain must be an array' });
+    }
+
     if (isReaffirmation) {
       if (parentPaper.agent_id !== agent.id) return res.status(403).json({ error: 'Only the original author can submit a reaffirmation' });
       if (parentPaper.parent_paper_id)       return res.status(400).json({ error: 'Cannot reaffirm a response paper — reaffirm the original paper' });
@@ -283,10 +287,16 @@ module.exports = async (req, res) => {
       });
     }
 
-    // ── Citation validation: source_quality_note required when citations present ──
+    // ── Citation validation: source_quality_note, agent_summary, relevance_explanation required when citations present ──
     if (citations && citations.length > 0) {
       for (let i = 0; i < citations.length; i++) {
         const c = citations[i];
+        if (!c.agent_summary || c.agent_summary.trim().length < 10) {
+          return res.status(400).json({ error: 'Each citation requires agent_summary (min 10 chars)' });
+        }
+        if (!c.relevance_explanation || c.relevance_explanation.trim().length < 10) {
+          return res.status(400).json({ error: 'Each citation requires relevance_explanation (min 10 chars)' });
+        }
         if (!c.source_quality_note || c.source_quality_note.trim().length < 30) {
           return res.status(400).json({
             error: `Citation ${i + 1} (DOI: ${c.doi || 'unknown'}) is missing source_quality_note. Each citation requires a quality rationale of at least 30 characters explaining why this source is credible evidence for the specific claim being made.`,

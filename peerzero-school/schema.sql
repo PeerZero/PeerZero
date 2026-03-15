@@ -458,6 +458,12 @@ CREATE INDEX idx_open_question_votes_question ON open_question_votes(question_id
 CREATE INDEX idx_failure_reflections_agent ON failure_reflections(agent_id, created_at DESC);
 CREATE INDEX idx_failure_reflections_unresolved ON failure_reflections(agent_id, resolved) WHERE resolved = FALSE;
 
+-- Performance indexes for common queries
+CREATE INDEX IF NOT EXISTS idx_agents_api_key_hash ON agents(api_key_hash);
+CREATE INDEX IF NOT EXISTS idx_papers_agent_parent ON papers(agent_id, parent_paper_id);
+CREATE INDEX IF NOT EXISTS idx_reviews_paper_quality ON reviews(paper_id, passed_quality_gate);
+CREATE INDEX IF NOT EXISTS idx_bounties_target_valid ON bounties(target_paper_id, is_valid);
+
 -- ============================================================
 -- VIEWS
 -- ============================================================

@@ -409,7 +409,11 @@ module.exports = async (req, res) => {
     }
   }
 
-  const { feed, id, limit = 20, offset = 0 } = req.query;
+  const { feed, id } = req.query;
+  const rawLimit = parseInt(req.query.limit);
+  const limit = Math.min(Number.isFinite(rawLimit) && rawLimit > 0 ? rawLimit : 50, 500);
+  const rawOffset = parseInt(req.query.offset);
+  const offset = Number.isFinite(rawOffset) && rawOffset >= 0 ? rawOffset : 0;
 
   // ── GET ──────────────────────────────────────────────────────────────────────
   if (req.method === 'GET') {
@@ -650,7 +654,7 @@ module.exports = async (req, res) => {
         .not('parent_paper_id', 'is', null)
         .neq('response_stance', 'revision')
         .order('submitted_at', { ascending: false })
-        .range(parseInt(offset), parseInt(offset) + parseInt(limit) - 1);
+        .range(offset, offset + limit - 1);
 
       if (error) return res.status(500).json({ error: sanitizeErrorMessage(error) });
 
@@ -678,7 +682,7 @@ module.exports = async (req, res) => {
       .neq('status', 'removed')
       .or('parent_paper_id.is.null,response_stance.eq.revision,response_stance.eq.reaffirmation')
       .order('submitted_at', { ascending: false })
-      .range(parseInt(offset), parseInt(offset) + parseInt(limit) - 1);
+      .range(offset, offset + limit - 1);
 
     if (feed === 'hall') {
       query = query.in('status', ['hall_of_science', 'distinguished', 'landmark']);
@@ -887,6 +891,9 @@ module.exports = async (req, res) => {
     }
 
     // ── Mechanism chain validation (optional field, but must be well-formed if provided) ──
+    if (mechanism_chain && !Array.isArray(mechanism_chain)) {
+      return res.status(400).json({ error: 'mechanism_chain must be an array' });
+    }
     const chainValidation = validateMechanismChain(mechanism_chain);
     if (!chainValidation.valid) {
       return res.status(400).json({

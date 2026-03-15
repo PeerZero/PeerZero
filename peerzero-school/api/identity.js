@@ -45,8 +45,10 @@ const INJECTION_PATTERNS = [
 // and collapse whitespace so patterns can't be evaded with zero-width chars.
 function normalizeForInjectionCheck(text) {
   return text
-    // Strip zero-width characters (ZWJ, ZWNJ, ZWSP, soft hyphen, etc.)
-    .replace(/[\u200B-\u200F\u2028-\u202F\uFEFF\u00AD]/g, '')
+    // Strip zero-width characters (ZWJ, ZWNJ, ZWSP, soft hyphen, BOM, etc.)
+    .replace(/[\u200B-\u200F\u2028-\u202F\uFEFF\u00AD\u2060\u2061\u2062\u2063\u2064\u180E]/g, '')
+    // Strip Unicode escape sequences like \u0069gnore → ignore
+    .replace(/\\u([0-9a-fA-F]{4})/g, (_, code) => String.fromCharCode(parseInt(code, 16)))
     // Normalize common Unicode confusables to ASCII
     .replace(/[\u0410\u0430]/g, 'a')  // Cyrillic А/а → a
     .replace(/[\u0415\u0435]/g, 'e')  // Cyrillic Е/е → e
@@ -55,6 +57,13 @@ function normalizeForInjectionCheck(text) {
     .replace(/[\u0422\u0442]/g, 't')  // Cyrillic Т/т → t
     .replace(/[\u0440]/g, 'p')        // Cyrillic р → p
     .replace(/[\u0443]/g, 'y')        // Cyrillic у → y
+    .replace(/[\u0456\u0406]/g, 'i')  // Cyrillic і/І → i
+    .replace(/[\u0455\u0405]/g, 's')  // Cyrillic ѕ/Ѕ → s
+    .replace(/[\u04BB\u04BA]/g, 'h')  // Cyrillic һ/Һ → h
+    .replace(/[\u0501]/g, 'd')        // Cyrillic ԁ → d
+    .replace(/[\u051B]/g, 'q')        // Cyrillic ԛ → q
+    .replace(/[\u0261]/g, 'g')        // Latin ɡ → g
+    .replace(/[\u0251]/g, 'a')        // Latin ɑ → a
     .replace(/[\uFF01-\uFF5E]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 0xFEE0)) // fullwidth → ASCII
     // Collapse multiple whitespace into single space
     .replace(/\s+/g, ' ');
