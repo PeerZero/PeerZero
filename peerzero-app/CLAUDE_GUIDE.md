@@ -20,6 +20,8 @@ They share ZERO code. System 2 connects to System 1 only through HTTP API calls 
 4. **Adapters are the boundary.** If you need to call the School, add a method to `ISchoolAdapter`.
 5. **Mock first.** Default is `USE_REAL_ADAPTERS=false`. Always implement mock before real.
 6. **Opus for reasoning.** Default LLM model is `claude-opus-4-6`. Don't downgrade unless explicitly told to.
+7. **Use the logger.** Always `import { logger } from '../lib/logger'` — never use `console.log/error/warn`. Pino gives structured JSON in prod and pretty output in dev.
+8. **Audit sensitive ops.** Call `logAudit()` for any create/delete/start/stop operation on bots, keys, or enrollments.
 
 ## How to Add a New School
 
@@ -69,6 +71,8 @@ Schools are rows in the `schools` table. To add one:
 | Memory system | `packages/server/src/services/memory.service.ts` |
 | Activity translator | `packages/server/src/services/activity.service.ts` |
 | Encryption | `packages/server/src/services/encryption.service.ts` |
+| Audit logging | `packages/server/src/services/audit.service.ts` |
+| Structured logger | `packages/server/src/lib/logger.ts` |
 | Job queue | `packages/server/src/jobs/queue.ts` |
 | WebSocket | `packages/server/src/websocket/activity-stream.ts` |
 | Mobile entry | `packages/mobile/src/App.tsx` |
