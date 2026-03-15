@@ -3,7 +3,7 @@
 // Each entry has a headline, summary, mood indicator, and timestamp.
 // =============================================================================
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import { View, Text, FlatList, StyleSheet, RefreshControl } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { bots as botsApi } from '../services/api';
@@ -26,22 +26,31 @@ export default function LogScreen({ route }: any) {
   const [hasMore, setHasMore] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const loadingRef = useRef(false);
 
   const loadPage = useCallback(async (p: number, append = false) => {
-    if (loading) return;
+    if (loadingRef.current) return;
+    loadingRef.current = true;
     setLoading(true);
     try {
       setError(null);
-      const result = await botsApi.activity(botId, p) as { data: ActivityEntry[]; has_more: boolean };
-      setEntries(prev => append ? [...prev, ...result.data] : result.data);
-      setHasMore(result.has_more);
+      const result = await botsApi.activity(botId, p);
+      if (!result || !Array.isArray((result as any).data)) {
+        throw new Error('Invalid response format');
+      }
+      const { data, has_more } = result as { data: ActivityEntry[]; has_more: boolean };
+      setEntries(prev => append ? [...prev, ...data] : data);
+      setHasMore(has_more);
       setPage(p);
     } catch (err: any) {
-      if (!append) setError(err?.message || 'Failed to load activity');
+      if (!append) {
+        setError(err?.message || 'Failed to load activity');
+      }
     } finally {
+      loadingRef.current = false;
       setLoading(false);
     }
-  }, [botId, loading]);
+  }, [botId]);
 
   useFocusEffect(useCallback(() => { loadPage(1); }, [loadPage]));
 

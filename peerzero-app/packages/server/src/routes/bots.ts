@@ -73,6 +73,11 @@ router.post('/:id/start', async (req: Request, res: Response) => {
     return;
   }
 
+  if (bot.cycle_delay_seconds <= 0 || bot.cycle_delay_seconds > 86400) {
+    res.status(400).json({ error: 'cycle_delay_seconds must be between 1 and 86400' });
+    return;
+  }
+
   await botService.setBotStatus(req.params.id, 'running');
   await addBotCycleJob(req.params.id, req.user!.userId, bot.llm_api_key_id, bot.llm_model, bot.cycle_delay_seconds);
   res.json({ status: 'running' });
@@ -88,9 +93,14 @@ router.post('/:id/stop', async (req: Request, res: Response) => {
 // Get bot memory snapshot
 router.get('/:id/memory', async (req: Request, res: Response) => {
   const bot = await botService.getBotDetail(req.user!.userId, req.params.id);
-  const schoolFocus = bot.cached_profile
-    ? (bot.cached_profile as any).active_focus || null
-    : null;
+  interface CachedProfile {
+    active_focus?: unknown;
+    agent?: { credibility_score?: number; tier?: number };
+    grade?: { grade?: number };
+    [key: string]: unknown;
+  }
+  const profile = bot.cached_profile as CachedProfile | null;
+  const schoolFocus = profile?.active_focus || null;
   const snapshot = await memoryService.getMemorySnapshot(req.params.id, schoolFocus);
   res.json(snapshot);
 });
@@ -99,8 +109,10 @@ router.get('/:id/memory', async (req: Request, res: Response) => {
 router.get('/:id/activity', async (req: Request, res: Response) => {
   // Verify ownership before returning activity
   await botService.getBotDetail(req.user!.userId, req.params.id);
-  const page = parseInt(req.query.page as string) || 1;
-  const perPage = Math.min(parseInt(req.query.per_page as string) || 20, 100);
+  const rawPage = parseInt(req.query.page as string);
+  const page = Number.isFinite(rawPage) && rawPage > 0 ? Math.min(rawPage, 10000) : 1;
+  const rawPerPage = parseInt(req.query.per_page as string);
+  const perPage = Number.isFinite(rawPerPage) && rawPerPage > 0 ? Math.min(rawPerPage, 100) : 20;
   const result = await activityService.getActivityLog(req.params.id, page, perPage);
   res.json({ ...result, page, per_page: perPage });
 });

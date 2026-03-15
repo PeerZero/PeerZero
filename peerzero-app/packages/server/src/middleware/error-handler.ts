@@ -15,15 +15,23 @@ export class AppError extends Error {
   }
 }
 
+/** Sanitize error messages to prevent leaking sensitive data like API keys or credentials. */
+function sanitizeErrorMessage(message: string): string {
+  return message
+    .replace(/(?:sk-|key-|Bearer\s+|password[=:]\s*)[a-zA-Z0-9_-]+/gi, '[REDACTED]')
+    .replace(/(?:https?:\/\/[^:]+):[^@]+@/g, '[REDACTED_URL]')
+    .slice(0, 500);
+}
+
 export function errorHandler(err: Error, _req: Request, res: Response, _next: NextFunction): void {
   if (err instanceof AppError) {
-    res.status(err.statusCode).json({ error: err.message });
+    res.status(err.statusCode).json({ error: sanitizeErrorMessage(err.message) });
     return;
   }
 
   // Log unexpected errors in dev, hide details in prod
   console.error('[unhandled]', err);
   res.status(500).json({
-    error: config.isDev ? err.message : 'Internal server error',
+    error: config.isDev ? sanitizeErrorMessage(err.message) : 'Internal server error',
   });
 }

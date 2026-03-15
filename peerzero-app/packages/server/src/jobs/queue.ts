@@ -122,8 +122,15 @@ export function startWorker(): void {
         const errorMsg = err instanceof Error ? err.message : String(err);
 
         // Immediately stop on auth errors
-        if (errorMsg.includes('401') || errorMsg.includes('403') || errorMsg.includes('API key')) {
-          await setBotStatus(botId, 'error', errorMsg.slice(0, 500));
+        const isAuthError = err instanceof Error && (
+          err.message.includes('401') ||
+          err.message.includes('403') ||
+          err.message.includes('API key')
+        );
+        // Sanitize error message to prevent sensitive data leaks
+        const sanitizedMsg = errorMsg.replace(/(?:sk-|key-|Bearer\s+)[a-zA-Z0-9_-]+/g, '[REDACTED]').slice(0, 500);
+        if (isAuthError) {
+          await setBotStatus(botId, 'error', sanitizedMsg);
           await removeBotJobs(botId);
           consecutiveFailures.delete(botId);
           return;
@@ -133,7 +140,7 @@ export function startWorker(): void {
         const failures = (consecutiveFailures.get(botId) || 0) + 1;
         consecutiveFailures.set(botId, failures);
         if (failures >= 3) {
-          await setBotStatus(botId, 'error', `Stopped after ${failures} consecutive failures: ${errorMsg.slice(0, 400)}`);
+          await setBotStatus(botId, 'error', `Stopped after ${failures} consecutive failures: ${sanitizedMsg.slice(0, 400)}`);
           await removeBotJobs(botId);
           consecutiveFailures.delete(botId);
         }

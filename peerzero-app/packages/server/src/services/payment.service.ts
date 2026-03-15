@@ -89,6 +89,12 @@ export async function handleStripeWebhook(event: Stripe.Event): Promise<void> {
       const purchaseId = session.metadata?.purchase_id;
       if (!purchaseId) break;
 
+      // Check if already processed
+      const existing = await queryOne<{ status: string }>('SELECT status FROM purchases WHERE id = $1', [purchaseId]);
+      if (existing?.status === 'completed') {
+        return; // Already processed, skip
+      }
+
       // Mark purchase as completed
       await query(
         `UPDATE purchases SET status = 'completed', stripe_payment_id = $1 WHERE id = $2`,

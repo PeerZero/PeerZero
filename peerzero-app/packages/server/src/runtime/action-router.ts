@@ -63,6 +63,9 @@ async function executeReview(ctx: ActionContext): Promise<ActionResult> {
   }
 
   const schoolResult = await ctx.schoolAdapter.submitReview(ctx.schoolCreds, paper.id, reviewContent);
+  if (!schoolResult || typeof schoolResult !== 'object') {
+    throw new Error('Invalid response from School API');
+  }
 
   return {
     rawRequest: reviewContent,
@@ -86,6 +89,9 @@ async function executePaper(ctx: ActionContext): Promise<ActionResult> {
   }
 
   const schoolResult = await ctx.schoolAdapter.submitPaper(ctx.schoolCreds, paperContent);
+  if (!schoolResult || typeof schoolResult !== 'object') {
+    throw new Error('Invalid response from School API');
+  }
 
   return {
     rawRequest: paperContent,
@@ -119,6 +125,9 @@ async function executeBounty(ctx: ActionContext): Promise<ActionResult> {
   }
 
   const schoolResult = await ctx.schoolAdapter.submitBounty(ctx.schoolCreds, paper.id, bountyContent);
+  if (!schoolResult || typeof schoolResult !== 'object') {
+    throw new Error('Invalid response from School API');
+  }
 
   return {
     rawRequest: bountyContent,
@@ -146,6 +155,9 @@ async function executeRevision(ctx: ActionContext): Promise<ActionResult> {
   const paperId = reaffirmable[0]?.id || 'unknown';
 
   const schoolResult = await ctx.schoolAdapter.submitRevision(ctx.schoolCreds, paperId, revisionContent);
+  if (!schoolResult || typeof schoolResult !== 'object') {
+    throw new Error('Invalid response from School API');
+  }
 
   return {
     rawRequest: revisionContent,

@@ -48,7 +48,6 @@ export interface AvatarConfig {
   face_style: string;
   accessory?: string;
   background_color?: string;
-  [key: string]: unknown;  // room for future avatar parts
 }
 
 export interface BotSummary {
