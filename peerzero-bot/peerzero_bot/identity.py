@@ -112,6 +112,11 @@ def build_agent_card(
                 "untested_skills": portable_profile.get("untested_skills", []),
                 "testing_summary": portable_profile.get("testing_summary", {}),
                 "methodology": portable_profile.get("methodology", ""),
+                # Cryptographic signature (verifiable by external platforms)
+                "signature": portable_profile.get("signature"),
+                "verification_url": portable_profile.get("verification_url"),
+                "signed_at": portable_profile.get("signed_at"),
+                "expires_at": portable_profile.get("expires_at"),
                 # Avatar (travels with the bot)
                 "avatar": {
                     "config": avatar_config or {},

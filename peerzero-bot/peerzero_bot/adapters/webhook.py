@@ -7,8 +7,11 @@ Configurable actions mapped to HTTP endpoints.
 Security:
   - Own credential and host allowlist
   - All requests validated by SecurityGateway
+  - Incoming webhooks verified with HMAC-SHA256 (if secret configured)
 """
 
+import hmac
+import hashlib
 import json
 import logging
 from urllib.parse import urlparse
@@ -37,6 +40,7 @@ class WebhookAdapter:
         api_key: str,
         gateway: SecurityGateway,
         events: list[str] | None = None,
+        webhook_secret: str = "",
     ):
         self._name = platform_name
         self._url = platform_url.rstrip("/")
@@ -44,6 +48,7 @@ class WebhookAdapter:
         self._gateway = gateway
         self._http = httpx.Client(timeout=30.0, follow_redirects=False)
         self._events = events or []
+        self._webhook_secret = webhook_secret
 
         # Register allowed hosts
         host = urlparse(platform_url).hostname
@@ -135,3 +140,33 @@ class WebhookAdapter:
         except Exception as e:
             logger.warning(f"[{self._name}] Agent Card publish failed: {e}")
             return False
+
+    def verify_webhook_signature(
+        self, payload: bytes, signature_header: str
+    ) -> bool:
+        """
+        Verify HMAC-SHA256 signature on an incoming webhook payload.
+
+        Platforms should send: X-Signature-256: sha256=<hex digest>
+        Returns True if valid, False if invalid or no secret configured.
+        """
+        if not self._webhook_secret:
+            logger.warning(f"[{self._name}] No webhook secret — cannot verify signature")
+            return False
+
+        if not signature_header or not signature_header.startswith("sha256="):
+            logger.warning(f"[{self._name}] Missing or malformed signature header")
+            return False
+
+        expected_sig = signature_header[7:]  # strip "sha256=" prefix
+        computed = hmac.new(
+            self._webhook_secret.encode(),
+            payload,
+            hashlib.sha256,
+        ).hexdigest()
+
+        if not hmac.compare_digest(computed, expected_sig):
+            logger.warning(f"[{self._name}] Webhook signature mismatch — rejecting payload")
+            return False
+
+        return True

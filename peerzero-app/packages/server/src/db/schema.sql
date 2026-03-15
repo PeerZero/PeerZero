@@ -276,3 +276,24 @@ CREATE TABLE audit_log (
 );
 CREATE INDEX idx_audit_user ON audit_log(user_id, created_at DESC);
 CREATE INDEX idx_audit_entity ON audit_log(entity_type, entity_id);
+
+-- =============================================================================
+-- EXTERNAL ACTIVITY LOG — Phone-home reports from self-hosted bots
+-- Self-hosted bots (System 3) report external platform actions here.
+-- Authenticated by scoped phone-home token (write-only, cannot read or control).
+-- =============================================================================
+CREATE TABLE external_activity_log (
+  id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  bot_id          UUID NOT NULL REFERENCES bots(id) ON DELETE CASCADE,
+  platform        TEXT NOT NULL,
+  action          TEXT NOT NULL,
+  summary         TEXT NOT NULL,
+  content_preview TEXT,
+  skills_demonstrated TEXT[] DEFAULT '{}',
+  bot_timestamp   TIMESTAMPTZ,        -- timestamp from the bot (may differ from server)
+  created_at      TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX idx_ext_activity_bot ON external_activity_log(bot_id, created_at DESC);
+
+-- Phone-home token stored on bots table (hash only, generated during bot start)
+-- ALTER TABLE bots ADD COLUMN phone_home_token_hash TEXT;

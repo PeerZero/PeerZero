@@ -2,12 +2,13 @@
 // Bot service — CRUD for bot instances, enrollment, status management
 // =============================================================================
 
+import crypto from 'crypto';
 import { queryOne, queryRows, query } from '../db/client';
 import { AppError } from '../middleware/error-handler';
 import { encrypt, decrypt } from './encryption.service';
 import { getSchoolAdapter } from '../adapters/adapter.factory';
 import type { BotSummary, BotDetail } from '@peerzero/shared';
-import { SUPPORTED_MODEL_IDS } from '@peerzero/shared';
+import { SUPPORTED_MODEL_IDS, sanitizeAvatarConfig } from '@peerzero/shared';
 
 export async function createBot(
   userId: string,
@@ -43,11 +44,13 @@ export async function createBot(
     throw new AppError(400, `Unsupported LLM model: ${model}. Supported: ${SUPPORTED_MODEL_IDS.join(', ')}`);
   }
 
+  const safeAvatar = sanitizeAvatarConfig(avatarConfig);
+
   const bot = await queryOne<{ id: string }>(
     `INSERT INTO bots (user_id, name, avatar_config, llm_api_key_id, llm_model)
      VALUES ($1, $2, $3, $4, $5)
      RETURNING id`,
-    [userId, name, JSON.stringify(avatarConfig), llmApiKeyId, model],
+    [userId, name, JSON.stringify(safeAvatar), llmApiKeyId, model],
   );
 
   return bot!.id;
@@ -102,7 +105,7 @@ export async function updateBot(userId: string, botId: string, updates: Partial<
   let idx = 1;
 
   if (updates.name !== undefined) { sets.push(`name = $${idx++}`); params.push(updates.name); }
-  if (updates.avatar_config !== undefined) { sets.push(`avatar_config = $${idx++}`); params.push(JSON.stringify(updates.avatar_config)); }
+  if (updates.avatar_config !== undefined) { sets.push(`avatar_config = $${idx++}`); params.push(JSON.stringify(sanitizeAvatarConfig(updates.avatar_config))); }
   if (updates.llm_api_key_id !== undefined) {
     // Verify the new API key belongs to this user
     const keyOwner = await queryOne(
@@ -181,6 +184,27 @@ export async function enrollBotInSchool(userId: string, botId: string, schoolId:
   );
 
   return { handle, schoolSlug: school.slug };
+}
+
+/**
+ * Generate a phone-home token for self-hosted bots (System 3).
+ * Token is stored as SHA-256 hash — plaintext returned only once.
+ * Write-only: cannot read bot data or control the bot.
+ */
+export async function generatePhoneHomeToken(userId: string, botId: string): Promise<string> {
+  // Verify ownership
+  const bot = await queryOne('SELECT id FROM bots WHERE id = $1 AND user_id = $2', [botId, userId]);
+  if (!bot) throw new AppError(404, 'Bot not found');
+
+  const token = `pht_${crypto.randomBytes(32).toString('hex')}`;
+  const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+
+  await query(
+    'UPDATE bots SET phone_home_token_hash = $1, updated_at = NOW() WHERE id = $2',
+    [tokenHash, botId],
+  );
+
+  return token;
 }
 
 const VALID_STATUSES = ['stopped', 'running', 'paused', 'error'] as const;

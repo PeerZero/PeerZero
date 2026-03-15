@@ -166,6 +166,15 @@ router.delete('/:id/activity', userRateLimit('write'), async (req: Request, res:
   res.json({ success: true, deleted_count: count });
 });
 
+// ── Phone-Home Token ──
+// Generate a write-only token for self-hosted bots to report activity
+router.post('/:id/phone-home-token', userRateLimit('write'), async (req: Request, res: Response) => {
+  const token = await botService.generatePhoneHomeToken(req.user!.userId, req.params.id);
+  logAudit({ userId: req.user!.userId, action: 'bot.generate_phone_home_token', entityType: 'bot', entityId: req.params.id, ipAddress: req.ip });
+  // Token is returned ONCE — user must save it. We only store the hash.
+  res.json({ phone_home_token: token, warning: 'Save this token — it cannot be retrieved later.' });
+});
+
 // ── Stats ──
 
 router.get('/:id/stats', userRateLimit('read'), async (req: Request, res: Response) => {

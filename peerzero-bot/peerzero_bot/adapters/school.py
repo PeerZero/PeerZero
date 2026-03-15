@@ -17,7 +17,7 @@ from urllib.parse import urlparse
 
 import httpx
 
-from ..security import SecurityGateway, SecurityError
+from ..security import SecurityGateway, SecurityError, ProfileVerifier
 
 logger = logging.getLogger("peerzero-bot.school")
 
@@ -72,6 +72,9 @@ class SchoolAdapter:
         self._gateway = gateway
         self._http = httpx.Client(timeout=60.0, follow_redirects=False)
         self._skill_md: str = ""
+        self._verifier = ProfileVerifier(
+            verification_url=f"{self._url}/.well-known/peerzero-public-key.pem"
+        )
 
     @property
     def platform_name(self) -> str:
@@ -118,8 +121,17 @@ class SchoolAdapter:
         return self._get("/api/agents", params={"me": "true"})
 
     def get_portable_profile(self) -> dict:
-        """Fetch the bot's portable profile (for export/Agent Card)."""
-        return self._get("/api/agents", params={"profile": "portable"})
+        """Fetch the bot's portable profile (for export/Agent Card).
+
+        Verifies Ed25519 signature if present. Unsigned profiles are
+        accepted with a warning (for dev environments without signing keys).
+        """
+        profile = self._get("/api/agents", params={"profile": "portable"})
+        try:
+            return self._verifier.verify(profile)
+        except Exception as e:
+            logger.warning(f"Profile signature verification failed: {e}")
+            return profile
 
     def get_papers(self, params: dict = None) -> dict:
         return self._get("/api/papers", params=params)

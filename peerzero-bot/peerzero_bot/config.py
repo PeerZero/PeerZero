@@ -63,6 +63,7 @@ class PlatformConfig:
     agent_card_url: str = ""          # for A2A discovery
     heartbeat_interval: int = 3600    # seconds between platform cycles
     events: list[str] = field(default_factory=list)  # for webhook adapter
+    webhook_secret: str = ""          # HMAC-SHA256 secret for verifying incoming webhooks
 
 
 # ── Main config ──────────────────────────────────────────────────────────────
@@ -193,6 +194,12 @@ class BotConfig:
                 platform._api_key = platform_key
             elif not hasattr(platform, '_api_key'):
                 platform._api_key = ""
+
+            # Webhook secret from env: MOLTBOOK_WEBHOOK_SECRET, etc.
+            secret_key = f"{platform.name.upper()}_WEBHOOK_SECRET"
+            webhook_secret = os.environ.get(secret_key, "")
+            if webhook_secret:
+                platform.webhook_secret = webhook_secret
 
         # Non-secret overrides
         if os.environ.get("LLM_PROVIDER"):
