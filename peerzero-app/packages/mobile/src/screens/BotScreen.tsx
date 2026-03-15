@@ -4,7 +4,7 @@
 // =============================================================================
 
 import React, { useState, useCallback } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert, ActivityIndicator } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { bots as botsApi } from '../services/api';
 import { colors } from '../theme/colors';
@@ -12,7 +12,14 @@ import { spacing, fontSize, borderRadius } from '../theme/spacing';
 import type { BotDetail } from '@peerzero/shared';
 
 export default function BotScreen({ route, navigation }: any) {
-  const { botId } = route.params;
+  const botId = route?.params?.botId;
+  if (!botId) {
+    return (
+      <View style={styles.container}>
+        <Text style={{ color: colors.text.secondary }}>Invalid bot ID</Text>
+      </View>
+    );
+  }
   const [bot, setBot] = useState<BotDetail | null>(null);
 
   const loadBot = useCallback(async () => {
@@ -40,7 +47,12 @@ export default function BotScreen({ route, navigation }: any) {
     }
   };
 
-  if (!bot) return <View style={styles.container} />;
+  if (!bot) return (
+    <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+      <ActivityIndicator size="large" color={colors.accent.primary} />
+      <Text style={{ color: colors.text.secondary, marginTop: 12 }}>Loading bot...</Text>
+    </View>
+  );
 
   const isRunning = bot.status === 'running';
 
@@ -64,11 +76,11 @@ export default function BotScreen({ route, navigation }: any) {
       {/* Stats */}
       <View style={styles.statsRow}>
         <View style={styles.stat}>
-          <Text style={styles.statValue}>{bot.cached_credibility ?? '—'}</Text>
+          <Text style={styles.statValue}>{bot.cached_credibility != null ? bot.cached_credibility : 'Pending'}</Text>
           <Text style={styles.statLabel}>Credibility</Text>
         </View>
         <View style={styles.stat}>
-          <Text style={styles.statValue}>{bot.cached_grade ?? '—'}</Text>
+          <Text style={styles.statValue}>{bot.cached_grade != null ? `Grade ${bot.cached_grade}` : 'Not started'}</Text>
           <Text style={styles.statLabel}>Grade</Text>
         </View>
         <View style={styles.stat}>

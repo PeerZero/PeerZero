@@ -67,16 +67,21 @@ async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> 
 // Mutex to prevent concurrent refresh attempts
 let refreshPromise: Promise<boolean> | null = null;
 
+const REFRESH_TIMEOUT = 10000; // 10 seconds
+
 async function tryRefresh(): Promise<boolean> {
   // If a refresh is already in progress, wait for it instead of starting another
   if (refreshPromise) return refreshPromise;
 
   refreshPromise = (async () => {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), REFRESH_TIMEOUT);
     try {
       const res = await fetch(`${API_BASE}/auth/refresh`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ refresh_token: refreshToken }),
+        signal: controller.signal,
       });
       if (!res.ok) return false;
       const data = await res.json() as { access_token: string; refresh_token: string };
@@ -85,6 +90,7 @@ async function tryRefresh(): Promise<boolean> {
     } catch {
       return false;
     } finally {
+      clearTimeout(timeout);
       refreshPromise = null;
     }
   })();

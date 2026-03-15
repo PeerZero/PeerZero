@@ -75,14 +75,23 @@ export default function BrainScreen({ route }: any) {
         <Text style={styles.tierTitle}>{MEMORY_TIER_LABELS[1]}</Text>
         <Text style={styles.tierCount}>{memory.tier1_exercises.length}</Text>
       </TouchableOpacity>
-      {expandedTier === 1 && memory.tier1_exercises.slice(0, 10).map((ex) => (
-        <View key={ex.id} style={styles.card}>
-          <Text style={styles.cardLabel}>Cycle {ex.cycle_number} — {ex.action_type}</Text>
-          <Text style={styles.cardContent} numberOfLines={3}>
-            {JSON.stringify(ex.exercise_data).slice(0, 200)}
-          </Text>
-        </View>
-      ))}
+      {expandedTier === 1 && (
+        <>
+          {memory.tier1_exercises.slice(0, 10).map((ex) => (
+            <View key={ex.id} style={styles.card}>
+              <Text style={styles.cardLabel}>Cycle {ex.cycle_number} — {ex.action_type}</Text>
+              <Text style={styles.cardContent} numberOfLines={3}>
+                {JSON.stringify(ex.exercise_data).slice(0, 200)}
+              </Text>
+            </View>
+          ))}
+          {memory.tier1_exercises.length > 10 && (
+            <Text style={{ color: colors.text.tertiary, textAlign: 'center', marginTop: 8 }}>
+              Showing 10 of {memory.tier1_exercises.length} exercises
+            </Text>
+          )}
+        </>
+      )}
 
       {/* Tier 2: Skill Paragraphs */}
       <TouchableOpacity style={styles.tierHeader} onPress={() => toggleTier(2)}>
@@ -101,7 +110,7 @@ export default function BrainScreen({ route }: any) {
       <TouchableOpacity style={styles.tierHeader} onPress={() => toggleTier(3)}>
         <View style={[styles.tierDot, { backgroundColor: TIER_COLORS[3] }]} />
         <Text style={styles.tierTitle}>{MEMORY_TIER_LABELS[3]}</Text>
-        <Text style={styles.tierCount}>{memory.tier3_core ? 'v' + memory.tier3_core.version : '—'}</Text>
+        <Text style={styles.tierCount}>{memory.tier3_core ? `Identity v${memory.tier3_core.version}` : 'No core identity yet'}</Text>
       </TouchableOpacity>
       {expandedTier === 3 && (
         <>

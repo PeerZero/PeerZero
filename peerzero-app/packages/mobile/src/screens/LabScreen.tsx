@@ -30,6 +30,7 @@ export default function LabScreen({ navigation }: any) {
       setBotList(data);
     } catch (err: any) {
       setError(err?.message || 'Failed to load bots');
+      setBotList([]);  // Clear stale data
     }
   }, []);
 
