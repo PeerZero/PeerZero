@@ -9,6 +9,7 @@ import { useAuth } from '../hooks/useAuth';
 import { apiKeys as keysApi } from '../services/api';
 import { colors } from '../theme/colors';
 import { spacing, fontSize, borderRadius } from '../theme/spacing';
+import { LLM_PROVIDERS } from '@peerzero/shared';
 import type { ApiKeyInfo } from '@peerzero/shared';
 
 export default function SettingsScreen() {
@@ -32,14 +33,25 @@ export default function SettingsScreen() {
 
   const handleAddKey = async () => {
     if (!newLabel || !newKey) return;
+
+    // Basic format validation
+    if (newProvider === 'anthropic' && !newKey.startsWith('sk-ant-')) {
+      Alert.alert('Invalid Key', 'Anthropic API keys typically start with "sk-ant-"');
+      return;
+    }
+    if (newProvider === 'openai' && !newKey.startsWith('sk-')) {
+      Alert.alert('Invalid Key', 'OpenAI API keys typically start with "sk-"');
+      return;
+    }
+
     try {
       await keysApi.add(newProvider, newLabel, newKey);
-      setShowAddKey(false);
+      setNewKey('');  // Clear immediately after submission
       setNewLabel('');
-      setNewKey('');
+      setShowAddKey(false);
       await loadKeys();
     } catch (err: any) {
-      Alert.alert('Error', err.message);
+      Alert.alert('Error', err?.message || 'Failed to add key');
     }
   };
 
