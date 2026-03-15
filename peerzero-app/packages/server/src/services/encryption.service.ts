@@ -10,6 +10,11 @@ const ALGORITHM = 'aes-256-gcm';
 const IV_LENGTH = 16;       // 128 bits
 const AUTH_TAG_LENGTH = 16;  // 128 bits
 
+// Validate on import — fail fast if misconfigured
+if (config.encryptionMasterKey && config.encryptionMasterKey.length !== 64) {
+  throw new Error('ENCRYPTION_MASTER_KEY must be 64 hex chars (32 bytes)');
+}
+
 function getMasterKey(): Buffer {
   // Master key must be exactly 32 bytes (256 bits), hex-encoded in env
   const hex = config.encryptionMasterKey;

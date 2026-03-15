@@ -22,11 +22,17 @@ export async function createBot(
   );
   if (!key) throw new AppError(400, 'Invalid API key');
 
+  const SUPPORTED_MODELS = ['claude-opus-4-6', 'claude-sonnet-4-6', 'gpt-4o', 'gpt-4o-mini'] as const;
+  const model = llmModel || 'claude-opus-4-6';
+  if (!SUPPORTED_MODELS.includes(model as any)) {
+    throw new AppError(400, `Unsupported LLM model: ${model}. Supported: ${SUPPORTED_MODELS.join(', ')}`);
+  }
+
   const bot = await queryOne<{ id: string }>(
     `INSERT INTO bots (user_id, name, avatar_config, llm_api_key_id, llm_model)
      VALUES ($1, $2, $3, $4, $5)
      RETURNING id`,
-    [userId, name, JSON.stringify(avatarConfig), llmApiKeyId, llmModel || 'claude-opus-4-6'],
+    [userId, name, JSON.stringify(avatarConfig), llmApiKeyId, model],
   );
 
   return bot!.id;
@@ -156,7 +162,12 @@ export async function enrollBotInSchool(userId: string, botId: string, schoolId:
   return { handle, schoolSlug: school.slug };
 }
 
+const VALID_STATUSES = ['stopped', 'running', 'paused', 'error'] as const;
+
 export async function setBotStatus(botId: string, status: string, errorMessage?: string): Promise<void> {
+  if (!VALID_STATUSES.includes(status as any)) {
+    throw new Error(`Invalid bot status: ${status}`);
+  }
   await query(
     'UPDATE bots SET status = $1, error_message = $2, updated_at = NOW() WHERE id = $3',
     [status, errorMessage || null, botId],
