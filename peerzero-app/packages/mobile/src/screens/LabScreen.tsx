@@ -92,7 +92,13 @@ export default function LabScreen({ navigation }: any) {
       ) : botList.length === 0 ? (
         <View style={styles.emptyState}>
           <Text style={styles.emptyTitle}>No bots yet</Text>
-          <Text style={styles.emptySubtitle}>Buy a bot shell to get started, then send it to school!</Text>
+          <Text style={styles.emptySubtitle}>Create your first bot and send it to school!</Text>
+          <TouchableOpacity
+            style={styles.createButtonLarge}
+            onPress={() => navigation.navigate('CreateBot')}
+          >
+            <Text style={styles.createButtonLargeText}>Create Bot</Text>
+          </TouchableOpacity>
         </View>
       ) : (
         <FlatList
@@ -102,6 +108,16 @@ export default function LabScreen({ navigation }: any) {
           contentContainerStyle={styles.list}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent.primary} />}
         />
+      )}
+
+      {/* Floating create button (when bots exist) */}
+      {botList.length > 0 && (
+        <TouchableOpacity
+          style={styles.fab}
+          onPress={() => navigation.navigate('CreateBot')}
+        >
+          <Text style={styles.fabText}>+</Text>
+        </TouchableOpacity>
       )}
     </View>
   );
@@ -115,9 +131,6 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md, flexDirection: 'row', alignItems: 'center',
     borderWidth: 1, borderColor: colors.border,
   },
-  avatar: {
-    width: 56, height: 56,
-  },
   botInfo: { flex: 1, marginLeft: spacing.md },
   botName: { fontSize: fontSize.lg, fontWeight: '600', color: colors.text.primary },
   botSchool: { fontSize: fontSize.sm, color: colors.text.secondary, marginTop: 2 },
@@ -129,4 +142,19 @@ const styles = StyleSheet.create({
   emptyState: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: spacing.xl },
   emptyTitle: { fontSize: fontSize.xl, fontWeight: '600', color: colors.text.primary, marginBottom: spacing.sm },
   emptySubtitle: { fontSize: fontSize.md, color: colors.text.secondary, textAlign: 'center' },
+  createButtonLarge: {
+    backgroundColor: colors.accent.primary, paddingVertical: spacing.md, paddingHorizontal: spacing.xl,
+    borderRadius: borderRadius.md, marginTop: spacing.lg,
+  },
+  createButtonLargeText: { color: '#fff', fontSize: fontSize.lg, fontWeight: '600' },
+  fab: {
+    position: 'absolute', bottom: spacing.xl, right: spacing.xl,
+    width: 56, height: 56, borderRadius: 28,
+    backgroundColor: colors.accent.primary, justifyContent: 'center', alignItems: 'center',
+    // Elevation for Android, shadow for iOS
+    elevation: 6,
+    shadowColor: colors.accent.primary, shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3, shadowRadius: 8,
+  },
+  fabText: { color: '#fff', fontSize: 28, fontWeight: '300', marginTop: -2 },
 });

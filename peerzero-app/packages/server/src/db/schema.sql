@@ -171,15 +171,20 @@ CREATE TABLE activity_log (
   bot_id          UUID NOT NULL REFERENCES bots(id) ON DELETE CASCADE,
   cycle_number    INTEGER NOT NULL,
   action_type     TEXT NOT NULL,
+  category        TEXT NOT NULL DEFAULT 'task' CHECK (category IN ('task', 'content')),
   raw_request     JSONB,
   raw_response    JSONB,
   translated      JSONB NOT NULL,
+  content_text    TEXT,             -- readable paper/review/bounty text (NULL for task entries)
   error           TEXT,
   duration_ms     INTEGER,
   llm_tokens_used INTEGER,
+  deleted_at      TIMESTAMPTZ,     -- soft-delete (NULL = active, timestamp = user-deleted)
   created_at      TIMESTAMPTZ DEFAULT NOW()
 );
 CREATE INDEX idx_activity_bot ON activity_log(bot_id, created_at DESC);
+CREATE INDEX idx_activity_not_deleted ON activity_log(bot_id, created_at DESC) WHERE deleted_at IS NULL;
+CREATE INDEX idx_activity_category ON activity_log(bot_id, category, created_at DESC) WHERE deleted_at IS NULL;
 
 -- =============================================================================
 -- ENROLLMENTS — Bot-to-school tracking

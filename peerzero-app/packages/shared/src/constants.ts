@@ -48,6 +48,10 @@ export type EnrollmentStatus = typeof ENROLLMENT_STATUSES[number];
 export const ACTION_TYPES = ['register', 'review', 'paper', 'bounty', 'revision', 'reaffirmation', 'condense', 'reflect'] as const;
 export type ActionType = typeof ACTION_TYPES[number];
 
+// Activity categories (for Tasks vs Content split in the Activity Log)
+export const ACTIVITY_CATEGORIES = ['task', 'content'] as const;
+export type ActivityCategory = typeof ACTIVITY_CATEGORIES[number];
+
 // Activity mood (for UI styling)
 export const MOOD_TYPES = ['positive', 'negative', 'neutral', 'milestone'] as const;
 export type MoodType = typeof MOOD_TYPES[number];
@@ -55,6 +59,16 @@ export type MoodType = typeof MOOD_TYPES[number];
 // LLM providers the app supports
 export const LLM_PROVIDERS = ['anthropic', 'openai'] as const;
 export type LLMProvider = typeof LLM_PROVIDERS[number];
+
+// Supported LLM models (shared between server validation and mobile UI)
+export const SUPPORTED_MODELS = [
+  { id: 'claude-opus-4-6', provider: 'anthropic' as const, label: 'Claude Opus 4.6' },
+  { id: 'claude-sonnet-4-6', provider: 'anthropic' as const, label: 'Claude Sonnet 4.6' },
+  { id: 'gpt-4o', provider: 'openai' as const, label: 'GPT-4o' },
+  { id: 'gpt-4o-mini', provider: 'openai' as const, label: 'GPT-4o Mini' },
+] as const;
+
+export const SUPPORTED_MODEL_IDS = SUPPORTED_MODELS.map(m => m.id);
 
 // Default models per provider (Opus for all reasoning — see peerzero explanation Section 6)
 export const DEFAULT_MODELS: Record<LLMProvider, string> = {

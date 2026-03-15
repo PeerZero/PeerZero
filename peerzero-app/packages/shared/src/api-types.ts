@@ -3,7 +3,7 @@
 // These define the contract between the mobile app and the app server.
 // =============================================================================
 
-import { BotStatus, EnrollmentStatus, ActionType, MoodType, LLMProvider } from './constants';
+import { BotStatus, EnrollmentStatus, ActionType, MoodType, LLMProvider, ActivityCategory } from './constants';
 
 // ── Auth ──
 export interface RegisterRequest {
@@ -130,7 +130,9 @@ export interface ActivityEntry {
   id: string;
   cycle_number: number;
   action_type: ActionType;
+  category: ActivityCategory;
   translated: TranslatedActivity;
+  content_text: string | null;
   error: string | null;
   duration_ms: number | null;
   llm_tokens_used: number | null;
@@ -212,6 +214,26 @@ export interface NotificationPrefsResponse {
 
 export interface UpdateNotificationPrefsRequest {
   preferences: Record<string, boolean>;  // Partial update — only keys present are changed
+}
+
+// ── Profile Management ──
+export interface UpdateProfileRequest {
+  display_name?: string;
+}
+
+export interface ChangePasswordRequest {
+  current_password: string;
+  new_password: string;
+}
+
+// ── Bot Stats ──
+export interface BotStats {
+  credibility_history: Array<{ date: string; value: number }>;
+  action_breakdown: Array<{ action_type: string; count: number }>;
+  skill_progress: Array<{ skill: string; strength: number; reps: number }>;
+  token_usage_trend: Array<{ date: string; tokens: number }>;
+  total_cycles: number;
+  total_tokens: number;
 }
 
 // ── Paginated response wrapper ──

@@ -7,6 +7,7 @@ import { AppError } from '../middleware/error-handler';
 import { encrypt, decrypt } from './encryption.service';
 import { getSchoolAdapter } from '../adapters/adapter.factory';
 import type { BotSummary, BotDetail } from '@peerzero/shared';
+import { SUPPORTED_MODEL_IDS } from '@peerzero/shared';
 
 export async function createBot(
   userId: string,
@@ -37,10 +38,9 @@ export async function createBot(
   );
   if (!key) throw new AppError(400, 'Invalid API key');
 
-  const SUPPORTED_MODELS = ['claude-opus-4-6', 'claude-sonnet-4-6', 'gpt-4o', 'gpt-4o-mini'] as const;
   const model = llmModel || 'claude-opus-4-6';
-  if (!SUPPORTED_MODELS.includes(model as any)) {
-    throw new AppError(400, `Unsupported LLM model: ${model}. Supported: ${SUPPORTED_MODELS.join(', ')}`);
+  if (!SUPPORTED_MODEL_IDS.includes(model as any)) {
+    throw new AppError(400, `Unsupported LLM model: ${model}. Supported: ${SUPPORTED_MODEL_IDS.join(', ')}`);
   }
 
   const bot = await queryOne<{ id: string }>(

@@ -13,6 +13,7 @@ interface AuthState {
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string, displayName?: string) => Promise<void>;
   logout: () => Promise<void>;
+  refreshUser: () => Promise<void>;
 }
 
 export const AuthContext = createContext<AuthState>({
@@ -22,6 +23,7 @@ export const AuthContext = createContext<AuthState>({
   login: async () => {},
   register: async () => {},
   logout: async () => {},
+  refreshUser: async () => {},
 });
 
 export function useAuthProvider(): AuthState {
@@ -66,6 +68,15 @@ export function useAuthProvider(): AuthState {
     setUser(null);
   }, []);
 
+  const refreshUser = useCallback(async () => {
+    try {
+      const profile = await authApi.me() as UserProfile;
+      setUser(profile);
+    } catch {
+      // Silently fail — user data will refresh on next navigation
+    }
+  }, []);
+
   return {
     user,
     isLoading,
@@ -73,6 +84,7 @@ export function useAuthProvider(): AuthState {
     login,
     register,
     logout,
+    refreshUser,
   };
 }
 

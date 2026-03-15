@@ -20,6 +20,9 @@ import BrainScreen from '../screens/BrainScreen';
 import LogScreen from '../screens/LogScreen';
 import SchoolScreen from '../screens/SchoolScreen';
 import SettingsScreen from '../screens/SettingsScreen';
+import CreateBotScreen from '../screens/CreateBotScreen';
+import EnrollBotScreen from '../screens/EnrollBotScreen';
+import StatsScreen from '../screens/StatsScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -63,6 +66,9 @@ function BotStack() {
       <Stack.Screen name="Bot" component={BotScreen} options={{ title: 'Bot' }} />
       <Stack.Screen name="Brain" component={BrainScreen} options={{ title: 'Brain' }} />
       <Stack.Screen name="Log" component={LogScreen} options={{ title: 'Activity Log' }} />
+      <Stack.Screen name="CreateBot" component={CreateBotScreen} options={{ title: 'Create Bot' }} />
+      <Stack.Screen name="EnrollBot" component={EnrollBotScreen} options={{ title: 'Enroll in School' }} />
+      <Stack.Screen name="Stats" component={StatsScreen} options={{ title: 'Stats' }} />
     </Stack.Navigator>
   );
 }

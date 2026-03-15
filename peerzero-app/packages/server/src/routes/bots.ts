@@ -1,5 +1,5 @@
 // =============================================================================
-// Bot routes — CRUD, enrollment, start/stop
+// Bot routes — CRUD, enrollment, start/stop, activity, stats
 // =============================================================================
 
 import { Router, Request, Response } from 'express';
@@ -8,8 +8,11 @@ import { userRateLimit } from '../middleware/rate-limit';
 import * as botService from '../services/bot.service';
 import * as memoryService from '../services/memory.service';
 import * as activityService from '../services/activity.service';
+import * as statsService from '../services/stats.service';
 import { addBotCycleJob, removeBotJobs } from '../jobs/queue';
 import { logAudit } from '../services/audit.service';
+import type { ActivityCategory } from '@peerzero/shared';
+import { ACTIVITY_CATEGORIES } from '@peerzero/shared';
 
 const router = Router();
 router.use(requireAuth);
@@ -114,7 +117,9 @@ router.get('/:id/memory', userRateLimit('read'), async (req: Request, res: Respo
   res.json(snapshot);
 });
 
-// Get bot activity log
+// ── Activity Log ──
+
+// Get bot activity log (supports category filtering)
 router.get('/:id/activity', userRateLimit('read'), async (req: Request, res: Response) => {
   // Verify ownership before returning activity
   await botService.getBotDetail(req.user!.userId, req.params.id);
@@ -122,8 +127,53 @@ router.get('/:id/activity', userRateLimit('read'), async (req: Request, res: Res
   const page = Number.isFinite(rawPage) && rawPage > 0 ? Math.min(rawPage, 10000) : 1;
   const rawPerPage = parseInt(req.query.per_page as string);
   const perPage = Number.isFinite(rawPerPage) && rawPerPage > 0 ? Math.min(rawPerPage, 100) : 20;
-  const result = await activityService.getActivityLog(req.params.id, page, perPage);
+
+  // Optional category filter
+  const category = req.query.category as string | undefined;
+  const validCategory = category && ACTIVITY_CATEGORIES.includes(category as ActivityCategory)
+    ? category as ActivityCategory
+    : undefined;
+
+  const result = await activityService.getActivityLog(req.params.id, page, perPage, validCategory);
   res.json({ ...result, page, per_page: perPage });
+});
+
+// Delete a single activity entry (soft-delete)
+router.delete('/:id/activity/:activityId', userRateLimit('write'), async (req: Request, res: Response) => {
+  // Verify ownership
+  await botService.getBotDetail(req.user!.userId, req.params.id);
+  const deleted = await activityService.deleteActivityItem(req.params.id, req.params.activityId);
+  if (!deleted) {
+    res.status(404).json({ error: 'Activity entry not found' });
+    return;
+  }
+  res.json({ success: true });
+});
+
+// Delete all activity for a bot (soft-delete)
+router.delete('/:id/activity', userRateLimit('write'), async (req: Request, res: Response) => {
+  // Verify ownership
+  await botService.getBotDetail(req.user!.userId, req.params.id);
+  const count = await activityService.deleteAllActivity(req.params.id);
+  logAudit({
+    userId: req.user!.userId,
+    action: 'activity.delete_all',
+    entityType: 'bot',
+    entityId: req.params.id,
+    metadata: { deleted_count: count },
+    ipAddress: req.ip,
+  });
+  res.json({ success: true, deleted_count: count });
+});
+
+// ── Stats ──
+
+router.get('/:id/stats', userRateLimit('read'), async (req: Request, res: Response) => {
+  // Verify ownership
+  await botService.getBotDetail(req.user!.userId, req.params.id);
+  const days = parseInt(req.query.days as string) || 30;
+  const stats = await statsService.getBotStats(req.params.id, Math.min(days, 365));
+  res.json(stats);
 });
 
 export default router;
