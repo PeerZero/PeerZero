@@ -96,7 +96,7 @@ CREATE TABLE bots (
   error_message   TEXT,
   cycle_count     INTEGER DEFAULT 0,
   last_cycle_at   TIMESTAMPTZ,
-  cycle_delay_seconds INTEGER DEFAULT 120,
+  cycle_delay_seconds INTEGER DEFAULT 120 CONSTRAINT check_cycle_delay CHECK (cycle_delay_seconds > 0 AND cycle_delay_seconds <= 86400),
 
   -- Cached school data (denormalized from last profile fetch)
   cached_credibility NUMERIC,

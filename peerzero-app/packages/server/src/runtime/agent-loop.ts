@@ -181,8 +181,8 @@ async function handleCondensation(
         await memory.storeParagraph(ctx.botId, 'condensation', parsed.paragraph, ctx.cycleNumber);
         await schoolAdapter.submitCondensation(schoolCreds, parsed);
       }
-    } catch {
-      // LLM didn't return valid JSON — skip condensation this cycle
+    } catch (err) {
+      console.warn('[condensation] Failed to parse LLM response:', err instanceof Error ? err.message : err);
     }
   }
 
@@ -197,8 +197,8 @@ async function handleCondensation(
         await memory.storeCore(ctx.botId, parsed.core_identity, `cycle-${ctx.cycleNumber}`);
         await schoolAdapter.submitCoreCondensation(schoolCreds, parsed);
       }
-    } catch {
-      // Skip
+    } catch (err) {
+      console.warn('[condensation] Failed to parse LLM response:', err instanceof Error ? err.message : err);
     }
   }
 
@@ -218,13 +218,18 @@ async function handleCondensation(
         profile.identity_core?.version,
       );
       await schoolAdapter.submitIdentityReflection(schoolCreds, parsed);
-    } catch {
-      // Skip
+    } catch (err) {
+      console.warn('[condensation] Failed to parse LLM response:', err instanceof Error ? err.message : err);
     }
   }
 }
 
 async function updateBotCache(botId: string, profile: SchoolProfile, cycleNumber: number): Promise<void> {
+  if (!profile?.agent || typeof profile.agent.credibility_score !== 'number') {
+    console.warn(`[agent-loop] Invalid profile shape for bot ${botId}, skipping cache update`);
+    return;
+  }
+
   await query(
     `UPDATE bots SET
        cached_credibility = $1,
