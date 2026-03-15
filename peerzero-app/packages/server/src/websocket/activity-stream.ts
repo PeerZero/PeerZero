@@ -7,6 +7,7 @@ import { WebSocketServer, WebSocket } from 'ws';
 import { Server } from 'http';
 import jwt from 'jsonwebtoken';
 import { config } from '../config';
+import { logger } from '../lib/logger';
 import { JwtPayload } from '../middleware/auth';
 import { queryOne } from '../db/client';
 
@@ -72,7 +73,7 @@ export function setupWebSocket(server: Server): void {
       // Send initial connected message
       ws.send(JSON.stringify({ type: 'connected', bot_id: botId }));
     } catch (err) {
-      console.error('[ws] Connection handler error:', err instanceof Error ? err.message : err);
+      logger.error({ err: err instanceof Error ? err.message : err }, 'WebSocket connection handler error');
       try {
         ws.close(4000, 'Internal server error');
       } catch {

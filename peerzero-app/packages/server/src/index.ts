@@ -10,8 +10,9 @@ import cors from 'cors';
 import helmet from 'helmet';
 import { createServer } from 'http';
 import { config } from './config';
+import { logger } from './lib/logger';
 import { errorHandler } from './middleware/error-handler';
-import { apiLimiter } from './middleware/rate-limit';
+import { authLimiter, closeRateLimitRedis } from './middleware/rate-limit';
 import { closePool } from './db/client';
 import { startWorker, stopWorker } from './jobs/queue';
 import { setupWebSocket } from './websocket/activity-stream';
@@ -34,14 +35,15 @@ app.use(cors({
     : ['https://peerzero.science', 'https://www.peerzero.science', 'https://peer-zero.vercel.app'],
   credentials: true,
 }));
-app.use(apiLimiter);
+// Auth routes get IP-based rate limiting (unauthenticated, can't key by user)
+// Authenticated routes get per-user Redis-backed limits applied at the route level.
 
 // Raw body for Stripe webhooks (must come before express.json)
 app.use('/api/payments/webhook', express.raw({ type: 'application/json' }));
 app.use(express.json());
 
 // ── Routes ──
-app.use('/api/auth', authRoutes);
+app.use('/api/auth', authLimiter, authRoutes);
 app.use('/api/bots', botRoutes);
 app.use('/api/keys', apiKeyRoutes);
 app.use('/api/schools', schoolRoutes);
@@ -61,15 +63,14 @@ setupWebSocket(server);
 startWorker();
 
 server.listen(config.port, () => {
-  console.log(`[server] PeerZero App Server running on port ${config.port}`);
-  console.log(`[server] Environment: ${config.nodeEnv}`);
-  console.log(`[server] Real adapters: ${config.useRealAdapters}`);
+  logger.info({ port: config.port, env: config.nodeEnv, realAdapters: config.useRealAdapters }, 'PeerZero App Server started');
 });
 
 // ── Graceful shutdown ──
 async function shutdown() {
-  console.log('[server] Shutting down...');
+  logger.info('Shutting down...');
   await stopWorker();
+  await closeRateLimitRedis();
   await closePool();
   server.close();
   process.exit(0);

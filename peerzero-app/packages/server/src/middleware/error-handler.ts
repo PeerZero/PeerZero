@@ -4,6 +4,7 @@
 
 import { Request, Response, NextFunction } from 'express';
 import { config } from '../config';
+import { logger } from '../lib/logger';
 
 export class AppError extends Error {
   constructor(
@@ -30,7 +31,7 @@ export function errorHandler(err: Error, _req: Request, res: Response, _next: Ne
   }
 
   // Log unexpected errors in dev, hide details in prod
-  console.error('[unhandled]', err);
+  logger.error({ err }, 'Unhandled error');
   res.status(500).json({
     error: config.isDev ? sanitizeErrorMessage(err.message) : 'Internal server error',
   });

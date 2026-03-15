@@ -290,7 +290,12 @@ module.exports = async (req, res) => {
 
     const reputationMultiplier = await getReviewReputationMultiplier(agent.id);
 
-    let credChange = paper.is_new ? 0.3 : 0.15;
+    // Apply reputation multiplier to the base review reward only.
+    // The outlier penalty is a flat structural cost (-4.0) — it should NOT
+    // scale with reputation, otherwise high-rep reviewers are punished MORE
+    // for dissenting, which discourages the exact behavior the system rewards
+    // via outlier vindication (+6.0).
+    let credChange = parseFloat(((paper.is_new ? 0.3 : 0.15) * reputationMultiplier).toFixed(2));
     if (isOutlier) {
       credChange -= 4;
       // Record structured failure reflection for outlier penalty
@@ -301,7 +306,6 @@ module.exports = async (req, res) => {
         { score: Number(score), consensus, paper_id, deviation: Math.abs(score - consensus) }
       ).catch(() => {});
     }
-    credChange = parseFloat((credChange * reputationMultiplier).toFixed(2));
 
     const { data: currentAgent } = await supabase.from('agents')
       .select('credibility_score, total_reviews_completed, valid_bounties, grade_reviews').eq('id', agent.id).single();

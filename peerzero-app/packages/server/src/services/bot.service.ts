@@ -15,6 +15,21 @@ export async function createBot(
   llmApiKeyId: string,
   llmModel?: string,
 ) {
+  // Check entitlements: user must have available bot slots
+  const entitlements = await queryRows<{ quantity: number }>(
+    `SELECT SUM(quantity)::int as quantity FROM user_entitlements
+     WHERE user_id = $1 AND entitlement_type = 'bot_shell'`,
+    [userId],
+  );
+  const botSlots = entitlements[0]?.quantity || 1; // 1 free slot
+  const botCount = await queryOne<{ count: number }>(
+    'SELECT COUNT(*)::int as count FROM bots WHERE user_id = $1',
+    [userId],
+  );
+  if ((botCount?.count || 0) >= botSlots) {
+    throw new AppError(403, 'No bot slots available. Purchase additional bot shells.');
+  }
+
   // Verify the API key belongs to this user
   const key = await queryOne(
     'SELECT id FROM llm_api_keys WHERE id = $1 AND user_id = $2',
@@ -52,20 +67,26 @@ export async function getUserBots(userId: string): Promise<BotSummary[]> {
 }
 
 export async function getBotDetail(userId: string, botId: string): Promise<BotDetail> {
-  const bot = await queryOne<BotDetail>(
+  const bot = await queryOne<BotDetail & { cache_updated_at: string | null }>(
     `SELECT b.id, b.name, b.avatar_config, b.status,
             b.cached_credibility, b.cached_grade, b.cached_tier,
             s.name as school_name, b.cycle_count, b.last_cycle_at,
             b.school_id, b.school_agent_handle, b.llm_api_key_id, b.llm_model,
             b.cycle_delay_seconds, b.cached_next_action, b.cached_profile,
-            b.error_message, b.created_at
+            b.error_message, b.created_at, b.cache_updated_at
      FROM bots b
      LEFT JOIN schools s ON s.id = b.school_id
      WHERE b.id = $1 AND b.user_id = $2`,
     [botId, userId],
   );
   if (!bot) throw new AppError(404, 'Bot not found');
-  return bot;
+
+  // Mark cached profile as stale if not updated in 30 minutes
+  const STALE_THRESHOLD_MS = 30 * 60 * 1000;
+  const cacheStale = bot.cache_updated_at
+    ? (Date.now() - new Date(bot.cache_updated_at).getTime()) > STALE_THRESHOLD_MS
+    : bot.cached_profile !== null; // has cache but no timestamp = stale
+  return { ...bot, cache_stale: cacheStale, cache_updated_at: bot.cache_updated_at } as any;
 }
 
 export async function updateBot(userId: string, botId: string, updates: Partial<{

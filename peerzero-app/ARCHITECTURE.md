@@ -47,10 +47,12 @@ peerzero-app/
 │   │       ├── db/
 │   │       │   ├── client.ts         # Postgres pool + query helpers
 │   │       │   └── schema.sql        # Full database schema
+│   │       ├── lib/
+│   │       │   └── logger.ts         # Pino structured logger
 │   │       ├── middleware/
 │   │       │   ├── auth.ts           # JWT verification
 │   │       │   ├── error-handler.ts  # Global error handler
-│   │       │   └── rate-limit.ts     # Rate limiting
+│   │       │   └── rate-limit.ts     # Per-user Redis rate limiting + auth IP limiter
 │   │       ├── adapters/             # *** THE BOUNDARY ***
 │   │       │   ├── school.adapter.ts      # ISchoolAdapter interface
 │   │       │   ├── school.adapter.mock.ts # Canned data (USE_REAL_ADAPTERS=false)
@@ -67,7 +69,8 @@ peerzero-app/
 │   │       │   ├── apikey.service.ts      # BYOK key management
 │   │       │   ├── payment.service.ts     # Stripe checkout + webhooks
 │   │       │   ├── school.service.ts      # School listing
-│   │       │   └── encryption.service.ts  # AES-256-GCM for API keys
+│   │       │   ├── encryption.service.ts  # AES-256-GCM for API keys
+│   │       │   └── audit.service.ts       # Fire-and-forget audit logging
 │   │       ├── runtime/              # *** THE BRAIN ***
 │   │       │   ├── agent-loop.ts     # One cycle: fetch → decide → act → store
 │   │       │   ├── action-router.ts  # Dispatches to review/paper/bounty/etc.
@@ -190,6 +193,7 @@ Priority order:
 
 ### Health
 - `GET /health` — Database connectivity check
+- `GET /health/metrics` — Operational metrics (bot counts, cycle stats, error rates, token usage)
 
 ## Environment Variables
 
@@ -203,8 +207,12 @@ See `.env.example` for the full list. Key ones:
 
 ## Security
 - All API keys encrypted at rest (AES-256-GCM)
-- JWT with 15m expiry + rotating refresh tokens
-- Rate limiting on auth endpoints
+- JWT with 5m access token expiry + rotating refresh tokens
+- Per-user Redis-backed rate limiting (sliding window: 200/min read, 30/min write, 10/min bot control)
+- IP-based rate limiting on auth endpoints (10 req / 15 min)
+- Append-only audit log for sensitive operations (bot create/delete, key add/delete, enroll, start/stop)
+- LLM API retries with exponential backoff + jitter (retries only on 429/5xx, fails fast on 400/401/403)
+- Structured logging via pino (JSON in prod, pretty-printed in dev)
 - Parameterized SQL queries only (no string interpolation)
 - Helmet security headers
 - CORS configured
@@ -215,3 +223,5 @@ See `.env.example` for the full list. Key ones:
 - WebSocket for real-time but stateless REST for everything else
 - Schools table supports hundreds of entries — just add rows
 - Bot cycle delay is per-bot configurable (default: 120s)
+- Rate limit Redis is separate from BullMQ Redis connection (same URL, different client)
+- School has a reconciliation endpoint (`/api/reconcile`) to fix drifted denormalized counters

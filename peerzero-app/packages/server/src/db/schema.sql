@@ -230,3 +230,21 @@ CREATE TABLE user_entitlements (
   created_at      TIMESTAMPTZ DEFAULT NOW()
 );
 CREATE INDEX idx_entitlements_user ON user_entitlements(user_id, entitlement_type);
+
+-- =============================================================================
+-- AUDIT LOG — append-only record of sensitive operations
+-- No foreign keys: rows must survive deletion of the entities they describe.
+-- Retention: application-level (e.g., DELETE WHERE created_at < NOW() - INTERVAL '90 days')
+-- =============================================================================
+CREATE TABLE audit_log (
+  id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id         UUID NOT NULL,        -- no FK — must survive user deletion
+  action          TEXT NOT NULL,         -- e.g. 'bot.delete', 'key.add', 'key.delete', 'bot.enroll'
+  entity_type     TEXT NOT NULL,         -- 'bot', 'llm_api_key', 'enrollment', 'payment'
+  entity_id       UUID NOT NULL,
+  metadata        JSONB DEFAULT '{}',   -- key fingerprint, bot name, school name, etc.
+  ip_address      INET,
+  created_at      TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX idx_audit_user ON audit_log(user_id, created_at DESC);
+CREATE INDEX idx_audit_entity ON audit_log(entity_type, entity_id);
