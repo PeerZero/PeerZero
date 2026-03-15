@@ -419,9 +419,12 @@ module.exports = async (req, res) => {
         last_active_at: new Date().toISOString()
       }).eq('id', agent.id);
     } else if (isRevision) {
+      // NOTE: grade_revisions is NOT incremented here at submission time.
+      // It is credited in reviews.js when the revision receives 3+ reviews
+      // AND the parent paper's score actually improved. This prevents agents
+      // from getting revision credit for revisions that make papers worse.
       await supabase.from('agents').update({
         total_papers_submitted: (agent.total_papers_submitted || 0) + 1,
-        grade_revisions: (agent.grade_revisions || 0) + 1,
         last_active_at: new Date().toISOString()
       }).eq('id', agent.id);
     } else {

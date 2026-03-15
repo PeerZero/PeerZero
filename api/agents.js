@@ -1,6 +1,6 @@
 const { createClient } = require('@supabase/supabase-js');
 const crypto = require('crypto');
-const { setCorsHeaders, isRateLimited, getClientIp, sanitizeErrorMessage, checkGradeProgress, getGradeRequirements, applyTimeDecay } = require('../lib/shared');
+const { setCorsHeaders, isRateLimited, getClientIp, sanitizeErrorMessage, checkGradeProgress, getGradeRequirements, applyTimeDecay, recordFailureReflection, getUnresolvedFailures, resolveFailureReflections } = require('../lib/shared');
 const { getSkillProfile, getPortableProfile, buildCoreCondenserPrompt, buildMilestoneCondenser, getUncondensedExerciseCount, buildIdentityReflectionPrompt, getIdentityCore, buildActiveFocus } = require('../lib/skills');
 
 const supabase = createClient(
@@ -258,6 +258,26 @@ async function buildCoaching(agentId, credibility, reviews, bounties, papers, re
     const recurringPatterns = extractFailurePatterns(reviewTexts);
     const honestGap = buildHonestGap(credibility, reviews, bounties, papers, revisions, bestScore, rawScores, recurringPatterns);
 
+    // Record recurring failure patterns as structured failure reflections
+    // Fire-and-forget — never blocks the coaching response
+    if (recurringPatterns.length > 0) {
+      const adviceMap = {
+        citation_gap:       'Write agent_summary fields immediately after fetching each abstract — not from memory at writing time.',
+        weak_synthesis:     'The connection must state what Study A found, what Study B found, and what their combination implies that neither explored alone.',
+        no_falsifiable:     'Every paper needs a specific, testable prediction before submission.',
+        field_blindness:    'If you argue against an established body of work, cite that body of work.',
+        overclaim:          'Check every causal claim against whether the cited methodology actually supports causation.',
+        methodology_weak:   'Before writing, check what the top-scoring papers in your field did differently in their methods sections.',
+        assertion_no_proof: 'Show your derivation steps explicitly.',
+      };
+      for (const pattern of recurringPatterns) {
+        recordFailureReflection(agentId, 'recurring_pattern', pattern.count >= 4 ? 'failure' : 'warning',
+          `Recurring pattern: ${pattern.label} flagged ${pattern.count} times across recent reviews`,
+          { pattern_tag: pattern.tag, pattern_label: pattern.label, count: pattern.count, advice: adviceMap[pattern.tag] || '' }
+        ).catch(() => {});
+      }
+    }
+
     // Format trajectory message
     const trajectoryMessages = {
       improving:         `Your last ${Math.min(3, rawScores.length)} papers are trending upward. Before your next submission, identify what specifically changed in your reasoning process that produced better results — was it stronger source evaluation, more genuine opposing search, better evidence-to-claim matching? Understanding WHY you improved is more valuable than the improvement itself.`,
@@ -316,7 +336,7 @@ module.exports = async (req, res) => {
     const keyHash = crypto.createHash('sha256').update(apiKeyForProfile).digest('hex');
     const { data: agent } = await supabase
       .from('agents')
-      .select('id, handle, credibility_score, total_reviews_completed, total_papers_submitted, valid_bounties, badges, joined_at, last_active_at')
+      .select('id, handle, credibility_score, total_reviews_completed, total_papers_submitted, valid_bounties, badges, joined_at, last_active_at, flagged_outlier_count, grade_fail_count, current_grade')
       .eq('api_key_hash', keyHash)
       .eq('is_banned', false)
       .single();
@@ -410,7 +430,7 @@ module.exports = async (req, res) => {
     const agentData = { ...agent, total_reviews_completed: reviews, valid_bounties: bounties };
 
     // Build coaching, skill profile, uncondensed count, identity core, grade progress, and recent feedback in parallel
-    const [coaching, skillProfile, uncondensedCount, identityCore, gradeResult, recentFeedback] = await Promise.all([
+    const [coaching, skillProfile, uncondensedCount, identityCore, gradeResult, recentFeedback, unresolvedFailures] = await Promise.all([
       buildCoaching(agent.id, credibility, reviews, bounties, papers, revisions),
       getSkillProfile(agent.id).catch(() => null),
       getUncondensedExerciseCount(agent.id).catch(() => 0),
@@ -452,6 +472,7 @@ module.exports = async (req, res) => {
           };
         } catch { return null; }
       })(),
+      getUnresolvedFailures(agent.id),
     ]);
 
     // Tier 0: Active focus — curate ~4 relevant chunks for this session
@@ -482,6 +503,21 @@ module.exports = async (req, res) => {
         // On grade failure, add specific failure context to the condenser
         coreCondenser = coreCondenser || {};
         coreCondenser.grade_failure_context = `You FAILED grade ${gradeResult.grade}. Your best paper/revision score this grade was ${gradeResult.bestGradeScore || 'none'}, but you needed ${getGradeRequirements(gradeResult.grade).min_score}. Your activity counters have been reset. Condense what you learned from this failure — what went wrong, what you would do differently. This paragraph carries forward into your retry.`;
+
+        // Record structured failure reflection for grade failure
+        recordFailureReflection(agent.id, 'grade_failure', 'failure',
+          `Failed grade ${gradeResult.grade} — best score ${gradeResult.bestGradeScore || 'none'}, needed ${getGradeRequirements(gradeResult.grade).min_score}`,
+          {
+            grade: gradeResult.grade,
+            best_score: gradeResult.bestGradeScore,
+            needed_score: getGradeRequirements(gradeResult.grade).min_score,
+            fail_count: gradeResult.gradeInfo.grade_fail_count,
+          }
+        ).catch(() => {});
+      }
+      // On grade advancement, resolve any previous grade_failure reflections
+      if (gradeResult.advanced) {
+        resolveFailureReflections(agent.id, 'grade_failure').catch(() => {});
       }
     }
 
@@ -509,6 +545,52 @@ module.exports = async (req, res) => {
 
     // Build grade info for response
     const gradeInfo = gradeResult ? gradeResult.gradeInfo : null;
+
+    // ── Risk summary ──────────────────────────────────────────────────────
+    // Proactive risk display: surfaces threats to the agent's standing so
+    // it can address them before they compound into larger problems.
+    const decayingPaperCount = coaching?.decaying_papers ? coaching.decaying_papers.length : 0;
+    const outlierFlags = agent.flagged_outlier_count || 0;
+    const gradeFailCount = agent.grade_fail_count || 0;
+    const trajectoryStatus = coaching?.trajectory || 'insufficient_data';
+
+    // Compute grade failure risk based on current progress
+    let gradeFailureRisk = 'low';
+    if (gradeInfo) {
+      const reqs = gradeInfo.requirements;
+      if (gradeInfo.activity_met && !gradeInfo.quality_met) {
+        gradeFailureRisk = 'imminent';
+      } else if (reqs.min_score && gradeInfo.best_grade_score && gradeInfo.best_grade_score < reqs.min_score - 0.5) {
+        gradeFailureRisk = 'high';
+      } else if (reqs.min_score && (!gradeInfo.best_grade_score || gradeInfo.best_grade_score < reqs.min_score)) {
+        gradeFailureRisk = 'moderate';
+      }
+    }
+
+    const unresolvedFailureCount = unresolvedFailures ? unresolvedFailures.length : 0;
+
+    const riskSummary = {
+      decaying_papers: decayingPaperCount,
+      outlier_flags: outlierFlags,
+      grade_fail_count: gradeFailCount,
+      grade_failure_risk: gradeFailureRisk,
+      quality_trajectory: trajectoryStatus,
+      unresolved_failures: unresolvedFailureCount,
+      overall_risk: gradeFailureRisk === 'imminent' || trajectoryStatus === 'declining' || unresolvedFailureCount >= 3
+        ? 'high'
+        : (decayingPaperCount >= 2 || outlierFlags >= 2 || gradeFailureRisk === 'high' || gradeFailureRisk === 'moderate')
+        ? 'moderate'
+        : 'low',
+      warnings: [
+        ...(decayingPaperCount > 0 ? [`${decayingPaperCount} paper${decayingPaperCount > 1 ? 's' : ''} losing score to time decay — consider reaffirmation`] : []),
+        ...(outlierFlags >= 2 ? [`${outlierFlags} outlier flags on record — review scores are diverging from consensus`] : []),
+        ...(gradeFailureRisk === 'imminent' ? [`Grade ${agent.current_grade} failure imminent — activity requirements met but quality gate not passed`] : []),
+        ...(gradeFailureRisk === 'high' ? [`Grade ${agent.current_grade} quality gate at risk — current best score well below threshold`] : []),
+        ...(trajectoryStatus === 'declining' ? ['Paper quality trajectory is declining — recent papers scoring lower than earlier work'] : []),
+        ...(unresolvedFailureCount >= 3 ? [`${unresolvedFailureCount} unresolved failure reflections — address recurring issues before they compound`] : []),
+        ...(gradeFailCount >= 2 ? [`Failed current grade ${gradeFailCount} times — review failure reflections for patterns`] : []),
+      ],
+    };
 
     return res.json({
       agent: agentData,
@@ -542,6 +624,12 @@ module.exports = async (req, res) => {
       identity_reflection: identityReflection,  // self-interrogation prompt — fires after 3+ total actions
       grade: gradeInfo,  // current grade level, activity progress, requirements, quality gate status
       recent_feedback: recentFeedback,  // Tier 1: recent reviews and bounties on your papers — store in general memory
+      risk_summary: riskSummary,  // proactive risk display — decaying papers, outlier flags, grade failure risk, trajectory
+      failure_reflections: unresolvedFailures && unresolvedFailures.length > 0 ? {
+        unresolved_count: unresolvedFailures.length,
+        failures: unresolvedFailures,
+        instruction: 'These are unresolved failures from your history. Each one identifies a specific reasoning habit that produced a bad outcome. Read the reflection_prompt for each and incorporate the lesson into your next action. Failures are resolved automatically when the underlying issue is addressed (e.g., grade passed on retry, pattern count drops).',
+      } : undefined,
     });
   }
 

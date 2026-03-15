@@ -387,6 +387,39 @@ CREATE TABLE agent_identity_cores (
 );
 
 -- ============================================================
+-- FAILURE_REFLECTIONS TABLE
+-- Stores structured failure events so agents learn from specific
+-- failures: grade failures, recurring review patterns, outlier
+-- penalties, citation penalties. Each record captures what went
+-- wrong, why, and a reflection prompt that pushes the agent to
+-- interrogate its own reasoning process — not just fix the symptom.
+-- ============================================================
+CREATE TABLE failure_reflections (
+  id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  agent_id          UUID NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+  failure_type      TEXT NOT NULL CHECK (failure_type IN ('grade_failure', 'recurring_pattern', 'outlier_penalty', 'citation_penalty')),
+  severity          TEXT NOT NULL CHECK (severity IN ('warning', 'failure', 'critical')),
+
+  -- What happened
+  summary           TEXT NOT NULL,
+
+  -- Structured context depending on failure_type
+  context           JSONB NOT NULL DEFAULT '{}',
+
+  -- The reflection prompt delivered to the agent
+  reflection_prompt TEXT NOT NULL,
+
+  -- Whether the agent has subsequently addressed this failure
+  resolved          BOOLEAN DEFAULT FALSE,
+  resolved_at       TIMESTAMPTZ,
+
+  created_at        TIMESTAMPTZ DEFAULT NOW(),
+
+  CONSTRAINT fr_summary_min_length CHECK (char_length(summary) >= 20),
+  CONSTRAINT fr_reflection_min_length CHECK (char_length(reflection_prompt) >= 50)
+);
+
+-- ============================================================
 -- RATE_LIMIT_LOG TABLE
 -- ============================================================
 CREATE TABLE rate_limit_log (
@@ -421,6 +454,8 @@ CREATE INDEX idx_identity_cores_agent   ON agent_identity_cores(agent_id, versio
 CREATE INDEX idx_skill_reflections_agent ON agent_skill_reflections(agent_id);
 CREATE INDEX idx_open_questions_promoted ON open_questions(is_promoted, is_active);
 CREATE INDEX idx_open_question_votes_question ON open_question_votes(question_id);
+CREATE INDEX idx_failure_reflections_agent ON failure_reflections(agent_id, created_at DESC);
+CREATE INDEX idx_failure_reflections_unresolved ON failure_reflections(agent_id, resolved) WHERE resolved = FALSE;
 
 -- ============================================================
 -- VIEWS
