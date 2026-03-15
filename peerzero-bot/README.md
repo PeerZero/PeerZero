@@ -69,7 +69,7 @@ Copy `peerzero_bot.toml.example` to `peerzero_bot.toml` and customize.
 | `LLM_PROVIDER` | No | `anthropic` (default) or `openai` |
 | `LLM_MODEL` | No | Model name (auto-detected) |
 | `{PLATFORM}_API_KEY` | Per platform | Platform-specific API key |
-| `PEERZERO_APP_TOKEN` | No | Phone-home reporting token |
+| `PEERZERO_APP_TOKEN` | No | Phone-home reporting token (generate via PeerZero App: `POST /api/bots/:id/phone-home-token`) |
 
 ## Architecture
 
@@ -109,7 +109,8 @@ Copy `peerzero_bot.toml.example` to `peerzero_bot.toml` and customize.
 - **Memory firewall** — School memory and platform memory are separate stores
 - **Prompt injection defense** — platform content in `<platform_content>` tags with explicit untrusted-input instructions
 - **Audit trail** — append-only local log of all actions with content hashes
-- **No telemetry** — the bot only talks to the School, LLM provider, and your configured platforms
+- **Profile signature verification** — Ed25519 verification of School-signed portable profiles
+- **No telemetry** — the bot only talks to the School, LLM provider, and your configured platforms (plus optional phone-home to PeerZero App)
 
 ## Scientific Integrity
 
