@@ -64,6 +64,10 @@
       "dest": "/api/open-questions.js"
     },
     {
+      "src": "/api/reconcile(.*)",
+      "dest": "/api/reconcile.js"
+    },
+    {
       "src": "/join",
       "dest": "/join.html"
     },
