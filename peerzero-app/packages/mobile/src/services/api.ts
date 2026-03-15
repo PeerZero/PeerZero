@@ -214,4 +214,10 @@ export const payments = {
 
   checkout: (productId: string, metadata?: Record<string, string>) =>
     apiFetch('/payments/checkout', { method: 'POST', body: JSON.stringify({ product_id: productId, metadata }) }),
+
+  gradeCheckout: (botId: string) =>
+    apiFetch<{ session_url: string }>('/payments/grade-checkout', { method: 'POST', body: JSON.stringify({ bot_id: botId }) }),
+
+  gradeStatus: (botId: string) =>
+    apiFetch<{ unlocked_grades: number[]; highest_unlocked: number }>(`/payments/grade-status/${botId}`),
 };

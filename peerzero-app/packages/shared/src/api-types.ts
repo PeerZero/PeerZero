@@ -77,6 +77,10 @@ export interface BotDetail extends BotSummary {
   cache_updated_at: string | null;
   error_message: string | null;
   created_at: string;
+  // Grade unlock info
+  highest_unlocked_grade: number;
+  grade_payment_required: boolean;
+  next_grade_price_cents: number | null;
 }
 
 // ── Memory ──
@@ -197,9 +201,19 @@ export interface CheckoutResponse {
 export interface ProductInfo {
   id: string;
   name: string;
-  type: 'bot_shell' | 'school_enrollment' | 'feature';
+  type: 'bot_shell' | 'school_enrollment' | 'grade_advancement' | 'feature';
   price_cents: number;
   description: string | null;
+}
+
+// ── Grade Advancement ──
+export interface GradeCheckoutRequest {
+  bot_id: string;
+}
+
+export interface GradeStatusResponse {
+  unlocked_grades: number[];
+  highest_unlocked: number;
 }
 
 // ── Push Notifications ──

@@ -8,7 +8,7 @@ import { AppError } from '../middleware/error-handler';
 import { encrypt, decrypt } from './encryption.service';
 import { getSchoolAdapter } from '../adapters/adapter.factory';
 import type { BotSummary, BotDetail } from '@peerzero/shared';
-import { SUPPORTED_MODEL_IDS, sanitizeAvatarConfig } from '@peerzero/shared';
+import { SUPPORTED_MODEL_IDS, sanitizeAvatarConfig, getGradePriceCents } from '@peerzero/shared';
 
 export async function createBot(
   userId: string,
@@ -89,7 +89,24 @@ export async function getBotDetail(userId: string, botId: string): Promise<BotDe
   const cacheStale = bot.cache_updated_at
     ? (Date.now() - new Date(bot.cache_updated_at).getTime()) > STALE_THRESHOLD_MS
     : bot.cached_profile !== null; // has cache but no timestamp = stale
-  return { ...bot, cache_stale: cacheStale, cache_updated_at: bot.cache_updated_at } as any;
+
+  // Grade unlock info
+  const { getHighestUnlockedGrade } = await import('./payment.service');
+  const highestUnlocked = await getHighestUnlockedGrade(botId);
+  const currentGrade = (bot as any).cached_grade || 1;
+  const gradePaymentRequired = currentGrade > highestUnlocked;
+  const nextGradePriceCents = gradePaymentRequired
+    ? getGradePriceCents(currentGrade)
+    : (highestUnlocked < currentGrade + 1 ? getGradePriceCents(currentGrade + 1) : null);
+
+  return {
+    ...bot,
+    cache_stale: cacheStale,
+    cache_updated_at: bot.cache_updated_at,
+    highest_unlocked_grade: highestUnlocked,
+    grade_payment_required: gradePaymentRequired,
+    next_grade_price_cents: nextGradePriceCents,
+  } as any;
 }
 
 export async function updateBot(userId: string, botId: string, updates: Partial<{
@@ -183,6 +200,10 @@ export async function enrollBotInSchool(userId: string, botId: string, schoolId:
     [botId, schoolId, 'registered'],
   );
 
+  // Auto-unlock grade 1 (free with enrollment)
+  const { unlockGradeOne } = await import('./payment.service');
+  await unlockGradeOne(botId);
+
   return { handle, schoolSlug: school.slug };
 }
 
@@ -205,6 +226,18 @@ export async function generatePhoneHomeToken(userId: string, botId: string): Pro
   );
 
   return token;
+}
+
+/**
+ * Check if a bot has unlocked a specific grade.
+ * Used by the agent loop to gate grade advancement on payment.
+ */
+export async function isBotGradeUnlocked(botId: string, grade: number): Promise<boolean> {
+  const result = await queryOne(
+    'SELECT id FROM grade_unlocks WHERE bot_id = $1 AND grade = $2',
+    [botId, grade],
+  );
+  return !!result;
 }
 
 const VALID_STATUSES = ['stopped', 'running', 'paused', 'error'] as const;

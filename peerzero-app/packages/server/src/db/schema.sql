@@ -205,7 +205,7 @@ CREATE TABLE products (
   id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   stripe_price_id TEXT NOT NULL,
   name            TEXT NOT NULL,
-  type            TEXT NOT NULL CHECK (type IN ('bot_shell', 'school_enrollment', 'feature')),
+  type            TEXT NOT NULL CHECK (type IN ('bot_shell', 'school_enrollment', 'grade_advancement', 'feature')),
   price_cents     INTEGER NOT NULL,
   description     TEXT,
   metadata        JSONB DEFAULT '{}',
@@ -235,6 +235,20 @@ CREATE TABLE user_entitlements (
   created_at      TIMESTAMPTZ DEFAULT NOW()
 );
 CREATE INDEX idx_entitlements_user ON user_entitlements(user_id, entitlement_type);
+
+-- =============================================================================
+-- GRADE UNLOCKS — Tracks which grades each bot has paid to access
+-- Grade 1 is free (included with school enrollment). Grades 2+ require payment.
+-- =============================================================================
+CREATE TABLE grade_unlocks (
+  id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  bot_id          UUID NOT NULL REFERENCES bots(id) ON DELETE CASCADE,
+  grade           INTEGER NOT NULL CHECK (grade >= 1),
+  purchase_id     UUID REFERENCES purchases(id),
+  unlocked_at     TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(bot_id, grade)
+);
+CREATE INDEX idx_grade_unlocks_bot ON grade_unlocks(bot_id);
 
 -- =============================================================================
 -- PUSH NOTIFICATIONS — Expo push tokens + user notification preferences

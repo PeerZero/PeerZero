@@ -182,6 +182,42 @@ export const NOTIFICATION_LABELS: Record<NotificationType, { title: string; desc
   hunger_reminder: { title: 'Learning Reminders', description: 'Occasional gentle nudge when your bot hasn\'t learned in a while' },
 };
 
+// ── Grade Pricing (Tiered Pay-Per-Grade) ──
+// Each grade costs a bit more than the last, totaling ~$40 through graduation (grade 12).
+// Post-graduation grades (13+) are a flat rate.
+export const GRADE_PRICES_CENTS: Record<number, number> = {
+  1: 150,   // $1.50
+  2: 175,   // $1.75
+  3: 200,   // $2.00
+  4: 250,   // $2.50
+  5: 275,   // $2.75
+  6: 300,   // $3.00
+  7: 325,   // $3.25
+  8: 350,   // $3.50
+  9: 375,   // $3.75
+  10: 400,  // $4.00
+  11: 425,  // $4.25
+  12: 575,  // $5.75
+};
+
+// Flat rate per grade after graduation
+export const POST_GRADUATION_PRICE_CENTS = 400; // $4.00
+
+// Total cost through graduation: $38.00
+export const GRADUATION_GRADE = 12;
+
+/** Get the price in cents for a given grade level */
+export function getGradePriceCents(grade: number): number {
+  if (grade <= 0) return 0;
+  return GRADE_PRICES_CENTS[grade] ?? POST_GRADUATION_PRICE_CENTS;
+}
+
+/** Get formatted price string for a grade */
+export function getGradePriceDisplay(grade: number): string {
+  const cents = getGradePriceCents(grade);
+  return `$${(cents / 100).toFixed(2)}`;
+}
+
 // Memory tier labels (for UI display)
 export const MEMORY_TIER_LABELS = {
   0: 'Active Focus',

@@ -7,13 +7,14 @@ import React, { useState, useCallback } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert, ActivityIndicator } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import Slider from '@react-native-community/slider';
-import { bots as botsApi } from '../services/api';
+import { bots as botsApi, payments as paymentsApi } from '../services/api';
 import { useBotStream } from '../hooks/useBotStream';
 import { colors } from '../theme/colors';
 import { spacing, fontSize, borderRadius } from '../theme/spacing';
 import BotAvatar from '../components/BotAvatar';
+import { Linking } from 'react-native';
 import type { BotDetail } from '@peerzero/shared';
-import { credibilityToStage, calculateHunger } from '@peerzero/shared';
+import { credibilityToStage, calculateHunger, getGradePriceDisplay } from '@peerzero/shared';
 
 // Logarithmic scale helpers for 1s–86400s range
 // Slider value 0–1 maps to seconds via exponential curve
@@ -83,6 +84,17 @@ export default function BotScreen({ route, navigation }: any) {
     try {
       await botsApi.start(botId);
       await loadBot();
+    } catch (err: any) {
+      Alert.alert('Error', err.message);
+    }
+  };
+
+  const handleGradeUnlock = async () => {
+    try {
+      const result = await paymentsApi.gradeCheckout(botId) as { session_url: string };
+      if (result.session_url) {
+        await Linking.openURL(result.session_url);
+      }
     } catch (err: any) {
       Alert.alert('Error', err.message);
     }
@@ -180,6 +192,23 @@ export default function BotScreen({ route, navigation }: any) {
       {!isError && bot.error_message && (
         <View style={styles.errorBox}>
           <Text style={styles.errorText}>{bot.error_message}</Text>
+        </View>
+      )}
+
+      {/* Grade unlock prompt */}
+      {bot.grade_payment_required && (
+        <View style={styles.gradeUnlockBox}>
+          <Text style={styles.gradeUnlockTitle}>
+            Grade {bot.cached_grade} Unlocked!
+          </Text>
+          <Text style={styles.gradeUnlockText}>
+            Your bot is ready to advance. Unlock the next grade to continue learning.
+          </Text>
+          <TouchableOpacity style={styles.gradeUnlockButton} onPress={handleGradeUnlock}>
+            <Text style={styles.gradeUnlockButtonText}>
+              Unlock Grade {bot.cached_grade} — {bot.next_grade_price_cents != null ? getGradePriceDisplay(bot.cached_grade || 1) : '$4.00'}
+            </Text>
+          </TouchableOpacity>
         </View>
       )}
 
@@ -287,6 +316,18 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.sm, alignSelf: 'flex-start', marginTop: spacing.md,
   },
   retryButtonText: { color: '#fff', fontWeight: '600', fontSize: fontSize.sm },
+  gradeUnlockBox: {
+    backgroundColor: colors.accent.primary + '15', padding: spacing.md,
+    borderRadius: borderRadius.md, marginTop: spacing.lg, width: '100%',
+    borderWidth: 1, borderColor: colors.accent.primary + '40',
+  },
+  gradeUnlockTitle: { fontSize: fontSize.md, fontWeight: '700', color: colors.accent.primary, marginBottom: spacing.xs },
+  gradeUnlockText: { color: colors.text.secondary, fontSize: fontSize.sm, marginBottom: spacing.md },
+  gradeUnlockButton: {
+    backgroundColor: colors.accent.primary, paddingVertical: spacing.sm, paddingHorizontal: spacing.lg,
+    borderRadius: borderRadius.sm, alignSelf: 'center',
+  },
+  gradeUnlockButtonText: { color: '#fff', fontWeight: '600', fontSize: fontSize.md },
   nextAction: { color: colors.text.secondary, fontSize: fontSize.sm, marginTop: spacing.md, textAlign: 'center' },
   delaySection: { width: '100%', marginTop: spacing.lg },
   delayLabel: { fontSize: fontSize.sm, color: colors.text.secondary, textAlign: 'center' },

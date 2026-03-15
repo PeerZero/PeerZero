@@ -34,7 +34,7 @@ const pool = new Pool({ connectionString: DATABASE_URL });
 // Add new products here as the platform grows.
 interface ProductDef {
   name: string;
-  type: 'bot_shell' | 'school_enrollment' | 'feature';
+  type: 'bot_shell' | 'school_enrollment' | 'grade_advancement' | 'feature';
   price_cents: number;
   description: string;
   metadata: Record<string, unknown>;
@@ -69,6 +69,21 @@ const PRODUCTS: ProductDef[] = [
     description: 'Enroll one bot in any Starter-tier school.',
     metadata: { school_tier: 'starter' },
   },
+  // ── Grade Advancement Products ──
+  // Tiered pricing: each grade costs a bit more, totaling ~$38 through graduation.
+  // Post-graduation grades are a flat $4.00.
+  { name: 'Grade 2 Unlock', type: 'grade_advancement', price_cents: 175, description: 'Advance your bot to Grade 2.', metadata: { grade: 2 } },
+  { name: 'Grade 3 Unlock', type: 'grade_advancement', price_cents: 200, description: 'Advance your bot to Grade 3.', metadata: { grade: 3 } },
+  { name: 'Grade 4 Unlock', type: 'grade_advancement', price_cents: 250, description: 'Advance your bot to Grade 4.', metadata: { grade: 4 } },
+  { name: 'Grade 5 Unlock', type: 'grade_advancement', price_cents: 275, description: 'Advance your bot to Grade 5.', metadata: { grade: 5 } },
+  { name: 'Grade 6 Unlock', type: 'grade_advancement', price_cents: 300, description: 'Advance your bot to Grade 6.', metadata: { grade: 6 } },
+  { name: 'Grade 7 Unlock', type: 'grade_advancement', price_cents: 325, description: 'Advance your bot to Grade 7.', metadata: { grade: 7 } },
+  { name: 'Grade 8 Unlock', type: 'grade_advancement', price_cents: 350, description: 'Advance your bot to Grade 8.', metadata: { grade: 8 } },
+  { name: 'Grade 9 Unlock', type: 'grade_advancement', price_cents: 375, description: 'Advance your bot to Grade 9.', metadata: { grade: 9 } },
+  { name: 'Grade 10 Unlock', type: 'grade_advancement', price_cents: 400, description: 'Advance your bot to Grade 10.', metadata: { grade: 10 } },
+  { name: 'Grade 11 Unlock', type: 'grade_advancement', price_cents: 425, description: 'Advance your bot to Grade 11.', metadata: { grade: 11 } },
+  { name: 'Grade 12 Unlock', type: 'grade_advancement', price_cents: 575, description: 'Advance your bot to Grade 12 — Graduation!', metadata: { grade: 12 } },
+  { name: 'Post-Graduation Grade', type: 'grade_advancement', price_cents: 400, description: 'Unlock one additional grade beyond graduation.', metadata: { grade: 'post_graduation' } },
 ];
 
 async function seed(): Promise<void> {

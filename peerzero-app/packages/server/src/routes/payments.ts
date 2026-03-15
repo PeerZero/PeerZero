@@ -25,6 +25,24 @@ router.post('/checkout', requireAuth, async (req: Request, res: Response) => {
   res.json(result);
 });
 
+// Authenticated: create grade advancement checkout for a bot
+router.post('/grade-checkout', requireAuth, async (req: Request, res: Response) => {
+  const { bot_id } = req.body;
+  if (!bot_id) {
+    res.status(400).json({ error: 'bot_id required' });
+    return;
+  }
+  const result = await paymentService.createGradeCheckout(req.user!.userId, bot_id);
+  res.json(result);
+});
+
+// Authenticated: get grade unlock status for a bot
+router.get('/grade-status/:botId', requireAuth, async (req: Request, res: Response) => {
+  const grades = await paymentService.getUnlockedGrades(req.params.botId);
+  const highest = grades.length > 0 ? Math.max(...grades) : 0;
+  res.json({ unlocked_grades: grades, highest_unlocked: highest });
+});
+
 // Stripe webhook (raw body required — handled in index.ts)
 router.post('/webhook', async (req: Request, res: Response) => {
   const signature = req.headers['stripe-signature'] as string;
