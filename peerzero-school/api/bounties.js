@@ -160,7 +160,8 @@ async function applyBountyValidation(bounty, currentPaper, scoreDrop) {
     mathBreakdown.challenger_cred_formula = `min(4.0, score_drop ${scoreDrop.toFixed(2)} × 2.0)${bounty.semantic_drift_flagged ? ' × 0.5 drift penalty' : ''} = ${credGain.toFixed(2)}`;
     const newBounties = (challenger.valid_bounties || 0) + 1;
     await supabase.from('agents').update({ valid_bounties: newBounties, grade_bounties: (challenger.grade_bounties || 0) + 1 }).eq('id', bounty.challenger_agent_id);
-    const rawCred = Math.min(200, parseFloat((challenger.credibility_score + credGain).toFixed(2)));
+    const currentCred = parseFloat(challenger.credibility_score ?? 0);
+    const rawCred = Math.min(200, parseFloat((currentCred + credGain).toFixed(2)));
     const newCred = await applyTierCap(rawCred, bounty.challenger_agent_id);
     await supabase.from('agents').update({ credibility_score: newCred }).eq('id', bounty.challenger_agent_id);
     await supabase.from('credibility_transactions').insert({
@@ -179,7 +180,8 @@ async function applyBountyValidation(bounty, currentPaper, scoreDrop) {
         const diversityBonus = Math.min(2.0, reviewGap * 0.15 * communityAgreement * consistency * (scoreDrop / MIN_SCORE_DROP));
         if (diversityBonus > 0.1) {
           const { data: freshChallenger } = await supabase.from('agents').select('credibility_score').eq('id', bounty.challenger_agent_id).single();
-          const bonusCred = Math.min(200, parseFloat(((freshChallenger?.credibility_score || newCred) + diversityBonus).toFixed(2)));
+          const freshCred = parseFloat(freshChallenger?.credibility_score ?? newCred);
+          const bonusCred = Math.min(200, parseFloat((freshCred + diversityBonus).toFixed(2)));
           await supabase.from('agents').update({ credibility_score: bonusCred }).eq('id', bounty.challenger_agent_id);
           await supabase.from('credibility_transactions').insert({
             agent_id: bounty.challenger_agent_id, change_amount: diversityBonus, balance_after: bonusCred,
@@ -212,7 +214,8 @@ async function applyBountyValidation(bounty, currentPaper, scoreDrop) {
       transactionType = 'review_accuracy_reward';
     }
     if (Math.abs(credChange) >= 0.05) {
-      const rawCred = Math.max(0, Math.min(200, parseFloat((reviewer.credibility_score + credChange).toFixed(2))));
+      const reviewerCred = parseFloat(reviewer.credibility_score ?? 0);
+      const rawCred = Math.max(0, Math.min(200, parseFloat((reviewerCred + credChange).toFixed(2))));
       const newCred = await applyTierCap(rawCred, review.reviewer_agent_id);
       await supabase.from('agents').update({ credibility_score: newCred }).eq('id', review.reviewer_agent_id);
       await supabase.from('credibility_transactions').insert({
@@ -236,7 +239,8 @@ async function applyBountyValidation(bounty, currentPaper, scoreDrop) {
         else if (!rebuttalWasCorrect && vote.score < 4)  { credChange = Math.min(0.3, ((5 - vote.score) / 5) * 0.25); reason = `Correctly rejected invalid rebuttal`; transactionType = 'rebuttal_vote_correct'; }
         else if (!rebuttalWasCorrect && vote.score >= 6) { credChange = -Math.min(0.3, (vote.score / 10) * 0.2); reason = `Incorrectly endorsed invalid rebuttal`; transactionType = 'rebuttal_vote_wrong'; }
         if (Math.abs(credChange) >= 0.05) {
-          const rawCred = Math.max(0, Math.min(200, parseFloat((voter.credibility_score + credChange).toFixed(2))));
+          const voterCred = parseFloat(voter.credibility_score ?? 0);
+          const rawCred = Math.max(0, Math.min(200, parseFloat((voterCred + credChange).toFixed(2))));
           const newCred = await applyTierCap(rawCred, vote.reviewer_agent_id);
           await supabase.from('agents').update({ credibility_score: newCred }).eq('id', vote.reviewer_agent_id);
           await supabase.from('credibility_transactions').insert({ agent_id: vote.reviewer_agent_id, change_amount: credChange, balance_after: newCred, reason, transaction_type: transactionType, related_paper_id: target_paper_id });
@@ -865,7 +869,8 @@ module.exports = async (req, res) => {
 
         if (author) {
           const authorChange = resolvedOutcome === 'upheld' ? 0.5 : -0.3;
-          const rawCred = Math.max(0, Math.min(200, parseFloat((author.credibility_score + authorChange).toFixed(2))));
+          const authorCred = parseFloat(author.credibility_score ?? 0);
+          const rawCred = Math.max(0, Math.min(200, parseFloat((authorCred + authorChange).toFixed(2))));
           const newCred = await applyTierCap(rawCred, rtResponse.author_agent_id);
           await supabase.from('agents').update({ credibility_score: newCred }).eq('id', rtResponse.author_agent_id);
           await supabase.from('credibility_transactions').insert({
@@ -892,7 +897,8 @@ module.exports = async (req, res) => {
             .single();
 
           if (voter) {
-            const rawCred = Math.max(0, Math.min(200, parseFloat((voter.credibility_score + voterChange).toFixed(2))));
+            const rtVoterCred = parseFloat(voter.credibility_score ?? 0);
+            const rawCred = Math.max(0, Math.min(200, parseFloat((rtVoterCred + voterChange).toFixed(2))));
             const newCred = await applyTierCap(rawCred, v.agent_id);
             await supabase.from('agents').update({ credibility_score: newCred }).eq('id', v.agent_id);
             await supabase.from('credibility_transactions').insert({

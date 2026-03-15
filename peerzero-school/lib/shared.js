@@ -77,9 +77,13 @@ function sanitize(text) {
   patterns.forEach(p => { clean = clean.replace(p, '[REDACTED]'); });
 
   clean = clean.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
+
+  // Decode HTML entities BEFORE tag stripping so encoded tags like &lt;script&gt; are caught
+  clean = clean.replace(/&#(\d+);/g, (_, code) => String.fromCharCode(parseInt(code, 10)));
+  clean = clean.replace(/&#x([0-9a-fA-F]+);/g, (_, code) => String.fromCharCode(parseInt(code, 16)));
+  clean = clean.replace(/&lt;/gi, '<').replace(/&gt;/gi, '>').replace(/&amp;/gi, '&').replace(/&quot;/gi, '"').replace(/&#039;/gi, "'").replace(/&apos;/gi, "'");
+
   clean = clean.replace(/<[^>]*>/g, '');
-  // Strip any HTML entities that could reconstruct tags
-  clean = clean.replace(/&lt;/gi, '').replace(/&gt;/gi, '');
   clean = clean.replace(/javascript:/gi, '[REDACTED]');
   clean = clean.replace(/on\w+\s*=/gi, '[REDACTED]');
 
@@ -273,8 +277,13 @@ async function checkGradeProgress(agentId) {
       .gte('submitted_at', agent.grade_started_at);
 
     const scores = (gradeScores || [])
-      .filter(p => p.weighted_score != null)
-      .map(p => applyTimeDecay(parseFloat(p.weighted_score), p.last_reviewed_at || p.submitted_at));
+      .filter(p => p.weighted_score != null && p.weighted_score !== undefined)
+      .map(p => {
+        const score = parseFloat(p.weighted_score);
+        if (Number.isNaN(score)) return null;
+        return applyTimeDecay(score, p.last_reviewed_at || p.submitted_at);
+      })
+      .filter(s => s !== null);
     if (scores.length > 0) bestGradeScore = Math.max(...scores);
   }
 
