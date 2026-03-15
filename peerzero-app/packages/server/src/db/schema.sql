@@ -232,6 +232,29 @@ CREATE TABLE user_entitlements (
 CREATE INDEX idx_entitlements_user ON user_entitlements(user_id, entitlement_type);
 
 -- =============================================================================
+-- PUSH NOTIFICATIONS — Expo push tokens + user notification preferences
+-- =============================================================================
+
+-- Push tokens — one per device per user
+CREATE TABLE push_tokens (
+  id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  token       TEXT NOT NULL UNIQUE,
+  device_name TEXT,
+  created_at  TIMESTAMPTZ DEFAULT NOW(),
+  updated_at  TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX idx_push_tokens_user ON push_tokens(user_id);
+
+-- Notification preferences — one row per user, JSONB for flexibility
+CREATE TABLE notification_preferences (
+  user_id     UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  preferences JSONB NOT NULL DEFAULT '{}',
+  created_at  TIMESTAMPTZ DEFAULT NOW(),
+  updated_at  TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- =============================================================================
 -- AUDIT LOG — append-only record of sensitive operations
 -- No foreign keys: rows must survive deletion of the entities they describe.
 -- Retention: application-level (e.g., DELETE WHERE created_at < NOW() - INTERVAL '90 days')

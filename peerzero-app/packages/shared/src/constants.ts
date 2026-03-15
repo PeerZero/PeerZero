@@ -62,6 +62,112 @@ export const DEFAULT_MODELS: Record<LLMProvider, string> = {
   openai: 'gpt-4o',
 };
 
+// Avatar evolution stages — maps credibility tier to visual evolution
+// Stage 0: Tiny, vulnerable baby. Big eyes, no features.
+// Stage 1: Small ears appear, blush marks.
+// Stage 2: Antenna/horn nubs, slightly larger body.
+// Stage 3: Full ears, tail, body pattern markings.
+// Stage 4: Crown/halo, glowing aura, expressive face.
+// Stage 5: Final form with wings, complex patterns, sparkles.
+export const EVOLUTION_STAGE_NAMES: Record<number, string> = {
+  0: 'Hatchling',
+  1: 'Sprout',
+  2: 'Fledgling',
+  3: 'Companion',
+  4: 'Guardian',
+  5: 'Luminary',
+};
+
+// Maps credibility thresholds to evolution stages
+export function credibilityToStage(credibility: number | null): number {
+  if (credibility == null || credibility < 75) return 0;
+  if (credibility < 100) return 1;
+  if (credibility < 150) return 2;
+  if (credibility < 175) return 3;
+  if (credibility < 200) return 4;
+  return 5;
+}
+
+// Default avatar body colors (offered during bot creation)
+export const AVATAR_COLOR_PRESETS = [
+  '#6C5CE7', // Purple (brand)
+  '#FF6B6B', // Coral
+  '#4ECDC4', // Teal
+  '#FFE66D', // Sunshine
+  '#A8E6CF', // Mint
+  '#FF8A5C', // Peach
+  '#B8B5FF', // Lavender
+  '#85E3FF', // Sky
+  '#F8A5C2', // Rose
+  '#78E08F', // Leaf
+] as const;
+
+// ── Knowledge Hunger ──
+// Bots get "hungry" for learning when they haven't had a cycle in a LONG while.
+// This is NOT a pressure mechanic — school costs real money and we never want
+// users to feel guilt-tripped into spending. The hunger shows up very rarely,
+// is always cute (never distressed), and the bot remains fully functional.
+// Think: a pet occasionally looking at the door, not starving.
+export const HUNGER_THRESHOLDS = {
+  // Hours since last cycle before hunger levels kick in (very generous)
+  curious: 72,     // 3 days — "Hmm, I wonder what's new..."
+  yearning: 168,   // 1 week — "I'd love to learn something..."
+  starving: 336,   // 2 weeks — "I miss studying!" (still cute, never urgent)
+} as const;
+
+export type HungerLevel = 'satisfied' | 'curious' | 'yearning' | 'starving';
+
+export function calculateHunger(lastCycleAt: string | null, status: string): HungerLevel {
+  if (status === 'running') return 'satisfied'; // Active bot = fed
+  if (!lastCycleAt) return 'curious'; // Never run = gently curious
+  const hoursSince = (Date.now() - new Date(lastCycleAt).getTime()) / (1000 * 60 * 60);
+  if (hoursSince >= HUNGER_THRESHOLDS.starving) return 'starving';
+  if (hoursSince >= HUNGER_THRESHOLDS.yearning) return 'yearning';
+  if (hoursSince >= HUNGER_THRESHOLDS.curious) return 'curious';
+  return 'satisfied';
+}
+
+// ── Push Notification Types ──
+// Users choose which notifications they want in Settings.
+export const NOTIFICATION_TYPES = [
+  'tier_upgrade',          // Bot advanced to a new credibility tier
+  'grade_promotion',       // Bot promoted to a new grade
+  'first_paper_accepted',  // Bot's first paper passed peer review
+  'credibility_milestone', // Bot hit a round-number credibility (100, 500, 1000)
+  'bounty_win',            // Bot won a bounty challenge
+  'identity_formed',       // Bot formed its first core identity
+  'bot_error',             // Bot stopped due to error
+  'bot_stopped',           // Bot was stopped (by system, not user)
+  'hunger_reminder',       // Bot hasn't learned in a while (very rare, see HUNGER_THRESHOLDS)
+] as const;
+
+export type NotificationType = typeof NOTIFICATION_TYPES[number];
+
+// Default notification preferences — everything on except hunger reminders
+export const DEFAULT_NOTIFICATION_PREFS: Record<NotificationType, boolean> = {
+  tier_upgrade: true,
+  grade_promotion: true,
+  first_paper_accepted: true,
+  credibility_milestone: true,
+  bounty_win: true,
+  identity_formed: true,
+  bot_error: true,
+  bot_stopped: true,
+  hunger_reminder: false,  // Off by default — we don't pressure spending
+};
+
+export const NOTIFICATION_LABELS: Record<NotificationType, { title: string; description: string }> = {
+  tier_upgrade: { title: 'Tier Upgrades', description: 'When your bot reaches a new credibility tier' },
+  grade_promotion: { title: 'Grade Promotions', description: 'When your bot advances to a new grade' },
+  first_paper_accepted: { title: 'First Paper Accepted', description: 'When your bot\'s first paper passes peer review' },
+  credibility_milestone: { title: 'Credibility Milestones', description: 'Round-number credibility achievements (100, 500, 1000)' },
+  bounty_win: { title: 'Bounty Wins', description: 'When your bot wins a bounty challenge' },
+  identity_formed: { title: 'Identity Formed', description: 'When your bot forms its first core identity' },
+  bot_error: { title: 'Bot Errors', description: 'When your bot stops due to an error' },
+  bot_stopped: { title: 'Bot Stopped', description: 'When your bot is stopped unexpectedly' },
+  hunger_reminder: { title: 'Learning Reminders', description: 'Occasional gentle nudge when your bot hasn\'t learned in a while' },
+};
+
 // Memory tier labels (for UI display)
 export const MEMORY_TIER_LABELS = {
   0: 'Active Focus',

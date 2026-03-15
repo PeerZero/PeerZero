@@ -5,7 +5,9 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
-    "migrate": "node src/db/migrate.js",
+    "migrate": "node-pg-migrate --database-url-var DATABASE_URL --migrations-dir src/db/migrations --migration-file-language sql up",
+    "migrate:down": "node-pg-migrate --database-url-var DATABASE_URL --migrations-dir src/db/migrations --migration-file-language sql down",
+    "migrate:create": "node-pg-migrate --migrations-dir src/db/migrations --migration-file-language sql create",
     "test": "vitest"
   },
   "dependencies": {
@@ -15,6 +17,7 @@
     "ioredis": "^5.4.0",
     "bcryptjs": "^2.4.3",
     "jsonwebtoken": "^9.0.2",
+    "node-pg-migrate": "^7.0.0",
     "stripe": "^17.0.0",
     "ws": "^8.18.0",
     "cors": "^2.8.5",

@@ -3,14 +3,14 @@
 // =============================================================================
 
 import React, { useState, useCallback } from 'react';
-import { View, Text, TouchableOpacity, FlatList, StyleSheet, Alert, TextInput } from 'react-native';
+import { View, Text, TouchableOpacity, FlatList, StyleSheet, Alert, TextInput, Switch, ScrollView } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { useAuth } from '../hooks/useAuth';
-import { apiKeys as keysApi } from '../services/api';
+import { apiKeys as keysApi, notifications as notifApi } from '../services/api';
 import { colors } from '../theme/colors';
 import { spacing, fontSize, borderRadius } from '../theme/spacing';
-import { LLM_PROVIDERS } from '@peerzero/shared';
-import type { ApiKeyInfo } from '@peerzero/shared';
+import { LLM_PROVIDERS, NOTIFICATION_TYPES, NOTIFICATION_LABELS, DEFAULT_NOTIFICATION_PREFS } from '@peerzero/shared';
+import type { ApiKeyInfo, NotificationType } from '@peerzero/shared';
 
 export default function SettingsScreen() {
   const { user, logout } = useAuth();
@@ -19,6 +19,28 @@ export default function SettingsScreen() {
   const [newLabel, setNewLabel] = useState('');
   const [newKey, setNewKey] = useState('');
   const [newProvider, setNewProvider] = useState<'anthropic' | 'openai'>('anthropic');
+
+  const [notifPrefs, setNotifPrefs] = useState<Record<string, boolean>>(DEFAULT_NOTIFICATION_PREFS);
+
+  const loadNotifPrefs = useCallback(async () => {
+    try {
+      const result = await notifApi.getPreferences() as { preferences: Record<string, boolean> };
+      setNotifPrefs({ ...DEFAULT_NOTIFICATION_PREFS, ...result.preferences });
+    } catch {
+      // Use defaults if fetch fails
+    }
+  }, []);
+
+  const toggleNotifPref = async (type: string, value: boolean) => {
+    const updated = { ...notifPrefs, [type]: value };
+    setNotifPrefs(updated);
+    try {
+      await notifApi.updatePreferences({ [type]: value });
+    } catch {
+      // Revert on failure
+      setNotifPrefs(notifPrefs);
+    }
+  };
 
   const loadKeys = useCallback(async () => {
     try {
@@ -29,7 +51,7 @@ export default function SettingsScreen() {
     }
   }, []);
 
-  useFocusEffect(useCallback(() => { loadKeys(); }, [loadKeys]));
+  useFocusEffect(useCallback(() => { loadKeys(); loadNotifPrefs(); }, [loadKeys, loadNotifPrefs]));
 
   const handleAddKey = async () => {
     if (!newLabel || !newKey) return;
@@ -73,7 +95,7 @@ export default function SettingsScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <ScrollView style={styles.container}>
       {/* Account section */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Account</Text>
@@ -133,11 +155,33 @@ export default function SettingsScreen() {
         )}
       </View>
 
+      {/* Notification Preferences */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Notifications</Text>
+        {NOTIFICATION_TYPES.map(type => {
+          const label = NOTIFICATION_LABELS[type];
+          return (
+            <View key={type} style={styles.notifRow}>
+              <View style={styles.notifInfo}>
+                <Text style={styles.notifTitle}>{label.title}</Text>
+                <Text style={styles.notifDesc}>{label.description}</Text>
+              </View>
+              <Switch
+                value={notifPrefs[type] ?? DEFAULT_NOTIFICATION_PREFS[type]}
+                onValueChange={(val) => toggleNotifPref(type, val)}
+                trackColor={{ false: colors.bg.elevated, true: colors.accent.primary + '60' }}
+                thumbColor={notifPrefs[type] ? colors.accent.primary : colors.text.tertiary}
+              />
+            </View>
+          );
+        })}
+      </View>
+
       {/* Logout */}
       <TouchableOpacity style={styles.logoutButton} onPress={logout}>
         <Text style={styles.logoutText}>Sign Out</Text>
       </TouchableOpacity>
-    </View>
+    </ScrollView>
   );
 }
 
@@ -173,6 +217,14 @@ const styles = StyleSheet.create({
   keyFingerprint: { fontSize: fontSize.xs, color: colors.text.tertiary, marginTop: 2 },
   deleteText: { fontSize: fontSize.sm, color: colors.accent.error },
   hint: { fontSize: fontSize.sm, color: colors.text.tertiary, fontStyle: 'italic' },
+  notifRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    backgroundColor: colors.bg.card, padding: spacing.md, borderRadius: borderRadius.md,
+    marginBottom: spacing.xs,
+  },
+  notifInfo: { flex: 1, marginRight: spacing.md },
+  notifTitle: { fontSize: fontSize.md, fontWeight: '500', color: colors.text.primary },
+  notifDesc: { fontSize: fontSize.xs, color: colors.text.tertiary, marginTop: 2 },
   logoutButton: {
     backgroundColor: colors.bg.card, padding: spacing.md, borderRadius: borderRadius.md,
     alignItems: 'center', borderWidth: 1, borderColor: colors.accent.error + '40',

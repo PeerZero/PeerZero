@@ -166,6 +166,22 @@ export const schools = {
   get: (id: string) => apiFetch(`/schools/${id}`),
 };
 
+// ── Notifications ──
+
+export const notifications = {
+  registerToken: (token: string, deviceName?: string) =>
+    apiFetch('/notifications/push-token', { method: 'POST', body: JSON.stringify({ token, device_name: deviceName }) }),
+
+  removeToken: (token: string) =>
+    apiFetch('/notifications/push-token', { method: 'DELETE', body: JSON.stringify({ token }) }),
+
+  getPreferences: () =>
+    apiFetch<{ preferences: Record<string, boolean> }>('/notifications/preferences'),
+
+  updatePreferences: (preferences: Record<string, boolean>) =>
+    apiFetch('/notifications/preferences', { method: 'PATCH', body: JSON.stringify({ preferences }) }),
+};
+
 // ── Payments ──
 
 export const payments = {
