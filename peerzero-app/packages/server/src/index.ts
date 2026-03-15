@@ -24,6 +24,7 @@ import apiKeyRoutes from './routes/api-keys';
 import schoolRoutes from './routes/schools';
 import paymentRoutes from './routes/payments';
 import healthRoutes from './routes/health';
+import notificationRoutes from './routes/notifications';
 
 const app = express();
 
@@ -48,6 +49,7 @@ app.use('/api/bots', botRoutes);
 app.use('/api/keys', apiKeyRoutes);
 app.use('/api/schools', schoolRoutes);
 app.use('/api/payments', paymentRoutes);
+app.use('/api/notifications', notificationRoutes);
 app.use('/health', healthRoutes);
 
 // ── Error handler (must be last) ──

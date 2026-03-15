@@ -7,6 +7,7 @@ import React, { useState, useCallback, useRef } from 'react';
 import { View, Text, FlatList, StyleSheet, RefreshControl } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { bots as botsApi } from '../services/api';
+import { useBotStream } from '../hooks/useBotStream';
 import { colors } from '../theme/colors';
 import { spacing, fontSize, borderRadius } from '../theme/spacing';
 import type { ActivityEntry, MoodType } from '@peerzero/shared';
@@ -27,6 +28,27 @@ export default function LogScreen({ route }: any) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const loadingRef = useRef(false);
+
+  // Real-time WebSocket stream — new activities prepend to the list
+  const { isConnected } = useBotStream({
+    botId,
+    onActivity: useCallback((event) => {
+      // Build an ActivityEntry from the WebSocket event and prepend it
+      if (event.translated) {
+        const newEntry: ActivityEntry = {
+          id: `ws-${Date.now()}`, // Temporary ID until next full refresh
+          cycle_number: event.cycle_number || 0,
+          action_type: (event.action_type || 'unknown') as any,
+          translated: event.translated,
+          error: event.error || null,
+          duration_ms: event.duration_ms || null,
+          llm_tokens_used: event.llm_tokens_used || null,
+          created_at: event.created_at || new Date().toISOString(),
+        };
+        setEntries(prev => [newEntry, ...prev]);
+      }
+    }, []),
+  });
 
   const loadPage = useCallback(async (p: number, append = false) => {
     if (loadingRef.current) return;
@@ -91,6 +113,14 @@ export default function LogScreen({ route }: any) {
 
   return (
     <View style={styles.container}>
+      {/* Live stream indicator */}
+      {isConnected && (
+        <View style={styles.liveIndicator}>
+          <View style={styles.liveDot} />
+          <Text style={styles.liveText}>Live</Text>
+        </View>
+      )}
+
       <FlatList
         data={entries}
         renderItem={renderEntry}
@@ -123,6 +153,14 @@ const styles = StyleSheet.create({
   error: { fontSize: fontSize.sm, color: colors.accent.error, marginTop: spacing.xs },
   meta: { flexDirection: 'row', gap: spacing.md, marginTop: spacing.sm },
   metaText: { fontSize: fontSize.xs, color: colors.text.tertiary },
+  liveIndicator: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    paddingVertical: spacing.xs, backgroundColor: colors.bg.secondary,
+  },
+  liveDot: {
+    width: 8, height: 8, borderRadius: 4, backgroundColor: colors.accent.success, marginRight: spacing.xs,
+  },
+  liveText: { fontSize: fontSize.xs, color: colors.accent.success, fontWeight: '600' },
   empty: { padding: spacing.xxl, alignItems: 'center' },
   emptyText: { color: colors.text.secondary, fontSize: fontSize.md, textAlign: 'center' },
 });

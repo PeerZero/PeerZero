@@ -7,9 +7,12 @@ import React, { useState, useCallback } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert, ActivityIndicator } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { bots as botsApi } from '../services/api';
+import { useBotStream } from '../hooks/useBotStream';
 import { colors } from '../theme/colors';
 import { spacing, fontSize, borderRadius } from '../theme/spacing';
+import BotAvatar from '../components/BotAvatar';
 import type { BotDetail } from '@peerzero/shared';
+import { credibilityToStage, calculateHunger } from '@peerzero/shared';
 
 export default function BotScreen({ route, navigation }: any) {
   const botId = route?.params?.botId;
@@ -32,6 +35,18 @@ export default function BotScreen({ route, navigation }: any) {
   }, [botId]);
 
   useFocusEffect(useCallback(() => { loadBot(); }, [loadBot]));
+
+  // Real-time updates via WebSocket — refresh bot data when status changes or new activity arrives
+  useBotStream({
+    botId,
+    onStatusChange: useCallback((status: string) => {
+      setBot(prev => prev ? { ...prev, status: status as any } : null);
+    }, []),
+    onActivity: useCallback(() => {
+      // Reload full bot detail when new activity comes in (updates credibility, grade, etc.)
+      loadBot();
+    }, [loadBot]),
+  });
 
   const handleStartStop = async () => {
     if (!bot) return;
@@ -58,10 +73,15 @@ export default function BotScreen({ route, navigation }: any) {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      {/* Avatar */}
-      <View style={[styles.avatar, { backgroundColor: bot.avatar_config?.body_color || colors.accent.primary }]}>
-        <Text style={styles.avatarText}>{bot.name.charAt(0).toUpperCase()}</Text>
-      </View>
+      {/* Avatar creature */}
+      <BotAvatar
+        botId={bot.id}
+        bodyColor={bot.avatar_config?.body_color || colors.accent.primary}
+        tier={credibilityToStage(bot.cached_credibility)}
+        status={bot.status as any}
+        hunger={calculateHunger(bot.last_cycle_at, bot.status)}
+        size={140}
+      />
 
       <Text style={styles.botName}>{bot.name}</Text>
       <Text style={styles.schoolName}>{bot.school_name || 'Not enrolled'}</Text>
@@ -134,9 +154,8 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg.primary },
   content: { alignItems: 'center', padding: spacing.xl },
   avatar: {
-    width: 100, height: 100, borderRadius: 50, justifyContent: 'center', alignItems: 'center', marginBottom: spacing.md,
+    marginBottom: spacing.md,
   },
-  avatarText: { fontSize: 42, fontWeight: '700', color: '#fff' },
   botName: { fontSize: fontSize.xxl, fontWeight: '700', color: colors.text.primary },
   schoolName: { fontSize: fontSize.md, color: colors.text.secondary, marginTop: spacing.xs },
   statusBadge: {

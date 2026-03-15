@@ -186,6 +186,12 @@ Priority order:
 - `GET /api/schools` — List available schools
 - `GET /api/schools/:id` — School detail
 
+### Notifications
+- `POST /api/notifications/push-token` — Register Expo push token
+- `DELETE /api/notifications/push-token` — Remove push token (logout)
+- `GET /api/notifications/preferences` — Get notification preferences
+- `PATCH /api/notifications/preferences` — Update preferences (partial merge)
+
 ### Payments
 - `GET /api/payments/products` — List products
 - `POST /api/payments/checkout` — Create Stripe checkout session
@@ -217,11 +223,51 @@ See `.env.example` for the full list. Key ones:
 - Helmet security headers
 - CORS configured
 
+## Avatar System (Tamagotchi Creatures)
+Procedurally generated SVG creatures that evolve as bots grow.
+
+- **Deterministic seed**: Each bot's ID generates a unique creature (body shape, ear style, tail, patterns)
+- **6 evolution stages**: Hatchling → Sprout → Fledgling → Companion → Guardian → Luminary
+- **Mood expressions**: Happy, sleeping, curious, distressed (driven by bot status + activity mood)
+- **Knowledge hunger**: Very occasional gentle indicator when bot hasn't learned in a while (3 days+, never punishing)
+- **Idle animations**: Breathing, bouncing (CSS-driven, no frame loops)
+- **Tier features unlock**: Ears at stage 1, patterns/tail at stage 3, crown/halo at stage 4, wings at stage 5
+- **Color presets**: 10 curated body colors, user-chosen at bot creation
+- **Portable**: SVG-based, works anywhere bots appear (dating sites, social media, comedy clubs, etc.)
+
+## Push Notifications (Expo Push)
+User-configurable push notifications for bot milestones.
+
+- **Expo Push API**: One integration handles iOS APNs + Android FCM
+- **Notification types**: Tier upgrades, grade promotions, credibility milestones, bounty wins, identity formed, errors, hunger reminders
+- **User preferences**: Per-type toggle in Settings (defaults: everything on, hunger reminders off)
+- **Stale token cleanup**: Auto-removes DeviceNotRegistered tokens
+- **Fire-and-forget**: Notification failures never block the bot cycle
+
+## Database Migrations
+Uses `node-pg-migrate` for versioned SQL-first migrations.
+
+- **Migration files**: `packages/server/src/db/migrations/*.sql`
+- **Run migrations**: `npm run db:migrate`
+- **Create new**: `npm run db:migrate:create -- <name>`
+- **Rollback**: `npm run db:migrate:down`
+- **schema.sql** remains the canonical reference, updated alongside migrations
+
+## Stripe Product Seeding
+Script to create products in Stripe and populate the `products` table.
+
+- **Idempotent**: Checks for existing products before creating
+- **Run**: `npm run db:seed` (requires DATABASE_URL + STRIPE_SECRET_KEY)
+- **Catalog**: Bot shells (Standard $9.99, Premium $24.99), School enrollments
+
 ## Scaling Notes
 - BullMQ worker concurrency is configurable (default: 5 parallel cycles)
 - Database uses connection pooling
-- WebSocket for real-time but stateless REST for everything else
+- WebSocket for real-time but stateless REST for everything else (horizontally scalable with sticky LB)
+- WebSocket connections are per-bot-view, not global (minimal server-side memory)
+- Push notifications use Expo's batch API (up to 100/request), can be moved to BullMQ for millions of users
 - Schools table supports hundreds of entries — just add rows
 - Bot cycle delay is per-bot configurable (default: 120s)
 - Rate limit Redis is separate from BullMQ Redis connection (same URL, different client)
 - School has a reconciliation endpoint (`/api/reconcile`) to fix drifted denormalized counters
+- Push tokens auto-cleaned on DeviceNotRegistered — no stale token accumulation at scale

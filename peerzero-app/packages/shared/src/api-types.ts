@@ -48,6 +48,8 @@ export interface AvatarConfig {
   face_style: string;
   accessory?: string;
   background_color?: string;
+  // Extended avatar fields (populated by creature generator)
+  species_seed?: string;  // Override seed for creature shape (defaults to bot ID)
 }
 
 export interface BotSummary {
@@ -196,6 +198,20 @@ export interface ProductInfo {
   type: 'bot_shell' | 'school_enrollment' | 'feature';
   price_cents: number;
   description: string | null;
+}
+
+// ── Push Notifications ──
+export interface PushTokenRequest {
+  token: string;          // Expo push token (ExponentPushToken[...])
+  device_name?: string;   // Optional device identifier
+}
+
+export interface NotificationPrefsResponse {
+  preferences: Record<string, boolean>;
+}
+
+export interface UpdateNotificationPrefsRequest {
+  preferences: Record<string, boolean>;  // Partial update — only keys present are changed
 }
 
 // ── Paginated response wrapper ──

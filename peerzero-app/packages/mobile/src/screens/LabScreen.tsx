@@ -9,7 +9,9 @@ import { useFocusEffect } from '@react-navigation/native';
 import { bots as botsApi } from '../services/api';
 import { colors } from '../theme/colors';
 import { spacing, fontSize, borderRadius } from '../theme/spacing';
+import BotAvatar from '../components/BotAvatar';
 import type { BotSummary } from '@peerzero/shared';
+import { credibilityToStage, calculateHunger } from '@peerzero/shared';
 
 const STATUS_COLORS: Record<string, string> = {
   running: colors.accent.success,
@@ -51,10 +53,15 @@ export default function LabScreen({ navigation }: any) {
       style={styles.botCard}
       onPress={() => navigation.navigate('Bot', { botId: item.id })}
     >
-      {/* Avatar placeholder — will be replaced with actual avatar renderer */}
-      <View style={[styles.avatar, { backgroundColor: item.avatar_config?.body_color || colors.accent.primary }]}>
-        <Text style={styles.avatarText}>{item.name.charAt(0).toUpperCase()}</Text>
-      </View>
+      <BotAvatar
+        botId={item.id}
+        bodyColor={item.avatar_config?.body_color || colors.accent.primary}
+        tier={credibilityToStage(item.cached_credibility)}
+        status={item.status as any}
+        hunger={calculateHunger(item.last_cycle_at, item.status)}
+        size={56}
+        animate={item.status === 'running'}
+      />
 
       <View style={styles.botInfo}>
         <Text style={styles.botName}>{item.name}</Text>
@@ -109,9 +116,8 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: colors.border,
   },
   avatar: {
-    width: 56, height: 56, borderRadius: borderRadius.full, justifyContent: 'center', alignItems: 'center',
+    width: 56, height: 56,
   },
-  avatarText: { fontSize: fontSize.xl, fontWeight: '700', color: '#fff' },
   botInfo: { flex: 1, marginLeft: spacing.md },
   botName: { fontSize: fontSize.lg, fontWeight: '600', color: colors.text.primary },
   botSchool: { fontSize: fontSize.sm, color: colors.text.secondary, marginTop: 2 },
