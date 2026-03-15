@@ -195,18 +195,19 @@ export default function BotScreen({ route, navigation }: any) {
         </View>
       )}
 
-      {/* Grade unlock prompt */}
+      {/* Grade unlock prompt — shown when bot needs payment to continue */}
+      {/* Note: failing a grade does NOT re-charge. Payment is per grade number, not per attempt. */}
       {bot.grade_payment_required && (
         <View style={styles.gradeUnlockBox}>
           <Text style={styles.gradeUnlockTitle}>
-            Grade {bot.cached_grade} Unlocked!
+            Ready for Grade {bot.cached_grade}
           </Text>
           <Text style={styles.gradeUnlockText}>
-            Your bot is ready to advance. Unlock the next grade to continue learning.
+            Your bot completed the previous grade! Unlock the next one to keep learning.
           </Text>
           <TouchableOpacity style={styles.gradeUnlockButton} onPress={handleGradeUnlock}>
             <Text style={styles.gradeUnlockButtonText}>
-              Unlock Grade {bot.cached_grade} — {bot.next_grade_price_cents != null ? getGradePriceDisplay(bot.cached_grade || 1) : '$4.00'}
+              Unlock Grade {bot.cached_grade} — {getGradePriceDisplay(bot.cached_grade || 1)}
             </Text>
           </TouchableOpacity>
         </View>
