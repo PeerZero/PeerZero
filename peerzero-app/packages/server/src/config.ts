@@ -28,7 +28,7 @@ export const config = {
   // JWT
   jwtSecret: required('JWT_SECRET'),
   jwtRefreshSecret: required('JWT_REFRESH_SECRET'),
-  jwtExpiresIn: '15m',
+  jwtExpiresIn: '5m',
   jwtRefreshExpiresIn: '30d',
 
   // Encryption (AES-256-GCM for user API keys)
