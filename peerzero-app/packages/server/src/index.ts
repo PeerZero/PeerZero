@@ -10,6 +10,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import { createServer } from 'http';
 import { config } from './config';
+import { logger } from './lib/logger';
 import { errorHandler } from './middleware/error-handler';
 import { authLimiter, closeRateLimitRedis } from './middleware/rate-limit';
 import { closePool } from './db/client';
@@ -62,14 +63,12 @@ setupWebSocket(server);
 startWorker();
 
 server.listen(config.port, () => {
-  console.log(`[server] PeerZero App Server running on port ${config.port}`);
-  console.log(`[server] Environment: ${config.nodeEnv}`);
-  console.log(`[server] Real adapters: ${config.useRealAdapters}`);
+  logger.info({ port: config.port, env: config.nodeEnv, realAdapters: config.useRealAdapters }, 'PeerZero App Server started');
 });
 
 // ── Graceful shutdown ──
 async function shutdown() {
-  console.log('[server] Shutting down...');
+  logger.info('Shutting down...');
   await stopWorker();
   await closeRateLimitRedis();
   await closePool();

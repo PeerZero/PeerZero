@@ -14,8 +14,8 @@
 // guard conditions (403s, requirements) constrain the bot's transitions.
 // =============================================================================
 
-import { getSchoolAdapter } from '../adapters/adapter.factory';
-import { getLLMAdapter } from '../adapters/adapter.factory';
+import { getSchoolAdapter, getLLMAdapter } from '../adapters/adapter.factory';
+import { logger } from '../lib/logger';
 import { getDecryptedSchoolKey, setBotStatus } from '../services/bot.service';
 import { getDecryptedKey } from '../services/apikey.service';
 import * as memory from '../services/memory.service';
@@ -182,7 +182,7 @@ async function handleCondensation(
         await schoolAdapter.submitCondensation(schoolCreds, parsed);
       }
     } catch (err) {
-      console.warn('[condensation] Failed to parse LLM response:', err instanceof Error ? err.message : err);
+      logger.warn({ err: err instanceof Error ? err.message : err }, 'Failed to parse condensation LLM response');
     }
   }
 
@@ -198,7 +198,7 @@ async function handleCondensation(
         await schoolAdapter.submitCoreCondensation(schoolCreds, parsed);
       }
     } catch (err) {
-      console.warn('[condensation] Failed to parse LLM response:', err instanceof Error ? err.message : err);
+      logger.warn({ err: err instanceof Error ? err.message : err }, 'Failed to parse condensation LLM response');
     }
   }
 
@@ -219,14 +219,14 @@ async function handleCondensation(
       );
       await schoolAdapter.submitIdentityReflection(schoolCreds, parsed);
     } catch (err) {
-      console.warn('[condensation] Failed to parse LLM response:', err instanceof Error ? err.message : err);
+      logger.warn({ err: err instanceof Error ? err.message : err }, 'Failed to parse condensation LLM response');
     }
   }
 }
 
 async function updateBotCache(botId: string, profile: SchoolProfile, cycleNumber: number): Promise<void> {
   if (!profile?.agent || typeof profile.agent.credibility_score !== 'number') {
-    console.warn(`[agent-loop] Invalid profile shape for bot ${botId}, skipping cache update`);
+    logger.warn({ botId }, 'Invalid profile shape, skipping cache update');
     return;
   }
 

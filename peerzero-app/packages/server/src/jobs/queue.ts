@@ -6,6 +6,7 @@
 import { Queue, Worker, Job } from 'bullmq';
 import IORedis from 'ioredis';
 import { config } from '../config';
+import { logger } from '../lib/logger';
 import { runOneCycle, BotContext } from '../runtime/agent-loop';
 import { setBotStatus } from '../services/bot.service';
 import { queryOne, query } from '../db/client';
@@ -118,7 +119,7 @@ export function startWorker(): void {
         // Reset failure counter on success
         consecutiveFailures.delete(botId);
       } catch (err) {
-        console.error(`[worker] Bot ${botId} cycle failed:`, err);
+        logger.error({ botId, err }, 'Bot cycle failed');
         const errorMsg = err instanceof Error ? err.message : String(err);
 
         // Immediately stop on auth errors
@@ -153,10 +154,10 @@ export function startWorker(): void {
   );
 
   botWorker.on('error', (err) => {
-    console.error('[worker] Worker error:', err);
+    logger.error({ err }, 'Worker error');
   });
 
-  console.log('[worker] Bot cycle worker started');
+  logger.info('Bot cycle worker started');
 }
 
 /** Graceful shutdown. */

@@ -4,6 +4,7 @@
 // =============================================================================
 
 import { query } from '../db/client';
+import { logger } from '../lib/logger';
 
 interface AuditEntry {
   userId: string;
@@ -27,6 +28,6 @@ export function logAudit(entry: AuditEntry): void {
       entry.ipAddress || null,
     ],
   ).catch((err) => {
-    console.error('[audit] Failed to write audit log:', err instanceof Error ? err.message : err);
+    logger.error({ err: err instanceof Error ? err.message : err }, 'Failed to write audit log');
   });
 }

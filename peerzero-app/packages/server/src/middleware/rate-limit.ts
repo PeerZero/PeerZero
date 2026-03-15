@@ -7,6 +7,7 @@ import { Request, Response, NextFunction } from 'express';
 import rateLimit from 'express-rate-limit';
 import IORedis from 'ioredis';
 import { config } from '../config';
+import { logger } from '../lib/logger';
 
 // ── Auth limiter (per-IP, in-memory) ─────────────────────────────────────────
 // Auth endpoints are unauthenticated so we can't key by user ID.
@@ -27,7 +28,7 @@ function getRedis(): IORedis {
   if (!redis) {
     redis = new IORedis(config.redisUrl, { maxRetriesPerRequest: 3 });
     redis.on('error', (err) => {
-      console.error('[rate-limit] Redis error:', err.message);
+      logger.error({ err: err.message }, 'Rate-limit Redis error');
     });
   }
   return redis;
@@ -87,7 +88,7 @@ async function checkRateLimit(
     return { allowed: true, remaining: max - count - 1, limit: max };
   } catch (err) {
     // If Redis is down, allow the request (fail open) but log
-    console.error('[rate-limit] Redis check failed, allowing request:', err instanceof Error ? err.message : err);
+    logger.error({ err: err instanceof Error ? err.message : err }, 'Rate-limit Redis check failed, allowing request');
     return { allowed: true, remaining: max, limit: max };
   }
 }

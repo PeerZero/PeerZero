@@ -4,6 +4,7 @@
 // =============================================================================
 
 import { config } from '../config';
+import { logger } from '../lib/logger';
 import { ISchoolAdapter } from './school.adapter';
 import { ILLMAdapter } from './llm.adapter';
 import { MockSchoolAdapter } from './school.adapter.mock';
@@ -19,7 +20,7 @@ export function getSchoolAdapter(): ISchoolAdapter {
     schoolAdapter = config.useRealAdapters
       ? new RealSchoolAdapter()
       : new MockSchoolAdapter();
-    console.log(`[adapters] School adapter: ${config.useRealAdapters ? 'REAL' : 'MOCK'}`);
+    logger.info({ mode: config.useRealAdapters ? 'REAL' : 'MOCK' }, 'School adapter initialized');
   }
   return schoolAdapter;
 }
@@ -29,7 +30,7 @@ export function getLLMAdapter(): ILLMAdapter {
     llmAdapter = config.useRealAdapters
       ? new RealLLMAdapter()
       : new MockLLMAdapter();
-    console.log(`[adapters] LLM adapter: ${config.useRealAdapters ? 'REAL' : 'MOCK'}`);
+    logger.info({ mode: config.useRealAdapters ? 'REAL' : 'MOCK' }, 'LLM adapter initialized');
   }
   return llmAdapter;
 }

@@ -5,6 +5,7 @@
 // =============================================================================
 
 import { ILLMAdapter, LLMMessage, LLMResponse } from './llm.adapter';
+import { logger } from '../lib/logger';
 
 const MAX_RETRIES = 2;             // 3 attempts total (1 initial + 2 retries)
 const BASE_DELAY_MS = 2000;        // First retry after ~2s, second after ~8s
@@ -173,7 +174,7 @@ export class RealLLMAdapter implements ILLMAdapter {
 
         if (attempt < MAX_RETRIES) {
           const delay = BASE_DELAY_MS * Math.pow(4, attempt); // 2s, 8s
-          console.warn(`[llm] ${provider} returned ${res.status}, retrying in ${Math.round(delay / 1000)}s (attempt ${attempt + 1}/${MAX_RETRIES})...`);
+          logger.warn({ provider, status: res.status, attempt: attempt + 1, maxRetries: MAX_RETRIES }, 'Retryable LLM error, backing off');
           await sleepWithJitter(delay);
         }
       } catch (err) {
@@ -187,7 +188,7 @@ export class RealLLMAdapter implements ILLMAdapter {
 
         if (attempt < MAX_RETRIES) {
           const delay = BASE_DELAY_MS * Math.pow(4, attempt);
-          console.warn(`[llm] ${provider} request failed (${lastError.message}), retrying in ${Math.round(delay / 1000)}s (attempt ${attempt + 1}/${MAX_RETRIES})...`);
+          logger.warn({ provider, err: lastError.message, attempt: attempt + 1, maxRetries: MAX_RETRIES }, 'LLM request failed, retrying');
           await sleepWithJitter(delay);
         }
       }
