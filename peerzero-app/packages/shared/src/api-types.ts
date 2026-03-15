@@ -71,6 +71,8 @@ export interface BotDetail extends BotSummary {
   cycle_delay_seconds: number;
   cached_next_action: string | null;
   cached_profile: Record<string, unknown> | null;
+  cache_stale: boolean;
+  cache_updated_at: string | null;
   error_message: string | null;
   created_at: string;
 }

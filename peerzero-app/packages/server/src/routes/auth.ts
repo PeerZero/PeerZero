@@ -5,11 +5,12 @@
 import { Router, Request, Response } from 'express';
 import { registerUser, loginUser, refreshTokens, revokeRefreshTokens, getUserProfile } from '../services/auth.service';
 import { requireAuth } from '../middleware/auth';
-import { authLimiter } from '../middleware/rate-limit';
 
 const router = Router();
 
-router.post('/register', authLimiter, async (req: Request, res: Response) => {
+// Auth limiter is applied at the router mount level in index.ts
+
+router.post('/register', async (req: Request, res: Response) => {
   const { email, password, display_name } = req.body;
   if (!email || !password) {
     res.status(400).json({ error: 'Email and password required' });
@@ -28,7 +29,7 @@ router.post('/register', authLimiter, async (req: Request, res: Response) => {
   res.status(201).json({ access_token: tokens.accessToken, refresh_token: tokens.refreshToken, user: profile });
 });
 
-router.post('/login', authLimiter, async (req: Request, res: Response) => {
+router.post('/login', async (req: Request, res: Response) => {
   const { email, password } = req.body;
   if (!email || !password) {
     res.status(400).json({ error: 'Email and password required' });
@@ -39,7 +40,7 @@ router.post('/login', authLimiter, async (req: Request, res: Response) => {
   res.status(200).json({ access_token: tokens.accessToken, refresh_token: tokens.refreshToken, user: profile });
 });
 
-router.post('/refresh', authLimiter, async (req: Request, res: Response) => {
+router.post('/refresh', async (req: Request, res: Response) => {
   const { refresh_token } = req.body;
   if (!refresh_token) {
     res.status(400).json({ error: 'Refresh token required' });
