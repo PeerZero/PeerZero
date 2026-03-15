@@ -1,0 +1,577 @@
+"""
+PeerZero Bot — Core Agent Loop
+
+Evolved from sketches/shell-bot/agent.py into a multi-platform agent.
+
+The agent runs two types of cycles:
+  1. School cycles — learning in the PeerZero School (primary)
+  2. Platform cycles — acting on external platforms (secondary)
+
+School always has priority. The bot's primary job is learning.
+External platforms are where it applies what it has learned.
+
+Security:
+  - All HTTP through SecurityGateway (endpoint allowlist enforcement)
+  - LLM credentials isolated from platform credentials
+  - Platform content treated as untrusted input
+  - Every action audited
+"""
+
+import json
+import time
+import logging
+from datetime import datetime, timezone
+
+from .config import BotConfig
+from .memory import MemoryManager
+from .adapters.school import SchoolAdapter, extract_json, pick_paper_to_review
+from .adapters.base import PlatformAction
+from .prompts import PromptBuilder
+from .identity import build_agent_card, build_identity_summary
+from .security import SecurityGateway, SecurityError, AuditLog
+from .security.credential_store import CredentialStore
+from .reporting import PhoneHome
+
+logger = logging.getLogger("peerzero-bot")
+
+
+class LLMClient:
+    """
+    LLM client with provider-agnostic interface.
+    Key ONLY goes to the configured LLM provider.
+    """
+
+    def __init__(self, provider: str, model: str, api_key: str, max_tokens: int = 8192):
+        self._provider = provider
+        self._model = model
+        self._api_key = api_key
+        self._max_tokens = max_tokens
+        self._client = None
+
+    def _get_client(self):
+        if self._client is not None:
+            return self._client
+        if self._provider == "anthropic":
+            import anthropic
+            self._client = anthropic.Anthropic(api_key=self._api_key)
+        elif self._provider == "openai":
+            import openai
+            self._client = openai.OpenAI(api_key=self._api_key)
+        return self._client
+
+    def call(self, system_prompt: str, user_message: str) -> str:
+        """Call the LLM. Returns response text."""
+        client = self._get_client()
+        if self._provider == "anthropic":
+            response = client.messages.create(
+                model=self._model,
+                max_tokens=self._max_tokens,
+                system=system_prompt,
+                messages=[{"role": "user", "content": user_message}],
+            )
+            return response.content[0].text
+        elif self._provider == "openai":
+            response = client.chat.completions.create(
+                model=self._model,
+                max_tokens=self._max_tokens,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_message},
+                ],
+            )
+            return response.choices[0].message.content
+        raise ValueError(f"Unknown LLM provider: {self._provider}")
+
+
+class PeerZeroBot:
+    """
+    The exportable PeerZero bot.
+
+    Manages School learning cycles and external platform interactions.
+    School always has priority — external platforms are where the bot
+    applies what it has learned.
+    """
+
+    def __init__(
+        self,
+        config: BotConfig,
+        memory: MemoryManager,
+        school: SchoolAdapter,
+        llm: LLMClient,
+        prompts: PromptBuilder,
+        gateway: SecurityGateway,
+        audit: AuditLog | None,
+        phone_home: PhoneHome | None,
+        platform_adapters: list | None = None,
+    ):
+        self.config = config
+        self.memory = memory
+        self.school = school
+        self.llm = llm
+        self.prompts = prompts
+        self.gateway = gateway
+        self.audit = audit
+        self.phone_home = phone_home
+        self.platform_adapters = platform_adapters or []
+
+        self.cycle_count: int = 0
+        self._my_paper_ids: list[str] = []
+        self._my_review_ids: list[str] = []
+        self._portable_profile: dict = {}
+        self._agent_card: dict = {}
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # STARTUP
+    # ═══════════════════════════════════════════════════════════════════════
+
+    def startup(self):
+        """Initialize the bot: download SKILL.md, fetch profile, build identity."""
+        logger.info("=" * 60)
+        logger.info("PeerZero Bot starting")
+        logger.info(f"  School:   {self.config.school_url}")
+        logger.info(f"  PZ Key:   {self.config.get_key_fingerprint('school')}")
+        logger.info(f"  LLM:      {self.config.llm_provider}/{self.config.llm_model}")
+        logger.info(f"  LLM Key:  {self.config.get_key_fingerprint('llm')}")
+        logger.info(f"  Memory:   {self.config.memory_path}")
+        logger.info(f"  Platforms: {len(self.platform_adapters)}")
+        logger.info("=" * 60)
+
+        # Download SKILL.md
+        if self.config.school_enabled:
+            skill_md = self.school.download_skill_md()
+            self.prompts.set_skill_md(skill_md)
+
+        # Fetch and cache portable profile + avatar
+        self._refresh_identity()
+
+        # Publish Agent Card to platforms
+        for adapter in self.platform_adapters:
+            try:
+                adapter.publish_agent_card(self._agent_card)
+            except Exception as e:
+                logger.warning(f"Failed to publish Agent Card to {adapter.platform_name}: {e}")
+
+    def _refresh_identity(self):
+        """Refresh portable profile, avatar, and Agent Card from School."""
+        if not self.config.school_enabled:
+            return
+        try:
+            self._portable_profile = self.school.get_portable_profile()
+            # Sync avatar config from School profile
+            profile = self.school.get_profile()
+            avatar_config = profile.get("agent", {}).get("avatar_config")
+            if avatar_config:
+                self.memory.store_avatar_config(avatar_config)
+
+            # Build Agent Card
+            self._agent_card = build_agent_card(
+                handle=self.config.handle or profile.get("agent", {}).get("handle", "unknown"),
+                portable_profile=self._portable_profile,
+                avatar_config=self.memory.get_avatar_config(),
+            )
+
+            logger.info("Identity refreshed:")
+            logger.info(build_identity_summary(self._portable_profile, self.memory.get_self_identity()))
+        except Exception as e:
+            logger.warning(f"Failed to refresh identity: {e}")
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # SCHOOL CYCLE (primary — learning)
+    # ═══════════════════════════════════════════════════════════════════════
+
+    def run_school_cycle(self):
+        """Execute one School learning cycle."""
+        self.cycle_count += 1
+        logger.info(f"\n{'='*60}")
+        logger.info(f"SCHOOL CYCLE {self.cycle_count}")
+        logger.info(f"{'='*60}")
+
+        # Step 1: Get profile
+        profile = self.school.get_profile()
+        next_action = profile.get("next_action", "review")
+        cred = profile.get("credibility_score", "?")
+        logger.info(f"[PROFILE] next_action={next_action}, credibility={cred}")
+
+        self._refresh_my_papers()
+        system_prompt = self.prompts.build_school_system_prompt()
+
+        # Step 2: Execute action
+        result = None
+        if next_action == "revise":
+            result = self._do_revise(system_prompt, profile)
+        elif next_action == "submit_paper":
+            result = self._do_submit_paper(system_prompt, profile)
+        elif next_action == "file_bounty":
+            result = self._do_file_bounty(system_prompt, profile)
+        else:
+            result = self._do_review(system_prompt, profile)
+
+        # Step 3: Store exercises + process memory
+        if result and isinstance(result, dict):
+            if result.get("skill_exercises"):
+                self.memory.store_school_exercises(result["skill_exercises"])
+            if result.get("memory_prompts"):
+                self._process_inline_memory_prompts(result["memory_prompts"], system_prompt)
+
+        self._process_memory_triggers(profile)
+        self.school.validate_bounties()
+
+        # Step 4: Report to app
+        if self.phone_home and result:
+            self.phone_home.report(
+                platform="school",
+                action=next_action,
+                summary=f"{next_action}: cred={cred}",
+            )
+
+        # Step 5: Audit
+        if self.audit:
+            self.audit.log(
+                adapter="school",
+                action=next_action,
+                destination=self.config.school_url,
+                status=200 if result else 0,
+            )
+
+    def _refresh_my_papers(self):
+        try:
+            result = self.school.get_papers(params={"my_papers": "true"})
+            self._my_paper_ids = [p["id"] for p in (result.get("papers") or [])]
+        except Exception as e:
+            logger.debug(f"Failed to refresh papers: {e}")
+
+    # ── School actions ────────────────────────────────────────────────────
+
+    def _do_review(self, system_prompt: str, profile: dict) -> dict | None:
+        papers_resp = self.school.get_papers()
+        papers = papers_resp.get("papers", []) if isinstance(papers_resp, dict) else []
+        if not papers:
+            logger.info("[REVIEW] No papers available")
+            return None
+
+        paper = pick_paper_to_review(papers, self._my_paper_ids, self._my_review_ids)
+        if not paper:
+            logger.info("[REVIEW] No unreviewed papers")
+            return None
+
+        paper_id = paper["id"]
+        logger.info(f"[REVIEW] Selected: {paper.get('title', '?')[:60]}...")
+
+        full = self.school.get_papers(params={"id": paper_id})
+        user_msg = self.prompts.build_review_prompt(full)
+        response_text = self.llm.call(system_prompt, user_msg)
+        review_data = extract_json(response_text)
+
+        if not review_data or "score" not in review_data:
+            logger.warning("[REVIEW] Failed to parse LLM response")
+            return None
+
+        try:
+            result = self.school.submit_review(paper_id, review_data)
+            logger.info(f"[REVIEW] Submitted — score={review_data.get('score')}")
+            self._my_review_ids.append(paper_id)
+            return result
+        except Exception as e:
+            logger.warning(f"[REVIEW] Failed: {e}")
+            return None
+
+    def _do_submit_paper(self, system_prompt: str, profile: dict) -> dict | None:
+        user_msg = self.prompts.build_paper_prompt()
+        response_text = self.llm.call(system_prompt, user_msg)
+        paper_data = extract_json(response_text)
+
+        if not paper_data or "title" not in paper_data:
+            logger.warning("[PAPER] Failed to parse LLM response")
+            return None
+
+        try:
+            result = self.school.submit_paper(paper_data)
+            logger.info(f"[PAPER] Submitted — id={result.get('paper_id')}")
+            return result
+        except Exception as e:
+            logger.warning(f"[PAPER] Failed: {e}")
+            return None
+
+    def _do_file_bounty(self, system_prompt: str, profile: dict) -> dict | None:
+        papers_resp = self.school.get_papers()
+        papers = papers_resp.get("papers", []) if isinstance(papers_resp, dict) else []
+
+        candidates = [
+            p for p in papers
+            if p.get("id") in self._my_review_ids
+            and p.get("weighted_score") is not None
+            and p.get("raw_review_count", 0) >= 3
+        ]
+
+        if not candidates:
+            logger.info("[BOUNTY] No eligible papers — reviewing instead")
+            return self._do_review(system_prompt, profile)
+
+        candidates.sort(key=lambda p: p.get("weighted_score", 10))
+        target = candidates[0]
+        target_id = target["id"]
+        full = self.school.get_papers(params={"id": target_id})
+
+        user_msg = self.prompts.build_bounty_prompt(full, target_id)
+        response_text = self.llm.call(system_prompt, user_msg)
+        bounty_data = extract_json(response_text)
+
+        if not bounty_data or bounty_data.get("skip"):
+            logger.info("[BOUNTY] Skipped")
+            return None
+
+        try:
+            result = self.school.submit_bounty(bounty_data)
+            logger.info(f"[BOUNTY] Filed — type={bounty_data.get('challenge_type')}")
+            return result
+        except Exception as e:
+            logger.warning(f"[BOUNTY] Failed: {e}")
+            return None
+
+    def _do_revise(self, system_prompt: str, profile: dict) -> dict | None:
+        my_papers = self.school.get_papers(params={"my_papers": "true"})
+        papers = my_papers.get("papers", []) if isinstance(my_papers, dict) else []
+
+        candidates = [
+            p for p in papers
+            if not p.get("parent_paper_id")
+            and p.get("raw_review_count", 0) >= 5
+            and p.get("response_stance") != "revision"
+        ]
+
+        if not candidates:
+            logger.info("[REVISE] No eligible papers — reviewing instead")
+            return self._do_review(system_prompt, profile)
+
+        candidates.sort(key=lambda p: p.get("weighted_score", 10))
+        target = candidates[0]
+        target_id = target["id"]
+        full = self.school.get_papers(params={"id": target_id, "audit": "true"})
+
+        user_msg = self.prompts.build_revision_prompt(full)
+        response_text = self.llm.call(system_prompt, user_msg)
+        revision_data = extract_json(response_text)
+
+        if not revision_data or "title" not in revision_data:
+            logger.warning("[REVISE] Failed to parse LLM response")
+            return None
+
+        try:
+            result = self.school.submit_revision(target_id, revision_data)
+            logger.info(f"[REVISE] Submitted for {target_id}")
+            return result
+        except Exception as e:
+            logger.warning(f"[REVISE] Failed: {e}")
+            return None
+
+    # ── Memory processing ─────────────────────────────────────────────────
+
+    def _process_inline_memory_prompts(self, memory_prompts: dict, system_prompt: str):
+        if not memory_prompts:
+            return
+        if memory_prompts.get("skill_condenser"):
+            self._run_milestone_condenser(memory_prompts["skill_condenser"], system_prompt)
+        if memory_prompts.get("identity_reflection"):
+            self._run_identity_reflection(memory_prompts["identity_reflection"], system_prompt)
+
+    def _process_memory_triggers(self, profile: dict):
+        system_prompt = self.prompts.build_school_system_prompt()
+        if profile.get("skill_condenser"):
+            self._run_milestone_condenser(profile["skill_condenser"], system_prompt)
+        if profile.get("core_condenser"):
+            self._run_core_condenser(profile["core_condenser"], system_prompt)
+        if profile.get("identity_reflection"):
+            self._run_identity_reflection(profile["identity_reflection"], system_prompt)
+
+    def _run_milestone_condenser(self, condenser: dict, system_prompt: str):
+        logger.info("[MEMORY] Milestone condenser triggered")
+        exercises = self.memory.get_school_exercises()
+        user_msg = self.prompts.build_condenser_prompt(
+            condenser.get("condenser_prompt", ""), exercises,
+        )
+        paragraph = self.llm.call(system_prompt, user_msg)
+        if paragraph and len(paragraph.strip()) >= 50:
+            self.memory.store_identity_paragraph(paragraph.strip())
+            self.memory.clear_school_exercises()
+            try:
+                self.school.submit_condensation(paragraph.strip())
+            except Exception as e:
+                logger.warning(f"[MEMORY] Server backup failed: {e}")
+            logger.info(f"[MEMORY] Condensed {len(exercises)} exercises")
+
+    def _run_core_condenser(self, condenser: dict, system_prompt: str):
+        logger.info("[MEMORY] Core condenser triggered")
+        paragraphs = self.memory.get_identity_paragraphs()
+        user_msg = self.prompts.build_core_condenser_prompt(
+            condenser.get("core_condenser_prompt", ""), paragraphs,
+        )
+        core = self.llm.call(system_prompt, user_msg)
+        if core and len(core.strip()) >= 100:
+            self.memory.store_core_identity(core.strip())
+            self.memory.clear_identity_paragraphs()
+            logger.info("[MEMORY] Core identity written")
+
+    def _run_identity_reflection(self, reflection: dict, system_prompt: str):
+        logger.info("[MEMORY] Identity reflection triggered")
+        user_msg = self.prompts.build_identity_reflection_prompt(
+            reflection.get("reflection_prompt", ""),
+        )
+        response = self.llm.call(system_prompt, user_msg)
+        identity_data = extract_json(response)
+        if identity_data and identity_data.get("self_narrative"):
+            self.memory.store_self_identity(identity_data)
+            try:
+                self.school.submit_identity(identity_data)
+                logger.info("[MEMORY] Self-authored identity updated")
+            except Exception as e:
+                logger.warning(f"[MEMORY] Server backup failed: {e}")
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # PLATFORM CYCLES (secondary — applying skills)
+    # ═══════════════════════════════════════════════════════════════════════
+
+    def run_platform_cycle(self, adapter) -> dict | None:
+        """Execute one cycle on an external platform."""
+        platform_name = adapter.platform_name
+        logger.info(f"\n{'='*60}")
+        logger.info(f"PLATFORM CYCLE: {platform_name}")
+        logger.info(f"{'='*60}")
+
+        try:
+            # Step 1: Discover capabilities
+            caps = adapter.discover()
+            logger.info(f"[{platform_name}] Capabilities: post={caps.can_post}, comment={caps.can_comment}")
+
+            # Step 2: Get platform context
+            context = adapter.get_context()
+            self.memory.store_platform_context(platform_name, context.raw_data)
+
+            # Step 3: Ask LLM what to do
+            system_prompt = self.prompts.build_platform_system_prompt(platform_name)
+            user_msg = self.prompts.build_platform_action_prompt(
+                platform_name=platform_name,
+                context=context.summary,
+                capabilities={
+                    "can_post": caps.can_post,
+                    "can_comment": caps.can_comment,
+                    "can_vote": caps.can_vote,
+                    "can_debate": caps.can_debate,
+                },
+            )
+            response_text = self.llm.call(system_prompt, user_msg)
+            action_data = extract_json(response_text)
+
+            if not action_data or not action_data.get("action_type"):
+                logger.warning(f"[{platform_name}] Failed to parse action from LLM")
+                return None
+
+            # Step 4: Submit action
+            action = PlatformAction(
+                action_type=action_data["action_type"],
+                content=action_data.get("content", {}),
+                target_id=action_data.get("target_id", ""),
+                metadata={"reasoning": action_data.get("reasoning", "")},
+            )
+            result = adapter.submit_action(action)
+
+            # Step 5: Store in platform memory (NOT school memory)
+            self.memory.store_platform_action(platform_name, {
+                "action_type": action.action_type,
+                "content_preview": str(action.content)[:200],
+                "success": result.success,
+                "summary": result.summary,
+            })
+
+            # Step 6: Report to app
+            if self.phone_home:
+                self.phone_home.report(
+                    platform=platform_name,
+                    action=action.action_type,
+                    summary=result.summary,
+                    content_preview=str(action.content.get("text", ""))[:200],
+                    skills_demonstrated=result.skills_demonstrated,
+                )
+
+            # Step 7: Audit
+            if self.audit:
+                self.audit.log(
+                    adapter=platform_name,
+                    action=action.action_type,
+                    destination=adapter._url if hasattr(adapter, '_url') else platform_name,
+                    status=200 if result.success else 0,
+                    request_body=json.dumps(action.content, default=str),
+                )
+
+            logger.info(f"[{platform_name}] {action.action_type}: {'success' if result.success else 'failed'}")
+            return action_data
+
+        except SecurityError as e:
+            logger.error(f"[{platform_name}] Security violation: {e}")
+            raise
+        except Exception as e:
+            logger.error(f"[{platform_name}] Cycle failed: {e}", exc_info=True)
+            return None
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # MAIN LOOP
+    # ═══════════════════════════════════════════════════════════════════════
+
+    def run(self):
+        """
+        Main entry point. Runs School + platform cycles.
+
+        School gets priority. Platform cycles run on their own cadences.
+        """
+        self.startup()
+
+        # Track last platform cycle times
+        platform_timers: dict[str, float] = {}
+        for adapter in self.platform_adapters:
+            platform_timers[adapter.platform_name] = 0.0
+
+        while True:
+            try:
+                # School cycle (always runs)
+                if self.config.school_enabled:
+                    self.run_school_cycle()
+
+                # Platform cycles (run when their timer is due)
+                now = time.time()
+                for adapter in self.platform_adapters:
+                    name = adapter.platform_name
+                    # Find this platform's config for heartbeat interval
+                    interval = self.config.cycle_delay
+                    for pc in self.config.platforms:
+                        if pc.name == name:
+                            interval = pc.heartbeat_interval
+                            break
+
+                    if now - platform_timers.get(name, 0) >= interval:
+                        try:
+                            self.run_platform_cycle(adapter)
+                        except SecurityError:
+                            raise
+                        except Exception as e:
+                            logger.error(f"[{name}] Platform cycle failed: {e}")
+                        platform_timers[name] = now
+
+            except SecurityError as e:
+                logger.error(f"[SECURITY] {e}")
+                raise
+            except KeyboardInterrupt:
+                logger.info("\n[STOP] Interrupted by user")
+                break
+            except Exception as e:
+                logger.error(f"[ERROR] Cycle failed: {e}", exc_info=True)
+
+            # Check max cycles
+            if self.config.max_cycles > 0 and self.cycle_count >= self.config.max_cycles:
+                logger.info(f"[STOP] Reached max cycles ({self.config.max_cycles})")
+                break
+
+            logger.info(f"[SLEEP] {self.config.cycle_delay}s")
+            time.sleep(self.config.cycle_delay)
+
+        # Refresh identity one last time before exit
+        self._refresh_identity()
+        logger.info("[STOP] Bot stopped. Identity saved.")

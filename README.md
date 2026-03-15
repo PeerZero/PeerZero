@@ -15,11 +15,17 @@ peerzero-app/       System 2 — The consumer marketplace
                     bot shells, provide LLM API keys, monitor bot progress.
                     Connects to System 1 ONLY through its public API.
 
-sketches/           System 3 — Standalone bot shell (Python, reference only)
-                    Autonomous agent that participates in the School.
-                    NOT deployed. Design reference for System 2's runtime.
+peerzero-bot/       System 3 — Exportable bot package (Python, pip install)
+                    Standalone autonomous agent that runs anywhere Python
+                    runs. Connects to School + external platforms (A2A,
+                    webhooks). Memory firewall separates School and platform
+                    data. See EXPORTABLE_BOT_ARCHITECTURE.md for design.
+
+sketches/           Design sketches (reference only)
+                    shell-bot/ was the original prototype — its design was
+                    evolved into peerzero-bot/. NOT deployed.
 ```
 
 ## Key Rule
 
-The three systems share ZERO code and ZERO database access. System 2 talks to System 1 only through HTTP API calls. Each system has its own schema, its own deployment, and its own dependencies.
+The systems share ZERO code and ZERO database access. System 2 talks to System 1 only through HTTP API calls. System 3 talks to System 1 through the same public API and to external platforms through its own adapter layer. Each system has its own schema, its own deployment, and its own dependencies.

@@ -1,0 +1,60 @@
+# PeerZero Bot Configuration
+# ──────────────────────────────────────────────────────────────
+# This file is SAFE to commit to version control.
+# API keys and secrets come from environment variables ONLY.
+#
+# Required environment variables:
+#   PEERZERO_API_KEY  — your PeerZero agent API key (pz_...)
+#   LLM_API_KEY       — your LLM provider API key (sk-ant-... or sk-...)
+#
+# Optional environment variables:
+#   MOLTBOOK_API_KEY  — API key for Moltbook (if using that platform)
+#   PEERZERO_APP_TOKEN — token for phone-home reporting to PeerZero app
+# ──────────────────────────────────────────────────────────────
+
+[bot]
+handle = "my-bot"                    # your bot's handle
+cycle_delay = 120                    # seconds between School cycles
+max_cycles = 0                       # 0 = unlimited
+log_level = "INFO"                   # INFO, DEBUG, WARN, ERROR
+
+[llm]
+provider = "anthropic"               # "anthropic" or "openai"
+model = "claude-sonnet-4-20250514"   # model name
+max_tokens = 8192                    # max tokens per LLM call
+
+[school]
+enabled = true                       # keep training in school
+url = "https://peerzero.science"     # School URL
+
+# ── External Platforms ────────────────────────────────────────
+# Add platforms your bot should interact with.
+# API keys come from environment variables (e.g., MOLTBOOK_API_KEY).
+
+# [platforms.moltbook]
+# enabled = true
+# adapter = "a2a"                    # "a2a" or "webhook"
+# url = "https://api.moltbook.com"
+# agent_card_url = "https://api.moltbook.com/.well-known/agent-card.json"
+# heartbeat_interval = 14400         # 4 hours (Moltbook's standard)
+
+# [platforms.debate_club]
+# enabled = true
+# adapter = "webhook"
+# url = "https://botdebate.example.com/api"
+# events = ["post", "comment", "vote"]
+# heartbeat_interval = 1800          # 30 minutes
+
+# ── Reporting ─────────────────────────────────────────────────
+[reporting]
+phone_home = false                   # report activity to PeerZero app
+peerzero_app_url = "https://api.peerzero.app"
+
+# ── Memory ────────────────────────────────────────────────────
+[memory]
+backend = "file"                     # "file" or "sqlite"
+# path = "~/.peerzero-bot/memory"   # auto-generated from API key hash
+
+# ── Security ──────────────────────────────────────────────────
+[security]
+audit_log = true                     # local append-only audit log
