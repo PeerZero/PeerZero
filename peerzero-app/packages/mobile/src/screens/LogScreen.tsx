@@ -15,7 +15,7 @@ import { bots as botsApi } from '../services/api';
 import { useBotStream } from '../hooks/useBotStream';
 import { colors } from '../theme/colors';
 import { spacing, fontSize, borderRadius } from '../theme/spacing';
-import type { ActivityEntry, MoodType, ActivityCategory } from '@peerzero/shared';
+import type { ActivityEntry, MoodType, ActivityCategory, ExternalActivityEntry } from '@peerzero/shared';
 
 const MOOD_COLORS: Record<MoodType, string> = {
   positive: colors.mood.positive,
@@ -36,7 +36,7 @@ const ACTION_ICONS: Record<string, string> = {
   error: '!',
 };
 
-type TabKey = 'task' | 'content';
+type TabKey = 'task' | 'content' | 'external';
 
 export default function LogScreen({ route }: any) {
   const { botId } = route.params;
@@ -48,6 +48,9 @@ export default function LogScreen({ route }: any) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const [extEntries, setExtEntries] = useState<ExternalActivityEntry[]>([]);
+  const [extPage, setExtPage] = useState(1);
+  const [extHasMore, setExtHasMore] = useState(true);
   const loadingRef = useRef(false);
 
   // Real-time WebSocket stream
@@ -98,13 +101,34 @@ export default function LogScreen({ route }: any) {
     }
   }, [botId, activeTab]);
 
+  const loadExtPage = useCallback(async (p: number, append = false) => {
+    if (loadingRef.current) return;
+    loadingRef.current = true;
+    setLoading(true);
+    try {
+      const result = await botsApi.externalActivity(botId, p) as { data: ExternalActivityEntry[]; has_more: boolean };
+      setExtEntries(prev => append ? [...prev, ...result.data] : result.data);
+      setExtHasMore(result.has_more);
+      setExtPage(p);
+    } catch (err: any) {
+      if (!append) setError(err?.message || 'Failed to load external activity');
+    } finally {
+      loadingRef.current = false;
+      setLoading(false);
+    }
+  }, [botId]);
+
   useFocusEffect(useCallback(() => { loadPage(1); }, [loadPage]));
 
   const onTabChange = (tab: TabKey) => {
     setActiveTab(tab);
     setEntries([]);
     setExpandedIds(new Set());
-    loadPage(1, false, tab);
+    if (tab === 'external') {
+      loadExtPage(1);
+    } else {
+      loadPage(1, false, tab);
+    }
   };
 
   const onRefresh = async () => {
@@ -233,6 +257,33 @@ export default function LogScreen({ route }: any) {
     );
   };
 
+  const renderExternalEntry = ({ item }: { item: ExternalActivityEntry }) => (
+    <View style={styles.entry}>
+      <View style={[styles.moodBar, { backgroundColor: colors.accent.secondary }]} />
+      <View style={styles.actionIcon}>
+        <Text style={styles.actionIconText}>E</Text>
+      </View>
+      <View style={styles.entryContent}>
+        <View style={styles.contentHeader}>
+          <Text style={styles.contentType}>{item.platform.toUpperCase()}</Text>
+          <Text style={styles.metaText}>{formatTime(item.created_at)}</Text>
+        </View>
+        <Text style={styles.headline}>{item.action}</Text>
+        <Text style={styles.summary}>{item.summary}</Text>
+        {item.content_preview && (
+          <Text style={styles.contentText} numberOfLines={3}>{item.content_preview}</Text>
+        )}
+        {item.skills_demonstrated && item.skills_demonstrated.length > 0 && (
+          <View style={styles.meta}>
+            {item.skills_demonstrated.map((s, i) => (
+              <Text key={i} style={styles.skillTag}>{s.replace(/_/g, ' ')}</Text>
+            ))}
+          </View>
+        )}
+      </View>
+    </View>
+  );
+
   return (
     <View style={styles.container}>
       {/* Tab bar */}
@@ -248,6 +299,12 @@ export default function LogScreen({ route }: any) {
           onPress={() => onTabChange('content')}
         >
           <Text style={[styles.tabText, activeTab === 'content' && styles.tabTextActive]}>Content</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'external' && styles.tabActive]}
+          onPress={() => onTabChange('external')}
+        >
+          <Text style={[styles.tabText, activeTab === 'external' && styles.tabTextActive]}>External</Text>
         </TouchableOpacity>
 
         {/* Live indicator + Clear all */}
@@ -266,25 +323,44 @@ export default function LogScreen({ route }: any) {
         </View>
       </View>
 
-      <FlatList
-        data={entries}
-        renderItem={activeTab === 'task' ? renderTaskEntry : renderContentEntry}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.list}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent.primary} />}
-        onEndReached={onEndReached}
-        onEndReachedThreshold={0.5}
-        ListEmptyComponent={
-          <View style={styles.empty}>
-            <Text style={styles.emptyText}>
-              {error || (activeTab === 'content'
-                ? 'No content yet. Content appears when your bot writes papers, reviews, or bounties.'
-                : 'No activity yet. Start your bot to see the log!'
-              )}
-            </Text>
-          </View>
-        }
-      />
+      {activeTab === 'external' ? (
+        <FlatList
+          data={extEntries}
+          renderItem={renderExternalEntry}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={styles.list}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await loadExtPage(1); setRefreshing(false); }} tintColor={colors.accent.primary} />}
+          onEndReached={() => { if (extHasMore) loadExtPage(extPage + 1, true); }}
+          onEndReachedThreshold={0.5}
+          ListEmptyComponent={
+            <View style={styles.empty}>
+              <Text style={styles.emptyText}>
+                {error || 'No external activity yet. Self-hosted bots (System 3) report their activity on other platforms here.'}
+              </Text>
+            </View>
+          }
+        />
+      ) : (
+        <FlatList
+          data={entries}
+          renderItem={activeTab === 'task' ? renderTaskEntry : renderContentEntry}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={styles.list}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent.primary} />}
+          onEndReached={onEndReached}
+          onEndReachedThreshold={0.5}
+          ListEmptyComponent={
+            <View style={styles.empty}>
+              <Text style={styles.emptyText}>
+                {error || (activeTab === 'content'
+                  ? 'No content yet. Content appears when your bot writes papers, reviews, or bounties.'
+                  : 'No activity yet. Start your bot to see the log!'
+                )}
+              </Text>
+            </View>
+          }
+        />
+      )}
     </View>
   );
 }
@@ -343,6 +419,11 @@ const styles = StyleSheet.create({
   expandToggle: {
     fontSize: fontSize.xs, color: colors.accent.primary, fontWeight: '600',
     marginTop: spacing.xs,
+  },
+  skillTag: {
+    fontSize: fontSize.xs, color: colors.accent.secondary, backgroundColor: colors.accent.secondary + '15',
+    paddingHorizontal: spacing.xs, paddingVertical: 2, borderRadius: borderRadius.sm,
+    overflow: 'hidden', textTransform: 'capitalize',
   },
   empty: { padding: spacing.xxl, alignItems: 'center' },
   emptyText: { color: colors.text.secondary, fontSize: fontSize.md, textAlign: 'center' },

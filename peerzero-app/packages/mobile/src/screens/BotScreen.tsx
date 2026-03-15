@@ -7,13 +7,14 @@ import React, { useState, useCallback } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert, ActivityIndicator } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import Slider from '@react-native-community/slider';
-import { bots as botsApi } from '../services/api';
+import { bots as botsApi, payments as paymentsApi } from '../services/api';
 import { useBotStream } from '../hooks/useBotStream';
 import { colors } from '../theme/colors';
 import { spacing, fontSize, borderRadius } from '../theme/spacing';
 import BotAvatar from '../components/BotAvatar';
+import * as WebBrowser from 'expo-web-browser';
 import type { BotDetail } from '@peerzero/shared';
-import { credibilityToStage, calculateHunger } from '@peerzero/shared';
+import { credibilityToStage, calculateHunger, getGradePriceDisplay, GRADUATION_GRADE, getGradePriceCents, GRADE_PRICES_CENTS } from '@peerzero/shared';
 
 // Logarithmic scale helpers for 1s–86400s range
 // Slider value 0–1 maps to seconds via exponential curve
@@ -42,11 +43,17 @@ export default function BotScreen({ route, navigation }: any) {
   }
   const [bot, setBot] = useState<BotDetail | null>(null);
   const [delayDraft, setDelayDraft] = useState<number | null>(null);
+  const [unlockedGrades, setUnlockedGrades] = useState<number[]>([]);
 
   const loadBot = useCallback(async () => {
     try {
       const data = await botsApi.get(botId) as BotDetail;
       setBot(data);
+      // Load grade unlock status if enrolled
+      if (data.school_id) {
+        const status = await paymentsApi.gradeStatus(botId) as { unlocked_grades: number[]; highest_unlocked: number };
+        setUnlockedGrades(status.unlocked_grades);
+      }
     } catch (err: any) {
       Alert.alert('Error', err.message);
     }
@@ -83,6 +90,25 @@ export default function BotScreen({ route, navigation }: any) {
     try {
       await botsApi.start(botId);
       await loadBot();
+    } catch (err: any) {
+      Alert.alert('Error', err.message);
+    }
+  };
+
+  const handleGradeUnlock = async (mode: 'next' | 'graduation') => {
+    try {
+      const result = mode === 'next'
+        ? await paymentsApi.gradeCheckout(botId) as { session_url: string }
+        : await paymentsApi.gradeBulkCheckout(botId, 'graduation') as { session_url: string };
+
+      if (result.session_url) {
+        await WebBrowser.openBrowserAsync(result.session_url, {
+          dismissButtonStyle: 'close',
+          presentationStyle: WebBrowser.WebBrowserPresentationStyle.AUTOMATIC,
+        });
+        // Refresh bot data when browser closes — payment may have completed
+        await loadBot();
+      }
     } catch (err: any) {
       Alert.alert('Error', err.message);
     }
@@ -165,6 +191,61 @@ export default function BotScreen({ route, navigation }: any) {
         </View>
       </View>
 
+      {/* Grade progress view */}
+      {isEnrolled && (
+        <View style={styles.gradeProgress}>
+          <Text style={styles.gradeProgressTitle}>Grade Progress</Text>
+          <View style={styles.gradeTrack}>
+            {Object.keys(GRADE_PRICES_CENTS).map((g) => {
+              const grade = Number(g);
+              const currentGrade = bot.cached_grade || 1;
+              const isUnlocked = unlockedGrades.includes(grade);
+              const isCurrent = grade === currentGrade;
+              const isCompleted = grade < currentGrade;
+
+              return (
+                <View key={grade} style={styles.gradeNode}>
+                  <View
+                    style={[
+                      styles.gradeDot,
+                      isCompleted && styles.gradeDotCompleted,
+                      isCurrent && styles.gradeDotCurrent,
+                      !isCompleted && !isCurrent && isUnlocked && styles.gradeDotUnlocked,
+                      !isCompleted && !isCurrent && !isUnlocked && styles.gradeDotLocked,
+                    ]}
+                  >
+                    {isCompleted && <Text style={styles.gradeDotCheck}>✓</Text>}
+                    {isCurrent && <Text style={styles.gradeDotLabel}>{grade}</Text>}
+                    {!isCompleted && !isCurrent && <Text style={styles.gradeDotLabel}>{grade}</Text>}
+                  </View>
+                  {grade === GRADUATION_GRADE && (
+                    <Text style={styles.gradFlag}>🎓</Text>
+                  )}
+                </View>
+              );
+            })}
+          </View>
+          <View style={styles.gradeLegend}>
+            <View style={styles.legendItem}>
+              <View style={[styles.legendDot, styles.gradeDotCompleted]} />
+              <Text style={styles.legendText}>Completed</Text>
+            </View>
+            <View style={styles.legendItem}>
+              <View style={[styles.legendDot, styles.gradeDotCurrent]} />
+              <Text style={styles.legendText}>Current</Text>
+            </View>
+            <View style={styles.legendItem}>
+              <View style={[styles.legendDot, styles.gradeDotUnlocked]} />
+              <Text style={styles.legendText}>Unlocked</Text>
+            </View>
+            <View style={styles.legendItem}>
+              <View style={[styles.legendDot, styles.gradeDotLocked]} />
+              <Text style={styles.legendText}>Locked</Text>
+            </View>
+          </View>
+        </View>
+      )}
+
       {/* Error message with retry */}
       {isError && bot.error_message && (
         <View style={styles.errorBox}>
@@ -182,6 +263,43 @@ export default function BotScreen({ route, navigation }: any) {
           <Text style={styles.errorText}>{bot.error_message}</Text>
         </View>
       )}
+
+      {/* Grade unlock prompt — shown when bot needs payment to continue */}
+      {/* Note: failing a grade does NOT re-charge. Payment is per grade number, not per attempt. */}
+      {bot.grade_payment_required && (() => {
+        const currentGrade = bot.cached_grade || 1;
+        const canShowGraduation = currentGrade <= GRADUATION_GRADE;
+        // Calculate remaining cost to graduation
+        let gradCost = 0;
+        for (let g = currentGrade; g <= GRADUATION_GRADE; g++) {
+          gradCost += getGradePriceCents(g);
+        }
+        return (
+          <View style={styles.gradeUnlockBox}>
+            <Text style={styles.gradeUnlockTitle}>
+              Ready for Grade {currentGrade}
+            </Text>
+            <Text style={styles.gradeUnlockText}>
+              Your bot completed the previous grade! Unlock the next one to keep learning.
+            </Text>
+            <TouchableOpacity style={styles.gradeUnlockButton} onPress={() => handleGradeUnlock('next')}>
+              <Text style={styles.gradeUnlockButtonText}>
+                Unlock Grade {currentGrade} — {getGradePriceDisplay(currentGrade)}
+              </Text>
+            </TouchableOpacity>
+            {canShowGraduation && currentGrade < GRADUATION_GRADE && (
+              <TouchableOpacity
+                style={[styles.gradeUnlockButton, styles.gradeUnlockButtonAlt]}
+                onPress={() => handleGradeUnlock('graduation')}
+              >
+                <Text style={styles.gradeUnlockButtonAltText}>
+                  Unlock All Through Graduation — ${(gradCost / 100).toFixed(2)}
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        );
+      })()}
 
       {/* Next action hint */}
       {bot.cached_next_action && (
@@ -287,6 +405,52 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.sm, alignSelf: 'flex-start', marginTop: spacing.md,
   },
   retryButtonText: { color: '#fff', fontWeight: '600', fontSize: fontSize.sm },
+  gradeProgress: {
+    width: '100%', marginTop: spacing.lg, padding: spacing.md,
+    backgroundColor: colors.bg.card, borderRadius: borderRadius.md,
+    borderWidth: 1, borderColor: colors.border,
+  },
+  gradeProgressTitle: {
+    fontSize: fontSize.md, fontWeight: '700', color: colors.text.primary,
+    marginBottom: spacing.md, textAlign: 'center',
+  },
+  gradeTrack: {
+    flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: spacing.xs,
+  },
+  gradeNode: { alignItems: 'center', position: 'relative' },
+  gradeDot: {
+    width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center',
+  },
+  gradeDotCompleted: { backgroundColor: colors.accent.success },
+  gradeDotCurrent: { backgroundColor: colors.accent.primary, borderWidth: 2, borderColor: colors.accent.primary + '60' },
+  gradeDotUnlocked: { backgroundColor: colors.accent.secondary + '30', borderWidth: 1, borderColor: colors.accent.secondary },
+  gradeDotLocked: { backgroundColor: colors.bg.elevated, borderWidth: 1, borderColor: colors.border },
+  gradeDotCheck: { color: '#fff', fontSize: 14, fontWeight: '700' },
+  gradeDotLabel: { color: colors.text.primary, fontSize: 11, fontWeight: '600' },
+  gradFlag: { fontSize: 12, marginTop: 2 },
+  gradeLegend: {
+    flexDirection: 'row', justifyContent: 'center', gap: spacing.md, marginTop: spacing.md,
+  },
+  legendItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  legendDot: { width: 10, height: 10, borderRadius: 5 },
+  legendText: { fontSize: fontSize.xs, color: colors.text.tertiary },
+  gradeUnlockBox: {
+    backgroundColor: colors.accent.primary + '15', padding: spacing.md,
+    borderRadius: borderRadius.md, marginTop: spacing.lg, width: '100%',
+    borderWidth: 1, borderColor: colors.accent.primary + '40',
+  },
+  gradeUnlockTitle: { fontSize: fontSize.md, fontWeight: '700', color: colors.accent.primary, marginBottom: spacing.xs },
+  gradeUnlockText: { color: colors.text.secondary, fontSize: fontSize.sm, marginBottom: spacing.md },
+  gradeUnlockButton: {
+    backgroundColor: colors.accent.primary, paddingVertical: spacing.sm, paddingHorizontal: spacing.lg,
+    borderRadius: borderRadius.sm, alignSelf: 'center',
+  },
+  gradeUnlockButtonText: { color: '#fff', fontWeight: '600', fontSize: fontSize.md },
+  gradeUnlockButtonAlt: {
+    backgroundColor: 'transparent', borderWidth: 1, borderColor: colors.accent.primary,
+    marginTop: spacing.sm,
+  },
+  gradeUnlockButtonAltText: { color: colors.accent.primary, fontWeight: '600', fontSize: fontSize.sm },
   nextAction: { color: colors.text.secondary, fontSize: fontSize.sm, marginTop: spacing.md, textAlign: 'center' },
   delaySection: { width: '100%', marginTop: spacing.lg },
   delayLabel: { fontSize: fontSize.sm, color: colors.text.secondary, textAlign: 'center' },

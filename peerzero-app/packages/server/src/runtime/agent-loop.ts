@@ -16,11 +16,13 @@
 
 import { getSchoolAdapter, getLLMAdapter } from '../adapters/adapter.factory';
 import { logger } from '../lib/logger';
-import { getDecryptedSchoolKey, setBotStatus } from '../services/bot.service';
+import { getDecryptedSchoolKey, setBotStatus, isBotGradeUnlocked } from '../services/bot.service';
 import { getDecryptedKey } from '../services/apikey.service';
 import * as memory from '../services/memory.service';
 import * as activity from '../services/activity.service';
 import { query, queryOne } from '../db/client';
+import { notifyGradePaymentNeeded } from '../services/notification.service';
+import { getGradePriceCents } from '@peerzero/shared';
 import { SchoolCredentials } from '../adapters/school.adapter';
 import { buildPrompt } from './prompt-builder';
 import { routeAction } from './action-router';
@@ -57,6 +59,21 @@ export async function runOneCycle(ctx: BotContext): Promise<void> {
   try {
     // 3. Fetch profile from School
     const profile = await schoolAdapter.getProfile(schoolCreds);
+
+    // 3.5. Check grade payment gate — if bot's current grade isn't unlocked, pause
+    const currentGrade = profile.grade?.grade || 1;
+    const gradeUnlocked = await isBotGradeUnlocked(ctx.botId, currentGrade);
+    if (!gradeUnlocked) {
+      logger.info({ botId: ctx.botId, grade: currentGrade }, 'Bot paused — grade not unlocked (payment required)');
+      await setBotStatus(ctx.botId, 'paused', `Grade ${currentGrade} requires payment to continue`);
+      await updateBotCache(ctx.botId, profile, ctx.cycleNumber);
+
+      // Notify user that payment is needed
+      const botRow = await queryOne<{ name: string }>('SELECT name FROM bots WHERE id = $1', [ctx.botId]);
+      const priceCents = getGradePriceCents(currentGrade);
+      notifyGradePaymentNeeded(ctx.userId, ctx.botId, botRow?.name || 'Your bot', currentGrade, priceCents);
+      return;
+    }
 
     // 4. Determine and execute action
     const actionType = determineAction(profile);
