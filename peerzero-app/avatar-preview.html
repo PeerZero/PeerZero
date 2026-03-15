@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PeerZero Bot Avatar Preview</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #0f0a1a;
+    color: #e0d8f0;
+    min-height: 100vh;
+    padding: 24px;
+  }
+  h1 { text-align: center; font-size: 28px; margin-bottom: 4px; color: #fff; }
+  .subtitle { text-align: center; color: #8b7faa; font-size: 14px; margin-bottom: 32px; }
+  .controls {
+    display: flex; flex-wrap: wrap; gap: 12px; justify-content: center;
+    margin-bottom: 32px; max-width: 900px; margin-left: auto; margin-right: auto;
+  }
+  .control-group { display: flex; flex-direction: column; gap: 4px; }
+  .control-group label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #8b7faa; }
+  select, input[type=text] {
+    background: #1a1428; border: 1px solid #2d2440; border-radius: 8px;
+    color: #e0d8f0; padding: 8px 12px; font-size: 14px; min-width: 140px;
+  }
+  .color-swatches { display: flex; gap: 4px; flex-wrap: wrap; }
+  .swatch {
+    width: 28px; height: 28px; border-radius: 50%; cursor: pointer;
+    border: 2px solid transparent; transition: border-color 0.15s;
+  }
+  .swatch.active, .swatch:hover { border-color: #fff; }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 16px; max-width: 1100px; margin: 0 auto;
+  }
+  .card {
+    background: #1a1428; border-radius: 16px; padding: 16px;
+    text-align: center; border: 1px solid #2d2440;
+  }
+  .card svg { display: block; margin: 0 auto 8px; }
+  .card-label { font-size: 12px; color: #8b7faa; }
+  .card-title { font-size: 14px; font-weight: 600; margin-bottom: 2px; }
+  .section-title {
+    text-align: center; font-size: 18px; font-weight: 600;
+    margin: 36px 0 16px; color: #c4b5e0;
+  }
+  .single-preview {
+    display: flex; justify-content: center; margin-bottom: 32px;
+  }
+  .single-card {
+    background: #1a1428; border-radius: 20px; padding: 24px;
+    text-align: center; border: 1px solid #2d2440; min-width: 200px;
+  }
+  .single-card svg { display: block; margin: 0 auto 12px; }
+  .single-card .card-title { font-size: 18px; }
+  @keyframes breathe {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.03); }
+  }
+  @keyframes bounce {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-3px); }
+  }
+  .animate-breathe { animation: breathe 3.6s ease-in-out infinite; }
+  .animate-bounce { animation: bounce 2.4s ease-in-out infinite; }
+  .animate-both { animation: breathe 3.6s ease-in-out infinite, bounce 2.4s ease-in-out infinite; }
+</style>
+</head>
+<body>
+
+<h1>PeerZero Bot Avatar Preview</h1>
+<p class="subtitle">Procedurally generated Tamagotchi-style creatures that evolve with your bot</p>
+
+<div class="controls">
+  <div class="control-group">
+    <label>Bot ID (seed)</label>
+    <input type="text" id="botId" value="bot_abc123_demo" oninput="render()">
+  </div>
+  <div class="control-group">
+    <label>Body Color</label>
+    <div class="color-swatches" id="swatches"></div>
+  </div>
+  <div class="control-group">
+    <label>Status</label>
+    <select id="status" onchange="render()">
+      <option value="running">Running (Happy)</option>
+      <option value="stopped">Stopped (Sleeping)</option>
+      <option value="paused">Paused (Curious)</option>
+      <option value="error">Error (Distressed)</option>
+    </select>
+  </div>
+  <div class="control-group">
+    <label>Mood</label>
+    <select id="mood" onchange="render()">
+      <option value="neutral">Neutral</option>
+      <option value="positive">Positive</option>
+      <option value="negative">Negative</option>
+      <option value="milestone">Milestone</option>
+    </select>
+  </div>
+  <div class="control-group">
+    <label>Hunger</label>
+    <select id="hunger" onchange="render()">
+      <option value="satisfied">Satisfied</option>
+      <option value="curious">Curious (3+ days)</option>
+      <option value="yearning">Yearning (1+ week)</option>
+      <option value="starving">Starving (2+ weeks)</option>
+    </select>
+  </div>
+</div>
+
+<div class="single-preview" id="mainPreview"></div>
+<div class="section-title">Evolution Stages (Tier 0 &rarr; 5)</div>
+<div class="grid" id="tierGrid"></div>
+<div class="section-title">All Statuses</div>
+<div class="grid" id="statusGrid"></div>
+<div class="section-title">Random Bots Gallery</div>
+<div class="grid" id="galleryGrid"></div>
+
+<script>
+// ── Port of BotAvatar.tsx SVG logic to plain JS ──
+
+const COLORS = [
+  '#6C5CE7', '#FF6B9D', '#00B894', '#FDCB6E', '#E17055',
+  '#74B9FF', '#A29BFE', '#FF7675', '#55EFC4', '#FD79A8'
+];
+const COLOR_NAMES = [
+  'Royal Purple', 'Rose Pink', 'Mint Green', 'Sunshine', 'Coral',
+  'Sky Blue', 'Lavender', 'Salmon', 'Teal', 'Hot Pink'
+];
+
+let selectedColor = COLORS[0];
+
+function hashCode(str) {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = ((hash << 5) - hash) + str.charCodeAt(i);
+    hash |= 0;
+  }
+  return Math.abs(hash);
+}
+
+function seededRandom(seed, index) {
+  const x = Math.sin(seed + index * 9301 + 49297) * 49381;
+  return x - Math.floor(x);
+}
+
+function hexToRgb(hex) {
+  const c = hex.replace('#', '');
+  return { r: parseInt(c.substring(0,2),16)||100, g: parseInt(c.substring(2,4),16)||100, b: parseInt(c.substring(4,6),16)||200 };
+}
+function rgbToHex(r,g,b) {
+  const cl = v => Math.max(0,Math.min(255,Math.round(v)));
+  return '#'+[r,g,b].map(v=>cl(v).toString(16).padStart(2,'0')).join('');
+}
+function lighten(hex, amt) { const {r,g,b}=hexToRgb(hex); return rgbToHex(r+(255-r)*amt,g+(255-g)*amt,b+(255-b)*amt); }
+function darken(hex, amt) { const {r,g,b}=hexToRgb(hex); return rgbToHex(r*(1-amt),g*(1-amt),b*(1-amt)); }
+
+function generateTraits(botId) {
+  const seed = hashCode(botId);
+  const r = i => seededRandom(seed, i);
+  const bodyShapes = ['round','oval','bean','pear'];
+  const earStyles = ['round','pointed','floppy','cat'];
+  const tailStyles = ['curly','fluffy','thin','stub'];
+  const patternStyles = ['spots','stripes','belly','none'];
+  return {
+    bodyShape: bodyShapes[Math.floor(r(0)*bodyShapes.length)],
+    earStyle: earStyles[Math.floor(r(1)*earStyles.length)],
+    tailStyle: tailStyles[Math.floor(r(2)*tailStyles.length)],
+    patternStyle: patternStyles[Math.floor(r(3)*patternStyles.length)],
+    eyeSpacing: 0.3+r(4)*0.2,
+    eyeSize: 0.8+r(5)*0.4,
+    cheekSize: 0.5+r(6)*0.5,
+  };
+}
+
+function renderAvatar(botId, color, tier, status, mood, hunger, size) {
+  const traits = generateTraits(botId);
+  const t = Math.max(0,Math.min(5,tier));
+  const sb = t * 1.2;
+  let svg = '';
+
+  // Helper to build the SVG string
+  const cx = 50, cy = 50;
+
+  // Aura (tier 4+)
+  if (t >= 4) {
+    const ac = lighten(color, 0.4);
+    svg += `<circle cx="50" cy="50" r="46" fill="${ac}" opacity="${t>=5?0.2:0.12}"/>`;
+  }
+
+  // Wings (tier 5)
+  if (t >= 5) {
+    const wc = lighten(color, 0.35);
+    svg += `<g opacity="0.5">
+      <path d="M 26 44 Q 8 32 14 20 Q 22 28 26 38" fill="${wc}"/>
+      <path d="M 26 44 Q 4 44 8 30 Q 18 36 26 42" fill="${wc}" opacity="0.7"/>
+      <path d="M 74 44 Q 92 32 86 20 Q 78 28 74 38" fill="${wc}"/>
+      <path d="M 74 44 Q 96 44 92 30 Q 82 36 74 42" fill="${wc}" opacity="0.7"/>
+    </g>`;
+  }
+
+  // Tail (tier 3+)
+  if (t >= 3) {
+    const tc = darken(color, 0.15);
+    switch(traits.tailStyle) {
+      case 'curly': svg += `<path d="M 22 58 Q 10 55 12 45 Q 14 38 18 42" stroke="${tc}" stroke-width="3" fill="none" stroke-linecap="round"/>`; break;
+      case 'fluffy': svg += `<circle cx="16" cy="52" r="6" fill="${tc}"/><circle cx="13" cy="48" r="4.5" fill="${tc}"/><circle cx="12" cy="44" r="3.5" fill="${tc}"/>`; break;
+      case 'thin': svg += `<path d="M 22 58 Q 8 52 10 42" stroke="${tc}" stroke-width="2" fill="none" stroke-linecap="round"/>`; break;
+      default: svg += `<ellipse cx="20" cy="56" rx="5" ry="3.5" fill="${tc}"/>`;
+    }
+  }
+
+  // Ears (tier 1+)
+  if (t >= 1) {
+    const ec = darken(color, 0.1), ic = lighten(color, 0.4);
+    const es = t>=3?1.2:t>=2?1.0:0.7;
+    switch(traits.earStyle) {
+      case 'round':
+        svg += `<circle cx="32" cy="24" r="${10*es}" fill="${ec}"/><circle cx="32" cy="24" r="${6*es}" fill="${ic}" opacity="0.6"/>`;
+        svg += `<circle cx="68" cy="24" r="${10*es}" fill="${ec}"/><circle cx="68" cy="24" r="${6*es}" fill="${ic}" opacity="0.6"/>`;
+        break;
+      case 'pointed':
+        svg += `<path d="M 28 ${32-2*es} L ${26-4*es} ${14-6*es} L ${38+2*es} ${28-2*es} Z" fill="${ec}"/>`;
+        svg += `<path d="M 30 ${30-2*es} L ${28-2*es} ${18-4*es} L ${36+es} ${28-es} Z" fill="${ic}" opacity="0.5"/>`;
+        svg += `<path d="M 72 ${32-2*es} L ${74+4*es} ${14-6*es} L ${62-2*es} ${28-2*es} Z" fill="${ec}"/>`;
+        svg += `<path d="M 70 ${30-2*es} L ${72+2*es} ${18-4*es} L ${64-es} ${28-es} Z" fill="${ic}" opacity="0.5"/>`;
+        break;
+      case 'floppy': {
+        const dropY = 30+8*es, earW = 8*es;
+        svg += `<path d="M 34 26 Q ${26-earW} 24, ${22-earW} ${dropY} Q ${20-earW} ${dropY+6}, ${24-earW+4} ${dropY+2} Q 30 ${dropY-4}, 36 30" fill="${ec}"/>`;
+        svg += `<path d="M 66 26 Q ${74+earW} 24, ${78+earW} ${dropY} Q ${80+earW} ${dropY+6}, ${76+earW-4} ${dropY+2} Q 70 ${dropY-4}, 64 30" fill="${ec}"/>`;
+        break;
+      }
+      default: // cat
+        svg += `<path d="M 30 30 L ${24-4*es} ${12-6*es} L 40 ${26-2*es} Z" fill="${ec}"/>`;
+        svg += `<path d="M 32 28 L ${27-2*es} ${16-4*es} L 38 ${26-es} Z" fill="${ic}" opacity="0.5"/>`;
+        svg += `<path d="M 70 30 L ${76+4*es} ${12-6*es} L 60 ${26-2*es} Z" fill="${ec}"/>`;
+        svg += `<path d="M 68 28 L ${73+2*es} ${16-4*es} L 62 ${26-es} Z" fill="${ic}" opacity="0.5"/>`;
+    }
+  }
+
+  // Body
+  const lc = lighten(color, 0.3);
+  const gradId = 'bg'+Math.random().toString(36).slice(2,8);
+  const gradDef = `<defs><radialGradient id="${gradId}" cx="0.4" cy="0.35" r="0.6"><stop offset="0" stop-color="${lc}"/><stop offset="1" stop-color="${color}"/></radialGradient></defs>`;
+  svg += gradDef;
+  switch(traits.bodyShape) {
+    case 'round':
+      svg += `<circle cx="${cx}" cy="${cy}" r="${28+sb}" fill="url(#${gradId})"/>`;
+      svg += `<ellipse cx="${cx}" cy="${cy+4}" rx="${16+sb*0.4}" ry="${18+sb*0.4}" fill="${lc}" opacity="0.4"/>`;
+      break;
+    case 'oval':
+      svg += `<ellipse cx="${cx}" cy="${cy+2}" rx="${22+sb}" ry="${26+sb}" fill="url(#${gradId})"/>`;
+      svg += `<ellipse cx="${cx}" cy="${cy+6}" rx="${13+sb*0.3}" ry="${15+sb*0.3}" fill="${lc}" opacity="0.4"/>`;
+      break;
+    case 'bean': {
+      const w=24+sb, h=28+sb;
+      svg += `<path d="M ${cx} ${cy-h} C ${cx+w*0.9} ${cy-h}, ${cx+w} ${cy-h*0.4}, ${cx+w} ${cy} C ${cx+w} ${cy+h*0.5}, ${cx+w*0.6} ${cy+h}, ${cx} ${cy+h} C ${cx-w*0.6} ${cy+h}, ${cx-w} ${cy+h*0.5}, ${cx-w} ${cy+2} C ${cx-w} ${cy-h*0.3}, ${cx-w*0.7} ${cy-h}, ${cx} ${cy-h} Z" fill="url(#${gradId})"/>`;
+      svg += `<ellipse cx="${cx+1}" cy="${cy+4}" rx="${13+sb*0.3}" ry="${15+sb*0.3}" fill="${lc}" opacity="0.35"/>`;
+      break;
+    }
+    default: { // pear
+      const pw=24+sb, ph=26+sb;
+      svg += `<path d="M ${cx} ${cy-ph} C ${cx+pw*0.6} ${cy-ph}, ${cx+pw*0.7} ${cy-ph*0.3}, ${cx+pw*0.8} ${cy} C ${cx+pw} ${cy+ph*0.4}, ${cx+pw*0.5} ${cy+ph}, ${cx} ${cy+ph} C ${cx-pw*0.5} ${cy+ph}, ${cx-pw} ${cy+ph*0.4}, ${cx-pw*0.8} ${cy} C ${cx-pw*0.7} ${cy-ph*0.3}, ${cx-pw*0.6} ${cy-ph}, ${cx} ${cy-ph} Z" fill="url(#${gradId})"/>`;
+      svg += `<ellipse cx="${cx}" cy="${cy+6}" rx="${14+sb*0.3}" ry="${14+sb*0.3}" fill="${lc}" opacity="0.35"/>`;
+    }
+  }
+
+  // Patterns (tier 3+)
+  if (t >= 3) {
+    const pc = lighten(color, 0.15);
+    switch(traits.patternStyle) {
+      case 'spots':
+        svg += `<g opacity="0.3"><circle cx="38" cy="40" r="2.5" fill="${pc}"/><circle cx="62" cy="42" r="2" fill="${pc}"/><circle cx="44" cy="62" r="2.2" fill="${pc}"/><circle cx="58" cy="60" r="1.8" fill="${pc}"/></g>`;
+        break;
+      case 'stripes':
+        svg += `<g opacity="0.2"><path d="M 38 36 Q 50 34 62 36" stroke="${pc}" stroke-width="2" fill="none" stroke-linecap="round"/><path d="M 36 44 Q 50 42 64 44" stroke="${pc}" stroke-width="2" fill="none" stroke-linecap="round"/><path d="M 38 52 Q 50 50 62 52" stroke="${pc}" stroke-width="2" fill="none" stroke-linecap="round"/></g>`;
+        break;
+      case 'belly':
+        svg += `<ellipse cx="50" cy="56" rx="12" ry="10" fill="${pc}" opacity="0.25"/>`;
+        break;
+    }
+  }
+
+  // Feet
+  const fc = darken(color, 0.2);
+  const bodyBot = 50+26+sb;
+  const feetY = Math.min(bodyBot+2, 90);
+  svg += `<ellipse cx="42" cy="${feetY}" rx="6" ry="3" fill="${fc}"/><ellipse cx="58" cy="${feetY}" rx="6" ry="3" fill="${fc}"/>`;
+
+  // Eyes
+  const spacing = traits.eyeSpacing * 30;
+  const baseSize = 5 * traits.eyeSize;
+  const ey = 44;
+  const lx = cx - spacing, rx2 = cx + spacing;
+
+  if (status === 'stopped') {
+    svg += `<path d="M ${lx-baseSize} ${ey} Q ${lx} ${ey-baseSize*0.8} ${lx+baseSize} ${ey}" stroke="#2D1B4E" stroke-width="1.5" fill="none" stroke-linecap="round"/>`;
+    svg += `<path d="M ${rx2-baseSize} ${ey} Q ${rx2} ${ey-baseSize*0.8} ${rx2+baseSize} ${ey}" stroke="#2D1B4E" stroke-width="1.5" fill="none" stroke-linecap="round"/>`;
+    svg += `<path d="M 72 32 L 78 32 L 72 38 L 78 38" stroke="#8B93A8" stroke-width="1" fill="none" opacity="0.6"/>`;
+    svg += `<path d="M 80 26 L 84 26 L 80 30 L 84 30" stroke="#8B93A8" stroke-width="0.8" fill="none" opacity="0.4"/>`;
+  } else if (status === 'error') {
+    svg += `<circle cx="${lx}" cy="${ey}" r="${baseSize}" fill="white"/><circle cx="${rx2}" cy="${ey}" r="${baseSize}" fill="white"/>`;
+    svg += `<circle cx="${lx}" cy="${ey-1}" r="${baseSize*0.45}" fill="#2D1B4E"/><circle cx="${rx2}" cy="${ey-1}" r="${baseSize*0.45}" fill="#2D1B4E"/>`;
+    svg += `<circle cx="${lx}" cy="${ey-2}" r="${baseSize*0.2}" fill="white"/><circle cx="${rx2}" cy="${ey-2}" r="${baseSize*0.2}" fill="white"/>`;
+    svg += `<path d="M 74 36 Q 76 32 78 36 Q 76 40 74 36" fill="#00D2FF" opacity="0.6"/>`;
+  } else if (status === 'paused') {
+    svg += `<circle cx="${lx}" cy="${ey}" r="${baseSize*1.1}" fill="white"/><circle cx="${rx2}" cy="${ey}" r="${baseSize*0.9}" fill="white"/>`;
+    svg += `<circle cx="${lx+0.5}" cy="${ey}" r="${baseSize*0.5}" fill="#2D1B4E"/><circle cx="${rx2+0.5}" cy="${ey}" r="${baseSize*0.4}" fill="#2D1B4E"/>`;
+    svg += `<circle cx="${lx+1}" cy="${ey-1}" r="${baseSize*0.2}" fill="white"/><circle cx="${rx2+1}" cy="${ey-1}" r="${baseSize*0.15}" fill="white"/>`;
+    svg += `<path d="M 72 28 Q 76 24 76 28 Q 76 31 73 32" stroke="#8B93A8" stroke-width="1" fill="none" opacity="0.5"/>`;
+    svg += `<circle cx="73" cy="35" r="0.8" fill="#8B93A8" opacity="0.5"/>`;
+  } else {
+    // Running
+    const isHappy = mood==='positive'||mood==='milestone';
+    const isSad = mood==='negative';
+    svg += `<circle cx="${lx}" cy="${ey}" r="${baseSize}" fill="white"/><circle cx="${rx2}" cy="${ey}" r="${baseSize}" fill="white"/>`;
+    svg += `<circle cx="${lx+(isHappy?0.5:0)}" cy="${ey+(isSad?1:0)}" r="${baseSize*0.5}" fill="#2D1B4E"/>`;
+    svg += `<circle cx="${rx2+(isHappy?0.5:0)}" cy="${ey+(isSad?1:0)}" r="${baseSize*0.5}" fill="#2D1B4E"/>`;
+    svg += `<circle cx="${lx+baseSize*0.25}" cy="${ey-baseSize*0.25}" r="${baseSize*0.18}" fill="white"/>`;
+    svg += `<circle cx="${rx2+baseSize*0.25}" cy="${ey-baseSize*0.25}" r="${baseSize*0.18}" fill="white"/>`;
+    if (isHappy) {
+      svg += `<path d="M ${lx-baseSize*0.7} ${ey+baseSize*0.1} Q ${lx} ${ey-baseSize*0.6} ${lx+baseSize*0.7} ${ey+baseSize*0.1}" stroke="#2D1B4E" stroke-width="1.5" fill="none" stroke-linecap="round"/>`;
+      svg += `<path d="M ${rx2-baseSize*0.7} ${ey+baseSize*0.1} Q ${rx2} ${ey-baseSize*0.6} ${rx2+baseSize*0.7} ${ey+baseSize*0.1}" stroke="#2D1B4E" stroke-width="1.5" fill="none" stroke-linecap="round"/>`;
+    }
+  }
+
+  // Cheeks
+  const chc = lighten(color, 0.2);
+  const chs = 4 * traits.cheekSize;
+  svg += `<ellipse cx="${50-traits.eyeSpacing*30-3}" cy="49" rx="${chs}" ry="${chs*0.7}" fill="${chc}" opacity="0.35"/>`;
+  svg += `<ellipse cx="${50+traits.eyeSpacing*30+3}" cy="49" rx="${chs}" ry="${chs*0.7}" fill="${chc}" opacity="0.35"/>`;
+
+  // Mouth
+  const my = 54;
+  if (status === 'stopped') {
+    svg += `<ellipse cx="50" cy="${my+1}" rx="2" ry="1.5" fill="#2D1B4E" opacity="0.4"/>`;
+  } else if (status === 'error') {
+    svg += `<path d="M 45 ${my+1} Q 47.5 ${my+4} 50 ${my+1} Q 52.5 ${my-2} 55 ${my+1}" stroke="#2D1B4E" stroke-width="1.2" fill="none" stroke-linecap="round"/>`;
+  } else if (status === 'paused') {
+    svg += `<ellipse cx="50" cy="${my+1}" rx="2.5" ry="3" fill="#2D1B4E" opacity="0.5"/>`;
+  } else {
+    const isHappy = mood==='positive'||mood==='milestone';
+    const isSad = mood==='negative';
+    if (isHappy) {
+      svg += `<path d="M 44 ${my} Q 50 ${my+8} 56 ${my}" fill="#2D1B4E" opacity="0.6"/>`;
+      svg += `<path d="M 48 ${my+4} Q 50 ${my+6.5} 52 ${my+4}" fill="#FF8A8A" opacity="0.7"/>`;
+    } else if (isSad) {
+      svg += `<path d="M 46 ${my+2} Q 50 ${my-1} 54 ${my+2}" stroke="#2D1B4E" stroke-width="1.2" fill="none" stroke-linecap="round" opacity="0.5"/>`;
+    } else {
+      svg += `<path d="M 46 ${my} Q 50 ${my+4} 54 ${my}" stroke="#2D1B4E" stroke-width="1.2" fill="none" stroke-linecap="round" opacity="0.5"/>`;
+    }
+  }
+
+  // Crown/halo (tier 4+)
+  if (t >= 4) {
+    const bodyTop = 50-26-sb;
+    const crownBase = bodyTop+2;
+    if (t >= 5) {
+      const cgId = 'cg'+Math.random().toString(36).slice(2,8);
+      svg += `<defs><linearGradient id="${cgId}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFD700"/><stop offset="1" stop-color="#FFA500"/></linearGradient></defs>`;
+      svg += `<path d="M 36 ${crownBase} L 38 ${crownBase-10} L 43 ${crownBase-4} L 50 ${crownBase-14} L 57 ${crownBase-4} L 62 ${crownBase-10} L 64 ${crownBase} Z" fill="url(#${cgId})"/>`;
+      svg += `<circle cx="43" cy="${crownBase-4}" r="1.5" fill="#FF5252"/><circle cx="50" cy="${crownBase-9}" r="2" fill="#00D2FF"/><circle cx="57" cy="${crownBase-4}" r="1.5" fill="#00E676"/>`;
+    } else {
+      svg += `<ellipse cx="50" cy="${bodyTop-2}" rx="14" ry="4" fill="none" stroke="#FFD600" stroke-width="1.5" opacity="0.7"/>`;
+    }
+  }
+
+  // Sparkles (tier 4+)
+  if (t >= 4) {
+    const sc = t>=5?'#FFD700':'#FFD600';
+    const so = t>=5?0.8:0.5;
+    const cnt = t>=5?6:3;
+    const positions = [{x:14,y:18},{x:82,y:22},{x:20,y:70},{x:80,y:68},{x:10,y:45},{x:90,y:42}];
+    svg += `<g opacity="${so}">`;
+    for (let i=0;i<cnt;i++) {
+      const p=positions[i];
+      svg += `<path d="M ${p.x} ${p.y-2.5} L ${p.x+0.8} ${p.y-0.8} L ${p.x+2.5} ${p.y} L ${p.x+0.8} ${p.y+0.8} L ${p.x} ${p.y+2.5} L ${p.x-0.8} ${p.y+0.8} L ${p.x-2.5} ${p.y} L ${p.x-0.8} ${p.y-0.8} Z" fill="${sc}"/>`;
+    }
+    svg += '</g>';
+  }
+
+  // Hunger indicator
+  if (hunger !== 'satisfied') {
+    const bo = hunger==='starving'?0.85:hunger==='yearning'?0.7:0.5;
+    svg += `<g opacity="${bo}">`;
+    svg += `<circle cx="72" cy="26" r="1.5" fill="white" opacity="0.6"/><circle cx="76" cy="20" r="2.2" fill="white" opacity="0.7"/>`;
+    svg += `<ellipse cx="84" cy="12" rx="10" ry="8" fill="white" opacity="0.9"/>`;
+    if (hunger==='starving') {
+      svg += `<path d="M 84 8 L 85.2 10.4 L 87.8 10.8 L 85.9 12.6 L 86.4 15.2 L 84 14 L 81.6 15.2 L 82.1 12.6 L 80.2 10.8 L 82.8 10.4 Z" fill="#FFD600"/>`;
+    } else if (hunger==='yearning') {
+      svg += `<rect x="80" y="9" width="8" height="6" rx="0.5" fill="#6C5CE7" opacity="0.8"/><path d="M 84 9 L 84 15" stroke="white" stroke-width="0.5"/><path d="M 81 10 L 83 10" stroke="white" stroke-width="0.4"/><path d="M 85 10 L 87 10" stroke="white" stroke-width="0.4"/>`;
+    } else {
+      svg += `<path d="M 82.5 9 Q 85.5 7 86 10 Q 86.5 12 84 13" stroke="#8B93A8" stroke-width="1.2" fill="none" stroke-linecap="round"/><circle cx="84" cy="15" r="0.8" fill="#8B93A8"/>`;
+    }
+    svg += '</g>';
+  }
+
+  const animClass = status==='running'?'animate-both':status==='error'?'animate-breathe':'';
+  return `<div class="${animClass}"><svg width="${size}" height="${size}" viewBox="0 0 100 100">${svg}</svg></div>`;
+}
+
+// Tier/stage names
+const TIER_NAMES = ['Newcomer','Apprentice','Tested','Verified','Distinguished','Master'];
+const STATUS_LABELS = {running:'Running',stopped:'Sleeping',paused:'Curious',error:'Distressed'};
+
+function render() {
+  const botId = document.getElementById('botId').value || 'demo';
+  const status = document.getElementById('status').value;
+  const mood = document.getElementById('mood').value;
+  const hunger = document.getElementById('hunger').value;
+
+  // Main preview
+  document.getElementById('mainPreview').innerHTML = `
+    <div class="single-card">
+      ${renderAvatar(botId, selectedColor, 3, status, mood, hunger, 180)}
+      <div class="card-title" style="margin-top:8px">${botId}</div>
+      <div class="card-label">${TIER_NAMES[3]} &middot; ${STATUS_LABELS[status]} &middot; ${mood}</div>
+    </div>
+  `;
+
+  // Tier grid
+  let tierHtml = '';
+  for (let i=0;i<=5;i++) {
+    tierHtml += `<div class="card">
+      ${renderAvatar(botId, selectedColor, i, 'running', 'positive', 'satisfied', 130)}
+      <div class="card-title">Tier ${i}</div>
+      <div class="card-label">${TIER_NAMES[i]}</div>
+    </div>`;
+  }
+  document.getElementById('tierGrid').innerHTML = tierHtml;
+
+  // Status grid
+  let statusHtml = '';
+  for (const s of ['running','stopped','paused','error']) {
+    statusHtml += `<div class="card">
+      ${renderAvatar(botId, selectedColor, 3, s, s==='running'?'positive':'neutral', 'satisfied', 130)}
+      <div class="card-title">${STATUS_LABELS[s]}</div>
+      <div class="card-label">${s}</div>
+    </div>`;
+  }
+  // Hunger states
+  for (const h of ['curious','yearning','starving']) {
+    statusHtml += `<div class="card">
+      ${renderAvatar(botId, selectedColor, 2, 'paused', 'neutral', h, 130)}
+      <div class="card-title">Hunger: ${h}</div>
+      <div class="card-label">Knowledge ${h}</div>
+    </div>`;
+  }
+  document.getElementById('statusGrid').innerHTML = statusHtml;
+
+  // Gallery — random bots
+  let galleryHtml = '';
+  const sampleIds = [
+    'bot_alice_42','bot_bob_99','bot_charlie_7','bot_diana_13',
+    'bot_echo_55','bot_frank_88','bot_grace_21','bot_hank_64',
+    'bot_iris_36','bot_jade_77','bot_kai_11','bot_luna_50'
+  ];
+  sampleIds.forEach((id, i) => {
+    const c = COLORS[i % COLORS.length];
+    const tier = Math.floor(seededRandom(hashCode(id), 99) * 6);
+    const statuses = ['running','running','running','stopped','paused','error'];
+    const st = statuses[Math.floor(seededRandom(hashCode(id), 100) * statuses.length)];
+    galleryHtml += `<div class="card">
+      ${renderAvatar(id, c, tier, st, st==='running'?'positive':'neutral', 'satisfied', 120)}
+      <div class="card-title">${id.replace('bot_','').replace(/_/g,' ')}</div>
+      <div class="card-label">${TIER_NAMES[tier]} &middot; ${STATUS_LABELS[st]}</div>
+    </div>`;
+  });
+  document.getElementById('galleryGrid').innerHTML = galleryHtml;
+}
+
+// Color swatches
+function initSwatches() {
+  const container = document.getElementById('swatches');
+  COLORS.forEach((c, i) => {
+    const el = document.createElement('div');
+    el.className = 'swatch' + (i===0?' active':'');
+    el.style.background = c;
+    el.title = COLOR_NAMES[i];
+    el.onclick = () => {
+      selectedColor = c;
+      document.querySelectorAll('.swatch').forEach(s=>s.classList.remove('active'));
+      el.classList.add('active');
+      render();
+    };
+    container.appendChild(el);
+  });
+}
+
+initSwatches();
+render();
+</script>
+</body>
+</html>
