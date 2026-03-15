@@ -391,7 +391,7 @@ module.exports = async (req, res) => {
       await checkCitationAccuracyConsensus(paper_id, paper.agent_id);
     }
 
-    if (newScore && all_reviews.length === 15) {
+    if (newScore && all_reviews.length >= 15 && (all_reviews.length === 15 || all_reviews.length % 5 === 0)) {
       await retroactiveAccuracyUpdate(paper_id, newScore);
       // Outcome-based: measure each reviewer's accuracy against settled consensus
       exerciseAdversarialFromConsensus(paper_id, newScore)
