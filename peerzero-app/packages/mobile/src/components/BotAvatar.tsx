@@ -123,12 +123,13 @@ function renderBody(
   tier: number,
 ): React.ReactElement {
   const lightColor = lighten(color, 0.3);
-  const darkColor = darken(color, 0.2);
-  // Body gets slightly larger and more complex with tier
-  const sizeBonus = Math.min(tier * 2, 10);
+  // Body gets slightly larger with tier, but capped to stay within viewBox
+  // At tier 5 (max), sizeBonus = 6. This keeps all shapes within the safe zone
+  // (roughly x: 12-88, y: 18-84) leaving room for ears, crown, feet.
+  const sizeBonus = Math.min(tier, 5) * 1.2;
 
   const cx = 50;
-  const cy = 52;
+  const cy = 50;
 
   switch (traits.bodyShape) {
     case 'round':
@@ -154,11 +155,14 @@ function renderBody(
               <Stop offset="1" stopColor={color} />
             </RadialGradient>
           </Defs>
-          <Ellipse cx={cx} cy={cy} rx={24 + sizeBonus} ry={30 + sizeBonus} fill="url(#bodyGrad)" />
-          <Ellipse cx={cx} cy={cy + 6} rx={14 + sizeBonus * 0.3} ry={18 + sizeBonus * 0.3} fill={lightColor} opacity={0.4} />
+          <Ellipse cx={cx} cy={cy + 2} rx={22 + sizeBonus} ry={26 + sizeBonus} fill="url(#bodyGrad)" />
+          <Ellipse cx={cx} cy={cy + 6} rx={13 + sizeBonus * 0.3} ry={15 + sizeBonus * 0.3} fill={lightColor} opacity={0.4} />
         </G>
       );
-    case 'bean':
+    case 'bean': {
+      // Bean shape: wider at bottom, narrower at top, with a slight indent on left
+      const w = 24 + sizeBonus;
+      const h = 28 + sizeBonus;
       return (
         <G>
           <Defs>
@@ -168,17 +172,23 @@ function renderBody(
             </RadialGradient>
           </Defs>
           <Path
-            d={`M ${cx - 26 - sizeBonus} ${cy}
-                C ${cx - 26 - sizeBonus} ${cy - 28 - sizeBonus}, ${cx + 26 + sizeBonus} ${cy - 32 - sizeBonus}, ${cx + 26 + sizeBonus} ${cy}
-                C ${cx + 26 + sizeBonus} ${cy + 28 + sizeBonus}, ${cx - 26 - sizeBonus} ${cy + 28 + sizeBonus}, ${cx - 26 - sizeBonus} ${cy}
+            d={`M ${cx} ${cy - h}
+                C ${cx + w * 0.9} ${cy - h}, ${cx + w} ${cy - h * 0.4}, ${cx + w} ${cy}
+                C ${cx + w} ${cy + h * 0.5}, ${cx + w * 0.6} ${cy + h}, ${cx} ${cy + h}
+                C ${cx - w * 0.6} ${cy + h}, ${cx - w} ${cy + h * 0.5}, ${cx - w} ${cy + 2}
+                C ${cx - w} ${cy - h * 0.3}, ${cx - w * 0.7} ${cy - h}, ${cx} ${cy - h}
                 Z`}
             fill="url(#bodyGrad)"
           />
-          <Ellipse cx={cx} cy={cy + 4} rx={14 + sizeBonus * 0.3} ry={16 + sizeBonus * 0.3} fill={lightColor} opacity={0.35} />
+          <Ellipse cx={cx + 1} cy={cy + 4} rx={13 + sizeBonus * 0.3} ry={15 + sizeBonus * 0.3} fill={lightColor} opacity={0.35} />
         </G>
       );
+    }
     case 'pear':
-    default:
+    default: {
+      // Pear: narrow top, wide bottom. Cute bottom-heavy shape.
+      const pw = 24 + sizeBonus;
+      const ph = 26 + sizeBonus;
       return (
         <G>
           <Defs>
@@ -188,17 +198,18 @@ function renderBody(
             </RadialGradient>
           </Defs>
           <Path
-            d={`M ${cx} ${cy - 30 - sizeBonus}
-                C ${cx + 20 + sizeBonus * 0.7} ${cy - 30 - sizeBonus}, ${cx + 28 + sizeBonus} ${cy - 10}, ${cx + 28 + sizeBonus} ${cy + 5}
-                C ${cx + 28 + sizeBonus} ${cy + 25 + sizeBonus}, ${cx + 10} ${cy + 32 + sizeBonus}, ${cx} ${cy + 32 + sizeBonus}
-                C ${cx - 10} ${cy + 32 + sizeBonus}, ${cx - 28 - sizeBonus} ${cy + 25 + sizeBonus}, ${cx - 28 - sizeBonus} ${cy + 5}
-                C ${cx - 28 - sizeBonus} ${cy - 10}, ${cx - 20 - sizeBonus * 0.7} ${cy - 30 - sizeBonus}, ${cx} ${cy - 30 - sizeBonus}
+            d={`M ${cx} ${cy - ph}
+                C ${cx + pw * 0.6} ${cy - ph}, ${cx + pw * 0.7} ${cy - ph * 0.3}, ${cx + pw * 0.8} ${cy}
+                C ${cx + pw} ${cy + ph * 0.4}, ${cx + pw * 0.5} ${cy + ph}, ${cx} ${cy + ph}
+                C ${cx - pw * 0.5} ${cy + ph}, ${cx - pw} ${cy + ph * 0.4}, ${cx - pw * 0.8} ${cy}
+                C ${cx - pw * 0.7} ${cy - ph * 0.3}, ${cx - pw * 0.6} ${cy - ph}, ${cx} ${cy - ph}
                 Z`}
             fill="url(#bodyGrad)"
           />
-          <Ellipse cx={cx} cy={cy + 8} rx={16 + sizeBonus * 0.3} ry={16 + sizeBonus * 0.3} fill={lightColor} opacity={0.35} />
+          <Ellipse cx={cx} cy={cy + 6} rx={14 + sizeBonus * 0.3} ry={14 + sizeBonus * 0.3} fill={lightColor} opacity={0.35} />
         </G>
       );
+    }
   }
 }
 
@@ -232,21 +243,25 @@ function renderEars(
           <Path d={`M 70 ${30 - 2 * earScale} L ${72 + 2 * earScale} ${18 - 4 * earScale} L ${64 - earScale} ${28 - earScale} Z`} fill={innerColor} opacity={0.5} />
         </G>
       );
-    case 'floppy':
+    case 'floppy': {
+      // Floppy ears droop down from head level — like a bunny/puppy
+      const dropY = 30 + 8 * earScale; // How far down the ear tip goes
+      const earW = 8 * earScale;
       return (
         <G>
+          {/* Left floppy ear */}
           <Path
-            d={`M 34 28 C 28 22, 18 ${20 + 6 * earScale}, ${20 - 2 * earScale} ${34 + 4 * earScale} C ${18 - 2 * earScale} ${40 + 2 * earScale}, 28 38, 34 34`}
+            d={`M 34 26 Q ${26 - earW} 24, ${22 - earW} ${dropY} Q ${20 - earW} ${dropY + 6}, ${24 - earW + 4} ${dropY + 2} Q 30 ${dropY - 4}, 36 30`}
             fill={earColor}
-            strokeWidth={0}
           />
+          {/* Right floppy ear */}
           <Path
-            d={`M 66 28 C 72 22, 82 ${20 + 6 * earScale}, ${80 + 2 * earScale} ${34 + 4 * earScale} C ${82 + 2 * earScale} ${40 + 2 * earScale}, 72 38, 66 34`}
+            d={`M 66 26 Q ${74 + earW} 24, ${78 + earW} ${dropY} Q ${80 + earW} ${dropY + 6}, ${76 + earW - 4} ${dropY + 2} Q 70 ${dropY - 4}, 64 30`}
             fill={earColor}
-            strokeWidth={0}
           />
         </G>
       );
+    }
     case 'cat':
     default:
       return (
@@ -264,12 +279,12 @@ function renderEyes(
   traits: CreatureTraits,
   status: 'running' | 'stopped' | 'paused' | 'error',
   mood: string,
-  tier: number,
+  _tier: number,
 ): React.ReactElement {
   const spacing = traits.eyeSpacing * 30;
   const baseSize = 5 * traits.eyeSize;
   const cx = 50;
-  const cy = 46;
+  const cy = 44; // Eyes sit in the upper third of the body (center at 50)
   const leftX = cx - spacing;
   const rightX = cx + spacing;
 
@@ -337,11 +352,18 @@ function renderEyes(
       {/* Sparkle/light reflection */}
       <Circle cx={leftX + baseSize * 0.25} cy={cy - baseSize * 0.25} r={baseSize * 0.18} fill="white" />
       <Circle cx={rightX + baseSize * 0.25} cy={cy - baseSize * 0.25} r={baseSize * 0.18} fill="white" />
-      {/* Happy eyes get a slight squint (bottom arc) */}
+      {/* Happy eyes: upward arc smile-eyes instead of round eyes */}
       {isHappy && (
         <G>
-          <Path d={`M ${leftX - baseSize * 0.6} ${cy + baseSize * 0.3} Q ${leftX} ${cy + baseSize * 0.8} ${leftX + baseSize * 0.6} ${cy + baseSize * 0.3}`} fill="white" />
-          <Path d={`M ${rightX - baseSize * 0.6} ${cy + baseSize * 0.3} Q ${rightX} ${cy + baseSize * 0.8} ${rightX + baseSize * 0.6} ${cy + baseSize * 0.3}`} fill="white" />
+          {/* Draw happy arc lines over the pupils to create ^ ^ effect */}
+          <Path
+            d={`M ${leftX - baseSize * 0.7} ${cy + baseSize * 0.1} Q ${leftX} ${cy - baseSize * 0.6} ${leftX + baseSize * 0.7} ${cy + baseSize * 0.1}`}
+            stroke="#2D1B4E" strokeWidth={1.5} fill="none" strokeLinecap="round"
+          />
+          <Path
+            d={`M ${rightX - baseSize * 0.7} ${cy + baseSize * 0.1} Q ${rightX} ${cy - baseSize * 0.6} ${rightX + baseSize * 0.7} ${cy + baseSize * 0.1}`}
+            stroke="#2D1B4E" strokeWidth={1.5} fill="none" strokeLinecap="round"
+          />
         </G>
       )}
     </G>
@@ -353,7 +375,7 @@ function renderMouth(
   mood: string,
 ): React.ReactElement {
   const cx = 50;
-  const cy = 56;
+  const cy = 54; // Below eyes (at 44), centered in lower face area
 
   if (status === 'stopped') {
     // Tiny sleeping mouth — small oval
@@ -431,10 +453,12 @@ function renderMouth(
 function renderCheeks(traits: CreatureTraits, color: string): React.ReactElement {
   const cheekColor = lighten(color, 0.2);
   const size = 4 * traits.cheekSize;
+  // Cheeks sit just below and outside the eyes
+  const cheekY = 49;
   return (
     <G>
-      <Ellipse cx={50 - traits.eyeSpacing * 30 - 3} cy={52} rx={size} ry={size * 0.7} fill={cheekColor} opacity={0.35} />
-      <Ellipse cx={50 + traits.eyeSpacing * 30 + 3} cy={52} rx={size} ry={size * 0.7} fill={cheekColor} opacity={0.35} />
+      <Ellipse cx={50 - traits.eyeSpacing * 30 - 3} cy={cheekY} rx={size} ry={size * 0.7} fill={cheekColor} opacity={0.35} />
+      <Ellipse cx={50 + traits.eyeSpacing * 30 + 3} cy={cheekY} rx={size} ry={size * 0.7} fill={cheekColor} opacity={0.35} />
     </G>
   );
 }
@@ -524,6 +548,10 @@ function renderPatterns(
 function renderCrown(tier: number): React.ReactElement | null {
   if (tier < 4) return null; // Crown at Distinguished+
 
+  // Body top is approximately at y = 50 - 26 - tier*1.2 = ~18 at tier 5
+  const bodyTop = 50 - 26 - Math.min(tier, 5) * 1.2;
+  const crownBase = bodyTop + 2;
+
   if (tier >= 5) {
     // Master — golden crown with gems
     return (
@@ -535,13 +563,13 @@ function renderCrown(tier: number): React.ReactElement | null {
           </LinearGradient>
         </Defs>
         <Path
-          d="M 36 22 L 38 12 L 43 18 L 50 8 L 57 18 L 62 12 L 64 22 Z"
+          d={`M 36 ${crownBase} L 38 ${crownBase - 10} L 43 ${crownBase - 4} L 50 ${crownBase - 14} L 57 ${crownBase - 4} L 62 ${crownBase - 10} L 64 ${crownBase} Z`}
           fill="url(#crownGrad)"
         />
         {/* Gems */}
-        <Circle cx={43} cy={18} r={1.5} fill="#FF5252" />
-        <Circle cx={50} cy={13} r={2} fill="#00D2FF" />
-        <Circle cx={57} cy={18} r={1.5} fill="#00E676" />
+        <Circle cx={43} cy={crownBase - 4} r={1.5} fill="#FF5252" />
+        <Circle cx={50} cy={crownBase - 9} r={2} fill="#00D2FF" />
+        <Circle cx={57} cy={crownBase - 4} r={1.5} fill="#00E676" />
       </G>
     );
   }
@@ -550,7 +578,7 @@ function renderCrown(tier: number): React.ReactElement | null {
   return (
     <Ellipse
       cx={50}
-      cy={18}
+      cy={bodyTop - 2}
       rx={14}
       ry={4}
       fill="none"
@@ -674,7 +702,10 @@ function renderAura(color: string, tier: number): React.ReactElement | null {
 
 function renderFeet(color: string, tier: number): React.ReactElement {
   const footColor = darken(color, 0.2);
-  const cy = 78 + Math.min(tier * 2, 10);
+  // Position feet just below the body. Body center is at y=50, body extends
+  // roughly 26 + tier*1.2 below center. Feet sit 2px below body bottom.
+  const bodyBottom = 50 + 26 + Math.min(tier, 5) * 1.2;
+  const cy = Math.min(bodyBottom + 2, 90); // Clamp to stay in viewBox
   return (
     <G>
       <Ellipse cx={42} cy={cy} rx={6} ry={3} fill={footColor} />

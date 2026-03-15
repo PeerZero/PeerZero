@@ -15,7 +15,7 @@
     "db:migrate": "cd packages/server && npm run migrate",
     "db:migrate:down": "cd packages/server && npm run migrate:down",
     "db:migrate:create": "cd packages/server && npm run migrate:create",
-    "db:seed": "cd packages/server && node src/db/seed-products.js",
+    "db:seed": "cd packages/server && npx tsx src/db/seed-products.ts",
     "test": "cd packages/server && npm test"
   }
 }

@@ -153,6 +153,16 @@ export async function sendNotification(
 
 // ── Milestone Detection Helpers ──
 // Called from the agent loop after each cycle to check for notification-worthy events.
+//
+// Batching: If multiple milestones fire in a single cycle (e.g. tier upgrade +
+// grade promotion + credibility milestone), we send ONE combined notification
+// instead of spamming the user with 3 separate ones.
+
+interface MilestoneHit {
+  type: NotificationType;
+  line: string;           // One-line description for the combined notification
+  data: Record<string, unknown>;
+}
 
 export async function checkAndNotifyMilestones(
   userId: string,
@@ -167,26 +177,28 @@ export async function checkAndNotifyMilestones(
   actionType: string,
   actionResult: Record<string, unknown>,
 ): Promise<void> {
+  const hits: MilestoneHit[] = [];
+
   // Tier upgrade
   if (newTier != null && oldTier != null && newTier > oldTier) {
     const tierNames: Record<number, string> = {
       0: 'Newcomer', 75: 'Apprentice', 100: 'Tested', 150: 'Verified', 175: 'Distinguished', 200: 'Master',
     };
     const tierName = tierNames[newTier] || `Tier ${newTier}`;
-    await sendNotification(userId, 'tier_upgrade',
-      `${botName} evolved!`,
-      `Your bot reached ${tierName} status! Check out their new look.`,
-      { botId, newTier },
-    );
+    hits.push({
+      type: 'tier_upgrade',
+      line: `Evolved to ${tierName}! New look unlocked.`,
+      data: { newTier },
+    });
   }
 
   // Grade promotion
   if (newGrade != null && oldGrade != null && newGrade > oldGrade) {
-    await sendNotification(userId, 'grade_promotion',
-      `${botName} was promoted!`,
-      `Your bot advanced to Grade ${newGrade}. They're growing up!`,
-      { botId, newGrade },
-    );
+    hits.push({
+      type: 'grade_promotion',
+      line: `Promoted to Grade ${newGrade}!`,
+      data: { newGrade },
+    });
   }
 
   // Credibility milestones (100, 250, 500, 1000, 2500, 5000, 10000)
@@ -194,23 +206,51 @@ export async function checkAndNotifyMilestones(
   if (newCredibility != null && oldCredibility != null) {
     for (const m of milestones) {
       if (oldCredibility < m && newCredibility >= m) {
-        await sendNotification(userId, 'credibility_milestone',
-          `${botName} hit ${m} credibility!`,
-          `A major achievement — your bot is building real reputation.`,
-          { botId, milestone: m },
-        );
-        break; // Only one milestone notification per cycle
+        hits.push({
+          type: 'credibility_milestone',
+          line: `Hit ${m} credibility!`,
+          data: { milestone: m },
+        });
+        break; // Only one milestone per cycle
       }
     }
   }
 
   // Bounty win
   if (actionType === 'bounty' && (actionResult.credibility_change as number) > 0) {
-    await sendNotification(userId, 'bounty_win',
-      `${botName} won a bounty!`,
-      `Successfully challenged a paper. Credibility +${actionResult.credibility_change}.`,
-      { botId },
+    hits.push({
+      type: 'bounty_win',
+      line: `Won a bounty! Credibility +${actionResult.credibility_change}.`,
+      data: {},
+    });
+  }
+
+  if (hits.length === 0) return;
+
+  // Check which notification types the user has enabled
+  const prefs = await getNotificationPrefs(userId);
+  const enabledHits = hits.filter(h => prefs[h.type] !== false);
+  if (enabledHits.length === 0) return;
+
+  if (enabledHits.length === 1) {
+    // Single milestone — send a focused notification
+    const hit = enabledHits[0];
+    await sendNotification(userId, hit.type,
+      `${botName}: ${hit.line.split('!')[0]}!`,
+      hit.line,
+      { botId, ...hit.data },
     );
+  } else {
+    // Multiple milestones — send one combined notification
+    // Use the "biggest" milestone type as the notification type for preference purposes
+    const priorityOrder: NotificationType[] = ['tier_upgrade', 'grade_promotion', 'credibility_milestone', 'bounty_win'];
+    const primaryType = priorityOrder.find(t => enabledHits.some(h => h.type === t)) || enabledHits[0].type;
+
+    const title = `${botName} had an amazing cycle!`;
+    const body = enabledHits.map(h => h.line).join(' ');
+    const allData = enabledHits.reduce((acc, h) => ({ ...acc, ...h.data }), {} as Record<string, unknown>);
+
+    await sendNotification(userId, primaryType, title, body, { botId, batched: true, count: enabledHits.length, ...allData });
   }
 }
 

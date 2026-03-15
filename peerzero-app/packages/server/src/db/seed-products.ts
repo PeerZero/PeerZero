@@ -1,10 +1,9 @@
-#!/usr/bin/env node
 // =============================================================================
 // Stripe Product Seeder — creates products in Stripe and inserts them into the
 // local products table with the corresponding stripe_price_id.
 //
 // Usage:
-//   DATABASE_URL=... STRIPE_SECRET_KEY=... node src/db/seed-products.js
+//   DATABASE_URL=... STRIPE_SECRET_KEY=... npx tsx src/db/seed-products.ts
 //
 // This script is idempotent: it checks for existing products by name before
 // creating new ones, and updates stripe_price_id if a product already exists
@@ -13,8 +12,8 @@
 // Security: Only runs with explicit env vars. Never auto-runs in production.
 // =============================================================================
 
-const { Pool } = require('pg');
-const Stripe = require('stripe');
+import { Pool } from 'pg';
+import Stripe from 'stripe';
 
 const DATABASE_URL = process.env.DATABASE_URL;
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
@@ -33,7 +32,15 @@ const pool = new Pool({ connectionString: DATABASE_URL });
 
 // ── Product catalog ──
 // Add new products here as the platform grows.
-const PRODUCTS = [
+interface ProductDef {
+  name: string;
+  type: 'bot_shell' | 'school_enrollment' | 'feature';
+  price_cents: number;
+  description: string;
+  metadata: Record<string, unknown>;
+}
+
+const PRODUCTS: ProductDef[] = [
   {
     name: 'Bot Shell — Standard',
     type: 'bot_shell',
@@ -64,7 +71,7 @@ const PRODUCTS = [
   },
 ];
 
-async function seed() {
+async function seed(): Promise<void> {
   const client = await pool.connect();
   try {
     console.log('Seeding products...\n');
@@ -85,7 +92,7 @@ async function seed() {
       const stripeProduct = await stripe.products.create({
         name: product.name,
         description: product.description,
-        metadata: product.metadata,
+        metadata: product.metadata as Stripe.MetadataParam,
       });
 
       // Create price in Stripe
@@ -114,8 +121,8 @@ async function seed() {
     }
 
     console.log('\nDone! Products seeded successfully.');
-  } catch (err) {
-    console.error('Seed failed:', err.message);
+  } catch (err: unknown) {
+    console.error('Seed failed:', err instanceof Error ? err.message : err);
     process.exit(1);
   } finally {
     client.release();
