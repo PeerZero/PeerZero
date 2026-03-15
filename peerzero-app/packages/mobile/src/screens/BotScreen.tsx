@@ -14,7 +14,7 @@ import { spacing, fontSize, borderRadius } from '../theme/spacing';
 import BotAvatar from '../components/BotAvatar';
 import { Linking } from 'react-native';
 import type { BotDetail } from '@peerzero/shared';
-import { credibilityToStage, calculateHunger, getGradePriceDisplay } from '@peerzero/shared';
+import { credibilityToStage, calculateHunger, getGradePriceDisplay, GRADUATION_GRADE, getGradePriceCents } from '@peerzero/shared';
 
 // Logarithmic scale helpers for 1s–86400s range
 // Slider value 0–1 maps to seconds via exponential curve
@@ -89,14 +89,25 @@ export default function BotScreen({ route, navigation }: any) {
     }
   };
 
-  const handleGradeUnlock = async () => {
-    try {
-      const result = await paymentsApi.gradeCheckout(botId) as { session_url: string };
-      if (result.session_url) {
-        await Linking.openURL(result.session_url);
-      }
-    } catch (err: any) {
-      Alert.alert('Error', err.message);
+  const handleGradeUnlock = (mode: 'next' | 'graduation') => {
+    if (mode === 'next') {
+      (async () => {
+        try {
+          const result = await paymentsApi.gradeCheckout(botId) as { session_url: string };
+          if (result.session_url) await Linking.openURL(result.session_url);
+        } catch (err: any) {
+          Alert.alert('Error', err.message);
+        }
+      })();
+    } else {
+      (async () => {
+        try {
+          const result = await paymentsApi.gradeBulkCheckout(botId, 'graduation') as { session_url: string };
+          if (result.session_url) await Linking.openURL(result.session_url);
+        } catch (err: any) {
+          Alert.alert('Error', err.message);
+        }
+      })();
     }
   };
 
@@ -197,21 +208,40 @@ export default function BotScreen({ route, navigation }: any) {
 
       {/* Grade unlock prompt — shown when bot needs payment to continue */}
       {/* Note: failing a grade does NOT re-charge. Payment is per grade number, not per attempt. */}
-      {bot.grade_payment_required && (
-        <View style={styles.gradeUnlockBox}>
-          <Text style={styles.gradeUnlockTitle}>
-            Ready for Grade {bot.cached_grade}
-          </Text>
-          <Text style={styles.gradeUnlockText}>
-            Your bot completed the previous grade! Unlock the next one to keep learning.
-          </Text>
-          <TouchableOpacity style={styles.gradeUnlockButton} onPress={handleGradeUnlock}>
-            <Text style={styles.gradeUnlockButtonText}>
-              Unlock Grade {bot.cached_grade} — {getGradePriceDisplay(bot.cached_grade || 1)}
+      {bot.grade_payment_required && (() => {
+        const currentGrade = bot.cached_grade || 1;
+        const canShowGraduation = currentGrade <= GRADUATION_GRADE;
+        // Calculate remaining cost to graduation
+        let gradCost = 0;
+        for (let g = currentGrade; g <= GRADUATION_GRADE; g++) {
+          gradCost += getGradePriceCents(g);
+        }
+        return (
+          <View style={styles.gradeUnlockBox}>
+            <Text style={styles.gradeUnlockTitle}>
+              Ready for Grade {currentGrade}
             </Text>
-          </TouchableOpacity>
-        </View>
-      )}
+            <Text style={styles.gradeUnlockText}>
+              Your bot completed the previous grade! Unlock the next one to keep learning.
+            </Text>
+            <TouchableOpacity style={styles.gradeUnlockButton} onPress={() => handleGradeUnlock('next')}>
+              <Text style={styles.gradeUnlockButtonText}>
+                Unlock Grade {currentGrade} — {getGradePriceDisplay(currentGrade)}
+              </Text>
+            </TouchableOpacity>
+            {canShowGraduation && currentGrade < GRADUATION_GRADE && (
+              <TouchableOpacity
+                style={[styles.gradeUnlockButton, styles.gradeUnlockButtonAlt]}
+                onPress={() => handleGradeUnlock('graduation')}
+              >
+                <Text style={styles.gradeUnlockButtonAltText}>
+                  Unlock All Through Graduation — ${(gradCost / 100).toFixed(2)}
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        );
+      })()}
 
       {/* Next action hint */}
       {bot.cached_next_action && (
@@ -329,6 +359,11 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.sm, alignSelf: 'center',
   },
   gradeUnlockButtonText: { color: '#fff', fontWeight: '600', fontSize: fontSize.md },
+  gradeUnlockButtonAlt: {
+    backgroundColor: 'transparent', borderWidth: 1, borderColor: colors.accent.primary,
+    marginTop: spacing.sm,
+  },
+  gradeUnlockButtonAltText: { color: colors.accent.primary, fontWeight: '600', fontSize: fontSize.sm },
   nextAction: { color: colors.text.secondary, fontSize: fontSize.sm, marginTop: spacing.md, textAlign: 'center' },
   delaySection: { width: '100%', marginTop: spacing.lg },
   delayLabel: { fontSize: fontSize.sm, color: colors.text.secondary, textAlign: 'center' },

@@ -43,6 +43,39 @@ router.get('/grade-status/:botId', requireAuth, async (req: Request, res: Respon
   res.json({ unlocked_grades: grades, highest_unlocked: highest });
 });
 
+// Authenticated: create bulk grade checkout (multiple grades at once)
+router.post('/grade-checkout-bulk', requireAuth, async (req: Request, res: Response) => {
+  const { bot_id, through_grade } = req.body;
+  if (!bot_id) {
+    res.status(400).json({ error: 'bot_id required' });
+    return;
+  }
+  // through_grade can be a number, "graduation", or "all"
+  let target: number | 'graduation' | 'all';
+  if (through_grade === 'graduation' || through_grade === 'all') {
+    target = through_grade;
+  } else {
+    target = parseInt(through_grade, 10);
+    if (!Number.isFinite(target) || target < 1) {
+      res.status(400).json({ error: 'through_grade must be a grade number, "graduation", or "all"' });
+      return;
+    }
+  }
+  const result = await paymentService.createBulkGradeCheckout(req.user!.userId, bot_id, target);
+  res.json(result);
+});
+
+// Authenticated: get price preview for bulk grade unlock
+router.get('/grade-price-preview/:botId', requireAuth, async (req: Request, res: Response) => {
+  const targetParam = req.query.through as string;
+  const highestUnlocked = (await paymentService.getUnlockedGrades(req.params.botId)).length > 0
+    ? Math.max(...await paymentService.getUnlockedGrades(req.params.botId))
+    : 0;
+  const target = (targetParam === 'graduation' || targetParam === 'all') ? 12 : parseInt(targetParam, 10) || 12;
+  const preview = paymentService.calculateBulkPrice(highestUnlocked, target);
+  res.json(preview);
+});
+
 // Stripe webhook (raw body required — handled in index.ts)
 router.post('/webhook', async (req: Request, res: Response) => {
   const signature = req.headers['stripe-signature'] as string;

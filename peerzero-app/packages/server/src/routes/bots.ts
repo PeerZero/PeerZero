@@ -166,6 +166,33 @@ router.delete('/:id/activity', userRateLimit('write'), async (req: Request, res:
   res.json({ success: true, deleted_count: count });
 });
 
+// ── External Activity (from self-hosted bots / System 3) ──
+
+router.get('/:id/external-activity', userRateLimit('read'), async (req: Request, res: Response) => {
+  // Verify ownership
+  await botService.getBotDetail(req.user!.userId, req.params.id);
+  const rawPage = parseInt(req.query.page as string);
+  const page = Number.isFinite(rawPage) && rawPage > 0 ? Math.min(rawPage, 10000) : 1;
+  const perPage = 20;
+  const offset = (page - 1) * perPage;
+
+  const { queryRows, queryOne: qOne } = await import('../db/client');
+  const rows = await queryRows(
+    `SELECT id, platform, action, summary, content_preview, skills_demonstrated, bot_timestamp, created_at
+     FROM external_activity_log
+     WHERE bot_id = $1
+     ORDER BY created_at DESC
+     LIMIT $2 OFFSET $3`,
+    [req.params.id, perPage, offset],
+  );
+  const countResult = await qOne<{ total: number }>(
+    'SELECT COUNT(*)::int as total FROM external_activity_log WHERE bot_id = $1',
+    [req.params.id],
+  );
+  const total = countResult?.total || 0;
+  res.json({ data: rows, total, page, per_page: perPage, has_more: offset + perPage < total });
+});
+
 // ── Phone-Home Token ──
 // Generate a write-only token for self-hosted bots to report activity
 router.post('/:id/phone-home-token', userRateLimit('write'), async (req: Request, res: Response) => {

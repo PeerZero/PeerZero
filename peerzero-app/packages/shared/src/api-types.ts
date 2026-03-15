@@ -216,6 +216,28 @@ export interface GradeStatusResponse {
   highest_unlocked: number;
 }
 
+export interface BulkGradeCheckoutRequest {
+  bot_id: string;
+  through_grade: number | 'graduation' | 'all';
+}
+
+export interface GradePricePreview {
+  grades: number[];
+  total_cents: number;
+}
+
+// ── External Activity (Phone-Home from System 3) ──
+export interface ExternalActivityEntry {
+  id: string;
+  platform: string;
+  action: string;
+  summary: string;
+  content_preview: string | null;
+  skills_demonstrated: string[];
+  bot_timestamp: string | null;
+  created_at: string;
+}
+
 // ── Push Notifications ──
 export interface PushTokenRequest {
   token: string;          // Expo push token (ExponentPushToken[...])

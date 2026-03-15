@@ -146,6 +146,7 @@ export function calculateHunger(lastCycleAt: string | null, status: string): Hun
 export const NOTIFICATION_TYPES = [
   'tier_upgrade',          // Bot advanced to a new credibility tier
   'grade_promotion',       // Bot promoted to a new grade
+  'grade_payment_needed',  // Bot paused because next grade requires payment
   'first_paper_accepted',  // Bot's first paper passed peer review
   'credibility_milestone', // Bot hit a round-number credibility (100, 500, 1000)
   'bounty_win',            // Bot won a bounty challenge
@@ -161,6 +162,7 @@ export type NotificationType = typeof NOTIFICATION_TYPES[number];
 export const DEFAULT_NOTIFICATION_PREFS: Record<NotificationType, boolean> = {
   tier_upgrade: true,
   grade_promotion: true,
+  grade_payment_needed: true,
   first_paper_accepted: true,
   credibility_milestone: true,
   bounty_win: true,
@@ -173,6 +175,7 @@ export const DEFAULT_NOTIFICATION_PREFS: Record<NotificationType, boolean> = {
 export const NOTIFICATION_LABELS: Record<NotificationType, { title: string; description: string }> = {
   tier_upgrade: { title: 'Tier Upgrades', description: 'When your bot reaches a new credibility tier' },
   grade_promotion: { title: 'Grade Promotions', description: 'When your bot advances to a new grade' },
+  grade_payment_needed: { title: 'Grade Unlock Needed', description: 'When your bot is ready for the next grade but needs payment' },
   first_paper_accepted: { title: 'First Paper Accepted', description: 'When your bot\'s first paper passes peer review' },
   credibility_milestone: { title: 'Credibility Milestones', description: 'Round-number credibility achievements (100, 500, 1000)' },
   bounty_win: { title: 'Bounty Wins', description: 'When your bot wins a bounty challenge' },

@@ -122,11 +122,20 @@ export async function handleStripeWebhook(event: Stripe.Event): Promise<void> {
         [purchase.user_id, product.type, purchaseId, JSON.stringify(session.metadata || {})],
       );
 
-      // Handle grade advancement fulfillment
-      if (product.type === 'grade_advancement' && session.metadata?.bot_id && session.metadata?.grade) {
-        const gradeNum = parseInt(session.metadata.grade, 10);
-        if (Number.isFinite(gradeNum) && gradeNum > 0) {
-          await unlockGrade(session.metadata.bot_id, gradeNum, purchaseId);
+      // Handle grade advancement fulfillment (single or bulk)
+      if (session.metadata?.bot_id) {
+        if (session.metadata?.type === 'grade_advancement_bulk' && session.metadata?.grades) {
+          // Bulk unlock: grades is a comma-separated list
+          const gradeNums = session.metadata.grades.split(',').map(Number).filter(n => Number.isFinite(n) && n > 0);
+          for (const g of gradeNums) {
+            await unlockGrade(session.metadata.bot_id, g, purchaseId);
+          }
+        } else if (session.metadata?.grade) {
+          // Single grade unlock
+          const gradeNum = parseInt(session.metadata.grade, 10);
+          if (Number.isFinite(gradeNum) && gradeNum > 0) {
+            await unlockGrade(session.metadata.bot_id, gradeNum, purchaseId);
+          }
         }
       }
       break;
@@ -300,6 +309,121 @@ export async function getUnlockedGrades(botId: string): Promise<number[]> {
     [botId],
   );
   return rows.map(r => r.grade);
+}
+
+/**
+ * Create a checkout session to unlock multiple grades at once.
+ * `throughGrade` = unlock all grades from (highest_unlocked + 1) through this grade.
+ * Pass `throughGrade = 'graduation'` to unlock all grades through 12.
+ * Pass `throughGrade = 'all'` — same as graduation (post-grad are one-at-a-time).
+ */
+export async function createBulkGradeCheckout(
+  userId: string,
+  botId: string,
+  throughGrade: number | 'graduation' | 'all',
+): Promise<CheckoutResponse> {
+  const bot = await queryOne<{ id: string; cached_grade: number | null; school_id: string | null }>(
+    'SELECT id, cached_grade, school_id FROM bots WHERE id = $1 AND user_id = $2',
+    [botId, userId],
+  );
+  if (!bot) throw new AppError(404, 'Bot not found');
+  if (!bot.school_id) throw new AppError(400, 'Bot must be enrolled in a school first');
+
+  const highestUnlocked = await getHighestUnlockedGrade(botId);
+  const targetGrade = (throughGrade === 'graduation' || throughGrade === 'all')
+    ? GRADUATION_GRADE
+    : throughGrade;
+
+  if (targetGrade <= highestUnlocked) {
+    throw new AppError(409, `All grades through ${targetGrade} are already unlocked`);
+  }
+
+  // Build line items for each grade to unlock
+  const gradesToUnlock: number[] = [];
+  for (let g = highestUnlocked + 1; g <= targetGrade; g++) {
+    gradesToUnlock.push(g);
+  }
+
+  if (gradesToUnlock.length === 0) {
+    throw new AppError(409, 'No grades to unlock');
+  }
+
+  // Calculate total
+  let totalCents = 0;
+  for (const g of gradesToUnlock) {
+    totalCents += getGradePriceCents(g);
+  }
+
+  // Get or create Stripe customer
+  const user = await queryOne<{ id: string; email: string; stripe_customer_id: string | null }>(
+    'SELECT id, email, stripe_customer_id FROM users WHERE id = $1',
+    [userId],
+  );
+  if (!user) throw new AppError(404, 'User not found');
+
+  let customerId = user.stripe_customer_id;
+  if (!customerId) {
+    const customer = await getStripe().customers.create({ email: user.email, metadata: { user_id: userId } });
+    customerId = customer.id;
+    await query('UPDATE users SET stripe_customer_id = $1 WHERE id = $2', [customerId, userId]);
+  }
+
+  // Create a single Stripe product for the bundle
+  const label = gradesToUnlock.length === 1
+    ? `Grade ${gradesToUnlock[0]} Unlock`
+    : `Grade ${gradesToUnlock[0]}-${gradesToUnlock[gradesToUnlock.length - 1]} Bundle`;
+
+  const stripeProduct = await getStripe().products.create({
+    name: label,
+    description: `Unlock grades ${gradesToUnlock.join(', ')} for your bot.`,
+    metadata: { type: 'grade_advancement', grades: gradesToUnlock.join(','), bot_id: botId },
+  });
+
+  const stripePrice = await getStripe().prices.create({
+    product: stripeProduct.id,
+    unit_amount: totalCents,
+    currency: 'usd',
+  });
+
+  // Create purchase record
+  const purchase = await queryOne<{ id: string }>(
+    `INSERT INTO purchases (user_id, product_id, amount_cents, status, metadata)
+     VALUES ($1, (SELECT id FROM products WHERE type = 'grade_advancement' LIMIT 1), $2, 'pending', $3)
+     RETURNING id`,
+    [userId, totalCents, JSON.stringify({ grades: gradesToUnlock, bot_id: botId, bulk: true })],
+  );
+
+  const session = await getStripe().checkout.sessions.create({
+    customer: customerId,
+    mode: 'payment',
+    line_items: [{ price: stripePrice.id, quantity: 1 }],
+    metadata: {
+      purchase_id: purchase!.id,
+      user_id: userId,
+      bot_id: botId,
+      grades: gradesToUnlock.join(','),
+      type: 'grade_advancement_bulk',
+    },
+    success_url: `${config.isDev ? 'http://localhost:3001' : 'https://app.peerzero.com'}/payment/success?session_id={CHECKOUT_SESSION_ID}`,
+    cancel_url: `${config.isDev ? 'http://localhost:3001' : 'https://app.peerzero.com'}/payment/cancel`,
+  });
+
+  await query('UPDATE purchases SET stripe_session_id = $1 WHERE id = $2', [session.id, purchase!.id]);
+
+  return { session_url: session.url! };
+}
+
+/**
+ * Calculate the total cost to unlock all remaining grades through graduation.
+ */
+export function calculateBulkPrice(highestUnlocked: number, throughGrade: number): { grades: number[]; total_cents: number } {
+  const grades: number[] = [];
+  let total = 0;
+  for (let g = highestUnlocked + 1; g <= throughGrade; g++) {
+    grades.push(g);
+    total += getGradePriceCents(g);
+  }
+  return { grades, total_cents: total };
 }
 
 /** Verify Stripe webhook signature. */

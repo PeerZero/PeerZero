@@ -171,6 +171,9 @@ export const bots = {
     const params = days ? `?days=${days}` : '';
     return apiFetch(`/bots/${id}/stats${params}`);
   },
+
+  externalActivity: (id: string, page = 1) =>
+    apiFetch(`/bots/${id}/external-activity?page=${page}`),
 };
 
 // ── API Keys ──
@@ -217,6 +220,14 @@ export const payments = {
 
   gradeCheckout: (botId: string) =>
     apiFetch<{ session_url: string }>('/payments/grade-checkout', { method: 'POST', body: JSON.stringify({ bot_id: botId }) }),
+
+  gradeBulkCheckout: (botId: string, throughGrade: number | 'graduation' | 'all') =>
+    apiFetch<{ session_url: string }>('/payments/grade-checkout-bulk', {
+      method: 'POST', body: JSON.stringify({ bot_id: botId, through_grade: throughGrade }),
+    }),
+
+  gradePricePreview: (botId: string, throughGrade: number | 'graduation' | 'all' = 'graduation') =>
+    apiFetch<{ grades: number[]; total_cents: number }>(`/payments/grade-price-preview/${botId}?through=${throughGrade}`),
 
   gradeStatus: (botId: string) =>
     apiFetch<{ unlocked_grades: number[]; highest_unlocked: number }>(`/payments/grade-status/${botId}`),

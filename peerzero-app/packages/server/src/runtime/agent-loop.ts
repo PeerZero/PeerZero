@@ -21,6 +21,8 @@ import { getDecryptedKey } from '../services/apikey.service';
 import * as memory from '../services/memory.service';
 import * as activity from '../services/activity.service';
 import { query, queryOne } from '../db/client';
+import { notifyGradePaymentNeeded } from '../services/notification.service';
+import { getGradePriceCents } from '@peerzero/shared';
 import { SchoolCredentials } from '../adapters/school.adapter';
 import { buildPrompt } from './prompt-builder';
 import { routeAction } from './action-router';
@@ -65,6 +67,11 @@ export async function runOneCycle(ctx: BotContext): Promise<void> {
       logger.info({ botId: ctx.botId, grade: currentGrade }, 'Bot paused — grade not unlocked (payment required)');
       await setBotStatus(ctx.botId, 'paused', `Grade ${currentGrade} requires payment to continue`);
       await updateBotCache(ctx.botId, profile, ctx.cycleNumber);
+
+      // Notify user that payment is needed
+      const botRow = await queryOne<{ name: string }>('SELECT name FROM bots WHERE id = $1', [ctx.botId]);
+      const priceCents = getGradePriceCents(currentGrade);
+      notifyGradePaymentNeeded(ctx.userId, ctx.botId, botRow?.name || 'Your bot', currentGrade, priceCents);
       return;
     }
 

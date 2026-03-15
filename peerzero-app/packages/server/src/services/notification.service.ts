@@ -268,6 +268,22 @@ export async function notifyBotError(
   );
 }
 
+/** Notify user when their bot pauses because the next grade requires payment. */
+export async function notifyGradePaymentNeeded(
+  userId: string,
+  botId: string,
+  botName: string,
+  grade: number,
+  priceCents: number,
+): Promise<void> {
+  const price = `$${(priceCents / 100).toFixed(2)}`;
+  await sendNotification(userId, 'grade_payment_needed',
+    `${botName} is ready for Grade ${grade}!`,
+    `Your bot completed the previous grade and is waiting to advance. Unlock Grade ${grade} for ${price} to keep learning.`,
+    { botId, grade, price_cents: priceCents },
+  );
+}
+
 /** Notify user when their bot stops unexpectedly (not user-initiated). */
 export async function notifyBotStopped(
   userId: string,
