@@ -1,10 +1,17 @@
 // =============================================================================
 // Activity service — logs every bot action with raw + translated forms
 // The "translated" form is what the mobile app displays in the Activity Log.
+//
+// Two entry categories:
+//   - 'task': operational metadata (submitted paper, reviewed, enrolled, etc.)
+//   - 'content': the actual text content (paper body, review text, bounty evidence)
+//
+// Soft-delete: users can remove entries from their Activity Log view without
+// affecting the bot's internal memory system (which uses bot_memory_* tables).
 // =============================================================================
 
 import { queryOne, queryRows, query } from '../db/client';
-import type { ActivityEntry, TranslatedActivity, MoodType } from '@peerzero/shared';
+import type { ActivityEntry, TranslatedActivity, MoodType, ActivityCategory } from '@peerzero/shared';
 
 export async function logActivity(
   botId: string,
@@ -16,10 +23,12 @@ export async function logActivity(
   durationMs?: number,
   llmTokensUsed?: number,
   error?: string,
+  contentText?: string,
 ): Promise<string> {
-  const result = await queryOne<{ id: string }>(
-    `INSERT INTO activity_log (bot_id, cycle_number, action_type, raw_request, raw_response, translated, duration_ms, llm_tokens_used, error)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+  // Always log the task entry
+  const taskResult = await queryOne<{ id: string }>(
+    `INSERT INTO activity_log (bot_id, cycle_number, action_type, category, raw_request, raw_response, translated, duration_ms, llm_tokens_used, error)
+     VALUES ($1, $2, $3, 'task', $4, $5, $6, $7, $8, $9)
      RETURNING id`,
     [
       botId, cycleNumber, actionType,
@@ -31,32 +40,75 @@ export async function logActivity(
       error || null,
     ],
   );
-  return result!.id;
+
+  // If there's content text, also log a content entry (separate row for the Tasks/Content split)
+  if (contentText) {
+    await query(
+      `INSERT INTO activity_log (bot_id, cycle_number, action_type, category, translated, content_text)
+       VALUES ($1, $2, $3, 'content', $4, $5)`,
+      [
+        botId, cycleNumber, actionType,
+        JSON.stringify({
+          headline: translated.headline,
+          summary: 'Full content',
+          details: [],
+          mood: translated.mood,
+        }),
+        contentText,
+      ],
+    );
+  }
+
+  return taskResult!.id;
 }
 
 export async function getActivityLog(
   botId: string,
   page = 1,
   perPage = 20,
+  category?: ActivityCategory,
 ): Promise<{ data: ActivityEntry[]; total: number; has_more: boolean }> {
   const offset = (page - 1) * perPage;
 
+  const categoryFilter = category ? 'AND category = $4' : '';
+  const params = category
+    ? [botId, perPage, offset, category]
+    : [botId, perPage, offset];
+
   const [entries, countResult] = await Promise.all([
     queryRows<ActivityEntry>(
-      `SELECT id, cycle_number, action_type, translated, error, duration_ms, llm_tokens_used, created_at
-       FROM activity_log WHERE bot_id = $1
+      `SELECT id, cycle_number, action_type, category, translated, content_text, error, duration_ms, llm_tokens_used, created_at
+       FROM activity_log WHERE bot_id = $1 AND deleted_at IS NULL ${categoryFilter}
        ORDER BY created_at DESC
        LIMIT $2 OFFSET $3`,
-      [botId, perPage, offset],
+      params,
     ),
     queryOne<{ count: number }>(
-      'SELECT COUNT(*)::int as count FROM activity_log WHERE bot_id = $1',
-      [botId],
+      `SELECT COUNT(*)::int as count FROM activity_log WHERE bot_id = $1 AND deleted_at IS NULL ${categoryFilter}`,
+      category ? [botId, category] : [botId],
     ),
   ]);
 
   const total = countResult?.count || 0;
   return { data: entries, total, has_more: offset + perPage < total };
+}
+
+/** Soft-delete a single activity entry. Bot memory is unaffected. */
+export async function deleteActivityItem(botId: string, activityId: string): Promise<boolean> {
+  const result = await query(
+    'UPDATE activity_log SET deleted_at = NOW() WHERE id = $1 AND bot_id = $2 AND deleted_at IS NULL',
+    [activityId, botId],
+  );
+  return (result.rowCount ?? 0) > 0;
+}
+
+/** Soft-delete all activity for a bot. Bot memory is unaffected. */
+export async function deleteAllActivity(botId: string): Promise<number> {
+  const result = await query(
+    'UPDATE activity_log SET deleted_at = NOW() WHERE bot_id = $1 AND deleted_at IS NULL',
+    [botId],
+  );
+  return result.rowCount ?? 0;
 }
 
 // ── Translator — converts raw School responses into human-readable activity ──

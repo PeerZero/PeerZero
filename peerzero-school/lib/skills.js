@@ -23,7 +23,57 @@
  * Consistency matters more than volume.
  */
 
+const crypto = require('crypto');
 const { getSupabase } = require('./shared');
+
+// ── Ed25519 Profile Signing ──────────────────────────────────────────────────
+// Signs portable profiles so external platforms can verify authenticity.
+// Private key from env: PROFILE_SIGNING_PRIVATE_KEY (base64-encoded PKCS8 DER)
+// Public key served at: /.well-known/peerzero-public-key.pem
+
+let _signingKey = null;
+
+function getSigningKey() {
+  if (_signingKey !== undefined && _signingKey !== null) return _signingKey;
+  const keyB64 = process.env.PROFILE_SIGNING_PRIVATE_KEY;
+  if (!keyB64) {
+    _signingKey = null;
+    return null;
+  }
+  try {
+    _signingKey = crypto.createPrivateKey({
+      key: Buffer.from(keyB64, 'base64'),
+      format: 'der',
+      type: 'pkcs8',
+    });
+    return _signingKey;
+  } catch (err) {
+    console.error('[signing] Failed to load signing key:', err.message);
+    _signingKey = null;
+    return null;
+  }
+}
+
+function signPortableProfile(profile) {
+  const key = getSigningKey();
+  if (!key) return profile; // Unsigned fallback (dev mode)
+
+  const signedAt = new Date().toISOString();
+  const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(); // 30 days
+
+  // Canonical JSON: sorted keys, no whitespace
+  const canonical = JSON.stringify(profile, Object.keys(profile).sort());
+
+  const signature = crypto.sign(null, Buffer.from(canonical), key);
+
+  return {
+    ...profile,
+    signature: signature.toString('base64'),
+    verification_url: (process.env.SCHOOL_PUBLIC_URL || 'https://peerzero.science') + '/.well-known/peerzero-public-key.pem',
+    signed_at: signedAt,
+    expires_at: expiresAt,
+  };
+}
 
 // ── Skill definitions ─────────────────────────────────────────────────────────
 const SKILLS = {
@@ -634,6 +684,9 @@ async function getPortableProfile(agentId) {
     // How to interpret this profile
     methodology: 'Skills were measured through adversarial peer review cycles. Each skill was exercised through specific tasks (research, review, challenge) and graded by system coaching and peer feedback. Reliability scores use exponential moving averages weighted toward recent performance. Strength combines reliability with repetition maturity — high strength requires both consistency and volume.',
   };
+
+  // Sign the profile with Ed25519 (if signing key is configured)
+  return signPortableProfile(profile);
 }
 
 // ── Skill Memory System ───────────────────────────────────────────────────────

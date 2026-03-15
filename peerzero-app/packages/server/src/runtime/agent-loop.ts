@@ -71,8 +71,9 @@ export async function runOneCycle(ctx: BotContext): Promise<void> {
       cycleNumber: ctx.cycleNumber,
     });
 
-    // 5. Log activity
+    // 5. Log activity (with content text for the Content tab)
     const durationMs = Date.now() - startTime;
+    const contentText = extractContentText(actionType, actionResult.rawRequest);
     await activity.logActivity(
       ctx.botId,
       ctx.cycleNumber,
@@ -82,6 +83,8 @@ export async function runOneCycle(ctx: BotContext): Promise<void> {
       actionResult.translated,
       durationMs,
       actionResult.tokensUsed,
+      undefined, // no error
+      contentText,
     );
 
     // 6. Store memory if exercises returned
@@ -221,6 +224,44 @@ async function handleCondensation(
     } catch (err) {
       logger.warn({ err: err instanceof Error ? err.message : err }, 'Failed to parse condensation LLM response');
     }
+  }
+}
+
+/**
+ * Extract readable content text from the LLM's raw request for the Activity Log "Content" tab.
+ * Returns null for action types that don't produce user-facing content.
+ */
+function extractContentText(actionType: string, rawRequest: Record<string, unknown> | null): string | undefined {
+  if (!rawRequest) return undefined;
+
+  switch (actionType) {
+    case 'paper': {
+      const title = rawRequest.title as string || '';
+      const abstract = rawRequest.abstract as string || '';
+      const body = rawRequest.body as string || '';
+      if (!body && !abstract) return undefined;
+      return [title && `# ${title}`, abstract && `**Abstract:** ${abstract}`, body].filter(Boolean).join('\n\n');
+    }
+    case 'review': {
+      const assessment = rawRequest.overall_assessment as string || rawRequest.assessment as string || '';
+      const score = rawRequest.score as number;
+      if (!assessment) return undefined;
+      return [score != null && `**Score:** ${score}/100`, assessment].filter(Boolean).join('\n\n');
+    }
+    case 'bounty': {
+      const evidence = rawRequest.evidence as string || rawRequest.challenge as string || '';
+      const challengeType = rawRequest.challenge_type as string || '';
+      if (!evidence) return undefined;
+      return [challengeType && `**Challenge type:** ${challengeType}`, evidence].filter(Boolean).join('\n\n');
+    }
+    case 'revision': {
+      const body = rawRequest.body as string || '';
+      const notes = rawRequest.revision_notes as string || '';
+      if (!body && !notes) return undefined;
+      return [notes && `**Revision notes:** ${notes}`, body].filter(Boolean).join('\n\n');
+    }
+    default:
+      return undefined;
   }
 }
 

@@ -1,24 +1,34 @@
 // =============================================================================
-// Settings screen — API keys (BYOK), account, logout
+// Settings screen — profile, API keys (BYOK), notifications, account management
 // =============================================================================
 
 import React, { useState, useCallback } from 'react';
-import { View, Text, TouchableOpacity, FlatList, StyleSheet, Alert, TextInput, Switch, ScrollView } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Alert, TextInput, Switch, ScrollView } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { useAuth } from '../hooks/useAuth';
-import { apiKeys as keysApi, notifications as notifApi } from '../services/api';
+import { apiKeys as keysApi, notifications as notifApi, auth as authApi } from '../services/api';
 import { colors } from '../theme/colors';
 import { spacing, fontSize, borderRadius } from '../theme/spacing';
-import { LLM_PROVIDERS, NOTIFICATION_TYPES, NOTIFICATION_LABELS, DEFAULT_NOTIFICATION_PREFS } from '@peerzero/shared';
-import type { ApiKeyInfo, NotificationType } from '@peerzero/shared';
+import { NOTIFICATION_TYPES, NOTIFICATION_LABELS, DEFAULT_NOTIFICATION_PREFS } from '@peerzero/shared';
+import type { ApiKeyInfo } from '@peerzero/shared';
 
 export default function SettingsScreen() {
-  const { user, logout } = useAuth();
+  const { user, logout, refreshUser } = useAuth();
   const [keys, setKeys] = useState<ApiKeyInfo[]>([]);
   const [showAddKey, setShowAddKey] = useState(false);
   const [newLabel, setNewLabel] = useState('');
   const [newKey, setNewKey] = useState('');
   const [newProvider, setNewProvider] = useState<'anthropic' | 'openai'>('anthropic');
+
+  // Profile editing
+  const [editingName, setEditingName] = useState(false);
+  const [displayName, setDisplayName] = useState('');
+
+  // Password change
+  const [showPasswordChange, setShowPasswordChange] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
 
   const [notifPrefs, setNotifPrefs] = useState<Record<string, boolean>>(DEFAULT_NOTIFICATION_PREFS);
 
@@ -37,7 +47,6 @@ export default function SettingsScreen() {
     try {
       await notifApi.updatePreferences({ [type]: value });
     } catch {
-      // Revert on failure
       setNotifPrefs(notifPrefs);
     }
   };
@@ -51,7 +60,11 @@ export default function SettingsScreen() {
     }
   }, []);
 
-  useFocusEffect(useCallback(() => { loadKeys(); loadNotifPrefs(); }, [loadKeys, loadNotifPrefs]));
+  useFocusEffect(useCallback(() => {
+    loadKeys();
+    loadNotifPrefs();
+    if (user?.display_name) setDisplayName(user.display_name);
+  }, [loadKeys, loadNotifPrefs, user?.display_name]));
 
   const handleAddKey = async () => {
     if (!newLabel || !newKey) return;
@@ -68,7 +81,7 @@ export default function SettingsScreen() {
 
     try {
       await keysApi.add(newProvider, newLabel, newKey);
-      setNewKey('');  // Clear immediately after submission
+      setNewKey('');
       setNewLabel('');
       setShowAddKey(false);
       await loadKeys();
@@ -94,15 +107,160 @@ export default function SettingsScreen() {
     ]);
   };
 
+  const handleSaveDisplayName = async () => {
+    if (!displayName.trim()) {
+      Alert.alert('Error', 'Display name cannot be empty');
+      return;
+    }
+    try {
+      await authApi.updateProfile({ display_name: displayName.trim() });
+      setEditingName(false);
+      if (refreshUser) refreshUser();
+    } catch (err: any) {
+      Alert.alert('Error', err?.message || 'Failed to update profile');
+    }
+  };
+
+  const handleChangePassword = async () => {
+    if (!currentPassword || !newPassword) {
+      Alert.alert('Error', 'All password fields are required');
+      return;
+    }
+    if (newPassword.length < 8) {
+      Alert.alert('Error', 'New password must be at least 8 characters');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      Alert.alert('Error', 'New passwords do not match');
+      return;
+    }
+    try {
+      await authApi.changePassword({ current_password: currentPassword, new_password: newPassword });
+      Alert.alert('Success', 'Password changed. Please log in again.');
+      setShowPasswordChange(false);
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      logout();
+    } catch (err: any) {
+      Alert.alert('Error', err?.message || 'Failed to change password');
+    }
+  };
+
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      'Delete Account',
+      'This will permanently delete your account, all bots, all memory, and all activity. This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete My Account', style: 'destructive',
+          onPress: () => {
+            // Double confirmation for destructive operation
+            Alert.alert(
+              'Are you absolutely sure?',
+              'Type "DELETE" in your mind and tap confirm. All data will be lost forever.',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                  text: 'Confirm Delete', style: 'destructive',
+                  onPress: async () => {
+                    try {
+                      await authApi.deleteAccount();
+                      logout();
+                    } catch (err: any) {
+                      Alert.alert('Error', err?.message || 'Failed to delete account');
+                    }
+                  },
+                },
+              ],
+            );
+          },
+        },
+      ],
+    );
+  };
+
   return (
     <ScrollView style={styles.container}>
       {/* Account section */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Account</Text>
         <Text style={styles.email}>{user?.email}</Text>
+
+        {/* Display name editing */}
+        <View style={styles.profileRow}>
+          {editingName ? (
+            <View style={styles.editNameRow}>
+              <TextInput
+                style={styles.nameInput}
+                value={displayName}
+                onChangeText={setDisplayName}
+                placeholder="Display name"
+                placeholderTextColor={colors.text.tertiary}
+                maxLength={100}
+                autoFocus
+              />
+              <TouchableOpacity onPress={handleSaveDisplayName}>
+                <Text style={styles.saveText}>Save</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => { setEditingName(false); setDisplayName(user?.display_name || ''); }}>
+                <Text style={styles.cancelText}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <TouchableOpacity style={styles.editNameRow} onPress={() => setEditingName(true)}>
+              <Text style={styles.displayName}>{user?.display_name || 'No display name'}</Text>
+              <Text style={styles.editText}>Edit</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+
         <Text style={styles.info}>
           Bots: {user?.entitlements?.bots_used || 0} / {user?.entitlements?.bot_slots || 1}
         </Text>
+      </View>
+
+      {/* Password change */}
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Security</Text>
+          <TouchableOpacity onPress={() => setShowPasswordChange(!showPasswordChange)}>
+            <Text style={styles.addButton}>{showPasswordChange ? 'Cancel' : 'Change Password'}</Text>
+          </TouchableOpacity>
+        </View>
+
+        {showPasswordChange && (
+          <View style={styles.addForm}>
+            <TextInput
+              style={styles.input}
+              placeholder="Current password"
+              placeholderTextColor={colors.text.tertiary}
+              value={currentPassword}
+              onChangeText={setCurrentPassword}
+              secureTextEntry
+            />
+            <TextInput
+              style={styles.input}
+              placeholder="New password (min 8 chars)"
+              placeholderTextColor={colors.text.tertiary}
+              value={newPassword}
+              onChangeText={setNewPassword}
+              secureTextEntry
+            />
+            <TextInput
+              style={styles.input}
+              placeholder="Confirm new password"
+              placeholderTextColor={colors.text.tertiary}
+              value={confirmPassword}
+              onChangeText={setConfirmPassword}
+              secureTextEntry
+            />
+            <TouchableOpacity style={styles.saveButton} onPress={handleChangePassword}>
+              <Text style={styles.saveButtonText}>Change Password</Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </View>
 
       {/* API Keys section */}
@@ -181,6 +339,13 @@ export default function SettingsScreen() {
       <TouchableOpacity style={styles.logoutButton} onPress={logout}>
         <Text style={styles.logoutText}>Sign Out</Text>
       </TouchableOpacity>
+
+      {/* Delete Account */}
+      <TouchableOpacity style={styles.deleteAccountButton} onPress={handleDeleteAccount}>
+        <Text style={styles.deleteAccountText}>Delete Account</Text>
+      </TouchableOpacity>
+
+      <View style={{ height: spacing.xxl }} />
     </ScrollView>
   );
 }
@@ -192,6 +357,17 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: fontSize.lg, fontWeight: '600', color: colors.text.primary, marginBottom: spacing.sm },
   email: { fontSize: fontSize.md, color: colors.accent.secondary },
   info: { fontSize: fontSize.sm, color: colors.text.secondary, marginTop: spacing.xs },
+  profileRow: { marginTop: spacing.sm },
+  editNameRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  nameInput: {
+    flex: 1, backgroundColor: colors.bg.card, color: colors.text.primary,
+    padding: spacing.sm, borderRadius: borderRadius.sm, fontSize: fontSize.md,
+    borderWidth: 1, borderColor: colors.accent.primary,
+  },
+  displayName: { fontSize: fontSize.md, color: colors.text.primary, flex: 1 },
+  editText: { fontSize: fontSize.sm, color: colors.accent.primary, fontWeight: '600' },
+  saveText: { fontSize: fontSize.sm, color: colors.accent.success, fontWeight: '600' },
+  cancelText: { fontSize: fontSize.sm, color: colors.text.tertiary },
   addButton: { fontSize: fontSize.md, color: colors.accent.primary, fontWeight: '600' },
   addForm: { backgroundColor: colors.bg.card, padding: spacing.md, borderRadius: borderRadius.md, marginBottom: spacing.md },
   providerRow: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.md },
@@ -228,6 +404,12 @@ const styles = StyleSheet.create({
   logoutButton: {
     backgroundColor: colors.bg.card, padding: spacing.md, borderRadius: borderRadius.md,
     alignItems: 'center', borderWidth: 1, borderColor: colors.accent.error + '40',
+    marginBottom: spacing.md,
   },
   logoutText: { fontSize: fontSize.md, color: colors.accent.error, fontWeight: '600' },
+  deleteAccountButton: {
+    backgroundColor: 'transparent', padding: spacing.md, borderRadius: borderRadius.md,
+    alignItems: 'center',
+  },
+  deleteAccountText: { fontSize: fontSize.sm, color: colors.text.tertiary },
 });

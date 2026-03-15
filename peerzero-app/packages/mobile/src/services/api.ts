@@ -4,6 +4,7 @@
 // =============================================================================
 
 import * as SecureStore from 'expo-secure-store';
+import type { ActivityCategory } from '@peerzero/shared';
 
 const API_BASE = __DEV__ ? 'http://localhost:3001/api' : 'https://api.peerzero.com/api';
 
@@ -119,6 +120,15 @@ export const auth = {
   logout: () => apiFetch('/auth/logout', { method: 'POST' }),
 
   me: () => apiFetch('/auth/me'),
+
+  updateProfile: (data: { display_name?: string }) =>
+    apiFetch('/auth/profile', { method: 'PATCH', body: JSON.stringify(data) }),
+
+  changePassword: (data: { current_password: string; new_password: string }) =>
+    apiFetch('/auth/password', { method: 'PATCH', body: JSON.stringify(data) }),
+
+  deleteAccount: () =>
+    apiFetch('/auth/account', { method: 'DELETE' }),
 };
 
 // ── Bots API ──
@@ -145,7 +155,22 @@ export const bots = {
 
   memory: (id: string) => apiFetch(`/bots/${id}/memory`),
 
-  activity: (id: string, page = 1) => apiFetch(`/bots/${id}/activity?page=${page}`),
+  activity: (id: string, page = 1, category?: ActivityCategory) => {
+    const params = new URLSearchParams({ page: String(page) });
+    if (category) params.set('category', category);
+    return apiFetch(`/bots/${id}/activity?${params}`);
+  },
+
+  deleteActivity: (botId: string, activityId: string) =>
+    apiFetch(`/bots/${botId}/activity/${activityId}`, { method: 'DELETE' }),
+
+  deleteAllActivity: (botId: string) =>
+    apiFetch(`/bots/${botId}/activity`, { method: 'DELETE' }),
+
+  stats: (id: string, days?: number) => {
+    const params = days ? `?days=${days}` : '';
+    return apiFetch(`/bots/${id}/stats${params}`);
+  },
 };
 
 // ── API Keys ──

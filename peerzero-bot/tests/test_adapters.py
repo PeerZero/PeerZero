@@ -63,6 +63,60 @@ class TestAdapterSecurityIntegration:
             gateway.validate_platform_request("platform_b", "https://a.com/test")
 
 
+class TestWebhookHMAC:
+    """Tests for HMAC-SHA256 webhook signature verification."""
+
+    def test_valid_signature_accepted(self):
+        """Correctly signed payload should pass verification."""
+        import hmac as hmac_mod
+        import hashlib
+
+        gateway = SecurityGateway()
+        from peerzero_bot.adapters.webhook import WebhookAdapter
+        adapter = WebhookAdapter(
+            "test", "https://test.com", "key", gateway,
+            events=["post"], webhook_secret="my-secret-key",
+        )
+
+        payload = b'{"event": "new_post", "data": "hello"}'
+        sig = hmac_mod.new(b"my-secret-key", payload, hashlib.sha256).hexdigest()
+
+        assert adapter.verify_webhook_signature(payload, f"sha256={sig}") is True
+
+    def test_invalid_signature_rejected(self):
+        """Tampered payload should fail verification."""
+        gateway = SecurityGateway()
+        from peerzero_bot.adapters.webhook import WebhookAdapter
+        adapter = WebhookAdapter(
+            "test", "https://test.com", "key", gateway,
+            events=["post"], webhook_secret="my-secret-key",
+        )
+
+        payload = b'{"event": "new_post"}'
+        assert adapter.verify_webhook_signature(payload, "sha256=deadbeef") is False
+
+    def test_missing_secret_returns_false(self):
+        """No webhook secret configured should return False."""
+        gateway = SecurityGateway()
+        from peerzero_bot.adapters.webhook import WebhookAdapter
+        adapter = WebhookAdapter(
+            "test", "https://test.com", "key", gateway,
+            events=["post"],
+        )
+        assert adapter.verify_webhook_signature(b"payload", "sha256=abc") is False
+
+    def test_malformed_header_rejected(self):
+        """Missing sha256= prefix should fail."""
+        gateway = SecurityGateway()
+        from peerzero_bot.adapters.webhook import WebhookAdapter
+        adapter = WebhookAdapter(
+            "test", "https://test.com", "key", gateway,
+            events=["post"], webhook_secret="secret",
+        )
+        assert adapter.verify_webhook_signature(b"payload", "bad-header") is False
+        assert adapter.verify_webhook_signature(b"payload", "") is False
+
+
 class TestPlatformCapabilities:
     def test_default_capabilities(self):
         caps = PlatformCapabilities(platform_name="test")

@@ -99,6 +99,47 @@ function hashToken(token: string): string {
   return crypto.createHash('sha256').update(token).digest('hex');
 }
 
+export async function updateProfile(userId: string, displayName: string): Promise<void> {
+  if (!displayName || typeof displayName !== 'string' || displayName.trim().length === 0) {
+    throw new AppError(400, 'Display name cannot be empty');
+  }
+  if (displayName.length > 100) {
+    throw new AppError(400, 'Display name must be 100 characters or less');
+  }
+  await query('UPDATE users SET display_name = $1, updated_at = NOW() WHERE id = $2', [displayName.trim(), userId]);
+}
+
+export async function changePassword(userId: string, currentPassword: string, newPassword: string): Promise<void> {
+  if (!newPassword || typeof newPassword !== 'string' || newPassword.length < 8) {
+    throw new AppError(400, 'New password must be at least 8 characters');
+  }
+
+  const user = await queryOne<{ password_hash: string }>(
+    'SELECT password_hash FROM users WHERE id = $1',
+    [userId],
+  );
+  if (!user) throw new AppError(404, 'User not found');
+
+  const valid = await bcrypt.compare(currentPassword, user.password_hash);
+  if (!valid) throw new AppError(401, 'Current password is incorrect');
+
+  const newHash = await bcrypt.hash(newPassword, SALT_ROUNDS);
+  await query('UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2', [newHash, userId]);
+
+  // Revoke all refresh tokens — force re-login on all devices
+  await revokeRefreshTokens(userId);
+}
+
+export async function deleteAccount(userId: string): Promise<void> {
+  // Verify user exists
+  const user = await queryOne('SELECT id FROM users WHERE id = $1', [userId]);
+  if (!user) throw new AppError(404, 'User not found');
+
+  // ON DELETE CASCADE handles: bots, keys, tokens, entitlements, purchases, push_tokens, notification_prefs
+  // BullMQ jobs must be cleaned up by the caller before invoking this.
+  await query('DELETE FROM users WHERE id = $1', [userId]);
+}
+
 export async function getUserProfile(userId: string) {
   const user = await queryOne<{ id: string; email: string; display_name: string | null; created_at: string }>(
     'SELECT id, email, display_name, created_at FROM users WHERE id = $1',

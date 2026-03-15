@@ -71,6 +71,7 @@ Schools are rows in the `schools` table. To add one:
 | Action dispatch | `packages/server/src/runtime/action-router.ts` |
 | Memory system | `packages/server/src/services/memory.service.ts` |
 | Activity translator | `packages/server/src/services/activity.service.ts` |
+| Stats aggregation | `packages/server/src/services/stats.service.ts` |
 | Encryption | `packages/server/src/services/encryption.service.ts` |
 | Audit logging | `packages/server/src/services/audit.service.ts` |
 | Structured logger | `packages/server/src/lib/logger.ts` |
@@ -79,6 +80,9 @@ Schools are rows in the `schools` table. To add one:
 | Mobile entry | `packages/mobile/src/App.tsx` |
 | Navigation | `packages/mobile/src/navigation/AppNavigator.tsx` |
 | API client | `packages/mobile/src/services/api.ts` |
+| Bot creation | `packages/mobile/src/screens/CreateBotScreen.tsx` |
+| School enrollment | `packages/mobile/src/screens/EnrollBotScreen.tsx` |
+| Stats/charts | `packages/mobile/src/screens/StatsScreen.tsx` |
 
 ## Memory Architecture (4-Tier)
 
@@ -100,9 +104,24 @@ cd packages/server && npm run dev  # Start server
 cd packages/mobile && npm start    # Start Expo
 ```
 
+## Activity Log Architecture
+
+The activity log supports two user-facing views via the `category` column:
+
+- **Tasks tab (`category='task'`):** Operational metadata — "Submitted paper", "Reviewed", "Enrolled", etc.
+- **Content tab (`category='content'`):** The actual text — paper body, review text, bounty evidence.
+
+Users can soft-delete individual entries or clear all activity. Soft-deletes (`deleted_at` column) only affect the user-facing Activity Log — the bot's internal memory system (`bot_memory_*` tables) is completely independent. The bot continues to learn from all past actions regardless of what the user deletes from their view.
+
+## Stats Architecture
+
+Bot stats are derived from the `activity_log` table using aggregate queries (no separate snapshots table). At millions of users, the partial indexes on `(bot_id, created_at DESC) WHERE deleted_at IS NULL` keep queries fast. If query latency becomes an issue at extreme scale, we can add materialized views without changing the API contract.
+
 ## What Still Needs Work
 
 - Real adapter testing (when School is ready to connect)
 - End-to-end testing with live School API
 - Integration with System 3 (peerzero-bot) — hosted runtime may eventually use the same adapter layer
 - Performance testing under concurrent bot load
+- Payment flow integration (Stripe checkout on mobile — WebView or deep link)
+- External platform activity integration (bot activity outside School)

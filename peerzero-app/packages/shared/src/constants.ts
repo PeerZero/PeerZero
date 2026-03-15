@@ -48,6 +48,10 @@ export type EnrollmentStatus = typeof ENROLLMENT_STATUSES[number];
 export const ACTION_TYPES = ['register', 'review', 'paper', 'bounty', 'revision', 'reaffirmation', 'condense', 'reflect'] as const;
 export type ActionType = typeof ACTION_TYPES[number];
 
+// Activity categories (for Tasks vs Content split in the Activity Log)
+export const ACTIVITY_CATEGORIES = ['task', 'content'] as const;
+export type ActivityCategory = typeof ACTIVITY_CATEGORIES[number];
+
 // Activity mood (for UI styling)
 export const MOOD_TYPES = ['positive', 'negative', 'neutral', 'milestone'] as const;
 export type MoodType = typeof MOOD_TYPES[number];
@@ -55,6 +59,16 @@ export type MoodType = typeof MOOD_TYPES[number];
 // LLM providers the app supports
 export const LLM_PROVIDERS = ['anthropic', 'openai'] as const;
 export type LLMProvider = typeof LLM_PROVIDERS[number];
+
+// Supported LLM models (shared between server validation and mobile UI)
+export const SUPPORTED_MODELS = [
+  { id: 'claude-opus-4-6', provider: 'anthropic' as const, label: 'Claude Opus 4.6' },
+  { id: 'claude-sonnet-4-6', provider: 'anthropic' as const, label: 'Claude Sonnet 4.6' },
+  { id: 'gpt-4o', provider: 'openai' as const, label: 'GPT-4o' },
+  { id: 'gpt-4o-mini', provider: 'openai' as const, label: 'GPT-4o Mini' },
+] as const;
+
+export const SUPPORTED_MODEL_IDS = SUPPORTED_MODELS.map(m => m.id);
 
 // Default models per provider (Opus for all reasoning — see peerzero explanation Section 6)
 export const DEFAULT_MODELS: Record<LLMProvider, string> = {
@@ -175,3 +189,44 @@ export const MEMORY_TIER_LABELS = {
   2: 'Skill Paragraphs',
   3: 'Core Identity',
 } as const;
+
+// ── Avatar Config Validation ──
+// Colors are rendered programmatically in React Native SVG, not as raw HTML.
+// Still validate to prevent injection if ever used in a web context.
+const HEX_COLOR_RE = /^#[0-9a-fA-F]{3,8}$/;
+const SAFE_STRING_RE = /^[a-zA-Z0-9_-]{1,50}$/;
+
+export function sanitizeAvatarConfig(config: Record<string, unknown>): Record<string, unknown> {
+  const sanitized: Record<string, unknown> = {};
+
+  // body_color: must be valid hex color
+  if (typeof config.body_color === 'string' && HEX_COLOR_RE.test(config.body_color)) {
+    sanitized.body_color = config.body_color;
+  } else {
+    sanitized.body_color = AVATAR_COLOR_PRESETS[0]; // fallback to brand purple
+  }
+
+  // face_style: alphanumeric/dash/underscore only
+  if (typeof config.face_style === 'string' && SAFE_STRING_RE.test(config.face_style)) {
+    sanitized.face_style = config.face_style;
+  } else {
+    sanitized.face_style = 'default';
+  }
+
+  // background_color: optional hex color
+  if (typeof config.background_color === 'string' && HEX_COLOR_RE.test(config.background_color)) {
+    sanitized.background_color = config.background_color;
+  }
+
+  // accessory: optional safe string
+  if (typeof config.accessory === 'string' && SAFE_STRING_RE.test(config.accessory)) {
+    sanitized.accessory = config.accessory;
+  }
+
+  // species_seed: optional safe string
+  if (typeof config.species_seed === 'string' && SAFE_STRING_RE.test(config.species_seed)) {
+    sanitized.species_seed = config.species_seed;
+  }
+
+  return sanitized;
+}

@@ -25,6 +25,7 @@ import schoolRoutes from './routes/schools';
 import paymentRoutes from './routes/payments';
 import healthRoutes from './routes/health';
 import notificationRoutes from './routes/notifications';
+import externalActivityRoutes from './routes/external-activity';
 
 const app = express();
 
@@ -45,6 +46,7 @@ app.use(express.json());
 
 // ── Routes ──
 app.use('/api/auth', authLimiter, authRoutes);
+app.use('/api/bots/external-activity', externalActivityRoutes);  // Phone-home from self-hosted bots (token auth, not JWT) — MUST be before /api/bots
 app.use('/api/bots', botRoutes);
 app.use('/api/keys', apiKeyRoutes);
 app.use('/api/schools', schoolRoutes);

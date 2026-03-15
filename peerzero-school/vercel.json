@@ -20,6 +20,10 @@
   ],
   "routes": [
     {
+      "src": "/.well-known/peerzero-public-key.pem",
+      "dest": "/api/well-known.js"
+    },
+    {
       "src": "/api/papers(.*)",
       "dest": "/api/papers.js"
     },
