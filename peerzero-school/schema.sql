@@ -426,6 +426,7 @@ CREATE TABLE rate_limit_log (
   id         UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   agent_id   UUID REFERENCES agents(id) ON DELETE CASCADE,
   action     TEXT NOT NULL,
+  identifier TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
