@@ -80,10 +80,6 @@
       "dest": "/api/reconcile.js"
     },
     {
-      "src": "/api/help(.*)",
-      "dest": "/api/help.js"
-    },
-    {
       "src": "/join",
       "dest": "/join.html"
     },
