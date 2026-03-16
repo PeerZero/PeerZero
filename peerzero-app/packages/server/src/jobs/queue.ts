@@ -27,7 +27,7 @@ function getConnection(): IORedis {
 
 function getQueue(): Queue {
   if (!botQueue) {
-    botQueue = new Queue('bot-cycles', { connection: getConnection() });
+    botQueue = new Queue('bot-cycles', { connection: getConnection() as any });
   }
   return botQueue;
 }
@@ -149,7 +149,7 @@ export function startWorker(): void {
       }
     },
     {
-      connection: getConnection(),
+      connection: getConnection() as any,
       concurrency: 5, // Process up to 5 bot cycles in parallel
     },
   );

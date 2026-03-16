@@ -299,6 +299,87 @@ export interface WidgetTokenResponse {
   expires_at: string;
 }
 
+// ── Platforms ──
+export interface PlatformRegistryEntry {
+  id: string;
+  slug: string;
+  name: string;
+  description: string | null;
+  adapter_type: string;
+  auth_type: string;
+  icon_url: string | null;
+  is_active: boolean;
+}
+
+export interface BotPlatformConnection {
+  id: string;
+  platform_name: string;
+  adapter_type: string;
+  status: string;
+  heartbeat_interval_seconds: number;
+  last_cycle_at: string | null;
+  cycle_count: number;
+  error_message: string | null;
+  created_at: string;
+}
+
+export interface ConnectPlatformRequest {
+  platform_slug: string;
+  api_key: string;
+  config?: Record<string, unknown>;
+}
+
+// ── Classes ──
+export interface ClassInfo {
+  id: string;
+  name: string;
+  description: string | null;
+  join_code: string;
+  school_name: string | null;
+  member_count: number;
+  role: string;
+  created_at: string;
+}
+
+export interface ClassMember {
+  user_id: string;
+  display_name: string | null;
+  role: string;
+  bot: BotSummary | null;
+  joined_at: string;
+}
+
+export interface ClassDashboard {
+  member_count: number;
+  avg_credibility: number | null;
+  grade_distribution: Record<number, number>;
+  active_bots: number;
+  total_cycles: number;
+  top_performers: Array<{ display_name: string; bot_name: string; credibility: number }>;
+  recent_milestones: Array<{ display_name: string; bot_name: string; event: string; timestamp: string }>;
+}
+
+export interface CreateClassRequest {
+  name: string;
+  description?: string;
+  school_id?: string;
+}
+
+export interface JoinClassRequest {
+  join_code: string;
+  bot_id?: string;
+}
+
+// ── Skills ──
+export interface SkillSnapshot {
+  skill_key: string;
+  strength: number;
+  reliability: number;
+  reps: number;
+  streak: number;
+  status: string;
+}
+
 // ── Paginated response wrapper ──
 export interface PaginatedResponse<T> {
   data: T[];

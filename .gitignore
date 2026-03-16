@@ -3,3 +3,5 @@ __pycache__/
 keys.json
 .env
 .claude/
+node_modules/
+dist/

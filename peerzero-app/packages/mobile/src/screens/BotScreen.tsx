@@ -370,6 +370,16 @@ export default function BotScreen({ route, navigation }: any) {
           <Text style={styles.navButtonSub}>Charts & trends</Text>
         </TouchableOpacity>
       </View>
+
+      <View style={styles.navRow}>
+        <TouchableOpacity
+          style={styles.navButton}
+          onPress={() => navigation.navigate('Platforms', { botId })}
+        >
+          <Text style={styles.navButtonText}>Platforms</Text>
+          <Text style={styles.navButtonSub}>External connections</Text>
+        </TouchableOpacity>
+      </View>
     </ScrollView>
   );
 }

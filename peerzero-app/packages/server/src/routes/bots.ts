@@ -9,9 +9,10 @@ import * as botService from '../services/bot.service';
 import * as memoryService from '../services/memory.service';
 import * as activityService from '../services/activity.service';
 import * as statsService from '../services/stats.service';
+import * as skillService from '../services/skill.service';
 import { addBotCycleJob, removeBotJobs } from '../jobs/queue';
 import { logAudit } from '../services/audit.service';
-import type { ActivityCategory } from '@peerzero/shared';
+import type { ActivityCategory, FocusChunk } from '@peerzero/shared';
 import { ACTIVITY_CATEGORIES } from '@peerzero/shared';
 
 const router = Router();
@@ -112,7 +113,7 @@ router.get('/:id/memory', userRateLimit('read'), async (req: Request, res: Respo
     [key: string]: unknown;
   }
   const profile = bot.cached_profile as CachedProfile | null;
-  const schoolFocus = profile?.active_focus || null;
+  const schoolFocus = (profile?.active_focus as { focus_chunks: FocusChunk[] }) || null;
   const snapshot = await memoryService.getMemorySnapshot(req.params.id, schoolFocus);
   res.json(snapshot);
 });
@@ -234,6 +235,15 @@ router.post('/:id/phone-home-token', userRateLimit('write'), async (req: Request
   logAudit({ userId: req.user!.userId, action: 'bot.generate_phone_home_token', entityType: 'bot', entityId: req.params.id, ipAddress: req.ip });
   // Token is returned ONCE — user must save it. We only store the hash.
   res.json({ phone_home_token: token, warning: 'Save this token — it cannot be retrieved later.' });
+});
+
+// ── Skills ──
+
+router.get('/:id/skills', userRateLimit('read'), async (req: Request, res: Response) => {
+  // Verify ownership
+  await botService.getBotDetail(req.user!.userId, req.params.id);
+  const skills = await skillService.getSkillSnapshots(req.params.id);
+  res.json(skills);
 });
 
 // ── Stats ──

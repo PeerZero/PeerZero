@@ -15,6 +15,7 @@ import { errorHandler } from './middleware/error-handler';
 import { authLimiter, closeRateLimitRedis } from './middleware/rate-limit';
 import { closePool } from './db/client';
 import { startWorker, stopWorker } from './jobs/queue';
+import { startPlatformWorker, stopPlatformWorker } from './jobs/platform-queue';
 import { setupWebSocket } from './websocket/activity-stream';
 
 // Routes
@@ -27,6 +28,8 @@ import healthRoutes from './routes/health';
 import notificationRoutes from './routes/notifications';
 import externalActivityRoutes from './routes/external-activity';
 import widgetRoutes from './routes/widgets';
+import platformRoutes from './routes/platforms';
+import classRoutes from './routes/classes';
 
 const app = express();
 
@@ -54,6 +57,8 @@ app.use('/api/schools', schoolRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/widgets', widgetRoutes);
+app.use('/api/platforms', platformRoutes);
+app.use('/api/classes', classRoutes);
 app.use('/health', healthRoutes);
 
 // ── Error handler (must be last) ──
@@ -65,8 +70,9 @@ const server = createServer(app);
 // WebSocket for real-time activity
 setupWebSocket(server);
 
-// Start BullMQ worker for bot cycles
+// Start BullMQ workers for bot cycles and platform cycles
 startWorker();
+startPlatformWorker();
 
 server.listen(config.port, () => {
   logger.info({ port: config.port, env: config.nodeEnv, realAdapters: config.useRealAdapters }, 'PeerZero App Server started');
@@ -76,6 +82,7 @@ server.listen(config.port, () => {
 async function shutdown() {
   logger.info('Shutting down...');
   await stopWorker();
+  await stopPlatformWorker();
   await closeRateLimitRedis();
   await closePool();
   server.close();

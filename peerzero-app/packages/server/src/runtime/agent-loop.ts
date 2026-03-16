@@ -26,7 +26,10 @@ import { getGradePriceCents } from '@peerzero/shared';
 import { SchoolCredentials } from '../adapters/school.adapter';
 import { buildPrompt } from './prompt-builder';
 import { routeAction } from './action-router';
+import { updateSkillSnapshots } from '../services/skill.service';
+import { schedulePlatformJobs } from '../jobs/platform-queue';
 import type { SchoolProfile } from '@peerzero/shared';
+import { SKILL_NAMES } from '@peerzero/shared';
 
 export interface BotContext {
   botId: string;
@@ -112,17 +115,35 @@ export async function runOneCycle(ctx: BotContext): Promise<void> {
         ctx.cycleNumber,
         actionType,
         actionResult.exercises,
-        actionResult.rawResponse,
+        actionResult.rawResponse ?? undefined,
       );
     }
 
     // 7. Handle condensation if needed
-    if (actionResult.memoryPrompts?.uncondensed_exercises >= 5) {
+    if ((actionResult.memoryPrompts?.uncondensed_exercises ?? 0) >= 5) {
       await handleCondensation(ctx, schoolCreds, llmKey, profile);
     }
 
     // 8. Update cached bot state
     await updateBotCache(ctx.botId, profile, ctx.cycleNumber);
+
+    // 9. Cache skill snapshots for BrainScreen progress bars
+    try {
+      const skills = extractSkillSnapshots(profile);
+      if (skills.length > 0) {
+        await updateSkillSnapshots(ctx.botId, skills);
+      }
+    } catch (err) {
+      logger.warn({ err: err instanceof Error ? err.message : err }, 'Failed to update skill snapshots');
+    }
+
+    // 10. Schedule platform cycles for any active platform connections
+    try {
+      const utilityModel = ctx.fastLlmModel || ctx.llmModel;
+      await schedulePlatformJobs(ctx.botId, ctx.userId, ctx.llmApiKeyId, utilityModel);
+    } catch (err) {
+      logger.warn({ err: err instanceof Error ? err.message : err }, 'Failed to schedule platform cycles');
+    }
 
   } catch (err) {
     const errorMsg = err instanceof Error ? err.message : String(err);
@@ -284,6 +305,47 @@ function extractContentText(actionType: string, rawRequest: Record<string, unkno
     default:
       return undefined;
   }
+}
+
+/**
+ * Extract skill data from the School profile for caching in bot_skill_snapshots.
+ */
+function extractSkillSnapshots(profile: SchoolProfile): Array<{
+  skill_key: string; strength: number; reliability: number; reps: number; streak: number; status: string;
+}> {
+  const skills: Array<{
+    skill_key: string; strength: number; reliability: number; reps: number; streak: number; status: string;
+  }> = [];
+
+  const profileSkills = (profile as any).skill_profile || (profile as any).skills;
+  if (!profileSkills) return skills;
+
+  for (const skillKey of SKILL_NAMES) {
+    const skill = Array.isArray(profileSkills)
+      ? profileSkills.find((s: any) => s.skill_key === skillKey)
+      : profileSkills[skillKey];
+
+    if (skill) {
+      const reps = skill.reps || 0;
+      const strength = skill.strength || 0;
+      let status = 'untested';
+      if (reps >= 10 && strength >= 50) status = 'verified';
+      else if (reps > 0) status = 'developing';
+
+      skills.push({
+        skill_key: skillKey,
+        strength,
+        reliability: skill.reliability || 0,
+        reps,
+        streak: skill.streak || 0,
+        status,
+      });
+    } else {
+      skills.push({ skill_key: skillKey, strength: 0, reliability: 0, reps: 0, streak: 0, status: 'untested' });
+    }
+  }
+
+  return skills;
 }
 
 async function updateBotCache(botId: string, profile: SchoolProfile, cycleNumber: number): Promise<void> {
