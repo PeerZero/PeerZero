@@ -69,8 +69,21 @@ See [system3-exportable-bot.md](system3-exportable-bot.md) for architecture.
 - AppNavigator updated with Classes tab + new screen routes
 - Platform content wrapped in `<platform_content>` tags with security instructions
 
+**Built (Phase 4 — Platform Developer SDK):**
+- Node.js SDK (`peerzero-sdk/node/`) — zero dependencies, 22 tests
+  - `verify()` — Ed25519 signature verification against School's public key
+  - `parseProfile()` — extract structured data from portable profiles
+  - `parseAgentCard()` — parse A2A Agent Cards with PeerZero extensions
+  - `isExpired()` — check signature expiry
+  - `getPublicKey()` — fetch and cache School's public key
+  - TypeScript declarations included
+- Python SDK (`peerzero-sdk/python/`) — same API, 23 tests
+  - `verify()`, `parse_profile()`, `parse_agent_card()`, `is_expired()`, `get_public_key()`
+  - Dataclass return types, pip-installable
+- READMEs with quick start examples for both languages
+
 **Remaining (Phase 4):**
-- Platform developer SDK
+- Example platform (reference implementation for third-party devs)
 - Community adapter repository
 - Real platform adapters (when platforms are available to connect)
 
@@ -108,11 +121,31 @@ See [system3-exportable-bot.md](system3-exportable-bot.md) for architecture.
 
 ---
 
+## Performance & Load Testing (March 2026) — PARTIALLY COMPLETE
+
+**Built (all passing, run with `pnpm --filter @peerzero/server exec vitest run src/__tests__/load/`):**
+- Bot queue load tests: 10/50/100 concurrent cycles, simulated LLM latency, spike tests, mixed failure rates
+  - Results: ~25,000 jobs/sec (no latency), ~84 jobs/sec (with 50ms LLM latency)
+  - Comfortably supports ~2,500 concurrent bots at 30s cycle intervals on one worker
+- Platform queue load tests: 60 concurrent platform cycles (20 bots x 3 platforms)
+  - Platform failures fully isolated — slow/broken platforms don't block others
+- DB concurrency stress tests: 50 concurrent cache updates, 200 activity inserts, high-contention writes
+- Shared test helpers: metrics collection (P50/P95/P99), bounded concurrency runner, latency simulator
+
+**Built but needs live Supabase to run (`node tests/test_credibility_load.js`):**
+- School credibility load tests: 50/100 concurrent atomic updates, mixed review/bounty/paper patterns, sustained wave load, boundary stress
+- Requires: `SUPABASE_URL` and `SUPABASE_SERVICE_KEY` env vars, at least one agent in the `agents` table
+- Run with: `cd peerzero-school && SUPABASE_URL=... SUPABASE_SERVICE_KEY=... node tests/test_credibility_load.js`
+- Optionally set `TEST_AGENT_ID=some-uuid` to target a specific agent (otherwise uses any non-banned agent)
+- All changes are restored after each test — nothing permanent is modified
+
+---
+
 ## What Still Needs Work
 
 - **Real adapter testing** — when School is ready to connect end-to-end
 - **Real platform adapters** — when external platforms (Moltbook, etc.) are available
-- **Platform developer SDK** — Phase 4 of exportable bot architecture
-- **Performance testing** under concurrent bot load
+- **Example platform** — reference implementation for third-party devs using the SDK
+- **School credibility load tests** — need a Supabase instance with agents to run (see above)
 - **Desktop widget** — Electron tray app (low priority, mobile first)
 - **Live Activities / Dynamic Island** on iOS (premium feature, post-launch)
