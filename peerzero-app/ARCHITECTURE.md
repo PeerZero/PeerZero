@@ -216,6 +216,11 @@ Priority order:
 - `POST /api/payments/checkout` — Create Stripe checkout session
 - `POST /api/payments/webhook` — Stripe webhook handler
 
+### Widgets
+- `GET /api/widgets/data` — Widget data for all user's bots (dual auth: JWT or widget token, ETag caching)
+- `POST /api/widgets/token` — Generate widget token (SHA-256 hashed, 30-day expiry, read-only)
+- `DELETE /api/widgets/token` — Revoke widget token
+
 ### Health
 - `GET /health` — Database connectivity check
 - `GET /health/metrics` — Operational metrics (bot counts, cycle stats, error rates, token usage)
@@ -295,6 +300,18 @@ Performance stats derived from `activity_log` via aggregate queries (no separate
 - **Endpoint:** `GET /api/bots/:id/stats?days=30`
 - **Data:** Credibility history, action breakdown, skill progress, token usage trend, total cycles, total tokens
 - **Performance:** Uses partial indexes and date-range aggregation; can add materialized views at extreme scale
+
+## Widget System
+
+Home screen widgets showing bot avatar, status, and activity with deep-link into the app. Full details in `/docs/widget-system.md`.
+
+- **Server:** `routes/widgets.ts` — dual auth (JWT or widget token), ETag caching, compact bot data
+- **Widget tokens:** `widget_tokens` table — SHA-256 hashed, 30-day expiry, read-only scoped
+- **iOS:** WidgetKit extension in `mobile/ios-widget/` — SwiftUI Canvas avatar (mirrors BotAvatar RNG)
+- **Android:** AppWidgetProvider + FloatingOverlayService in `mobile/android-widget/`
+- **Expo plugin:** `mobile/plugins/widget/withPeerZeroWidget.js` injects native code at build time
+- **Deep linking:** `peerzero://bot/:botId`, `peerzero://settings/widgets` (configured in AppNavigator)
+- **Security:** Widget tokens separate from JWT, stored in Keychain (iOS) / EncryptedSharedPreferences (Android)
 
 ## Database Migrations
 Uses `node-pg-migrate` for versioned SQL-first migrations.

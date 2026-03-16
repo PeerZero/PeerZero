@@ -1,6 +1,7 @@
 # Pet Widget — Floating Companion Feature Plan
 
-> Status: Planning — March 2026
+> Status: **IMPLEMENTED** — March 2026 (see `/docs/widget-system.md` for current implementation)
+> This document was the original planning document. The actual implementation diverged in some areas — notably, native SwiftUI/Kotlin Canvas rendering replaced the pre-rendered sprite atlas approach, and widget tokens replaced JWT for widget auth.
 > Priority: Phase 3-4 feature (after tiered pricing, platform enrollment)
 > Audience: Developer reference for future implementation
 
