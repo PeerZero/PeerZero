@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # ── System 1: School (JS) ──────────────────────────────────────────
+  school-tests:
+    name: School Tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: peerzero-school
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: peerzero-school/package-lock.json
+      - run: npm ci
+      - run: node tests/test_shared_logic.js
+
+  # ── System 3: Bot (Python) ─────────────────────────────────────────
+  bot-tests:
+    name: Bot Tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: peerzero-bot
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -e ".[dev]" 2>/dev/null || pip install -e .
+      - run: python -m pytest tests/ -v
+
+  # ── System 2: App Server (TypeScript) ──────────────────────────────
+  app-typecheck:
+    name: App Type Check
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: peerzero-app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: peerzero-app/package.json
+      - run: npm install
+      - run: npx tsc --noEmit -p packages/server/tsconfig.json

@@ -39,7 +39,12 @@ class LLMClient:
     """
     LLM client with provider-agnostic interface.
     Key ONLY goes to the configured LLM provider.
+    Retries transient failures (rate limits, timeouts, server errors)
+    with exponential backoff.
     """
+
+    MAX_RETRIES = 3
+    BASE_DELAY = 2.0  # seconds
 
     def __init__(self, provider: str, model: str, api_key: str, max_tokens: int = 8192):
         self._provider = provider
@@ -59,28 +64,63 @@ class LLMClient:
             self._client = openai.OpenAI(api_key=self._api_key)
         return self._client
 
+    @staticmethod
+    def _is_retryable(exc: Exception) -> bool:
+        """Check if an exception is transient and worth retrying."""
+        exc_type = type(exc).__name__
+        # Rate limits, overloaded, timeouts, connection errors
+        if exc_type in ("RateLimitError", "APIStatusError", "APITimeoutError",
+                        "APIConnectionError", "InternalServerError", "Timeout"):
+            return True
+        # Check HTTP status codes on API errors
+        status = getattr(exc, "status_code", None) or getattr(exc, "status", None)
+        if status and isinstance(status, int) and status in (429, 500, 502, 503, 529):
+            return True
+        # httpx and connection errors
+        if isinstance(exc, (ConnectionError, TimeoutError)):
+            return True
+        return False
+
     def call(self, system_prompt: str, user_message: str) -> str:
-        """Call the LLM. Returns response text."""
+        """Call the LLM with retry on transient failures. Returns response text."""
         client = self._get_client()
-        if self._provider == "anthropic":
-            response = client.messages.create(
-                model=self._model,
-                max_tokens=self._max_tokens,
-                system=system_prompt,
-                messages=[{"role": "user", "content": user_message}],
-            )
-            return response.content[0].text
-        elif self._provider == "openai":
-            response = client.chat.completions.create(
-                model=self._model,
-                max_tokens=self._max_tokens,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_message},
-                ],
-            )
-            return response.choices[0].message.content
-        raise ValueError(f"Unknown LLM provider: {self._provider}")
+        last_exc = None
+
+        for attempt in range(self.MAX_RETRIES + 1):
+            try:
+                if self._provider == "anthropic":
+                    response = client.messages.create(
+                        model=self._model,
+                        max_tokens=self._max_tokens,
+                        system=system_prompt,
+                        messages=[{"role": "user", "content": user_message}],
+                    )
+                    return response.content[0].text
+                elif self._provider == "openai":
+                    response = client.chat.completions.create(
+                        model=self._model,
+                        max_tokens=self._max_tokens,
+                        messages=[
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": user_message},
+                        ],
+                    )
+                    return response.choices[0].message.content
+                else:
+                    raise ValueError(f"Unknown LLM provider: {self._provider}")
+            except Exception as e:
+                last_exc = e
+                if attempt < self.MAX_RETRIES and self._is_retryable(e):
+                    delay = self.BASE_DELAY * (2 ** attempt)
+                    logger.warning(
+                        f"[LLM] {type(e).__name__} on attempt {attempt + 1}/{self.MAX_RETRIES + 1}, "
+                        f"retrying in {delay:.0f}s: {e}"
+                    )
+                    time.sleep(delay)
+                else:
+                    raise
+
+        raise last_exc  # type: ignore[misc]
 
 
 class PeerZeroBot:
@@ -117,8 +157,9 @@ class PeerZeroBot:
         self.platform_adapters = platform_adapters or []
 
         self.cycle_count: int = 0
-        self._my_paper_ids: list[str] = []
-        self._my_review_ids: list[str] = []
+        # Restore tracked IDs from persistent memory (survives restarts)
+        self._my_paper_ids: list[str] = self.memory.get_tracked_paper_ids()
+        self._my_review_ids: list[str] = self.memory.get_tracked_review_ids()
         self._portable_profile: dict = {}
         self._agent_card: dict = {}
         self._identity_refresh_interval: int = 10  # refresh every N school cycles
@@ -255,6 +296,7 @@ class PeerZeroBot:
         try:
             result = self.school.get_papers(params={"my_papers": "true"})
             self._my_paper_ids = [p["id"] for p in (result.get("papers") or [])]
+            self.memory.store_tracked_paper_ids(self._my_paper_ids)
         except Exception as e:
             logger.debug(f"Failed to refresh papers: {e}")
 
@@ -288,6 +330,7 @@ class PeerZeroBot:
             result = self.school.submit_review(paper_id, review_data)
             logger.info(f"[REVIEW] Submitted — score={review_data.get('score')}")
             self._my_review_ids.append(paper_id)
+            self.memory.add_tracked_review_id(paper_id)
             return result
         except Exception as e:
             logger.warning(f"[REVIEW] Failed: {e}")

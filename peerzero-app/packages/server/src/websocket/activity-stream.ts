@@ -23,17 +23,66 @@ interface ConnectedClient {
 const clients: Map<string, ConnectedClient[]> = new Map(); // botId → clients
 
 const AUTH_TIMEOUT_MS = 5000; // Client must send auth message within 5s
+const MAX_CONNECTIONS_PER_BOT = 10; // Prevent resource exhaustion per bot
+const MAX_CONNECTIONS_PER_USER = 20; // Prevent a single user from hogging connections
+const MAX_TOTAL_CONNECTIONS = 500; // Global limit
+
+// Track per-user connection counts for limits
+const userConnectionCounts: Map<string, number> = new Map();
+
+function getTotalConnections(): number {
+  let total = 0;
+  for (const botClients of clients.values()) {
+    total += botClients.length;
+  }
+  return total;
+}
 
 export function setupWebSocket(server: Server): void {
   const wss = new WebSocketServer({ server, path: '/ws' });
 
+  // Periodic cleanup of stale connections (every 30s)
+  const cleanupInterval = setInterval(() => {
+    for (const [botId, botClients] of clients.entries()) {
+      const alive = botClients.filter(c => c.ws.readyState === WebSocket.OPEN);
+      if (alive.length === 0) {
+        clients.delete(botId);
+      } else if (alive.length !== botClients.length) {
+        clients.set(botId, alive);
+      }
+    }
+    // Recount user connections after cleanup
+    userConnectionCounts.clear();
+    for (const botClients of clients.values()) {
+      for (const c of botClients) {
+        userConnectionCounts.set(c.userId, (userConnectionCounts.get(c.userId) || 0) + 1);
+      }
+    }
+  }, 30_000);
+
+  // Clean up interval when server closes
+  server.on('close', () => clearInterval(cleanupInterval));
+
   wss.on('connection', async (ws, req) => {
     try {
+      // Global connection limit
+      if (getTotalConnections() >= MAX_TOTAL_CONNECTIONS) {
+        ws.close(4008, 'Server connection limit reached');
+        return;
+      }
+
       const url = new URL(req.url || '', `http://${req.headers.host}`);
       const botId = url.searchParams.get('bot_id');
 
       if (!botId) {
         ws.close(4001, 'Missing bot_id');
+        return;
+      }
+
+      // Per-bot connection limit (before auth, to prevent resource exhaustion)
+      const existingBotClients = clients.get(botId) || [];
+      if (existingBotClients.length >= MAX_CONNECTIONS_PER_BOT) {
+        ws.close(4007, 'Too many connections for this bot');
         return;
       }
 
@@ -71,11 +120,19 @@ export function setupWebSocket(server: Server): void {
             return;
           }
 
+          // Per-user connection limit
+          const userCount = userConnectionCounts.get(payload.userId) || 0;
+          if (userCount >= MAX_CONNECTIONS_PER_USER) {
+            ws.close(4009, 'Too many connections for this user');
+            return;
+          }
+
           // Register client
           const client: ConnectedClient = { ws, userId: payload.userId, botId };
           const existing = clients.get(botId) || [];
           existing.push(client);
           clients.set(botId, existing);
+          userConnectionCounts.set(payload.userId, userCount + 1);
 
           ws.on('close', () => {
             const botClients = clients.get(botId);
@@ -86,6 +143,13 @@ export function setupWebSocket(server: Server): void {
               } else {
                 clients.set(botId, filtered);
               }
+            }
+            // Decrement user connection count
+            const currentCount = userConnectionCounts.get(payload.userId) || 1;
+            if (currentCount <= 1) {
+              userConnectionCounts.delete(payload.userId);
+            } else {
+              userConnectionCounts.set(payload.userId, currentCount - 1);
             }
           });
 
