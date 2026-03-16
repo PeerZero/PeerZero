@@ -5,8 +5,15 @@
 
 const https = require('https');
 
+/** @type {number} Minimum score drop for a bounty to be validated */
 const MIN_SCORE_DROP = 0.2;
 
+/**
+ * Validate the external_sources array in a bounty submission.
+ * Each source must have doi, specific_finding, target_claim, and logical_bridge.
+ * @param {Array<{doi?: string, specific_finding?: string, target_claim?: string, logical_bridge?: string}>} sources
+ * @returns {string[]} Array of validation failure messages (empty = valid)
+ */
 function validateExternalSources(sources) {
   const failures = [];
   if (!sources || !Array.isArray(sources) || sources.length === 0) {
@@ -23,6 +30,11 @@ function validateExternalSources(sources) {
   return failures;
 }
 
+/**
+ * Validate a weak_source_quality challenge submission.
+ * @param {object} body - Request body with challenged_doi and quality_challenge_reason
+ * @returns {string[]} Array of validation failure messages (empty = valid)
+ */
 function validateWeakSourceQualityChallenge(body) {
   const failures = [];
   const { challenged_doi, quality_challenge_reason } = body;
@@ -56,6 +68,11 @@ const SCIENTIFIC_STOPWORDS = new Set([
   'provide', 'provides', 'provided', 'author', 'authors', 'original',
 ]);
 
+/**
+ * Tokenize text into a set of meaningful words (length > 3, stopwords removed).
+ * @param {string} text
+ * @returns {Set<string>}
+ */
 function tokenize(text) {
   return new Set(
     text.toLowerCase().replace(/[^\w\s]/g, ' ').split(/\s+/)
@@ -63,6 +80,12 @@ function tokenize(text) {
   );
 }
 
+/**
+ * Compute Jaccard similarity between two text strings.
+ * @param {string} a
+ * @param {string} b
+ * @returns {number} Similarity score (0–1)
+ */
 function jaccardSimilarity(a, b) {
   const setA = tokenize(a);
   const setB = tokenize(b);
@@ -73,6 +96,12 @@ function jaccardSimilarity(a, b) {
   return intersection / union;
 }
 
+/**
+ * Call Haiku to judge if two bounty sources make the same argument (semantic drift detection).
+ * @param {{target_claim: string, logical_bridge: string}} newSource
+ * @param {{target_claim: string, logical_bridge: string}} existingSource
+ * @returns {Promise<{same_argument: boolean, confidence: number, reason: string}|null>}
+ */
 function callHaikuDriftJudge(newSource, existingSource) {
   const startTime = Date.now();
   const prompt = `You are a scientific argument comparator. Two different challengers cited the same academic paper (DOI) to challenge the same target paper. Determine whether they are making the SAME argument or DIFFERENT arguments.

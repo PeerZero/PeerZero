@@ -3,6 +3,23 @@
  * Extracted to avoid duplication across API endpoints.
  */
 
+/**
+ * @typedef {object} Review
+ * @property {string} overall_assessment
+ * @property {string} [methodology_notes]
+ * @property {string} [statistical_validity_notes]
+ * @property {string} [citation_accuracy_notes]
+ * @property {string} [reproducibility_notes]
+ * @property {string} [logical_consistency_notes]
+ * @property {number} score
+ * @property {number} [reviewer_credibility_at_time]
+ */
+
+/**
+ * Check whether a review meets minimum quality requirements.
+ * @param {Review} review
+ * @returns {{ passed: boolean, failures: string[] }}
+ */
 function qualityGate(review) {
   const failures = [];
   if (!review.overall_assessment || review.overall_assessment.trim().length < 100) {
@@ -22,6 +39,12 @@ function qualityGate(review) {
   return { passed: failures.length === 0, failures };
 }
 
+/**
+ * Map a reviewer's credibility to a scoring weight.
+ * Higher credibility = more influence on the weighted paper score.
+ * @param {number} credibility - Reviewer's credibility score (0–200)
+ * @returns {number} Weight multiplier (0.1–2.0)
+ */
 function reviewerWeight(credibility) {
   if (credibility <= 10) return 0.1;
   if (credibility <= 25) return 0.3;
@@ -32,6 +55,12 @@ function reviewerWeight(credibility) {
   return 2.0;
 }
 
+/**
+ * Compute the credibility-weighted paper score from its reviews.
+ * Requires at least 3 reviews to produce a score.
+ * @param {Review[]} reviews
+ * @returns {number|null} Weighted score (1–10) or null if insufficient reviews
+ */
 function weightedScore(reviews) {
   if (reviews.length < 3) return null;
   let total = 0, weights = 0;
@@ -43,6 +72,11 @@ function weightedScore(reviews) {
   return weights > 0 ? parseFloat((total / weights).toFixed(2)) : null;
 }
 
+/**
+ * Compute standard deviation of review scores (population std dev).
+ * @param {Review[]} reviews
+ * @returns {number} Standard deviation (0 if fewer than 3 reviews)
+ */
 function stdDev(reviews) {
   if (reviews.length < 3) return 0;
   const scores = reviews.map(r => r.score);
@@ -51,6 +85,13 @@ function stdDev(reviews) {
   return Math.sqrt(variance);
 }
 
+/**
+ * Determine a paper's status based on its score, review count, and variance.
+ * @param {number|null} score - Weighted score
+ * @param {number} reviewCount
+ * @param {number} variance - Score variance across reviews
+ * @returns {'pending'|'contested'|'landmark'|'distinguished'|'hall_of_science'|'active'}
+ */
 function paperStatus(score, reviewCount, variance) {
   const THRESHOLDS = {
     hall_of_science: { min_score: 8.5, min_reviews: 15 },
@@ -65,6 +106,13 @@ function paperStatus(score, reviewCount, variance) {
   return 'active';
 }
 
+/**
+ * Compute Elo-style credibility change for a paper author.
+ * Higher credibility = higher expected score = smaller gains, larger losses.
+ * @param {number} authorCredibility - Author's current credibility score
+ * @param {number|null} paperScore - Paper's weighted score
+ * @returns {number} Credibility delta (positive = gain, negative = loss)
+ */
 function eloAuthorChange(authorCredibility, paperScore) {
   if (!paperScore) return 0;
   const expectedScore = 5 + (authorCredibility - 50) / 50;
