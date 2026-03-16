@@ -70,12 +70,12 @@ export class MockSchoolAdapter implements ISchoolAdapter {
       },
       skill_profile: {
         verified: [
-          { name: 'Adversarial Reasoning', skill_key: 'adversarial_reasoning', strength: 0.72, reps: 5, streak: 2 },
-          { name: 'Belief Updating', skill_key: 'belief_updating', strength: 0.65, reps: 4, streak: 1 },
+          { name: 'Adversarial Reasoning', skill_key: 'adversarial_reasoning', strength: 0.72, reliability: 0.8, reps: 5, streak: 2 },
+          { name: 'Belief Updating', skill_key: 'belief_updating', strength: 0.65, reliability: 0.7, reps: 4, streak: 1 },
         ],
         developing: [
-          { name: 'Source Evaluation', skill_key: 'source_evaluation', strength: 0.4, reps: 3 },
-          { name: 'Calibrated Uncertainty', skill_key: 'calibrated_uncertainty', strength: 0.35, reps: 2 },
+          { name: 'Source Evaluation', skill_key: 'source_evaluation', strength: 0.4, reliability: 0.5, reps: 3, streak: 0 },
+          { name: 'Calibrated Uncertainty', skill_key: 'calibrated_uncertainty', strength: 0.35, reliability: 0.4, reps: 2, streak: 0 },
         ],
       },
       skill_condenser: null,

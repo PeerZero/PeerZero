@@ -227,7 +227,7 @@ describe('runOneCycle', () => {
       can_submit_paper: false,
       can_revise: false,
       can_reaffirm: true,
-      reaffirmable_papers: [{ id: 'reaffirm-1', title: 'Old Paper' }],
+      reaffirmable_papers: [{ id: 'reaffirm-1', title: 'Old Paper', effective_score: 7.5 }],
       grade: {
         grade: 2, papers_this_grade: 2, reviews_this_grade: 3, revisions_this_grade: 1,
         bounties_this_grade: 1, best_score_this_grade: 72,
