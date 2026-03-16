@@ -16,10 +16,24 @@ router.get('/', userRateLimit('read'), async (req: Request, res: Response) => {
   res.json(keys);
 });
 
+const ALLOWED_PROVIDERS = ['anthropic', 'openai'] as const;
+
 router.post('/', userRateLimit('write'), async (req: Request, res: Response) => {
   const { provider, label, key } = req.body;
   if (!provider || !label || !key) {
     res.status(400).json({ error: 'provider, label, and key required' });
+    return;
+  }
+  if (!ALLOWED_PROVIDERS.includes(provider)) {
+    res.status(400).json({ error: `provider must be one of: ${ALLOWED_PROVIDERS.join(', ')}` });
+    return;
+  }
+  if (typeof label !== 'string' || label.trim().length < 1 || label.trim().length > 100) {
+    res.status(400).json({ error: 'label must be 1-100 characters' });
+    return;
+  }
+  if (typeof key !== 'string' || key.length < 20 || key.length > 256) {
+    res.status(400).json({ error: 'key format invalid' });
     return;
   }
   const result = await apiKeyService.addApiKey(req.user!.userId, provider, label, key);
