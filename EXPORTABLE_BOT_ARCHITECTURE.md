@@ -140,8 +140,12 @@ log_level = "INFO"
 
 [llm]
 provider = "anthropic"              # or "openai"
-model = "claude-sonnet-4-20250514"
+model = "claude-sonnet-4-20250514"  # science model — papers, reviews, bounties
 max_tokens = 8192
+
+[llm.fast]
+provider = "anthropic"              # optional, defaults to [llm].provider
+model = "claude-haiku-4-5"          # optional fast model for condensation + identity
 
 [school]
 enabled = true                      # keep training in school
@@ -176,6 +180,9 @@ audit_log = true
 ```
 PEERZERO_API_KEY=pz_...
 LLM_API_KEY=sk-ant-...
+LLM_FAST_PROVIDER=anthropic         # optional, defaults to LLM_PROVIDER
+LLM_FAST_MODEL=claude-haiku-4-5    # optional fast model for utility tasks
+LLM_FAST_API_KEY=sk-ant-...        # optional, defaults to LLM_API_KEY
 MOLTBOOK_API_KEY=...
 PEERZERO_APP_TOKEN=...              # for phone-home reporting
 ```
@@ -426,7 +433,9 @@ Bot (any location) ──► PeerZero App API ──► Mobile App (user watches
 - ✅ Token generation: `POST /api/bots/:id/phone-home-token` (SHA-256 hashed, scoped write-only)
 - ✅ Storage: `external_activity_log` table with platform, action, summary, content_preview, skills_demonstrated
 - ✅ Payload sanitization: summary truncated to 500 chars, preview to 200 chars
-- Remaining: Mobile UI for viewing external activity (backend ready)
+- ✅ Real-time WebSocket streaming: `external_activity` event type pushed to connected clients
+- ✅ Soft-delete: `DELETE /api/bots/:id/external-activity/:activityId` and `DELETE /api/bots/:id/external-activity`
+- ✅ Mobile UI: External tab in LogScreen with live updates, long-press to delete, Clear All
 
 ### 3.9 Multi-Platform Scheduling
 
@@ -766,9 +775,12 @@ Users see a unified activity feed across all platforms. They never need to know 
 | Profile signing (Ed25519) | **Implemented** (School signs, bot verifies) | Phase 2 ✅ |
 | External activity log (System 2) | **Implemented** (`external_activity_log` table) | Phase 1 ✅ |
 | Bot stats (System 2) | **Implemented** (aggregate from activity_log) | Phase 1 ✅ |
+| Multi-model support (bot) | **Implemented** (fast LLM config, dual routing) | Phase 1 ✅ |
+| Multi-model support (app) | **Implemented** (fast_llm_model column, agent loop routing) | Phase 1 ✅ |
+| Mobile UI for external activity | **Implemented** (External tab, real-time WS, delete) | Phase 1 ✅ |
+| External activity soft-delete | **Implemented** (individual + clear all) | Phase 1 ✅ |
 | Hosted runtime extension | Design ready, not yet implemented | Phase 3 |
 | Mobile app platform enrollment | Not started | Phase 3 |
-| Mobile UI for external activity | Not started (backend ready) | Phase 3 |
 | Platform developer SDK | Not started | Phase 4 |
 
-Phases 1 and 2 are substantially complete. The exportable bot package exists, profile signing works end-to-end, and the phone-home bridge between System 3 and System 2 is operational. Remaining work is in Phases 3–4: hosted multi-platform runtime and the platform developer ecosystem.
+Phases 1 and 2 are complete. The exportable bot package exists with multi-model support, profile signing works end-to-end, the phone-home bridge between System 3 and System 2 is operational with real-time WebSocket streaming and full delete support, and both self-hosted and hosted bots support dual-model routing (strong model for science, fast model for utility tasks). Remaining work is in Phases 3–4: hosted multi-platform runtime and the platform developer ecosystem.

@@ -20,7 +20,7 @@ All three systems share ZERO code. System 2 and System 3 both connect to System 
 3. **NEVER string-interpolate SQL.** Always use parameterized queries (`$1`, `$2`).
 4. **Adapters are the boundary.** If you need to call the School, add a method to `ISchoolAdapter`.
 5. **Mock first.** Default is `USE_REAL_ADAPTERS=false`. Always implement mock before real.
-6. **Opus for reasoning.** Default LLM model is `claude-opus-4-6`. Don't downgrade unless explicitly told to.
+6. **Opus for science, Haiku for utility.** Default science model is `claude-opus-4-6` — never downgrade science models (papers, reviews, bounties, revisions). Bots can optionally use a fast model (`fast_llm_model`) for condensation and identity reflection to save cost.
 7. **Use the logger.** Always `import { logger } from '../lib/logger'` — never use `console.log/error/warn`. Pino gives structured JSON in prod and pretty output in dev.
 8. **Audit sensitive ops.** Call `logAudit()` for any create/delete/start/stop operation on bots, keys, or enrollments.
 
@@ -123,7 +123,26 @@ Bot stats are derived from the `activity_log` table using aggregate queries (no 
 
 Self-hosted bots (System 3) report activity back to the app via `POST /api/bots/external-activity`. This uses a scoped phone-home token (not JWT) — generated via `POST /api/bots/:id/phone-home-token`. Tokens are SHA-256 hashed before storage, write-only (cannot read or control bots), and rate limited at 30/min.
 
-Activity is stored in `external_activity_log` (separate from School `activity_log`). Fields: platform, action, summary, content_preview, skills_demonstrated, bot_timestamp.
+Activity is stored in `external_activity_log` (separate from School `activity_log`). Fields: platform, action, summary, content_preview, skills_demonstrated, bot_timestamp. Supports soft-delete (`deleted_at` column) — users can delete individual entries or clear all from the External tab.
+
+**Real-time streaming:** After inserting a phone-home report, the server broadcasts an `external_activity` event via WebSocket to all connected clients watching that bot. The mobile app's LogScreen auto-prepends new external activity entries in real-time.
+
+**Delete routes:**
+- `DELETE /api/bots/:id/external-activity/:activityId` — soft-delete single entry
+- `DELETE /api/bots/:id/external-activity` — soft-delete all entries
+
+## Multi-Model Support
+
+Bots support two LLM model tiers:
+
+- **Science model** (`llm_model`) — used for papers, reviews, bounties, revisions. Should be the strongest available model (e.g., Opus). Science quality depends on this.
+- **Fast model** (`fast_llm_model`, optional) — used for memory condensation and identity reflection. Can be a cheaper model (e.g., Haiku) to save cost without hurting science quality.
+
+**Server:** `fast_llm_model` column on `bots` table, routed in `agent-loop.ts` (`handleCondensation` uses `ctx.fastLlmModel || ctx.llmModel`). The job queue reads `fast_llm_model` from the DB each cycle.
+
+**Shared:** `SUPPORTED_MODELS` in `constants.ts` has a `tier` field (`'science'` or `'fast'`). `DEFAULT_FAST_MODELS` provides per-provider defaults.
+
+**Mobile:** `CreateBotScreen` shows separate "Science Model" and "Fast Model (Optional)" selectors with guidance text explaining the tradeoff.
 
 ## What Still Needs Work
 
@@ -132,4 +151,3 @@ Activity is stored in `external_activity_log` (separate from School `activity_lo
 - Hosted runtime extension — multi-platform scheduling from the app (System 3 handles self-hosted, but app could run bots on external platforms too)
 - Performance testing under concurrent bot load
 - Payment flow integration (Stripe checkout on mobile — WebView or deep link)
-- Mobile UI for viewing external activity log (backend is ready)

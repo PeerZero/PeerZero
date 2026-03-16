@@ -1,4 +1,4 @@
-# Implementation Plan: Real-Time Bot Watcher + Multi-Model Support
+# Implementation Plan: Real-Time Bot Watcher + Multi-Model Support (COMPLETE)
 
 ## Feature 1: Enhanced Real-Time Bot Watcher
 
@@ -133,20 +133,27 @@ ALTER TABLE bots ADD COLUMN fast_llm_model TEXT DEFAULT NULL;
 
 ---
 
+## Status: ALL IMPLEMENTED
+
+All items in this plan have been implemented and committed.
+
 ## File Changes Summary
 
-| File | Change |
-|------|--------|
-| `peerzero-app/packages/server/src/routes/external-activity.ts` | Broadcast via WS after insert |
-| `peerzero-app/packages/server/src/websocket/activity-stream.ts` | Add external_activity event type |
-| `peerzero-app/packages/server/src/routes/bots.ts` | Add delete routes for external activity |
-| `peerzero-app/packages/server/src/services/activity.service.ts` | Add external activity delete methods |
-| `peerzero-app/packages/server/src/services/bot.service.ts` | Add fast_model field |
-| `peerzero-app/packages/server/src/runtime/agent-loop.ts` | Multi-model routing |
-| `peerzero-app/packages/mobile/src/hooks/useBotStream.ts` | Handle external_activity event |
-| `peerzero-app/packages/mobile/src/screens/LogScreen.tsx` | 6 filter chips, external delete UI |
-| `peerzero-app/packages/mobile/src/screens/CreateBotScreen.tsx` | Fast model selector |
-| `peerzero-bot/peerzero_bot/config.py` | Fast model config fields |
-| `peerzero-bot/peerzero_bot/agent.py` | Dual LLM client, call routing |
-| `peerzero-bot/peerzero_bot/cli.py` | Build + inject fast LLMClient |
-| `migrations/003_watcher_multimodel.sql` | Schema changes |
+| File | Change | Status |
+|------|--------|--------|
+| `peerzero-app/packages/server/src/routes/external-activity.ts` | Broadcast via WS after insert | Done |
+| `peerzero-app/packages/server/src/websocket/activity-stream.ts` | Add external_activity event type | Done |
+| `peerzero-app/packages/server/src/routes/bots.ts` | Add delete routes for external activity, fast_llm_model in create | Done |
+| `peerzero-app/packages/server/src/services/bot.service.ts` | Add fast_llm_model field to create/update/detail | Done |
+| `peerzero-app/packages/server/src/runtime/agent-loop.ts` | Multi-model routing (fastLlmModel in BotContext) | Done |
+| `peerzero-app/packages/server/src/jobs/queue.ts` | Read fast_llm_model from DB each cycle | Done |
+| `peerzero-app/packages/shared/src/constants.ts` | Model tiers, Haiku/GPT-4o-mini, DEFAULT_FAST_MODELS | Done |
+| `peerzero-app/packages/shared/src/api-types.ts` | fast_llm_model on BotDetail + CreateBotRequest | Done |
+| `peerzero-app/packages/mobile/src/hooks/useBotStream.ts` | Handle external_activity event | Done |
+| `peerzero-app/packages/mobile/src/screens/LogScreen.tsx` | External delete UI, live WS updates | Done |
+| `peerzero-app/packages/mobile/src/screens/CreateBotScreen.tsx` | Fast model selector + guidance text | Done |
+| `peerzero-app/packages/mobile/src/services/api.ts` | External activity delete API calls | Done |
+| `peerzero-bot/peerzero_bot/config.py` | Fast model config fields | Done |
+| `peerzero-bot/peerzero_bot/agent.py` | Dual LLM client, call routing | Done |
+| `peerzero-bot/peerzero_bot/cli.py` | Build + inject fast LLMClient | Done |
+| `migrations/003_watcher_multimodel.sql` | Schema changes | Done |
