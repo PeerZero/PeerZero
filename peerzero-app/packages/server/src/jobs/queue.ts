@@ -97,9 +97,9 @@ export function startWorker(): void {
     async (job: Job) => {
       const { botId, userId, llmApiKeyId, llmModel } = job.data;
 
-      // Check if bot is still running
-      const bot = await queryOne<{ status: string; cycle_count: number }>(
-        'SELECT status, cycle_count FROM bots WHERE id = $1',
+      // Check if bot is still running (also fetch fast model from DB — may change between cycles)
+      const bot = await queryOne<{ status: string; cycle_count: number; fast_llm_model: string | null }>(
+        'SELECT status, cycle_count, fast_llm_model FROM bots WHERE id = $1',
         [botId],
       );
       if (!bot || bot.status !== 'running') {
@@ -111,6 +111,7 @@ export function startWorker(): void {
         userId,
         llmApiKeyId,
         llmModel,
+        fastLlmModel: bot.fast_llm_model,
         cycleNumber: (bot.cycle_count || 0) + 1,
       };
 

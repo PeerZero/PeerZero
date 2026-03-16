@@ -41,6 +41,7 @@ export interface CreateBotRequest {
   avatar_config: AvatarConfig;
   llm_api_key_id: string;
   llm_model?: string;
+  fast_llm_model?: string | null;
 }
 
 export interface AvatarConfig {
@@ -70,6 +71,7 @@ export interface BotDetail extends BotSummary {
   school_agent_handle: string | null;
   llm_api_key_id: string | null;
   llm_model: string;
+  fast_llm_model: string | null;
   cycle_delay_seconds: number;
   cached_next_action: string | null;
   cached_profile: Record<string, unknown> | null;

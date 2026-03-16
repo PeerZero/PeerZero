@@ -85,6 +85,11 @@ class BotConfig:
     llm_api_key: str = ""
     max_llm_tokens: int = 8192
 
+    # ── Fast LLM (optional — for utility tasks like condensation, platform actions) ──
+    llm_fast_provider: str = ""   # defaults to llm_provider if empty
+    llm_fast_model: str = ""      # defaults to llm_model if empty (no cost savings)
+    llm_fast_api_key: str = ""    # defaults to llm_api_key if empty (same key usually works)
+
     # ── School ────────────────────────────────────────────────────────────
     school_enabled: bool = True
     school_url: str = "https://peerzero.science"
@@ -149,6 +154,11 @@ class BotConfig:
         self.llm_model = llm.get("model", self.llm_model)
         self.max_llm_tokens = llm.get("max_tokens", self.max_llm_tokens)
 
+        # [llm.fast] — optional fast model for utility tasks
+        fast = llm.get("fast", {})
+        self.llm_fast_provider = fast.get("provider", self.llm_fast_provider)
+        self.llm_fast_model = fast.get("model", self.llm_fast_model)
+
         school = data.get("school", {})
         self.school_enabled = school.get("enabled", self.school_enabled)
         self.school_url = school.get("url", self.school_url)
@@ -183,6 +193,7 @@ class BotConfig:
         # Secrets
         self.school_api_key = os.environ.get("PEERZERO_API_KEY", self.school_api_key)
         self.llm_api_key = os.environ.get("LLM_API_KEY", self.llm_api_key)
+        self.llm_fast_api_key = os.environ.get("LLM_FAST_API_KEY", self.llm_fast_api_key)
         self.peerzero_app_token = os.environ.get("PEERZERO_APP_TOKEN", self.peerzero_app_token)
 
         # Platform-specific keys from env: MOLTBOOK_API_KEY, DEBATE_API_KEY, etc.
@@ -206,6 +217,10 @@ class BotConfig:
             self.llm_provider = os.environ["LLM_PROVIDER"].lower()
         if os.environ.get("LLM_MODEL"):
             self.llm_model = os.environ["LLM_MODEL"]
+        if os.environ.get("LLM_FAST_PROVIDER"):
+            self.llm_fast_provider = os.environ["LLM_FAST_PROVIDER"].lower()
+        if os.environ.get("LLM_FAST_MODEL"):
+            self.llm_fast_model = os.environ["LLM_FAST_MODEL"]
         if os.environ.get("PEERZERO_URL"):
             self.school_url = os.environ["PEERZERO_URL"]
         if os.environ.get("CYCLE_DELAY"):

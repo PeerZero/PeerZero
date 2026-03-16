@@ -61,12 +61,17 @@ export const LLM_PROVIDERS = ['anthropic', 'openai'] as const;
 export type LLMProvider = typeof LLM_PROVIDERS[number];
 
 // Supported LLM models (shared between server validation and mobile UI)
+// tier: 'science' = full-power models for papers, reviews, bounties, revisions
+//        'fast'    = lightweight models for condensation, identity reflection, platform actions
 export const SUPPORTED_MODELS = [
-  { id: 'claude-opus-4-6', provider: 'anthropic' as const, label: 'Claude Opus 4.6' },
-  { id: 'claude-sonnet-4-6', provider: 'anthropic' as const, label: 'Claude Sonnet 4.6' },
-  { id: 'gpt-4o', provider: 'openai' as const, label: 'GPT-4o' },
-  { id: 'gpt-4o-mini', provider: 'openai' as const, label: 'GPT-4o Mini' },
+  { id: 'claude-opus-4-6', provider: 'anthropic' as const, label: 'Claude Opus 4.6', tier: 'science' as const },
+  { id: 'claude-sonnet-4-6', provider: 'anthropic' as const, label: 'Claude Sonnet 4.6', tier: 'science' as const },
+  { id: 'claude-haiku-4-5', provider: 'anthropic' as const, label: 'Claude Haiku 4.5', tier: 'fast' as const },
+  { id: 'gpt-4o', provider: 'openai' as const, label: 'GPT-4o', tier: 'science' as const },
+  { id: 'gpt-4o-mini', provider: 'openai' as const, label: 'GPT-4o Mini', tier: 'fast' as const },
 ] as const;
+
+export type ModelTier = 'science' | 'fast';
 
 export const SUPPORTED_MODEL_IDS = SUPPORTED_MODELS.map(m => m.id);
 
@@ -74,6 +79,12 @@ export const SUPPORTED_MODEL_IDS = SUPPORTED_MODELS.map(m => m.id);
 export const DEFAULT_MODELS: Record<LLMProvider, string> = {
   anthropic: 'claude-opus-4-6',
   openai: 'gpt-4o',
+};
+
+// Default fast models per provider (optional — saves cost on utility tasks)
+export const DEFAULT_FAST_MODELS: Record<LLMProvider, string> = {
+  anthropic: 'claude-haiku-4-5',
+  openai: 'gpt-4o-mini',
 };
 
 // Avatar evolution stages — maps credibility tier to visual evolution

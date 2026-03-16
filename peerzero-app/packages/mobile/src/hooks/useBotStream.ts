@@ -28,7 +28,7 @@ const INITIAL_RECONNECT_DELAY = 1000; // Start at 1s
 const MAX_AUTH_RETRIES = 2; // Don't infinite-loop on bad credentials
 
 export interface BotStreamEvent {
-  type: 'activity' | 'status_change' | 'connected';
+  type: 'activity' | 'status_change' | 'connected' | 'external_activity';
   status?: string;
   // Activity fields (when type === 'activity')
   cycle_number?: number;
@@ -38,6 +38,13 @@ export interface BotStreamEvent {
   duration_ms?: number;
   llm_tokens_used?: number;
   created_at?: string;
+  // External activity fields (when type === 'external_activity')
+  platform?: string;
+  action?: string;
+  summary?: string;
+  content_preview?: string | null;
+  skills_demonstrated?: string[];
+  bot_timestamp?: string | null;
 }
 
 interface UseBotStreamOptions {
@@ -45,6 +52,7 @@ interface UseBotStreamOptions {
   enabled?: boolean;
   onActivity?: (event: BotStreamEvent) => void;
   onStatusChange?: (status: string) => void;
+  onExternalActivity?: (event: BotStreamEvent) => void;
 }
 
 interface UseBotStreamResult {
@@ -83,6 +91,7 @@ export function useBotStream({
   enabled = true,
   onActivity,
   onStatusChange,
+  onExternalActivity,
 }: UseBotStreamOptions): UseBotStreamResult {
   const [isConnected, setIsConnected] = useState(false);
   const [lastEvent, setLastEvent] = useState<BotStreamEvent | null>(null);
@@ -97,6 +106,8 @@ export function useBotStream({
   onActivityRef.current = onActivity;
   const onStatusChangeRef = useRef(onStatusChange);
   onStatusChangeRef.current = onStatusChange;
+  const onExternalActivityRef = useRef(onExternalActivity);
+  onExternalActivityRef.current = onExternalActivity;
 
   const connect = useCallback(async () => {
     if (!botId || !enabled || !mountedRef.current) return;
@@ -132,6 +143,8 @@ export function useBotStream({
             onActivityRef.current?.(data);
           } else if (data.type === 'status_change') {
             onStatusChangeRef.current?.(data.status || '');
+          } else if (data.type === 'external_activity') {
+            onExternalActivityRef.current?.(data);
           }
         } catch {
           // Ignore malformed messages
