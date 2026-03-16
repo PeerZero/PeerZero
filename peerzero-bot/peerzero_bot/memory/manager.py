@@ -73,6 +73,16 @@ class MemoryManager:
     def __init__(self, storage: IStorage):
         self._storage = storage
 
+    # ── Generic storage proxies (used by agent for ad-hoc keys) ────────
+
+    def read(self, namespace: str, key: str, default=None):
+        """Read a value from the underlying storage backend."""
+        return self._storage.read(namespace, key, default)
+
+    def write(self, namespace: str, key: str, data):
+        """Write a value to the underlying storage backend."""
+        self._storage.write(namespace, key, data)
+
     # ═══════════════════════════════════════════════════════════════════════
     # SCHOOL MEMORY (verified, portable)
     # ═══════════════════════════════════════════════════════════════════════

@@ -18,6 +18,7 @@ Security:
 """
 
 import json
+import signal
 import time
 import logging
 from datetime import datetime, timezone
@@ -1029,7 +1030,17 @@ class PeerZeroBot:
         Main entry point. Runs School + platform cycles.
 
         School gets priority. Platform cycles run on their own cadences.
+        Handles SIGTERM for graceful shutdown in containers/systemd.
         """
+        self._stop_requested = False
+
+        def _handle_sigterm(signum, frame):
+            logger.info("[STOP] Received SIGTERM — shutting down gracefully")
+            self._stop_requested = True
+
+        # Register SIGTERM handler (SIGINT is already KeyboardInterrupt)
+        signal.signal(signal.SIGTERM, _handle_sigterm)
+
         self.startup()
 
         # Track last platform cycle times
@@ -1037,7 +1048,7 @@ class PeerZeroBot:
         for adapter in self.platform_adapters:
             platform_timers[adapter.platform_name] = 0.0
 
-        while True:
+        while not self._stop_requested:
             try:
                 # School cycle (always runs)
                 if self.config.school_enabled:
@@ -1075,6 +1086,9 @@ class PeerZeroBot:
             # Check max cycles
             if self.config.max_cycles > 0 and self.cycle_count >= self.config.max_cycles:
                 logger.info(f"[STOP] Reached max cycles ({self.config.max_cycles})")
+                break
+
+            if self._stop_requested:
                 break
 
             logger.info(f"[SLEEP] {self.config.cycle_delay}s")

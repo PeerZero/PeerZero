@@ -22,17 +22,25 @@ Reference: https://modelcontextprotocol.io/
 import json
 import logging
 import subprocess
+import sys
 import threading
+import time
 import os
 from dataclasses import dataclass, field
 from typing import Optional
+
+import httpx
 
 from .base import (
     PlatformCapabilities, PlatformContext,
     PlatformAction, PlatformResult,
 )
+from ..config import MCPServerConfig
 
 logger = logging.getLogger("peerzero-bot.mcp")
+
+# MCP protocol version — aligned with spec 2025-11-25
+MCP_PROTOCOL_VERSION = "2025-11-25"
 
 
 # ── MCP data types ───────────────────────────────────────────────────────────
@@ -52,17 +60,6 @@ class MCPTool:
             "description": f"[{self.server_name}] {self.description}",
             "input_schema": self.input_schema,
         }
-
-
-@dataclass
-class MCPServerConfig:
-    """Configuration for a single MCP server."""
-    name: str
-    command: str                     # e.g., "npx @anthropic/mcp-server-brave-search"
-    args: list[str] = field(default_factory=list)
-    env: dict[str, str] = field(default_factory=dict)
-    transport: str = "stdio"         # "stdio" or "streamable-http"
-    url: str = ""                    # for streamable-http transport
 
 
 # ── MCP Server Connection (stdio transport) ──────────────────────────────────
@@ -92,11 +89,6 @@ class MCPServerConnection:
 
     def start(self) -> bool:
         """Start the MCP server subprocess and initialize the protocol."""
-        if self.config.transport == "streamable-http":
-            logger.info(f"[MCP:{self.name}] HTTP transport — no subprocess needed")
-            self._initialized = True
-            return True
-
         try:
             # Build command
             cmd_parts = self.config.command.split()
@@ -117,7 +109,7 @@ class MCPServerConnection:
 
             # Send initialize request
             init_result = self._send_request("initialize", {
-                "protocolVersion": "2024-11-05",
+                "protocolVersion": MCP_PROTOCOL_VERSION,
                 "capabilities": {},
                 "clientInfo": {
                     "name": "peerzero-bot",
@@ -185,22 +177,7 @@ class MCPServerConnection:
             if result is None:
                 return {"error": "No response from server"}
 
-            # Extract content from MCP response
-            content_parts = result.get("content", [])
-            output = []
-            for part in content_parts:
-                if part.get("type") == "text":
-                    output.append(part["text"])
-                elif part.get("type") == "image":
-                    output.append(f"[image: {part.get('mimeType', 'unknown')}]")
-                elif part.get("type") == "resource":
-                    output.append(f"[resource: {part.get('uri', 'unknown')}]")
-
-            is_error = result.get("isError", False)
-            return {
-                "output": "\n".join(output) if output else str(result),
-                "is_error": is_error,
-            }
+            return _parse_mcp_content(result)
 
         except Exception as e:
             logger.warning(f"[MCP:{self.name}] Tool call failed: {e}")
@@ -259,23 +236,36 @@ class MCPServerConnection:
         self._process.stdin.flush()
 
     def _read_response(self, request_id: int, timeout: float = 30.0) -> Optional[dict]:
-        """Read JSON-RPC response, skipping notifications."""
+        """Read JSON-RPC response, skipping notifications.
+
+        Uses a thread-based reader for cross-platform compatibility
+        (select.select() doesn't work on pipes on Windows).
+        """
         if not self._process or not self._process.stdout:
             return None
 
-        import select
-        deadline = __import__("time").time() + timeout
+        deadline = time.time() + timeout
 
-        while __import__("time").time() < deadline:
-            # Check if data is available
-            ready, _, _ = select.select([self._process.stdout], [], [], 1.0)
-            if not ready:
+        while time.time() < deadline:
+            remaining = deadline - time.time()
+            if remaining <= 0:
+                break
+
+            # Use a thread with timeout to read a line (works on all platforms)
+            line_container: list[bytes] = []
+            reader = threading.Thread(
+                target=lambda: line_container.append(self._process.stdout.readline()),
+                daemon=True,
+            )
+            reader.start()
+            reader.join(timeout=min(remaining, 2.0))
+
+            if not line_container or not line_container[0]:
+                if not reader.is_alive():
+                    return None  # EOF
                 continue
 
-            line = self._process.stdout.readline()
-            if not line:
-                return None
-
+            line = line_container[0]
             try:
                 msg = json.loads(line.decode().strip())
             except (json.JSONDecodeError, UnicodeDecodeError):
@@ -295,6 +285,182 @@ class MCPServerConnection:
         return None
 
 
+# ── MCP HTTP Connection (streamable-http transport) ──────────────────────────
+
+class MCPHttpConnection:
+    """
+    Manages a single MCP server over Streamable HTTP transport.
+
+    Uses HTTP POST for JSON-RPC requests to the server's endpoint URL.
+    No subprocess needed — the server is already running remotely.
+    """
+
+    def __init__(self, config: MCPServerConfig):
+        self.config = config
+        self._request_id: int = 0
+        self._lock = threading.Lock()
+        self._tools: list[MCPTool] = []
+        self._initialized = False
+        self._http = httpx.Client(timeout=30.0, follow_redirects=False)
+        self._session_url: str = config.url.rstrip("/")
+
+    @property
+    def name(self) -> str:
+        return self.config.name
+
+    def start(self) -> bool:
+        """Initialize the MCP protocol over HTTP."""
+        try:
+            init_result = self._send_request("initialize", {
+                "protocolVersion": MCP_PROTOCOL_VERSION,
+                "capabilities": {},
+                "clientInfo": {
+                    "name": "peerzero-bot",
+                    "version": "1.0.0",
+                },
+            })
+
+            if init_result is None:
+                logger.error(f"[MCP:{self.name}] HTTP initialize failed — no response")
+                return False
+
+            # Send initialized notification (fire-and-forget)
+            self._send_notification("notifications/initialized", {})
+
+            self._initialized = True
+            logger.info(f"[MCP:{self.name}] HTTP server connected at {self._session_url}")
+            return True
+
+        except Exception as e:
+            logger.error(f"[MCP:{self.name}] HTTP connection failed: {e}")
+            return False
+
+    def list_tools(self) -> list[MCPTool]:
+        """Discover available tools from the HTTP server."""
+        if not self._initialized:
+            return []
+
+        try:
+            result = self._send_request("tools/list", {})
+            if result is None:
+                return []
+
+            tools = []
+            for tool_def in result.get("tools", []):
+                tools.append(MCPTool(
+                    name=tool_def["name"],
+                    description=tool_def.get("description", ""),
+                    input_schema=tool_def.get("inputSchema", {}),
+                    server_name=self.name,
+                ))
+            self._tools = tools
+            logger.info(f"[MCP:{self.name}] Discovered {len(tools)} tools (HTTP)")
+            return tools
+
+        except Exception as e:
+            logger.warning(f"[MCP:{self.name}] HTTP tool discovery failed: {e}")
+            return []
+
+    def call_tool(self, tool_name: str, arguments: dict) -> dict:
+        """Invoke a tool on the HTTP server."""
+        if not self._initialized:
+            return {"error": "Server not initialized"}
+
+        try:
+            result = self._send_request("tools/call", {
+                "name": tool_name,
+                "arguments": arguments,
+            })
+
+            if result is None:
+                return {"error": "No response from server"}
+
+            return _parse_mcp_content(result)
+
+        except Exception as e:
+            logger.warning(f"[MCP:{self.name}] HTTP tool call failed: {e}")
+            return {"error": str(e)}
+
+    def stop(self):
+        """Close the HTTP client."""
+        try:
+            self._http.close()
+        except Exception:
+            pass
+        self._initialized = False
+        logger.info(f"[MCP:{self.name}] HTTP connection closed")
+
+    def _send_request(self, method: str, params: dict) -> Optional[dict]:
+        """Send a JSON-RPC request over HTTP POST."""
+        with self._lock:
+            self._request_id += 1
+            request = {
+                "jsonrpc": "2.0",
+                "id": self._request_id,
+                "method": method,
+                "params": params,
+            }
+
+            headers = {
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+            }
+            # Pass through any configured env vars as auth headers
+            auth_token = self.config.env.get("AUTH_TOKEN", "")
+            if auth_token:
+                headers["Authorization"] = f"Bearer {auth_token}"
+
+            response = self._http.post(
+                self._session_url,
+                json=request,
+                headers=headers,
+            )
+            response.raise_for_status()
+
+            body = response.json()
+            if "error" in body:
+                logger.warning(f"[MCP:{self.name}] HTTP RPC error: {body['error']}")
+                return None
+            return body.get("result", {})
+
+    def _send_notification(self, method: str, params: dict):
+        """Send a JSON-RPC notification over HTTP (no response expected)."""
+        notification = {
+            "jsonrpc": "2.0",
+            "method": method,
+            "params": params,
+        }
+        try:
+            self._http.post(
+                self._session_url,
+                json=notification,
+                headers={"Content-Type": "application/json"},
+            )
+        except Exception:
+            pass  # Notifications are fire-and-forget
+
+
+# ── Shared helpers ────────────────────────────────────────────────────────────
+
+def _parse_mcp_content(result: dict) -> dict:
+    """Parse content parts from an MCP tool call response."""
+    content_parts = result.get("content", [])
+    output = []
+    for part in content_parts:
+        if part.get("type") == "text":
+            output.append(part["text"])
+        elif part.get("type") == "image":
+            output.append(f"[image: {part.get('mimeType', 'unknown')}]")
+        elif part.get("type") == "resource":
+            output.append(f"[resource: {part.get('uri', 'unknown')}]")
+
+    is_error = result.get("isError", False)
+    return {
+        "output": "\n".join(output) if output else str(result),
+        "is_error": is_error,
+    }
+
+
 # ── MCP Platform Adapter ─────────────────────────────────────────────────────
 
 class MCPAdapter:
@@ -305,6 +471,8 @@ class MCPAdapter:
     Unlike A2A/Webhook adapters which map to a single platform, the MCP
     adapter manages multiple servers and aggregates their tools into a
     unified tool catalog.
+
+    Supports both stdio (subprocess) and streamable-http transports.
     """
 
     def __init__(
@@ -316,7 +484,7 @@ class MCPAdapter:
     ):
         self._name = platform_name
         self._server_configs = servers
-        self._connections: list[MCPServerConnection] = []
+        self._connections: list = []  # MCPServerConnection | MCPHttpConnection
         self._tools: list[MCPTool] = []
         self._defer_loading = defer_loading
         self._max_tools = max_tools_in_context
@@ -362,7 +530,10 @@ class MCPAdapter:
         """Start all configured MCP servers. Returns count of successfully started servers."""
         started = 0
         for config in self._server_configs:
-            conn = MCPServerConnection(config)
+            if config.transport == "streamable-http":
+                conn = MCPHttpConnection(config)
+            else:
+                conn = MCPServerConnection(config)
             if conn.start():
                 self._connections.append(conn)
                 started += 1
@@ -389,7 +560,6 @@ class MCPAdapter:
             self._tools.extend(tools)
 
         self._discovered = True
-        tool_names = [t.name for t in self._tools]
         logger.info(f"[MCP:{self._name}] Total tools: {len(self._tools)}")
 
         return PlatformCapabilities(

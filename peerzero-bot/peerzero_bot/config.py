@@ -166,6 +166,8 @@ class BotConfig:
             toml_path = Path("peerzero_bot.toml")
 
         if toml_path.exists() and tomllib:
+            # Warn if config file is world-readable (could leak settings)
+            config._check_file_permissions(toml_path)
             with open(toml_path, "rb") as f:
                 toml_data = tomllib.load(f)
             config._apply_toml(toml_data)
@@ -174,6 +176,19 @@ class BotConfig:
         config._apply_env()
 
         return config
+
+    @staticmethod
+    def _check_file_permissions(path: Path):
+        """Warn if config file is readable by group or others."""
+        try:
+            mode = path.stat().st_mode
+            if mode & stat.S_IRGRP or mode & stat.S_IROTH:
+                logger.warning(
+                    f"Config file {path} is readable by group/others (mode {oct(mode)}). "
+                    f"Consider restricting: chmod 600 {path}"
+                )
+        except OSError:
+            pass  # Can't check permissions — skip silently
 
     def _apply_toml(self, data: dict):
         """Apply TOML config (non-secret settings only)."""
@@ -308,7 +323,7 @@ class BotConfig:
         # Set defaults before validation so validators see final values
         if not self.llm_model:
             self.llm_model = (
-                "claude-sonnet-4-20250514" if self.llm_provider == "anthropic"
+                "claude-sonnet-4-6" if self.llm_provider == "anthropic"
                 else "gpt-4o"
             )
 
