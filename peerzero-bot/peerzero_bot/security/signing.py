@@ -80,12 +80,11 @@ class ProfileVerifier:
             from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
             from cryptography.hazmat.primitives.serialization import load_pem_public_key
             from cryptography.exceptions import InvalidSignature
-        except Exception:
-            logger.warning(
-                "cryptography package not available — skipping signature verification. "
+        except ImportError:
+            raise SignatureError(
+                "cryptography package is required for signature verification. "
                 "Install with: pip install cryptography"
             )
-            return profile
 
         try:
             public_key_pem = self._get_public_key(verification_url)

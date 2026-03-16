@@ -102,3 +102,17 @@ export function broadcastActivity(botId: string, userId: string, data: Record<st
 export function broadcastStatusChange(botId: string, userId: string, status: string): void {
   broadcastActivity(botId, userId, { type: 'status_change', status });
 }
+
+/** Broadcast external activity (phone-home from self-hosted bots). */
+export function broadcastExternalActivity(botId: string, userId: string, data: Record<string, unknown>): void {
+  const botClients = clients.get(botId);
+  if (!botClients) return;
+
+  const message = JSON.stringify({ type: 'external_activity', ...data });
+
+  for (const client of botClients) {
+    if (client.userId === userId && client.ws.readyState === WebSocket.OPEN) {
+      client.ws.send(message);
+    }
+  }
+}

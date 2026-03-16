@@ -103,11 +103,13 @@ class PeerZeroBot:
         audit: AuditLog | None,
         phone_home: PhoneHome | None,
         platform_adapters: list | None = None,
+        llm_fast: LLMClient | None = None,
     ):
         self.config = config
         self.memory = memory
         self.school = school
-        self.llm = llm
+        self.llm = llm  # Strong model — paper, review, bounty, revise
+        self.llm_fast = llm_fast or llm  # Fast model — condensers, platform, identity reflection
         self.prompts = prompts
         self.gateway = gateway
         self.audit = audit
@@ -119,6 +121,8 @@ class PeerZeroBot:
         self._my_review_ids: list[str] = []
         self._portable_profile: dict = {}
         self._agent_card: dict = {}
+        self._identity_refresh_interval: int = 10  # refresh every N school cycles
+        self._last_identity_refresh: int = 0
 
     # ═══════════════════════════════════════════════════════════════════════
     # STARTUP
@@ -132,6 +136,10 @@ class PeerZeroBot:
         logger.info(f"  PZ Key:   {self.config.get_key_fingerprint('school')}")
         logger.info(f"  LLM:      {self.config.llm_provider}/{self.config.llm_model}")
         logger.info(f"  LLM Key:  {self.config.get_key_fingerprint('llm')}")
+        if self.llm_fast is not self.llm:
+            fast_provider = self.config.llm_fast_provider or self.config.llm_provider
+            fast_model = self.config.llm_fast_model or self.config.llm_model
+            logger.info(f"  LLM Fast: {fast_provider}/{fast_model}")
         logger.info(f"  Memory:   {self.config.memory_path}")
         logger.info(f"  Platforms: {len(self.platform_adapters)}")
         logger.info("=" * 60)
@@ -215,6 +223,11 @@ class PeerZeroBot:
 
         self._process_memory_triggers(profile)
         self.school.validate_bounties()
+
+        # Periodic identity refresh to avoid using expired profiles
+        if self.cycle_count - self._last_identity_refresh >= self._identity_refresh_interval:
+            self._refresh_identity()
+            self._last_identity_refresh = self.cycle_count
 
         # Step 4: Report to app
         if self.phone_home and result:
@@ -389,7 +402,7 @@ class PeerZeroBot:
         user_msg = self.prompts.build_condenser_prompt(
             condenser.get("condenser_prompt", ""), exercises,
         )
-        paragraph = self.llm.call(system_prompt, user_msg)
+        paragraph = self.llm_fast.call(system_prompt, user_msg)
         if paragraph and len(paragraph.strip()) >= 50:
             self.memory.store_identity_paragraph(paragraph.strip())
             self.memory.clear_school_exercises()
@@ -405,7 +418,7 @@ class PeerZeroBot:
         user_msg = self.prompts.build_core_condenser_prompt(
             condenser.get("core_condenser_prompt", ""), paragraphs,
         )
-        core = self.llm.call(system_prompt, user_msg)
+        core = self.llm_fast.call(system_prompt, user_msg)
         if core and len(core.strip()) >= 100:
             self.memory.store_core_identity(core.strip())
             self.memory.clear_identity_paragraphs()
@@ -416,7 +429,7 @@ class PeerZeroBot:
         user_msg = self.prompts.build_identity_reflection_prompt(
             reflection.get("reflection_prompt", ""),
         )
-        response = self.llm.call(system_prompt, user_msg)
+        response = self.llm_fast.call(system_prompt, user_msg)
         identity_data = extract_json(response)
         if identity_data and identity_data.get("self_narrative"):
             self.memory.store_self_identity(identity_data)
@@ -458,7 +471,7 @@ class PeerZeroBot:
                     "can_debate": caps.can_debate,
                 },
             )
-            response_text = self.llm.call(system_prompt, user_msg)
+            response_text = self.llm_fast.call(system_prompt, user_msg)
             action_data = extract_json(response_text)
 
             if not action_data or not action_data.get("action_type"):

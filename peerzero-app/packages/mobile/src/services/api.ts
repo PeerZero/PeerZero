@@ -138,7 +138,7 @@ export const bots = {
 
   get: (id: string) => apiFetch(`/bots/${id}`),
 
-  create: (data: { name: string; avatar_config: Record<string, unknown>; llm_api_key_id: string; llm_model?: string }) =>
+  create: (data: { name: string; avatar_config: Record<string, unknown>; llm_api_key_id: string; llm_model?: string; fast_llm_model?: string | null }) =>
     apiFetch('/bots', { method: 'POST', body: JSON.stringify(data) }),
 
   update: (id: string, data: Record<string, unknown>) =>
@@ -174,6 +174,12 @@ export const bots = {
 
   externalActivity: (id: string, page = 1) =>
     apiFetch(`/bots/${id}/external-activity?page=${page}`),
+
+  deleteExternalActivity: (botId: string, activityId: string) =>
+    apiFetch(`/bots/${botId}/external-activity/${activityId}`, { method: 'DELETE' }),
+
+  deleteAllExternalActivity: (botId: string) =>
+    apiFetch(`/bots/${botId}/external-activity`, { method: 'DELETE' }),
 };
 
 // ── API Keys ──

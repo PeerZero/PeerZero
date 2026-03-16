@@ -31,12 +31,12 @@ router.get('/:id', userRateLimit('read'), async (req: Request, res: Response) =>
 
 // Create bot
 router.post('/', userRateLimit('write'), async (req: Request, res: Response) => {
-  const { name, avatar_config, llm_api_key_id, llm_model } = req.body;
+  const { name, avatar_config, llm_api_key_id, llm_model, fast_llm_model } = req.body;
   if (!name || !avatar_config || !llm_api_key_id) {
     res.status(400).json({ error: 'name, avatar_config, and llm_api_key_id required' });
     return;
   }
-  const botId = await botService.createBot(req.user!.userId, name, avatar_config, llm_api_key_id, llm_model);
+  const botId = await botService.createBot(req.user!.userId, name, avatar_config, llm_api_key_id, llm_model, fast_llm_model);
   logAudit({ userId: req.user!.userId, action: 'bot.create', entityType: 'bot', entityId: botId, metadata: { name }, ipAddress: req.ip });
   const bot = await botService.getBotDetail(req.user!.userId, botId);
   res.status(201).json(bot);
@@ -180,17 +180,51 @@ router.get('/:id/external-activity', userRateLimit('read'), async (req: Request,
   const rows = await queryRows(
     `SELECT id, platform, action, summary, content_preview, skills_demonstrated, bot_timestamp, created_at
      FROM external_activity_log
-     WHERE bot_id = $1
+     WHERE bot_id = $1 AND deleted_at IS NULL
      ORDER BY created_at DESC
      LIMIT $2 OFFSET $3`,
     [req.params.id, perPage, offset],
   );
   const countResult = await qOne<{ total: number }>(
-    'SELECT COUNT(*)::int as total FROM external_activity_log WHERE bot_id = $1',
+    'SELECT COUNT(*)::int as total FROM external_activity_log WHERE bot_id = $1 AND deleted_at IS NULL',
     [req.params.id],
   );
   const total = countResult?.total || 0;
   res.json({ data: rows, total, page, per_page: perPage, has_more: offset + perPage < total });
+});
+
+// Delete a single external activity entry (soft-delete)
+router.delete('/:id/external-activity/:activityId', userRateLimit('write'), async (req: Request, res: Response) => {
+  await botService.getBotDetail(req.user!.userId, req.params.id);
+  const { query: dbQuery } = await import('../db/client');
+  const result = await dbQuery(
+    'UPDATE external_activity_log SET deleted_at = NOW() WHERE id = $1 AND bot_id = $2 AND deleted_at IS NULL',
+    [req.params.activityId, req.params.id],
+  );
+  if ((result.rowCount ?? 0) === 0) {
+    res.status(404).json({ error: 'External activity entry not found' });
+    return;
+  }
+  res.json({ success: true });
+});
+
+// Delete all external activity for a bot (soft-delete)
+router.delete('/:id/external-activity', userRateLimit('write'), async (req: Request, res: Response) => {
+  await botService.getBotDetail(req.user!.userId, req.params.id);
+  const { query: dbQuery } = await import('../db/client');
+  const result = await dbQuery(
+    'UPDATE external_activity_log SET deleted_at = NOW() WHERE bot_id = $1 AND deleted_at IS NULL',
+    [req.params.id],
+  );
+  logAudit({
+    userId: req.user!.userId,
+    action: 'external_activity.delete_all',
+    entityType: 'bot',
+    entityId: req.params.id,
+    metadata: { deleted_count: result.rowCount ?? 0 },
+    ipAddress: req.ip,
+  });
+  res.json({ success: true, deleted_count: result.rowCount ?? 0 });
 });
 
 // ── Phone-Home Token ──

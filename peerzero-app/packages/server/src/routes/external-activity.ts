@@ -15,6 +15,7 @@ import crypto from 'crypto';
 import { Router, Request, Response } from 'express';
 import { query, queryOne } from '../db/client';
 import { logger } from '../lib/logger';
+import { broadcastExternalActivity } from '../websocket/activity-stream';
 
 const router = Router();
 
@@ -44,14 +45,18 @@ router.post('/', async (req: Request, res: Response) => {
     res.status(401).json({ error: 'Missing phone-home token' });
     return;
   }
-  const token = authHeader.slice(7);
-  if (!token || token.length < 32) {
+  const token = authHeader.slice(7).trim();
+  if (!token || token.length < 32 || token.length > 256) {
     res.status(401).json({ error: 'Invalid token format' });
     return;
   }
 
   // Hash token for lookup
   const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+  if (tokenHash.length !== 64) {
+    res.status(401).json({ error: 'Invalid token' });
+    return;
+  }
 
   // Rate limit
   if (!checkPhoneHomeRateLimit(tokenHash)) {
@@ -59,9 +64,9 @@ router.post('/', async (req: Request, res: Response) => {
     return;
   }
 
-  // Look up bot by token hash
-  const bot = await queryOne<{ id: string }>(
-    'SELECT id FROM bots WHERE phone_home_token_hash = $1',
+  // Look up bot by token hash (include user_id for WebSocket broadcast)
+  const bot = await queryOne<{ id: string; user_id: string }>(
+    'SELECT id, user_id FROM bots WHERE phone_home_token_hash = $1',
     [tokenHash],
   );
   if (!bot) {
@@ -103,6 +108,17 @@ router.post('/', async (req: Request, res: Response) => {
   );
 
   logger.debug({ botId: bot.id, platform: safePlatform, action: safeAction }, 'Phone-home report received');
+
+  // Broadcast to connected WebSocket clients in real-time
+  broadcastExternalActivity(bot.id, bot.user_id, {
+    platform: safePlatform,
+    action: safeAction,
+    summary: safeSummary,
+    content_preview: safePreview,
+    skills_demonstrated: safeSkills,
+    bot_timestamp: botTimestamp,
+    created_at: new Date().toISOString(),
+  });
 
   res.status(201).json({ received: true });
 });

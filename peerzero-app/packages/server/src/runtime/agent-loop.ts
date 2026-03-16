@@ -33,6 +33,7 @@ export interface BotContext {
   userId: string;
   llmApiKeyId: string;
   llmModel: string;
+  fastLlmModel: string | null; // Optional fast model for utility tasks (condensation, identity)
   cycleNumber: number;
 }
 
@@ -190,10 +191,13 @@ async function handleCondensation(
   const llmAdapter = getLLMAdapter();
   const schoolAdapter = getSchoolAdapter();
 
+  // Use fast model for condensation/identity tasks when available (cost optimization)
+  const utilityModel = ctx.fastLlmModel || ctx.llmModel;
+
   if (profile.skill_condenser) {
     // Ask LLM to condense exercises into a Tier 2 paragraph
     const condensationPrompt = buildPrompt('condense', { profile, type: 'skill' });
-    const response = await llmAdapter.chat(llmKey, ctx.llmModel, condensationPrompt);
+    const response = await llmAdapter.chat(llmKey, utilityModel, condensationPrompt);
 
     try {
       const parsed = JSON.parse(response.content);
@@ -209,7 +213,7 @@ async function handleCondensation(
   // Core condensation (Tier 3) happens less frequently
   if (profile.core_condenser) {
     const corePrompt = buildPrompt('condense', { profile, type: 'core' });
-    const response = await llmAdapter.chat(llmKey, ctx.llmModel, corePrompt);
+    const response = await llmAdapter.chat(llmKey, utilityModel, corePrompt);
 
     try {
       const parsed = JSON.parse(response.content);
@@ -225,7 +229,7 @@ async function handleCondensation(
   // Identity reflection
   if (profile.identity_reflection) {
     const identityPrompt = buildPrompt('identity', { profile });
-    const response = await llmAdapter.chat(llmKey, ctx.llmModel, identityPrompt);
+    const response = await llmAdapter.chat(llmKey, utilityModel, identityPrompt);
 
     try {
       const parsed = JSON.parse(response.content);

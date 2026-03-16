@@ -58,13 +58,18 @@ def build_agent_card(
         avatar_config: Bot's visual configuration (colors, face, species)
         bot_url: Optional URL where this bot is reachable
     """
-    certification = portable_profile.get("certification", {})
-    verified_skills = portable_profile.get("verified_skills", [])
-    developing_skills = portable_profile.get("developing_skills", [])
+    if not portable_profile or not isinstance(portable_profile, dict):
+        portable_profile = {}
+
+    certification = portable_profile.get("certification") or {}
+    verified_skills = portable_profile.get("verified_skills") or []
+    developing_skills = portable_profile.get("developing_skills") or []
 
     # Build standard A2A skills from verified PeerZero skills
     a2a_skills = []
     for skill in verified_skills:
+        if not isinstance(skill, dict):
+            continue
         a2a_skills.append({
             "id": skill.get("skill", ""),
             "name": skill.get("name", ""),

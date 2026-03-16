@@ -70,9 +70,21 @@ export default function LogScreen({ route }: any) {
           llm_tokens_used: event.llm_tokens_used || null,
           created_at: event.created_at || new Date().toISOString(),
         };
-        // Only prepend if on the matching tab
         setEntries(prev => [newEntry, ...prev]);
       }
+    }, []),
+    onExternalActivity: useCallback((event) => {
+      const newExt: ExternalActivityEntry = {
+        id: `ws-ext-${Date.now()}`,
+        platform: event.platform || '',
+        action: event.action || '',
+        summary: event.summary || '',
+        content_preview: event.content_preview || null,
+        skills_demonstrated: event.skills_demonstrated || [],
+        bot_timestamp: event.bot_timestamp || null,
+        created_at: event.created_at || new Date().toISOString(),
+      };
+      setExtEntries(prev => [newExt, ...prev]);
     }, []),
   });
 
@@ -257,8 +269,46 @@ export default function LogScreen({ route }: any) {
     );
   };
 
+  const handleDeleteExtItem = (item: ExternalActivityEntry) => {
+    Alert.alert('Delete Entry', 'Remove this external activity entry?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete', style: 'destructive',
+        onPress: async () => {
+          try {
+            await botsApi.deleteExternalActivity(botId, item.id);
+            setExtEntries(prev => prev.filter(e => e.id !== item.id));
+          } catch (err: any) {
+            Alert.alert('Error', err?.message || 'Failed to delete');
+          }
+        },
+      },
+    ]);
+  };
+
+  const handleDeleteAllExt = () => {
+    Alert.alert(
+      'Clear All External Activity',
+      'Remove all external activity entries?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Clear All', style: 'destructive',
+          onPress: async () => {
+            try {
+              await botsApi.deleteAllExternalActivity(botId);
+              setExtEntries([]);
+            } catch (err: any) {
+              Alert.alert('Error', err?.message || 'Failed to clear');
+            }
+          },
+        },
+      ],
+    );
+  };
+
   const renderExternalEntry = ({ item }: { item: ExternalActivityEntry }) => (
-    <View style={styles.entry}>
+    <TouchableOpacity style={styles.entry} onLongPress={() => handleDeleteExtItem(item)}>
       <View style={[styles.moodBar, { backgroundColor: colors.accent.secondary }]} />
       <View style={styles.actionIcon}>
         <Text style={styles.actionIconText}>E</Text>
@@ -281,7 +331,7 @@ export default function LogScreen({ route }: any) {
           </View>
         )}
       </View>
-    </View>
+    </TouchableOpacity>
   );
 
   return (
@@ -315,8 +365,8 @@ export default function LogScreen({ route }: any) {
               <Text style={styles.liveText}>Live</Text>
             </View>
           )}
-          {entries.length > 0 && (
-            <TouchableOpacity onPress={handleDeleteAll}>
+          {((activeTab !== 'external' && entries.length > 0) || (activeTab === 'external' && extEntries.length > 0)) && (
+            <TouchableOpacity onPress={activeTab === 'external' ? handleDeleteAllExt : handleDeleteAll}>
               <Text style={styles.clearText}>Clear All</Text>
             </TouchableOpacity>
           )}

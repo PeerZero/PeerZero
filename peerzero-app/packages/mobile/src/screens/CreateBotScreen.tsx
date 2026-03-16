@@ -8,7 +8,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { bots as botsApi, apiKeys as keysApi } from '../services/api';
 import { colors } from '../theme/colors';
 import { spacing, fontSize, borderRadius } from '../theme/spacing';
-import { AVATAR_COLOR_PRESETS, SUPPORTED_MODELS } from '@peerzero/shared';
+import { AVATAR_COLOR_PRESETS, SUPPORTED_MODELS, DEFAULT_FAST_MODELS } from '@peerzero/shared';
 import type { ApiKeyInfo } from '@peerzero/shared';
 import BotAvatar from '../components/BotAvatar';
 
@@ -20,6 +20,7 @@ export default function CreateBotScreen({ navigation }: any) {
   const [keys, setKeys] = useState<ApiKeyInfo[]>([]);
   const [selectedKeyId, setSelectedKeyId] = useState<string | null>(null);
   const [selectedModel, setSelectedModel] = useState('claude-opus-4-6');
+  const [selectedFastModel, setSelectedFastModel] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [loading, setLoading] = useState(true);
 
@@ -44,6 +45,9 @@ export default function CreateBotScreen({ navigation }: any) {
   const availableModels = selectedKey
     ? SUPPORTED_MODELS.filter(m => m.provider === selectedKey.provider)
     : SUPPORTED_MODELS;
+
+  const scienceModels = availableModels.filter(m => m.tier === 'science');
+  const fastModels = availableModels.filter(m => m.tier === 'fast');
 
   // If selected model doesn't match provider, reset to default
   const modelMatchesKey = availableModels.some(m => m.id === selectedModel);
@@ -76,6 +80,7 @@ export default function CreateBotScreen({ navigation }: any) {
         avatar_config: { body_color: bodyColor, face_style: 'default' },
         llm_api_key_id: selectedKeyId,
         llm_model: finalModel,
+        fast_llm_model: selectedFastModel,
       }) as { id: string };
       navigation.replace('Bot', { botId: bot.id });
     } catch (err: any) {
@@ -148,10 +153,15 @@ export default function CreateBotScreen({ navigation }: any) {
               style={[styles.keyOption, selectedKeyId === k.id && styles.keyOptionSelected]}
               onPress={() => {
                 setSelectedKeyId(k.id);
-                // Auto-switch model to match provider
+                // Auto-switch models to match provider
                 const providerModels = SUPPORTED_MODELS.filter(m => m.provider === k.provider);
                 if (providerModels.length > 0 && !providerModels.some(m => m.id === selectedModel)) {
-                  setSelectedModel(providerModels[0].id);
+                  const scienceOpts = providerModels.filter(m => m.tier === 'science');
+                  if (scienceOpts.length > 0) setSelectedModel(scienceOpts[0].id);
+                }
+                // Reset fast model if it doesn't match new provider
+                if (selectedFastModel && !providerModels.some(m => m.id === selectedFastModel)) {
+                  setSelectedFastModel(null);
                 }
               }}
             >
@@ -162,16 +172,42 @@ export default function CreateBotScreen({ navigation }: any) {
         </View>
       )}
 
-      {/* Model selector */}
-      <Text style={styles.label}>Model</Text>
+      {/* Science model selector */}
+      <Text style={styles.label}>Science Model</Text>
+      <Text style={styles.modelHint}>
+        Used for papers, reviews, bounties, and revisions. Pick the strongest model you can — science quality depends on it.
+      </Text>
       <View style={styles.modelGrid}>
-        {availableModels.map(m => (
+        {scienceModels.map(m => (
           <TouchableOpacity
             key={m.id}
             style={[styles.modelPill, selectedModel === m.id && styles.modelPillSelected]}
             onPress={() => setSelectedModel(m.id)}
           >
             <Text style={[styles.modelText, selectedModel === m.id && styles.modelTextSelected]}>{m.label}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      {/* Fast model selector (optional) */}
+      <Text style={styles.label}>Fast Model (Optional)</Text>
+      <Text style={styles.modelHint}>
+        Used for memory condensation and identity reflection — tasks that don't need full reasoning power. Saves cost without hurting science quality.
+      </Text>
+      <View style={styles.modelGrid}>
+        <TouchableOpacity
+          style={[styles.modelPill, selectedFastModel === null && styles.modelPillSelected]}
+          onPress={() => setSelectedFastModel(null)}
+        >
+          <Text style={[styles.modelText, selectedFastModel === null && styles.modelTextSelected]}>None</Text>
+        </TouchableOpacity>
+        {fastModels.map(m => (
+          <TouchableOpacity
+            key={m.id}
+            style={[styles.modelPill, selectedFastModel === m.id && styles.modelPillSelected]}
+            onPress={() => setSelectedFastModel(m.id)}
+          >
+            <Text style={[styles.modelText, selectedFastModel === m.id && styles.modelTextSelected]}>{m.label}</Text>
           </TouchableOpacity>
         ))}
       </View>
@@ -227,6 +263,10 @@ const styles = StyleSheet.create({
   keyLabel: { fontSize: fontSize.md, fontWeight: '600', color: colors.text.primary },
   keyLabelSelected: { color: colors.accent.primary },
   keyFingerprint: { fontSize: fontSize.xs, color: colors.text.tertiary, marginTop: 2 },
+  modelHint: {
+    fontSize: fontSize.xs, color: colors.text.tertiary, lineHeight: 18,
+    marginBottom: spacing.sm, width: '100%',
+  },
   modelGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, width: '100%' },
   modelPill: {
     paddingHorizontal: spacing.md, paddingVertical: spacing.sm,

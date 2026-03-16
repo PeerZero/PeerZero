@@ -50,13 +50,23 @@ def _build_bot(config: BotConfig) -> PeerZeroBot:
         storage = FileStorage(config.memory_path)
     memory = MemoryManager(storage)
 
-    # LLM client
+    # LLM client (strong model — paper, review, bounty, revise)
     llm = LLMClient(
         provider=config.llm_provider,
         model=config.llm_model,
         api_key=config.llm_api_key,
         max_tokens=config.max_llm_tokens,
     )
+
+    # Fast LLM client (optional — condensers, platform actions, identity reflection)
+    llm_fast = None
+    if config.llm_fast_model:
+        llm_fast = LLMClient(
+            provider=config.llm_fast_provider or config.llm_provider,
+            model=config.llm_fast_model,
+            api_key=config.llm_fast_api_key or config.llm_api_key,
+            max_tokens=config.max_llm_tokens,
+        )
 
     # School adapter
     school = SchoolAdapter(
@@ -115,6 +125,7 @@ def _build_bot(config: BotConfig) -> PeerZeroBot:
         audit=audit,
         phone_home=phone_home,
         platform_adapters=platform_adapters,
+        llm_fast=llm_fast,
     )
 
 

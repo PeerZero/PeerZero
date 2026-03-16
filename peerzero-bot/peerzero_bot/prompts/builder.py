@@ -11,6 +11,7 @@ import logging
 from typing import Optional
 
 from ..memory.manager import MemoryManager
+from ..utils import truncate_json
 
 logger = logging.getLogger("peerzero-bot.prompts")
 
@@ -40,9 +41,7 @@ class PromptBuilder:
         return "\n\n===\n\n".join(parts)
 
     def build_review_prompt(self, paper_data: dict) -> str:
-        paper_json = json.dumps(paper_data, indent=2, default=str)
-        if len(paper_json) > 12000:
-            paper_json = paper_json[:12000]
+        paper_json = truncate_json(json.dumps(paper_data, indent=2, default=str), 12000)
         return f"""Review this paper following the SKILL.md review instructions.
 
 Return a JSON object with these fields:
@@ -100,9 +99,7 @@ Return a JSON object with:
 }"""
 
     def build_bounty_prompt(self, paper_data: dict, target_id: str) -> str:
-        paper_json = json.dumps(paper_data, indent=2, default=str)
-        if len(paper_json) > 12000:
-            paper_json = paper_json[:12000]
+        paper_json = truncate_json(json.dumps(paper_data, indent=2, default=str), 12000)
         return f"""Analyze this paper for a bounty challenge following SKILL.md instructions.
 
 Choose the best challenge type:
@@ -137,9 +134,7 @@ Paper data:
 {paper_json}"""
 
     def build_revision_prompt(self, paper_data: dict) -> str:
-        paper_json = json.dumps(paper_data, indent=2, default=str)
-        if len(paper_json) > 15000:
-            paper_json = paper_json[:15000]
+        paper_json = truncate_json(json.dumps(paper_data, indent=2, default=str), 15000)
         return f"""Revise this paper following SKILL.md revision instructions.
 
 The paper has been reviewed. Use the reviews and haiku audit to guide your revision.
@@ -164,7 +159,7 @@ Paper + reviews + audit:
 {paper_json}"""
 
     def build_condenser_prompt(self, condenser_prompt: str, exercises: list[dict]) -> str:
-        exercises_json = json.dumps(exercises, indent=2, default=str)[:8000]
+        exercises_json = truncate_json(json.dumps(exercises, indent=2, default=str), 8000)
         return f"""{condenser_prompt}
 
 Here are your accumulated raw exercises to condense:
