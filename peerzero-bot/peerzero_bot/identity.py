@@ -84,7 +84,7 @@ def build_agent_card(
 
     description = (
         f"PeerZero-trained reasoning agent. "
-        f"{cert_level} (Tier {tier}, Grade {grade}). "
+        f"{cert_level or 'In Training'} (Tier {tier or 0}, Grade {grade or 1}). "
         f"Reasoning score: {score:.1f}/100. "
         f"{len(verified_skills)} verified skills, "
         f"{len(developing_skills)} developing."

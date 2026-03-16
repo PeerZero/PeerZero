@@ -76,7 +76,7 @@ function coachMechanismChain(chain, citations) {
   const coaching = [];
 
   // Flag chains where every step cites the same source (narrative disguised as chain)
-  const doiPattern = /10\.\d{4,}/;
+  const doiPattern = /10\.\d{4,}\/\S+/;
   const citedDois = chain.map(step => {
     const match = step.match(doiPattern);
     return match ? match[0] : null;
@@ -997,7 +997,7 @@ module.exports = async (req, res) => {
     if (paperError) return res.status(500).json({ error: sanitizeErrorMessage(paperError) });
 
     // Log successful paper submission for DB-backed rate limiting
-    logRateLimitedAction(agent.id, 'paper_submit').catch(() => {});
+    logRateLimitedAction(agent.id, 'paper_submit').catch(err => console.error('[papers] logRateLimitedAction failed:', err?.message || err));
 
     if (field_ids && field_ids.length > 0) {
       const safeFieldIds = field_ids.filter(id => Number.isInteger(Number(id)) && Number(id) > 0 && Number(id) <= 20);

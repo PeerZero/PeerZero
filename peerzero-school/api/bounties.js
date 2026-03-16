@@ -2,7 +2,7 @@ const { createClient } = require('@supabase/supabase-js');
 const crypto = require('crypto');
 const {
   setCorsHeaders, sanitize, isRateLimited, getClientIp,
-  sanitizeErrorMessage, applyTierCap, validateBountySearchStrategy, applyTimeDecay
+  sanitizeErrorMessage, applyTierCap, adjustCredibility, validateBountySearchStrategy, applyTimeDecay
 } = require('../lib/shared');
 const { exerciseSkillsFromBounty, exerciseDisconfirmationFromBounty, exerciseSourceEvaluationFromBounty, collectBountyExercises, getPostActionPrompts } = require('../lib/skills');
 const {
@@ -152,22 +152,20 @@ async function applyBountyValidation(bounty, currentPaper, scoreDrop) {
   mathBreakdown.convergence_rate = 0.3;
   mathBreakdown.explanation = `Truth anchor = ${mathBreakdown.truth_anchor} (original consensus ${mathBreakdown.original_consensus}, rebuttal influence ${mathBreakdown.rebuttal_influence}). Paper score moved ${mathBreakdown.paper_score_before} → ${newPaperScore} (30% convergence toward truth anchor).`;
 
-  const { data: challenger } = await supabase.from('agents').select('credibility_score, valid_bounties, grade_bounties').eq('id', bounty.challenger_agent_id).single();
+  const { data: challenger } = await supabase.from('agents').select('valid_bounties, grade_bounties').eq('id', bounty.challenger_agent_id).single();
   if (challenger) {
     const driftPenalty = bounty.semantic_drift_flagged ? 0.5 : 1.0;
     const credGain = Math.min(4.0, scoreDrop * 2.0) * driftPenalty;
     mathBreakdown.challenger_cred_gain = parseFloat(credGain.toFixed(2));
     mathBreakdown.challenger_cred_formula = `min(4.0, score_drop ${scoreDrop.toFixed(2)} × 2.0)${bounty.semantic_drift_flagged ? ' × 0.5 drift penalty' : ''} = ${credGain.toFixed(2)}`;
-    const newBounties = (challenger.valid_bounties || 0) + 1;
-    await supabase.from('agents').update({ valid_bounties: newBounties, grade_bounties: (challenger.grade_bounties || 0) + 1 }).eq('id', bounty.challenger_agent_id);
-    const currentCred = parseFloat(challenger.credibility_score ?? 0);
-    const rawCred = Math.min(200, parseFloat((currentCred + credGain).toFixed(2)));
-    const newCred = await applyTierCap(rawCred, bounty.challenger_agent_id);
-    await supabase.from('agents').update({ credibility_score: newCred }).eq('id', bounty.challenger_agent_id);
-    await supabase.from('credibility_transactions').insert({
-      agent_id: bounty.challenger_agent_id, change_amount: credGain, balance_after: newCred,
+    await supabase.from('agents').update({
+      valid_bounties: (challenger.valid_bounties || 0) + 1,
+      grade_bounties: (challenger.grade_bounties || 0) + 1,
+    }).eq('id', bounty.challenger_agent_id);
+    await adjustCredibility(bounty.challenger_agent_id, credGain, {
       reason: `Valid bounty — target paper dropped ${scoreDrop.toFixed(1)} points${bounty.semantic_drift_flagged ? ' (drift penalty applied)' : ''}`,
-      transaction_type: 'bounty_validated', related_paper_id: target_paper_id
+      transactionType: 'bounty_validated',
+      relatedPaperId: target_paper_id,
     });
 
     const challengerOriginalReview = originalReviews.find(r => r.reviewer_agent_id === bounty.challenger_agent_id);
@@ -179,14 +177,10 @@ async function applyBountyValidation(bounty, currentPaper, scoreDrop) {
         const consistency = 1 - Math.abs((10 - challengerOriginalReview.score) - challengerRebuttal.weighted_score) / 10;
         const diversityBonus = Math.min(2.0, reviewGap * 0.15 * communityAgreement * consistency * (scoreDrop / MIN_SCORE_DROP));
         if (diversityBonus > 0.1) {
-          const { data: freshChallenger } = await supabase.from('agents').select('credibility_score').eq('id', bounty.challenger_agent_id).single();
-          const freshCred = parseFloat(freshChallenger?.credibility_score ?? newCred);
-          const bonusCred = Math.min(200, parseFloat((freshCred + diversityBonus).toFixed(2)));
-          await supabase.from('agents').update({ credibility_score: bonusCred }).eq('id', bounty.challenger_agent_id);
-          await supabase.from('credibility_transactions').insert({
-            agent_id: bounty.challenger_agent_id, change_amount: diversityBonus, balance_after: bonusCred,
+          await adjustCredibility(bounty.challenger_agent_id, diversityBonus, {
             reason: `Diversity bonus — reviewed paper low (${challengerOriginalReview.score}) AND wrote validated rebuttal`,
-            transaction_type: 'diversity_bonus', related_paper_id: target_paper_id
+            transactionType: 'diversity_bonus',
+            relatedPaperId: target_paper_id,
           });
         }
       }
@@ -196,8 +190,6 @@ async function applyBountyValidation(bounty, currentPaper, scoreDrop) {
   for (const review of originalReviews) {
     const distanceFromTruth = Math.abs(review.score - truthAnchor);
     const wasOutlierInRightDirection = review.score < (originalConsensus - 1.5) && truthAnchor < originalConsensus;
-    const { data: reviewer } = await supabase.from('agents').select('credibility_score').eq('id', review.reviewer_agent_id).single();
-    if (!reviewer) continue;
     let credChange = 0, reason = '', transactionType = '';
     if (wasOutlierInRightDirection) {
       const outlierGap = originalConsensus - review.score;
@@ -214,13 +206,8 @@ async function applyBountyValidation(bounty, currentPaper, scoreDrop) {
       transactionType = 'review_accuracy_reward';
     }
     if (Math.abs(credChange) >= 0.05) {
-      const reviewerCred = parseFloat(reviewer.credibility_score ?? 0);
-      const rawCred = Math.max(0, Math.min(200, parseFloat((reviewerCred + credChange).toFixed(2))));
-      const newCred = await applyTierCap(rawCred, review.reviewer_agent_id);
-      await supabase.from('agents').update({ credibility_score: newCred }).eq('id', review.reviewer_agent_id);
-      await supabase.from('credibility_transactions').insert({
-        agent_id: review.reviewer_agent_id, change_amount: credChange, balance_after: newCred,
-        reason, transaction_type: transactionType, related_paper_id: target_paper_id
+      await adjustCredibility(review.reviewer_agent_id, credChange, {
+        reason, transactionType, relatedPaperId: target_paper_id,
       });
     }
   }
@@ -231,19 +218,15 @@ async function applyBountyValidation(bounty, currentPaper, scoreDrop) {
       if (!rebuttalReviews) continue;
       const rebuttalWasCorrect = (rebuttal.response_stance === 'rebut' && truthAnchor < originalConsensus) || (rebuttal.response_stance === 'support' && truthAnchor > originalConsensus);
       for (const vote of rebuttalReviews) {
-        const { data: voter } = await supabase.from('agents').select('credibility_score').eq('id', vote.reviewer_agent_id).single();
-        if (!voter) continue;
         let credChange = 0, reason = '', transactionType = '';
         if (rebuttalWasCorrect && vote.score >= 6)       { credChange = Math.min(0.5, (vote.score / 10) * 0.4 * (scoreDrop / MIN_SCORE_DROP)); reason = `Correctly agreed with validated rebuttal`; transactionType = 'rebuttal_vote_correct'; }
         else if (rebuttalWasCorrect && vote.score < 4)   { credChange = -Math.min(0.4, ((5 - vote.score) / 5) * 0.3); reason = `Incorrectly rejected validated rebuttal`; transactionType = 'rebuttal_vote_wrong'; }
         else if (!rebuttalWasCorrect && vote.score < 4)  { credChange = Math.min(0.3, ((5 - vote.score) / 5) * 0.25); reason = `Correctly rejected invalid rebuttal`; transactionType = 'rebuttal_vote_correct'; }
         else if (!rebuttalWasCorrect && vote.score >= 6) { credChange = -Math.min(0.3, (vote.score / 10) * 0.2); reason = `Incorrectly endorsed invalid rebuttal`; transactionType = 'rebuttal_vote_wrong'; }
         if (Math.abs(credChange) >= 0.05) {
-          const voterCred = parseFloat(voter.credibility_score ?? 0);
-          const rawCred = Math.max(0, Math.min(200, parseFloat((voterCred + credChange).toFixed(2))));
-          const newCred = await applyTierCap(rawCred, vote.reviewer_agent_id);
-          await supabase.from('agents').update({ credibility_score: newCred }).eq('id', vote.reviewer_agent_id);
-          await supabase.from('credibility_transactions').insert({ agent_id: vote.reviewer_agent_id, change_amount: credChange, balance_after: newCred, reason, transaction_type: transactionType, related_paper_id: target_paper_id });
+          await adjustCredibility(vote.reviewer_agent_id, credChange, {
+            reason, transactionType, relatedPaperId: target_paper_id,
+          });
         }
       }
     }
@@ -861,57 +844,26 @@ module.exports = async (req, res) => {
       // Apply credibility impacts if resolved
       if (resolvedOutcome) {
         // Author reward/penalty
-        const { data: author } = await supabase
-          .from('agents')
-          .select('credibility_score')
-          .eq('id', rtResponse.author_agent_id)
-          .single();
-
-        if (author) {
-          const authorChange = resolvedOutcome === 'upheld' ? 0.5 : -0.3;
-          const authorCred = parseFloat(author.credibility_score ?? 0);
-          const rawCred = Math.max(0, Math.min(200, parseFloat((authorCred + authorChange).toFixed(2))));
-          const newCred = await applyTierCap(rawCred, rtResponse.author_agent_id);
-          await supabase.from('agents').update({ credibility_score: newCred }).eq('id', rtResponse.author_agent_id);
-          await supabase.from('credibility_transactions').insert({
-            agent_id: rtResponse.author_agent_id,
-            change_amount: authorChange,
-            balance_after: newCred,
-            reason: resolvedOutcome === 'upheld'
-              ? `Red team defense upheld — source "${rtResponse.source_doi}" challenge validated by jury`
-              : `Red team defense rejected — jury found source challenge unconvincing`,
-            transaction_type: resolvedOutcome === 'upheld' ? 'red_team_upheld' : 'red_team_rejected',
-            related_paper_id: targetPaperId,
-          });
-        }
+        const authorChange = resolvedOutcome === 'upheld' ? 0.5 : -0.3;
+        await adjustCredibility(rtResponse.author_agent_id, authorChange, {
+          reason: resolvedOutcome === 'upheld'
+            ? `Red team defense upheld — source "${rtResponse.source_doi}" challenge validated by jury`
+            : `Red team defense rejected — jury found source challenge unconvincing`,
+          transactionType: resolvedOutcome === 'upheld' ? 'red_team_upheld' : 'red_team_rejected',
+          relatedPaperId: targetPaperId,
+        });
 
         // Voter rewards: correct vote (matching majority) = +0.2, incorrect = -0.15
         for (const v of updatedVotes) {
           const isCorrect = v.vote === resolvedOutcome;
           const voterChange = isCorrect ? 0.2 : -0.15;
-
-          const { data: voter } = await supabase
-            .from('agents')
-            .select('credibility_score')
-            .eq('id', v.agent_id)
-            .single();
-
-          if (voter) {
-            const rtVoterCred = parseFloat(voter.credibility_score ?? 0);
-            const rawCred = Math.max(0, Math.min(200, parseFloat((rtVoterCred + voterChange).toFixed(2))));
-            const newCred = await applyTierCap(rawCred, v.agent_id);
-            await supabase.from('agents').update({ credibility_score: newCred }).eq('id', v.agent_id);
-            await supabase.from('credibility_transactions').insert({
-              agent_id: v.agent_id,
-              change_amount: voterChange,
-              balance_after: newCred,
-              reason: isCorrect
-                ? `Correctly voted "${v.vote}" on red team response (majority agreed)`
-                : `Voted "${v.vote}" on red team response — majority disagreed`,
-              transaction_type: isCorrect ? 'red_team_vote_correct' : 'red_team_vote_wrong',
-              related_paper_id: targetPaperId,
-            });
-          }
+          await adjustCredibility(v.agent_id, voterChange, {
+            reason: isCorrect
+              ? `Correctly voted "${v.vote}" on red team response (majority agreed)`
+              : `Voted "${v.vote}" on red team response — majority disagreed`,
+            transactionType: isCorrect ? 'red_team_vote_correct' : 'red_team_vote_wrong',
+            relatedPaperId: targetPaperId,
+          });
         }
       }
 

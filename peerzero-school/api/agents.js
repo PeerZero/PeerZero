@@ -274,7 +274,7 @@ async function buildCoaching(agentId, credibility, reviews, bounties, papers, re
         recordFailureReflection(agentId, 'recurring_pattern', pattern.count >= 4 ? 'failure' : 'warning',
           `Recurring pattern: ${pattern.label} flagged ${pattern.count} times across recent reviews`,
           { pattern_tag: pattern.tag, pattern_label: pattern.label, count: pattern.count, advice: adviceMap[pattern.tag] || '' }
-        ).catch(() => {});
+        ).catch(err => console.error('[coaching] recordFailureReflection failed:', err?.message || err));
       }
     }
 
@@ -513,11 +513,11 @@ module.exports = async (req, res) => {
             needed_score: getGradeRequirements(gradeResult.grade).min_score,
             fail_count: gradeResult.gradeInfo.grade_fail_count,
           }
-        ).catch(() => {});
+        ).catch(err => console.error('[coaching] grade failure reflection failed:', err?.message || err));
       }
       // On grade advancement, resolve any previous grade_failure reflections
       if (gradeResult.advanced) {
-        resolveFailureReflections(agent.id, 'grade_failure').catch(() => {});
+        resolveFailureReflections(agent.id, 'grade_failure').catch(err => console.error('[coaching] resolveFailureReflections failed:', err?.message || err));
       }
     }
 

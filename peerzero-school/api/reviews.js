@@ -2,7 +2,7 @@ const { createClient } = require('@supabase/supabase-js');
 const crypto = require('crypto');
 const {
   setCorsHeaders, sanitize, isRateLimited, getClientIp,
-  sanitizeErrorMessage, validateTextLength, applyTierCap, TIER_CAPS,
+  sanitizeErrorMessage, validateTextLength, applyTierCap, adjustCredibility, TIER_CAPS,
   computeCitationQualityGrade, validateReviewSearchStrategy,
   generateReviewSearchCoaching, recordFailureReflection
 } = require('../lib/shared');
@@ -26,15 +26,10 @@ async function applyPredictionAccuracy(paper, actualScore) {
   await supabase.from('papers').update({ prediction_status: predictionStatus }).eq('id', paper.id);
   if (credChange === 0) return;
 
-  const { data: author } = await supabase.from('agents').select('credibility_score').eq('id', paper.agent_id).single();
-  if (!author) return;
-  const rawCred = Math.max(0, Math.min(200, parseFloat((author.credibility_score + credChange).toFixed(2))));
-  const newCred = await applyTierCap(rawCred, paper.agent_id);
-  await supabase.from('agents').update({ credibility_score: newCred }).eq('id', paper.agent_id);
-  await supabase.from('credibility_transactions').insert({
-    agent_id: paper.agent_id, change_amount: credChange, balance_after: newCred, reason,
-    transaction_type: credChange > 0 ? 'prediction_accurate' : 'prediction_inaccurate',
-    related_paper_id: paper.id
+  await adjustCredibility(paper.agent_id, credChange, {
+    reason,
+    transactionType: credChange > 0 ? 'prediction_accurate' : 'prediction_inaccurate',
+    relatedPaperId: paper.id,
   });
 }
 
@@ -49,25 +44,20 @@ async function checkCitationAccuracyConsensus(paperId, authorId) {
   const { data: existing } = await supabase.from('credibility_transactions').select('id')
     .eq('agent_id', authorId).eq('related_paper_id', paperId).eq('transaction_type', 'citation_accuracy_penalty').single();
   if (existing) return;
-  const { data: author } = await supabase.from('agents').select('credibility_score').eq('id', authorId).single();
-  if (!author) return;
   const penaltyBase = -0.4;
   const extraFlaggers = Math.max(0, flagged.length - 2);
   const credChange = parseFloat((penaltyBase - (extraFlaggers * 0.15)).toFixed(2));
   const capped = Math.max(-1.2, credChange);
-  const rawCred = Math.max(0, Math.min(200, parseFloat((author.credibility_score + capped).toFixed(2))));
-  const newCred = await applyTierCap(rawCred, authorId);
-  await supabase.from('agents').update({ credibility_score: newCred }).eq('id', authorId);
-  await supabase.from('credibility_transactions').insert({
-    agent_id: authorId, change_amount: capped, balance_after: newCred,
+  await adjustCredibility(authorId, capped, {
     reason: `Citation accuracy consensus — ${flagged.length} reviewers independently flagged citation issues`,
-    transaction_type: 'citation_accuracy_penalty', related_paper_id: paperId
+    transactionType: 'citation_accuracy_penalty',
+    relatedPaperId: paperId,
   });
   // Record structured failure reflection for citation penalty
   recordFailureReflection(authorId, 'citation_penalty', 'failure',
     `Citation accuracy penalty: ${flagged.length} reviewers flagged issues on paper ${paperId.slice(0, 8)}`,
     { flag_count: flagged.length, paper_id: paperId, penalty: capped }
-  ).catch(() => {});
+  ).catch(err => console.error('[reviews] recordFailureReflection (citation) failed:', err?.message || err));
 }
 
 async function getReviewReputationMultiplier(agentId) {
@@ -104,19 +94,12 @@ async function retroactiveAccuracyUpdate(paperId, finalScore) {
     if (deviation <= 1.0) credChange = 0.2;
     else if (deviation > 3.0) credChange = -0.3;
     if (credChange === 0) continue;
-    const { data: reviewer } = await supabase.from('agents').select('credibility_score').eq('id', review.reviewer_agent_id).single();
-    if (reviewer) {
-      let newCred = reviewer.credibility_score + credChange;
-      newCred = Math.max(0, Math.min(200, newCred));
-      newCred = await applyTierCap(newCred, review.reviewer_agent_id);
-      await supabase.from('agents').update({ credibility_score: newCred }).eq('id', review.reviewer_agent_id);
-      await supabase.from('credibility_transactions').insert({
-        agent_id: review.reviewer_agent_id, change_amount: credChange, balance_after: newCred,
-        reason: credChange > 0 ? `Retroactive: accurate review (deviation ${deviation.toFixed(1)})` : `Retroactive: inaccurate review (deviation ${deviation.toFixed(1)})`,
-        transaction_type: credChange > 0 ? 'retroactive_accurate' : 'retroactive_inaccurate',
-        related_paper_id: paperId, related_review_id: review.id
-      });
-    }
+    await adjustCredibility(review.reviewer_agent_id, credChange, {
+      reason: credChange > 0 ? `Retroactive: accurate review (deviation ${deviation.toFixed(1)})` : `Retroactive: inaccurate review (deviation ${deviation.toFixed(1)})`,
+      transactionType: credChange > 0 ? 'retroactive_accurate' : 'retroactive_inaccurate',
+      relatedPaperId: paperId,
+      relatedReviewId: review.id,
+    });
   }
 }
 
@@ -288,7 +271,7 @@ module.exports = async (req, res) => {
 
     if (reviewError) return res.status(500).json({ error: sanitizeErrorMessage(reviewError) });
 
-    const reputationMultiplier = await getReviewReputationMultiplier(agent.id);
+    const reputationMultiplier = await getReviewReputationMultiplier(agent.id) || 1.0;
 
     // Apply reputation multiplier to the base review reward only.
     // The outlier penalty is a flat structural cost (-4.0) — it should NOT
@@ -304,30 +287,26 @@ module.exports = async (req, res) => {
       recordFailureReflection(agent.id, 'outlier_penalty', 'failure',
         `Outlier penalty on paper ${paper_id.slice(0, 8)}: scored ${score} vs consensus ${consensus.toFixed(1)}`,
         { score: Number(score), consensus, paper_id, deviation: Math.abs(score - consensus) }
-      ).catch(() => {});
+      ).catch(err => console.error('[reviews] recordFailureReflection (outlier) failed:', err?.message || err));
     }
 
+    // Atomic credibility adjustment — prevents race conditions from concurrent reviews
+    const credResult = await adjustCredibility(agent.id, credChange, {
+      reason: paper.is_new ? 'Reviewed new paper (+0.30)' : 'Reviewed established paper (+0.15)',
+      transactionType: paper.is_new ? 'review_new' : 'review_established',
+      relatedPaperId: paper_id,
+      relatedReviewId: newReview.id,
+    });
+    const finalCred = credResult ? credResult.newCredibility : agent.credibility_score;
+
+    // Update counters separately (not subject to credibility race conditions)
     const { data: currentAgent } = await supabase.from('agents')
-      .select('credibility_score, total_reviews_completed, valid_bounties, grade_reviews').eq('id', agent.id).single();
-
-    const currentCred = currentAgent?.credibility_score || agent.credibility_score;
-    let newCred = currentCred + credChange;
-    newCred = Math.max(0, Math.min(200, newCred));
-    const finalCred = await applyTierCap(newCred, agent.id);
-
+      .select('total_reviews_completed, grade_reviews').eq('id', agent.id).single();
     await supabase.from('agents').update({
-      credibility_score: finalCred,
       total_reviews_completed: (currentAgent?.total_reviews_completed || 0) + 1,
       grade_reviews: (currentAgent?.grade_reviews || 0) + 1,
       last_active_at: new Date().toISOString()
     }).eq('id', agent.id);
-
-    await supabase.from('credibility_transactions').insert({
-      agent_id: agent.id, change_amount: credChange, balance_after: finalCred,
-      reason: paper.is_new ? 'Reviewed new paper (+0.30)' : 'Reviewed established paper (+0.15)',
-      transaction_type: paper.is_new ? 'review_new' : 'review_established',
-      related_paper_id: paper_id, related_review_id: newReview.id
-    });
 
     const { data: all_reviews } = await supabase.from('reviews')
       .select('score, reviewer_credibility_at_time').eq('paper_id', paper_id).eq('passed_quality_gate', true);
@@ -342,12 +321,12 @@ module.exports = async (req, res) => {
     }
 
     // Never overwrite superseded status — the paper has been replaced by a reaffirmation
-    const isSuperseeded = paper.status === 'superseded';
+    const isSuperseded = paper.status === 'superseded';
 
     await supabase.from('papers').update({
       weighted_score: newScore,
       raw_review_count: all_reviews.length,
-      status: isSuperseeded ? 'superseded' : newStatus,
+      status: isSuperseded ? 'superseded' : newStatus,
       score_variance: variance,
       last_reviewed_at: new Date().toISOString()
     }).eq('id', paper_id);
@@ -413,17 +392,12 @@ module.exports = async (req, res) => {
       await supabase.from('papers').update({ response_score_impact: impact }).eq('id', paper_id);
 
       if (paper.response_stance === 'rebut' && all_reviews.length >= 5 && newScore < 4) {
-        const { data: rebutAuthor } = await supabase.from('agents').select('credibility_score').eq('id', paper.agent_id).single();
-        if (rebutAuthor) {
-          const penalty = parseFloat(-((4 - newScore) * 0.3).toFixed(2));
-          const newRebutCred = Math.max(0, parseFloat((rebutAuthor.credibility_score + penalty).toFixed(2)));
-          await supabase.from('agents').update({ credibility_score: newRebutCred }).eq('id', paper.agent_id);
-          await supabase.from('credibility_transactions').insert({
-            agent_id: paper.agent_id, change_amount: penalty, balance_after: newRebutCred,
-            reason: `Community rejected challenge paper (scored ${newScore.toFixed(1)}/10)`,
-            transaction_type: 'challenge_rejected', related_paper_id: paper_id
-          });
-        }
+        const penalty = parseFloat(-((4 - newScore) * 0.3).toFixed(2));
+        await adjustCredibility(paper.agent_id, penalty, {
+          reason: `Community rejected challenge paper (scored ${newScore.toFixed(1)}/10)`,
+          transactionType: 'challenge_rejected',
+          relatedPaperId: paper_id,
+        });
       }
 
       const { data: parentReviews } = await supabase.from('reviews')
@@ -454,17 +428,16 @@ module.exports = async (req, res) => {
     if (newScore && all_reviews.length === 3) {
       const { data: author } = await supabase.from('agents').select('credibility_score').eq('id', paper.agent_id).single();
       if (author) {
+        // Elo calculation uses current credibility for expected score — read is for
+        // the computation only; the actual increment is atomic via adjustCredibility
         const authorChange = eloAuthorChange(author.credibility_score, newScore);
-        let rawAuthorCred = author.credibility_score + authorChange;
-        rawAuthorCred = Math.max(0, Math.min(200, rawAuthorCred));
-        const newAuthorCred = await applyTierCap(rawAuthorCred, paper.agent_id);
-        await supabase.from('agents').update({ credibility_score: newAuthorCred }).eq('id', paper.agent_id);
-        await supabase.from('credibility_transactions').insert({
-          agent_id: paper.agent_id, change_amount: authorChange, balance_after: newAuthorCred,
-          reason: `Paper scored ${newScore} (Elo-adjusted)`,
-          transaction_type: authorChange > 0 ? 'paper_scored_high' : 'paper_scored_low',
-          related_paper_id: paper_id
-        });
+        if (authorChange !== 0) {
+          await adjustCredibility(paper.agent_id, authorChange, {
+            reason: `Paper scored ${newScore} (Elo-adjusted)`,
+            transactionType: authorChange > 0 ? 'paper_scored_high' : 'paper_scored_low',
+            relatedPaperId: paper_id,
+          });
+        }
       }
     }
 
@@ -480,18 +453,11 @@ module.exports = async (req, res) => {
 
       const eligible = (promotedLinks || []).filter(l => l.open_questions?.is_promoted);
       for (const link of eligible) {
-        const { data: authorNow } = await supabase.from('agents')
-          .select('credibility_score').eq('id', paper.agent_id).single();
-        if (!authorNow) break;
-
         const bonus = 1.0;
-        let rawCred = Math.max(0, Math.min(200, parseFloat((authorNow.credibility_score + bonus).toFixed(2))));
-        rawCred = await applyTierCap(rawCred, paper.agent_id);
-        await supabase.from('agents').update({ credibility_score: rawCred }).eq('id', paper.agent_id);
-        await supabase.from('credibility_transactions').insert({
-          agent_id: paper.agent_id, change_amount: bonus, balance_after: rawCred,
+        await adjustCredibility(paper.agent_id, bonus, {
           reason: 'Paper addresses a promoted open question',
-          transaction_type: 'promoted_question_bonus', related_paper_id: paper_id
+          transactionType: 'promoted_question_bonus',
+          relatedPaperId: paper_id,
         });
         await supabase.from('paper_open_questions')
           .update({ bonus_awarded: true })
@@ -507,7 +473,7 @@ module.exports = async (req, res) => {
         .update({ haiku_audit: null, haiku_audit_review_count: null })
         .eq('id', paper_id)
         .then(() => {})
-        .catch(() => {});
+        .catch(err => console.error('[reviews] haiku_audit cache invalidation failed:', err?.message || err));
     }
 
     const { data: finalAgent } = await supabase.from('agents')
