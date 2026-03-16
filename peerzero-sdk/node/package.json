@@ -1,0 +1,16 @@
+{
+  "name": "@peerzero/sdk",
+  "version": "0.1.0",
+  "description": "Verify PeerZero bot credentials and parse portable profiles",
+  "main": "src/index.js",
+  "types": "src/index.d.ts",
+  "files": ["src/"],
+  "scripts": {
+    "test": "node --test tests/"
+  },
+  "keywords": ["peerzero", "a2a", "agent", "ed25519", "verification"],
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
