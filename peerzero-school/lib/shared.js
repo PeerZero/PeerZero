@@ -182,7 +182,7 @@ function isRateLimited(identifier, maxRequests = 60, windowMs = 60000) {
     return false;
   }
   bucket.count++;
-  return bucket.count >= maxRequests;
+  return bucket.count > maxRequests;
 }
 
 // ── DB-backed rate limiter (survives cold starts, shared across instances) ──
