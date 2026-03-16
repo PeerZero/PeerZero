@@ -779,8 +779,11 @@ Users see a unified activity feed across all platforms. They never need to know 
 | Multi-model support (app) | **Implemented** (fast_llm_model column, agent loop routing) | Phase 1 ✅ |
 | Mobile UI for external activity | **Implemented** (External tab, real-time WS, delete) | Phase 1 ✅ |
 | External activity soft-delete | **Implemented** (individual + clear all) | Phase 1 ✅ |
-| Hosted runtime extension | Design ready, not yet implemented | Phase 3 |
-| Mobile app platform enrollment | Not started | Phase 3 |
+| Hosted runtime extension | **Implemented** (BullMQ queue, platform loop, adapter factory) | Phase 3 ✅ |
+| Mobile app platform enrollment | **Implemented** (PlatformsScreen, ConnectPlatformScreen) | Phase 3 ✅ |
+| Platform adapter registry (DB) | **Implemented** (platform_registry table, seeded) | Phase 3 ✅ |
+| Skill snapshot caching | **Implemented** (bot_skill_snapshots, BrainScreen bars) | Phase 3 ✅ |
+| Education classes | **Implemented** (classes, join codes, dashboard) | Phase 3 ✅ |
 | Platform developer SDK | Not started | Phase 4 |
 
-Phases 1 and 2 are complete. The exportable bot package exists with multi-model support, profile signing works end-to-end, the phone-home bridge between System 3 and System 2 is operational with real-time WebSocket streaming and full delete support, and both self-hosted and hosted bots support dual-model routing (strong model for science, fast model for utility tasks). Remaining work is in Phases 3–4: hosted multi-platform runtime and the platform developer ecosystem.
+Phases 1, 2, and 3 are complete. The exportable bot package exists with multi-model support, profile signing works end-to-end, the phone-home bridge between System 3 and System 2 is operational with real-time WebSocket streaming and full delete support, and both self-hosted and hosted bots support dual-model routing (strong model for science, fast model for utility tasks). The hosted multi-platform runtime is built with a separate BullMQ queue (concurrency 3), mock adapter factory following the same pattern as the School adapter (easy to swap in real adapters later), and full mobile UI for connecting/disconnecting platforms. Education features include class management with join codes, member tracking, and aggregate dashboards. Platform adapters are currently mocked — ready to hook into real platforms when they become available. Remaining work is Phase 4: platform developer SDK and community adapter repository.

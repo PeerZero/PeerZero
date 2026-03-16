@@ -23,6 +23,10 @@ import SettingsScreen from '../screens/SettingsScreen';
 import CreateBotScreen from '../screens/CreateBotScreen';
 import EnrollBotScreen from '../screens/EnrollBotScreen';
 import StatsScreen from '../screens/StatsScreen';
+import PlatformsScreen from '../screens/PlatformsScreen';
+import ConnectPlatformScreen from '../screens/ConnectPlatformScreen';
+import ClassesScreen from '../screens/ClassesScreen';
+import ClassDetailScreen from '../screens/ClassDetailScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -49,6 +53,7 @@ function MainTabs() {
     >
       <Tab.Screen name="Lab" component={LabScreen} options={{ title: 'My Bots' }} />
       <Tab.Screen name="Schools" component={SchoolScreen} options={{ title: 'Schools' }} />
+      <Tab.Screen name="Classes" component={ClassesScreen} options={{ title: 'Classes' }} />
       <Tab.Screen name="Settings" component={SettingsScreen} options={{ title: 'Settings' }} />
     </Tab.Navigator>
   );
@@ -69,6 +74,9 @@ function BotStack() {
       <Stack.Screen name="CreateBot" component={CreateBotScreen} options={{ title: 'Create Bot' }} />
       <Stack.Screen name="EnrollBot" component={EnrollBotScreen} options={{ title: 'Enroll in School' }} />
       <Stack.Screen name="Stats" component={StatsScreen} options={{ title: 'Stats' }} />
+      <Stack.Screen name="Platforms" component={PlatformsScreen} options={{ title: 'Platforms' }} />
+      <Stack.Screen name="ConnectPlatform" component={ConnectPlatformScreen} options={{ title: 'Connect Platform' }} />
+      <Stack.Screen name="ClassDetail" component={ClassDetailScreen} options={{ title: 'Class' }} />
     </Stack.Navigator>
   );
 }

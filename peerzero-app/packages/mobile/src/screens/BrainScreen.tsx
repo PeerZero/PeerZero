@@ -6,11 +6,11 @@
 import React, { useState, useCallback } from 'react';
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { bots as botsApi } from '../services/api';
+import { bots as botsApi, skills as skillsApi } from '../services/api';
 import { colors } from '../theme/colors';
 import { spacing, fontSize, borderRadius } from '../theme/spacing';
 import { MEMORY_TIER_LABELS } from '@peerzero/shared';
-import type { MemorySnapshot } from '@peerzero/shared';
+import type { MemorySnapshot, SkillSnapshot } from '@peerzero/shared';
 
 type TierKey = 0 | 1 | 2 | 3;
 
@@ -24,6 +24,7 @@ const TIER_COLORS: Record<TierKey, string> = {
 export default function BrainScreen({ route }: any) {
   const { botId } = route.params;
   const [memory, setMemory] = useState<MemorySnapshot | null>(null);
+  const [skills, setSkills] = useState<SkillSnapshot[]>([]);
   const [expandedTier, setExpandedTier] = useState<TierKey | null>(0);
   const [error, setError] = useState<string | null>(null);
 
@@ -32,8 +33,12 @@ export default function BrainScreen({ route }: any) {
       (async () => {
         try {
           setError(null);
-          const data = await botsApi.memory(botId) as MemorySnapshot;
+          const [data, skillData] = await Promise.all([
+            botsApi.memory(botId) as Promise<MemorySnapshot>,
+            skillsApi.get(botId) as Promise<SkillSnapshot[]>,
+          ]);
           setMemory(data);
+          setSkills(skillData);
         } catch (err: any) {
           setError(err?.message || 'Failed to load memory');
         }
@@ -55,6 +60,35 @@ export default function BrainScreen({ route }: any) {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+      {/* Skill Progress */}
+      {skills.length > 0 && (
+        <View style={styles.skillSection}>
+          <Text style={styles.skillSectionTitle}>Skill Progress</Text>
+          {skills.filter(s => s.reps > 0).map((skill) => (
+            <View key={skill.skill_key} style={styles.skillRow}>
+              <View style={styles.skillHeader}>
+                <Text style={styles.skillName}>{skill.skill_key.replace(/_/g, ' ')}</Text>
+                <Text style={styles.skillValue}>{skill.strength}%</Text>
+              </View>
+              <View style={styles.skillBarBg}>
+                <View style={[styles.skillBarFill, { width: `${Math.min(skill.strength, 100)}%` }]} />
+              </View>
+              <View style={styles.skillMeta}>
+                <Text style={styles.skillMetaText}>{skill.reps} reps</Text>
+                <Text style={[styles.skillStatus, {
+                  color: skill.status === 'verified' ? colors.accent.success
+                    : skill.status === 'developing' ? colors.accent.warning
+                    : colors.text.tertiary,
+                }]}>{skill.status}</Text>
+              </View>
+            </View>
+          ))}
+          {skills.every(s => s.reps === 0) && (
+            <Text style={styles.skillEmptyText}>No skills measured yet. Start running cycles to build skills.</Text>
+          )}
+        </View>
+      )}
+
       {/* Tier 0: Active Focus */}
       <TouchableOpacity style={styles.tierHeader} onPress={() => toggleTier(0)}>
         <View style={[styles.tierDot, { backgroundColor: TIER_COLORS[0] }]} />
@@ -156,4 +190,21 @@ const styles = StyleSheet.create({
   cardLabel: { fontSize: fontSize.xs, fontWeight: '600', color: colors.text.secondary, textTransform: 'uppercase' },
   cardContent: { fontSize: fontSize.md, color: colors.text.primary, marginTop: spacing.xs },
   cardSource: { fontSize: fontSize.xs, color: colors.text.tertiary, marginTop: spacing.xs },
+  skillSection: {
+    backgroundColor: colors.bg.secondary, borderRadius: borderRadius.md,
+    padding: spacing.md, marginBottom: spacing.sm,
+  },
+  skillSectionTitle: { fontSize: fontSize.lg, fontWeight: '600', color: colors.text.primary, marginBottom: spacing.md },
+  skillRow: { marginBottom: spacing.md },
+  skillHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  skillName: { fontSize: fontSize.sm, fontWeight: '600', color: colors.text.primary, textTransform: 'capitalize' },
+  skillValue: { fontSize: fontSize.sm, fontWeight: '700', color: colors.accent.secondary },
+  skillBarBg: {
+    height: 6, backgroundColor: colors.bg.elevated, borderRadius: 3, marginTop: spacing.xs, overflow: 'hidden' as const,
+  },
+  skillBarFill: { height: 6, backgroundColor: colors.accent.primary, borderRadius: 3 },
+  skillMeta: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 2 },
+  skillMetaText: { fontSize: fontSize.xs, color: colors.text.tertiary },
+  skillStatus: { fontSize: fontSize.xs, fontWeight: '600', textTransform: 'capitalize' as const },
+  skillEmptyText: { fontSize: fontSize.sm, color: colors.text.tertiary, textAlign: 'center' as const },
 });
