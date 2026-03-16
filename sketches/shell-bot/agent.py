@@ -128,10 +128,17 @@ class SecureClient:
         if not self._is_academic_request(url):
             raise SecurityError(f"Blocked: {urlparse(url).hostname} not in academic allowlist")
 
-        response = self.http.get(url, params=params)
-        if response.status_code != 200:
+        try:
+            response = self.http.get(url, params=params, timeout=30.0)
+            if response.status_code != 200:
+                return {}
+            return response.json()
+        except (httpx.TimeoutException, httpx.NetworkError) as e:
+            logger.warning(f"[ACADEMIC] Request to {urlparse(url).hostname} failed: {e}")
             return {}
-        return response.json()
+        except Exception as e:
+            logger.warning(f"[ACADEMIC] Unexpected error for {urlparse(url).hostname}: {e}")
+            return {}
 
     def llm_call(self, system_prompt: str, user_message: str) -> str:
         """

@@ -67,7 +67,7 @@ async function checkCitationAccuracyConsensus(paperId, authorId) {
   recordFailureReflection(authorId, 'citation_penalty', 'failure',
     `Citation accuracy penalty: ${flagged.length} reviewers flagged issues on paper ${paperId.slice(0, 8)}`,
     { flag_count: flagged.length, paper_id: paperId, penalty: capped }
-  ).catch(() => {});
+  ).catch(err => console.error('[reviews] recordFailureReflection (citation) failed:', err?.message || err));
 }
 
 async function getReviewReputationMultiplier(agentId) {
@@ -288,7 +288,7 @@ module.exports = async (req, res) => {
 
     if (reviewError) return res.status(500).json({ error: sanitizeErrorMessage(reviewError) });
 
-    const reputationMultiplier = await getReviewReputationMultiplier(agent.id);
+    const reputationMultiplier = await getReviewReputationMultiplier(agent.id) || 1.0;
 
     // Apply reputation multiplier to the base review reward only.
     // The outlier penalty is a flat structural cost (-4.0) — it should NOT
@@ -304,7 +304,7 @@ module.exports = async (req, res) => {
       recordFailureReflection(agent.id, 'outlier_penalty', 'failure',
         `Outlier penalty on paper ${paper_id.slice(0, 8)}: scored ${score} vs consensus ${consensus.toFixed(1)}`,
         { score: Number(score), consensus, paper_id, deviation: Math.abs(score - consensus) }
-      ).catch(() => {});
+      ).catch(err => console.error('[reviews] recordFailureReflection (outlier) failed:', err?.message || err));
     }
 
     const { data: currentAgent } = await supabase.from('agents')
@@ -342,12 +342,12 @@ module.exports = async (req, res) => {
     }
 
     // Never overwrite superseded status — the paper has been replaced by a reaffirmation
-    const isSuperseeded = paper.status === 'superseded';
+    const isSuperseded = paper.status === 'superseded';
 
     await supabase.from('papers').update({
       weighted_score: newScore,
       raw_review_count: all_reviews.length,
-      status: isSuperseeded ? 'superseded' : newStatus,
+      status: isSuperseded ? 'superseded' : newStatus,
       score_variance: variance,
       last_reviewed_at: new Date().toISOString()
     }).eq('id', paper_id);
@@ -507,7 +507,7 @@ module.exports = async (req, res) => {
         .update({ haiku_audit: null, haiku_audit_review_count: null })
         .eq('id', paper_id)
         .then(() => {})
-        .catch(() => {});
+        .catch(err => console.error('[reviews] haiku_audit cache invalidation failed:', err?.message || err));
     }
 
     const { data: finalAgent } = await supabase.from('agents')
