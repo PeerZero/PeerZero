@@ -48,4 +48,7 @@ export const config = {
 
   // Frontend URLs for Stripe redirects
   frontendUrl: optional('FRONTEND_URL', 'https://app.peerzero.com'),
+
+  // CORS allowed origins (comma-separated, used in production; dev mode always allows localhost)
+  corsOrigins: optional('CORS_ORIGINS', 'https://peerzero.science,https://www.peerzero.science,https://peer-zero.vercel.app'),
 } as const;

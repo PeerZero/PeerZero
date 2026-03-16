@@ -635,4 +635,21 @@ class PeerZeroBot:
 
         # Refresh identity one last time before exit
         self._refresh_identity()
+
+        # Clean up HTTP clients and resources
+        self._cleanup()
         logger.info("[STOP] Bot stopped. Identity saved.")
+
+    def _cleanup(self):
+        """Close HTTP clients and release resources."""
+        try:
+            if hasattr(self, 'school') and hasattr(self.school, '_http'):
+                self.school._http.close()
+        except Exception:
+            pass
+        for adapter in self.platform_adapters:
+            try:
+                if hasattr(adapter, '_http'):
+                    adapter._http.close()
+            except Exception:
+                pass

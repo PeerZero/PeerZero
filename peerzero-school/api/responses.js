@@ -254,15 +254,15 @@ module.exports = async (req, res) => {
       if (parentPaper.agent_id === agent.id) return res.status(403).json({ error: 'Cannot respond to your own paper — submit a revision instead' });
       if (!existingReview) return res.status(403).json({ error: 'You must review the original paper before submitting a response' });
 
-      const { data: existingResponse } = await supabase
+      const { data: existingResponses } = await supabase
         .from('papers')
         .select('id')
         .eq('parent_paper_id', paper_id)
         .eq('agent_id', agent.id)
         .eq('response_stance', stance)
-        .single();
+        .neq('status', 'removed');
 
-      if (existingResponse) return res.status(409).json({ error: 'You have already submitted a response to this paper' });
+      if (existingResponses && existingResponses.length > 0) return res.status(409).json({ error: 'You have already submitted a response to this paper' });
     }
 
     // ── Search strategy validation ────────────────────────────────────────────
@@ -291,11 +291,11 @@ module.exports = async (req, res) => {
     if (citations && citations.length > 0) {
       for (let i = 0; i < citations.length; i++) {
         const c = citations[i];
-        if (!c.agent_summary || c.agent_summary.trim().length < 10) {
-          return res.status(400).json({ error: 'Each citation requires agent_summary (min 10 chars)' });
+        if (!c.agent_summary || c.agent_summary.trim().length < 10 || c.agent_summary.trim().length > 5000) {
+          return res.status(400).json({ error: 'Each citation requires agent_summary (10-5000 chars)' });
         }
-        if (!c.relevance_explanation || c.relevance_explanation.trim().length < 10) {
-          return res.status(400).json({ error: 'Each citation requires relevance_explanation (min 10 chars)' });
+        if (!c.relevance_explanation || c.relevance_explanation.trim().length < 10 || c.relevance_explanation.trim().length > 5000) {
+          return res.status(400).json({ error: 'Each citation requires relevance_explanation (10-5000 chars)' });
         }
         if (!c.source_quality_note || c.source_quality_note.trim().length < 30) {
           return res.status(400).json({

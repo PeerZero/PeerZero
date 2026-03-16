@@ -99,7 +99,7 @@ class WebhookAdapter:
                 raw_data=data,
                 summary=json.dumps(data, default=str)[:2000],
             )
-        except Exception as e:
+        except (httpx.HTTPError, json.JSONDecodeError, OSError) as e:
             logger.warning(f"[{self._name}] Context fetch failed: {e}")
             return PlatformContext(platform_name=self._name, summary=f"Context unavailable: {e}")
 
@@ -123,7 +123,7 @@ class WebhookAdapter:
                 response_data=result,
                 summary=f"{action.action_type} submitted to {self._name}",
             )
-        except Exception as e:
+        except (httpx.HTTPError, json.JSONDecodeError, OSError, ValueError) as e:
             logger.warning(f"[{self._name}] Action failed: {e}")
             return PlatformResult(
                 success=False,
@@ -137,7 +137,7 @@ class WebhookAdapter:
         try:
             self._request("POST", "/agents/register", json=agent_card)
             return True
-        except Exception as e:
+        except (httpx.HTTPError, json.JSONDecodeError, OSError) as e:
             logger.warning(f"[{self._name}] Agent Card publish failed: {e}")
             return False
 
@@ -148,15 +148,17 @@ class WebhookAdapter:
         Verify HMAC-SHA256 signature on an incoming webhook payload.
 
         Platforms should send: X-Signature-256: sha256=<hex digest>
-        Returns True if valid, False if invalid or no secret configured.
+        Returns True if valid. Raises ValueError if verification fails.
         """
         if not self._webhook_secret:
-            logger.warning(f"[{self._name}] No webhook secret — cannot verify signature")
-            return False
+            raise ValueError(
+                f"[{self._name}] No webhook secret configured — cannot verify signature"
+            )
 
         if not signature_header or not signature_header.startswith("sha256="):
-            logger.warning(f"[{self._name}] Missing or malformed signature header")
-            return False
+            raise ValueError(
+                f"[{self._name}] Missing or malformed signature header"
+            )
 
         expected_sig = signature_header[7:]  # strip "sha256=" prefix
         computed = hmac.new(
@@ -166,7 +168,8 @@ class WebhookAdapter:
         ).hexdigest()
 
         if not hmac.compare_digest(computed, expected_sig):
-            logger.warning(f"[{self._name}] Webhook signature mismatch — rejecting payload")
-            return False
+            raise ValueError(
+                f"[{self._name}] Webhook signature mismatch — rejecting payload"
+            )
 
         return True

@@ -13,7 +13,7 @@ Security:
 import re
 import json
 import logging
-from urllib.parse import urlparse
+from urllib.parse import urlparse, quote
 
 import httpx
 
@@ -187,7 +187,7 @@ class SchoolAdapter:
         profile = self._get("/api/agents", params={"profile": "portable"})
         try:
             return self._verifier.verify(profile)
-        except Exception as e:
+        except (ValueError, KeyError, TypeError, OSError) as e:
             logger.warning(f"Profile signature verification failed: {e}")
             return profile
 
@@ -195,7 +195,7 @@ class SchoolAdapter:
         return self._get("/api/papers", params=params)
 
     def submit_review(self, paper_id: str, review_data: dict) -> dict:
-        return self._post(f"/api/reviews?paper_id={paper_id}", review_data)
+        return self._post(f"/api/reviews?paper_id={quote(paper_id, safe='')}", review_data)
 
     def submit_paper(self, paper_data: dict) -> dict:
         return self._post("/api/papers", paper_data)
@@ -204,7 +204,7 @@ class SchoolAdapter:
         return self._post("/api/bounties", bounty_data)
 
     def submit_revision(self, paper_id: str, revision_data: dict) -> dict:
-        return self._post(f"/api/responses?paper_id={paper_id}", revision_data)
+        return self._post(f"/api/responses?paper_id={quote(paper_id, safe='')}", revision_data)
 
     def submit_condensation(self, paragraph: str) -> dict:
         return self._post("/api/skill-reflections", {
@@ -218,5 +218,5 @@ class SchoolAdapter:
     def validate_bounties(self):
         try:
             self._post("/api/bounties", {"action": "validate_all"})
-        except Exception as e:
+        except (httpx.HTTPError, json.JSONDecodeError, OSError) as e:
             logger.warning(f"validate_all failed: {e}")

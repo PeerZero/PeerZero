@@ -25,6 +25,14 @@ const tokenBuckets = new Map<string, { count: number; resetAt: number }>();
 const RATE_LIMIT = 30;
 const RATE_WINDOW_MS = 60_000;
 
+// Periodically clean up expired buckets to prevent memory leak from cycled tokens
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, bucket] of tokenBuckets) {
+    if (now > bucket.resetAt) tokenBuckets.delete(key);
+  }
+}, RATE_WINDOW_MS);
+
 function checkPhoneHomeRateLimit(tokenHash: string): boolean {
   const now = Date.now();
   const bucket = tokenBuckets.get(tokenHash);

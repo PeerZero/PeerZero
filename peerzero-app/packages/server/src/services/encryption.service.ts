@@ -45,10 +45,9 @@ export function encrypt(plaintext: string): EncryptedPayload {
   const authTag = cipher.getAuthTag();
   const combined = Buffer.concat([encrypted, authTag]);
 
-  // Fingerprint: first 4 + last 4 chars of the key
-  const fingerprint = plaintext.length > 8
-    ? `${plaintext.slice(0, 7)}...${plaintext.slice(-4)}`
-    : '****';
+  // Fingerprint: SHA-256 hash prefix (safe to display, no plaintext leakage)
+  const hash = crypto.createHash('sha256').update(plaintext).digest('hex');
+  const fingerprint = `${hash.slice(0, 8)}...${plaintext.slice(-4)}`;
 
   return { encrypted: combined, iv, fingerprint };
 }

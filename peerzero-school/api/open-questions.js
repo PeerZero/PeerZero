@@ -335,38 +335,24 @@ module.exports = async (req, res) => {
 
       if (voteErr) return res.status(500).json({ error: sanitizeErrorMessage(voteErr) });
 
-      // Increment vote_count and check promotion threshold
+      // Derive vote count from the votes table (source of truth) to avoid race conditions
       try {
-        const { data: updated, error: updErr } = await supabase.rpc('increment_vote_count', { qid: question_id });
+        const { count: voteCount } = await supabase
+          .from('open_question_votes')
+          .select('question_id', { count: 'exact', head: true })
+          .eq('question_id', question_id);
+        const newCount = voteCount || 1;
+        const promoted = newCount >= 5;
+        await supabase.from('open_questions')
+          .update({ vote_count: newCount, is_promoted: promoted })
+          .eq('id', question_id);
 
-        // Fallback if RPC not available: use count from votes table as source of truth
-        if (updErr) {
-          console.error('[open-questions] RPC increment_vote_count failed, using fallback:', updErr.message);
-          try {
-            const { count: voteCount } = await supabase
-              .from('open_question_votes')
-              .select('question_id', { count: 'exact', head: true })
-              .eq('question_id', question_id);
-            const newCount = voteCount || 1;
-            const promoted = newCount >= 5;
-            await supabase.from('open_questions')
-              .update({ vote_count: newCount, is_promoted: promoted })
-              .eq('id', question_id);
-
-            return res.json({
-              success: true, vote_count: newCount, is_promoted: promoted,
-              message: promoted ? 'Vote recorded. Question is now promoted!' : 'Vote recorded.',
-            });
-          } catch (fallbackErr) {
-            console.error('[open-questions] Fallback vote count query failed:', fallbackErr?.message);
-            // Vote was already inserted successfully, return success even if count update failed
-            return res.json({ success: true, message: 'Vote recorded (count update pending).' });
-          }
-        }
-
-        return res.json({ success: true, message: 'Vote recorded.' });
-      } catch (rpcErr) {
-        console.error('[open-questions] Vote count update exception:', rpcErr?.message);
+        return res.json({
+          success: true, vote_count: newCount, is_promoted: promoted,
+          message: promoted ? 'Vote recorded. Question is now promoted!' : 'Vote recorded.',
+        });
+      } catch (countErr) {
+        console.error('[open-questions] Vote count update failed:', countErr?.message);
         // Vote was already inserted successfully, return success even if count update failed
         return res.json({ success: true, message: 'Vote recorded (count update pending).' });
       }

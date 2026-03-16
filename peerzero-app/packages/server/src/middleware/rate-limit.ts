@@ -42,6 +42,29 @@ const LIMITS: Record<RateLimitCategory, { max: number; windowSeconds: number }> 
   bot_control: { max: 10,  windowSeconds: 60 },   // 10/min — prevents rapid cycling
 };
 
+// ── In-memory fallback when Redis is unavailable ─────────────────────────────
+const fallbackBuckets = new Map<string, { count: number; resetAt: number }>();
+
+function checkInMemoryFallback(
+  userId: string,
+  category: RateLimitCategory,
+): { allowed: boolean; remaining: number; limit: number } {
+  const { max, windowSeconds } = LIMITS[category];
+  const key = `${userId}:${category}`;
+  const now = Date.now();
+  const bucket = fallbackBuckets.get(key);
+
+  if (!bucket || now > bucket.resetAt) {
+    fallbackBuckets.set(key, { count: 1, resetAt: now + windowSeconds * 1000 });
+    return { allowed: true, remaining: max - 1, limit: max };
+  }
+  if (bucket.count >= max) {
+    return { allowed: false, remaining: 0, limit: max };
+  }
+  bucket.count++;
+  return { allowed: true, remaining: max - bucket.count, limit: max };
+}
+
 /**
  * Sliding window rate limiter using Redis sorted sets.
  * Key: rate:{userId}:{category}
@@ -87,9 +110,9 @@ async function checkRateLimit(
 
     return { allowed: true, remaining: max - count - 1, limit: max };
   } catch (err) {
-    // If Redis is down, allow the request (fail open) but log
-    logger.error({ err: err instanceof Error ? err.message : err }, 'Rate-limit Redis check failed, allowing request');
-    return { allowed: true, remaining: max, limit: max };
+    // If Redis is down, use in-memory fallback (fail-safe, not fail-open)
+    logger.error({ err: err instanceof Error ? err.message : err }, 'Rate-limit Redis check failed, using in-memory fallback');
+    return checkInMemoryFallback(userId, category);
   }
 }
 

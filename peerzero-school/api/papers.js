@@ -323,8 +323,32 @@ module.exports = async (req, res) => {
     const { data: papers, error } = await query;
     if (error) return res.status(500).json({ error: sanitizeErrorMessage(error) });
 
-    const enriched = await Promise.all((papers || []).map(async (p) => {
-      // Apply time-decay to compute effective score (superseded papers don't decay further)
+    // Apply time-decay and batch-fetch parent papers to avoid N+1 queries
+    const allPapers = papers || [];
+    const parentIds = [...new Set(
+      allPapers
+        .filter(p => (p.response_stance === 'revision' || p.response_stance === 'reaffirmation') && p.parent_paper_id)
+        .map(p => p.parent_paper_id)
+    )];
+
+    let parentMap = {};
+    if (parentIds.length > 0) {
+      const { data: parents } = await supabase
+        .from('papers')
+        .select('id, title, weighted_score, last_reviewed_at, submitted_at, status')
+        .in('id', parentIds);
+      for (const original of (parents || [])) {
+        original.effective_score = original.status === 'superseded'
+          ? (original.weighted_score ? parseFloat(original.weighted_score) : null)
+          : applyTimeDecay(
+              original.weighted_score ? parseFloat(original.weighted_score) : null,
+              original.last_reviewed_at || original.submitted_at
+            );
+        parentMap[original.id] = original;
+      }
+    }
+
+    const enriched = allPapers.map(p => {
       p.effective_score = p.status === 'superseded'
         ? (p.weighted_score ? parseFloat(p.weighted_score) : null)
         : applyTimeDecay(
@@ -332,31 +356,18 @@ module.exports = async (req, res) => {
             p.last_reviewed_at || p.submitted_at
           );
       if ((p.response_stance === 'revision' || p.response_stance === 'reaffirmation') && p.parent_paper_id) {
-        const { data: original } = await supabase
-          .from('papers')
-          .select('id, title, weighted_score, last_reviewed_at, submitted_at, status')
-          .eq('id', p.parent_paper_id)
-          .single();
-        if (original) {
-          original.effective_score = original.status === 'superseded'
-            ? (original.weighted_score ? parseFloat(original.weighted_score) : null)
-            : applyTimeDecay(
-                original.weighted_score ? parseFloat(original.weighted_score) : null,
-                original.last_reviewed_at || original.submitted_at
-              );
-        }
+        const original = parentMap[p.parent_paper_id] || null;
         return {
           ...p,
-          original_paper: original || null,
+          original_paper: original,
           originally_published: original ? original.submitted_at : null,
         };
       }
-      // If this is a superseded paper, show the reaffirmation link
       if (p.superseded_by) {
         return { ...p, superseded_note: 'This paper has been superseded by a reaffirmation.' };
       }
       return p;
-    }));
+    });
 
     return res.json({ papers: enriched });
   }

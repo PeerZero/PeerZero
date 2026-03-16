@@ -57,6 +57,32 @@ function setCorsHeaders(req, res) {
   res.setHeader('Access-Control-Max-Age', '86400'); // cache preflight for 24h
 }
 
+/**
+ * CSRF protection for state-changing requests.
+ * Validates Origin header against allowed origins for POST/PATCH/DELETE.
+ * API-key-authenticated requests (bot traffic) are exempt since bots don't use browsers.
+ * Returns true if the request should be rejected.
+ */
+/**
+ * Check if request body exceeds maximum allowed size (1MB default).
+ * Returns true if oversized.
+ */
+function isBodyTooLarge(req, maxBytes = 1_048_576) {
+  const contentLength = parseInt(req.headers['content-length'] || '0', 10);
+  return contentLength > maxBytes;
+}
+
+function isCsrfRejected(req) {
+  if (req.method === 'GET' || req.method === 'OPTIONS') return false;
+  // API-key-authenticated requests are exempt (bot-to-server, not browser)
+  if (req.headers['x-api-key']) return false;
+  const origin = req.headers.origin || '';
+  if (!origin) return false; // No origin = not a browser request
+  if (ALLOWED_ORIGINS.includes(origin)) return false;
+  if (process.env.PEERZERO_DEV === 'true' && origin.startsWith('http://localhost:')) return false;
+  return true;
+}
+
 // ── Sanitize (prompt injection + HTML) ────────────────────────────────
 function sanitize(text) {
   if (!text) return text;
@@ -304,9 +330,10 @@ async function checkGradeProgress(agentId) {
       .map(p => {
         const score = parseFloat(p.weighted_score);
         if (Number.isNaN(score)) return null;
-        return applyTimeDecay(score, p.last_reviewed_at || p.submitted_at);
+        const decayed = applyTimeDecay(score, p.last_reviewed_at || p.submitted_at);
+        return decayed ?? score;
       })
-      .filter(s => s !== null);
+      .filter(s => s !== null && !Number.isNaN(s));
     if (scores.length > 0) bestGradeScore = Math.max(...scores);
   }
 
@@ -720,6 +747,8 @@ module.exports = {
   // Core (defined in this file)
   getSupabase,
   setCorsHeaders,
+  isCsrfRejected,
+  isBodyTooLarge,
   recordFailureReflection,
   getUnresolvedFailures,
   resolveFailureReflections,
