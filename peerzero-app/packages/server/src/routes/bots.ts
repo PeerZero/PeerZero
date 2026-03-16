@@ -12,7 +12,7 @@ import * as statsService from '../services/stats.service';
 import * as skillService from '../services/skill.service';
 import { addBotCycleJob, removeBotJobs } from '../jobs/queue';
 import { logAudit } from '../services/audit.service';
-import type { ActivityCategory } from '@peerzero/shared';
+import type { ActivityCategory, FocusChunk } from '@peerzero/shared';
 import { ACTIVITY_CATEGORIES } from '@peerzero/shared';
 
 const router = Router();
@@ -113,7 +113,7 @@ router.get('/:id/memory', userRateLimit('read'), async (req: Request, res: Respo
     [key: string]: unknown;
   }
   const profile = bot.cached_profile as CachedProfile | null;
-  const schoolFocus = profile?.active_focus || null;
+  const schoolFocus = (profile?.active_focus as { focus_chunks: FocusChunk[] }) || null;
   const snapshot = await memoryService.getMemorySnapshot(req.params.id, schoolFocus);
   res.json(snapshot);
 });

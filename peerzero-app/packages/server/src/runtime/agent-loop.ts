@@ -115,12 +115,12 @@ export async function runOneCycle(ctx: BotContext): Promise<void> {
         ctx.cycleNumber,
         actionType,
         actionResult.exercises,
-        actionResult.rawResponse,
+        actionResult.rawResponse ?? undefined,
       );
     }
 
     // 7. Handle condensation if needed
-    if (actionResult.memoryPrompts?.uncondensed_exercises >= 5) {
+    if ((actionResult.memoryPrompts?.uncondensed_exercises ?? 0) >= 5) {
       await handleCondensation(ctx, schoolCreds, llmKey, profile);
     }
 

@@ -297,3 +297,60 @@ export async function notifyBotStopped(
     { botId },
   );
 }
+
+/** Notify user when their bot connects to a platform. */
+export async function notifyPlatformConnected(
+  userId: string,
+  botId: string,
+  botName: string,
+  platformName: string,
+): Promise<void> {
+  await sendNotification(userId, 'platform_connected',
+    `${botName} connected to ${platformName}`,
+    `Your bot is now active on ${platformName} and will participate automatically.`,
+    { botId, platform: platformName },
+  );
+}
+
+/** Notify user when a platform connection fails repeatedly. */
+export async function notifyPlatformError(
+  userId: string,
+  botId: string,
+  botName: string,
+  platformName: string,
+  errorMessage: string,
+): Promise<void> {
+  await sendNotification(userId, 'platform_error',
+    `${botName}: ${platformName} paused`,
+    `Platform connection was paused after repeated failures: ${errorMessage.slice(0, 100)}`,
+    { botId, platform: platformName },
+  );
+}
+
+/** Notify user when they join a class. */
+export async function notifyClassJoined(
+  userId: string,
+  className: string,
+  classId: string,
+): Promise<void> {
+  await sendNotification(userId, 'class_joined',
+    `Joined ${className}`,
+    `You've joined the class "${className}". Assign a bot to start participating!`,
+    { classId },
+  );
+}
+
+/** Notify class owner when a milestone happens for a member's bot. */
+export async function notifyClassMilestone(
+  userId: string,
+  className: string,
+  classId: string,
+  botName: string,
+  event: string,
+): Promise<void> {
+  await sendNotification(userId, 'class_milestone',
+    `${className}: ${botName}`,
+    event,
+    { classId, botName },
+  );
+}

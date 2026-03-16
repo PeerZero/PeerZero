@@ -28,7 +28,7 @@ function getConnection(): IORedis {
 
 function getQueue(): Queue {
   if (!platformQueue) {
-    platformQueue = new Queue('platform-cycles', { connection: getConnection() });
+    platformQueue = new Queue('platform-cycles', { connection: getConnection() as any });
   }
   return platformQueue;
 }
@@ -130,7 +130,7 @@ export function startPlatformWorker(): void {
       }
     },
     {
-      connection: getConnection(),
+      connection: getConnection() as any,
       concurrency: 3, // Lower than school (5) — school gets priority
     },
   );

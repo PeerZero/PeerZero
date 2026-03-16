@@ -3,12 +3,12 @@
 // =============================================================================
 
 import React, { useState, useCallback } from 'react';
-import { View, Text, FlatList, TouchableOpacity, StyleSheet, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, StyleSheet, Alert, ActivityIndicator, Modal, ScrollView } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { classes as classesApi } from '../services/api';
+import { classes as classesApi, bots as botsApi } from '../services/api';
 import { colors } from '../theme/colors';
 import { spacing, fontSize, borderRadius } from '../theme/spacing';
-import type { ClassInfo, ClassMember, ClassDashboard } from '@peerzero/shared';
+import type { ClassInfo, ClassMember, ClassDashboard, BotSummary } from '@peerzero/shared';
 
 type Tab = 'members' | 'dashboard';
 
@@ -19,6 +19,9 @@ export default function ClassDetailScreen({ route, navigation }: any) {
   const [dashboard, setDashboard] = useState<ClassDashboard | null>(null);
   const [tab, setTab] = useState<Tab>('members');
   const [loading, setLoading] = useState(true);
+  const [showBotPicker, setShowBotPicker] = useState(false);
+  const [userBots, setUserBots] = useState<BotSummary[]>([]);
+  const [loadingBots, setLoadingBots] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -89,6 +92,29 @@ export default function ClassDetailScreen({ route, navigation }: any) {
     ]);
   };
 
+  const openBotPicker = async () => {
+    setShowBotPicker(true);
+    setLoadingBots(true);
+    try {
+      const list = await botsApi.list() as BotSummary[];
+      setUserBots(list);
+    } catch (err: any) {
+      Alert.alert('Error', err.message);
+    } finally {
+      setLoadingBots(false);
+    }
+  };
+
+  const selectBot = async (botId: string | null) => {
+    try {
+      await classesApi.updateBot(classId, botId);
+      setShowBotPicker(false);
+      load(); // refresh members
+    } catch (err: any) {
+      Alert.alert('Error', err.message);
+    }
+  };
+
   if (loading || !classInfo) {
     return (
       <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
@@ -97,7 +123,8 @@ export default function ClassDetailScreen({ route, navigation }: any) {
     );
   }
 
-  const isOwner = classInfo.role === 'owner';
+  const isTeacher = classInfo.role === 'teacher';
+  const isStudent = classInfo.role === 'student';
 
   return (
     <View style={styles.container}>
@@ -160,9 +187,52 @@ export default function ClassDetailScreen({ route, navigation }: any) {
         <DashboardView dashboard={dashboard} />
       )}
 
+      {/* Bot Selector (students only) */}
+      {isStudent && (
+        <View style={styles.botPickerBar}>
+          <TouchableOpacity style={styles.changeBotButton} onPress={openBotPicker}>
+            <Text style={styles.changeBotText}>Change My Bot</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* Bot Picker Modal */}
+      <Modal visible={showBotPicker} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Select Bot for Class</Text>
+            {loadingBots ? (
+              <ActivityIndicator size="large" color={colors.accent.primary} style={{ marginVertical: spacing.xl }} />
+            ) : (
+              <ScrollView style={styles.botList}>
+                {/* Option to remove bot */}
+                <TouchableOpacity style={styles.botOption} onPress={() => selectBot(null)}>
+                  <Text style={styles.botOptionName}>None</Text>
+                  <Text style={styles.botOptionDetail}>Remove bot from class</Text>
+                </TouchableOpacity>
+                {userBots.map(bot => (
+                  <TouchableOpacity key={bot.id} style={styles.botOption} onPress={() => selectBot(bot.id)}>
+                    <Text style={styles.botOptionName}>{bot.name}</Text>
+                    <Text style={styles.botOptionDetail}>
+                      {bot.status} | Cred: {bot.cached_credibility ?? '—'} | Grade: {bot.cached_grade ?? '—'}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+                {userBots.length === 0 && (
+                  <Text style={styles.noBotText}>No bots available. Create a bot first.</Text>
+                )}
+              </ScrollView>
+            )}
+            <TouchableOpacity style={styles.modalCancel} onPress={() => setShowBotPicker(false)}>
+              <Text style={styles.modalCancelText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
       {/* Actions */}
       <View style={styles.actions}>
-        {isOwner ? (
+        {isTeacher ? (
           <TouchableOpacity style={styles.deleteButton} onPress={handleDelete}>
             <Text style={styles.deleteText}>Delete Class</Text>
           </TouchableOpacity>
@@ -320,4 +390,25 @@ const styles = StyleSheet.create({
     backgroundColor: colors.accent.error + '15',
   },
   deleteText: { color: colors.accent.error, fontSize: fontSize.md, fontWeight: '600' },
+  botPickerBar: { paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
+  changeBotButton: {
+    padding: spacing.md, borderRadius: borderRadius.md, alignItems: 'center',
+    backgroundColor: colors.accent.primary + '15', borderWidth: 1, borderColor: colors.accent.primary + '40',
+  },
+  changeBotText: { color: colors.accent.primary, fontSize: fontSize.md, fontWeight: '600' },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+  modalContent: {
+    backgroundColor: colors.bg.primary, borderTopLeftRadius: 20, borderTopRightRadius: 20,
+    padding: spacing.lg, maxHeight: '70%',
+  },
+  modalTitle: { fontSize: fontSize.lg, fontWeight: '700', color: colors.text.primary, marginBottom: spacing.md },
+  botList: { maxHeight: 300 },
+  botOption: {
+    padding: spacing.md, borderRadius: borderRadius.md, marginBottom: spacing.sm,
+    backgroundColor: colors.bg.card, borderWidth: 1, borderColor: colors.border,
+  },
+  botOptionName: { fontSize: fontSize.md, fontWeight: '600', color: colors.text.primary },
+  botOptionDetail: { fontSize: fontSize.xs, color: colors.text.tertiary, marginTop: 2 },
+  modalCancel: { padding: spacing.md, alignItems: 'center', marginTop: spacing.sm },
+  modalCancelText: { fontSize: fontSize.md, color: colors.text.secondary, fontWeight: '600' },
 });

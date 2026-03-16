@@ -8,6 +8,7 @@ import crypto from 'crypto';
 import { queryOne, queryRows, query } from '../db/client';
 import { AppError } from '../middleware/error-handler';
 import { logAudit } from './audit.service';
+import { notifyClassJoined } from './notification.service';
 import { MAX_CLASS_MEMBERS, JOIN_CODE_LENGTH } from '@peerzero/shared';
 import type { ClassInfo, ClassMember, ClassDashboard } from '@peerzero/shared';
 
@@ -156,6 +157,10 @@ export async function joinClass(
     [cls.id, userId, botId || null],
   );
 
+  // Fire-and-forget notification
+  const classInfo = await queryOne<{ name: string }>('SELECT name FROM classes WHERE id = $1', [cls.id]);
+  notifyClassJoined(userId, classInfo?.name || 'a class', cls.id);
+
   return getClass(cls.id, userId);
 }
 
@@ -259,7 +264,7 @@ export async function getClassMembers(classId: string, userId: string): Promise<
     [classId],
   );
 
-  return rows.map(r => ({
+  return rows.map((r): ClassMember => ({
     user_id: r.user_id,
     display_name: r.display_name,
     role: r.role,
@@ -267,7 +272,7 @@ export async function getClassMembers(classId: string, userId: string): Promise<
     bot: r.bot_id ? {
       id: r.bot_id,
       name: r.bot_name!,
-      avatar_config: r.bot_avatar_config || {},
+      avatar_config: r.bot_avatar_config as any || {},
       status: r.bot_status as any,
       cached_credibility: r.bot_cached_credibility,
       cached_grade: r.bot_cached_grade,

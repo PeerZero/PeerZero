@@ -9,6 +9,7 @@ import { queryOne, queryRows, query } from '../db/client';
 import { AppError } from '../middleware/error-handler';
 import { encrypt, decrypt } from './encryption.service';
 import { logAudit } from './audit.service';
+import { notifyPlatformConnected, notifyPlatformError } from './notification.service';
 import type { BotPlatformConnection, PlatformRegistryEntry } from '@peerzero/shared';
 import { MAX_PLATFORMS_PER_BOT } from '@peerzero/shared';
 
@@ -98,6 +99,10 @@ export async function connectPlatform(
     metadata: { platform: platform.slug },
   });
 
+  // Fire-and-forget notification
+  const botRow = await queryOne<{ name: string }>('SELECT name FROM bots WHERE id = $1', [botId]);
+  notifyPlatformConnected(userId, botId, botRow?.name || 'Your bot', platform.name);
+
   return result!;
 }
 
@@ -184,6 +189,23 @@ export async function updatePlatformCycleStatus(
      WHERE id = $3`,
     [status, errorMessage || null, platformId],
   );
+
+  // Notify user when platform is paused due to errors
+  if (status === 'paused' && errorMessage) {
+    const info = await queryOne<{ bot_id: string; platform_name: string }>(
+      'SELECT bot_id, platform_name FROM bot_platforms WHERE id = $1',
+      [platformId],
+    );
+    if (info) {
+      const bot = await queryOne<{ user_id: string; name: string }>(
+        'SELECT user_id, name FROM bots WHERE id = $1',
+        [info.bot_id],
+      );
+      if (bot) {
+        notifyPlatformError(bot.user_id, info.bot_id, bot.name, info.platform_name, errorMessage);
+      }
+    }
+  }
 }
 
 /** Get decrypted platform credentials for the agent loop. */
