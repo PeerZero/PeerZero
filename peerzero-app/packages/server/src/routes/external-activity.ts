@@ -25,6 +25,14 @@ const tokenBuckets = new Map<string, { count: number; resetAt: number }>();
 const RATE_LIMIT = 30;
 const RATE_WINDOW_MS = 60_000;
 
+// Periodically clean up expired buckets to prevent memory leak from cycled tokens
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, bucket] of tokenBuckets) {
+    if (now > bucket.resetAt) tokenBuckets.delete(key);
+  }
+}, RATE_WINDOW_MS);
+
 function checkPhoneHomeRateLimit(tokenHash: string): boolean {
   const now = Date.now();
   const bucket = tokenBuckets.get(tokenHash);
@@ -88,7 +96,10 @@ router.post('/', async (req: Request, res: Response) => {
   const safeSummary = String(summary).slice(0, 500);
   const safePreview = content_preview ? String(content_preview).slice(0, 200) : null;
   const safeSkills = Array.isArray(skills_demonstrated)
-    ? skills_demonstrated.slice(0, 10).map((s: unknown) => String(s).slice(0, 50))
+    ? skills_demonstrated
+        .filter((s: unknown) => typeof s === 'string' || typeof s === 'number')
+        .slice(0, 10)
+        .map((s: unknown) => String(s).slice(0, 50))
     : [];
 
   let botTimestamp: string | null = null;

@@ -4,6 +4,7 @@
 
 import { Router, Request, Response } from 'express';
 import { requireAuth } from '../middleware/auth';
+import { userRateLimit } from '../middleware/rate-limit';
 import * as paymentService from '../services/payment.service';
 
 const router = Router();
@@ -15,7 +16,7 @@ router.get('/products', async (_req: Request, res: Response) => {
 });
 
 // Authenticated: create checkout session
-router.post('/checkout', requireAuth, async (req: Request, res: Response) => {
+router.post('/checkout', requireAuth, userRateLimit('write'), async (req: Request, res: Response) => {
   const { product_id, metadata } = req.body;
   if (!product_id) {
     res.status(400).json({ error: 'product_id required' });
@@ -26,7 +27,7 @@ router.post('/checkout', requireAuth, async (req: Request, res: Response) => {
 });
 
 // Authenticated: create grade advancement checkout for a bot
-router.post('/grade-checkout', requireAuth, async (req: Request, res: Response) => {
+router.post('/grade-checkout', requireAuth, userRateLimit('write'), async (req: Request, res: Response) => {
   const { bot_id } = req.body;
   if (!bot_id) {
     res.status(400).json({ error: 'bot_id required' });
@@ -44,7 +45,7 @@ router.get('/grade-status/:botId', requireAuth, async (req: Request, res: Respon
 });
 
 // Authenticated: create bulk grade checkout (multiple grades at once)
-router.post('/grade-checkout-bulk', requireAuth, async (req: Request, res: Response) => {
+router.post('/grade-checkout-bulk', requireAuth, userRateLimit('write'), async (req: Request, res: Response) => {
   const { bot_id, through_grade } = req.body;
   if (!bot_id) {
     res.status(400).json({ error: 'bot_id required' });
@@ -66,11 +67,10 @@ router.post('/grade-checkout-bulk', requireAuth, async (req: Request, res: Respo
 });
 
 // Authenticated: get price preview for bulk grade unlock
-router.get('/grade-price-preview/:botId', requireAuth, async (req: Request, res: Response) => {
+router.get('/grade-price-preview/:botId', requireAuth, userRateLimit('read'), async (req: Request, res: Response) => {
   const targetParam = req.query.through as string;
-  const highestUnlocked = (await paymentService.getUnlockedGrades(req.params.botId)).length > 0
-    ? Math.max(...await paymentService.getUnlockedGrades(req.params.botId))
-    : 0;
+  const unlockedGrades = await paymentService.getUnlockedGrades(req.params.botId);
+  const highestUnlocked = unlockedGrades.length > 0 ? Math.max(...unlockedGrades) : 0;
   const target = (targetParam === 'graduation' || targetParam === 'all') ? 12 : parseInt(targetParam, 10) || 12;
   const preview = paymentService.calculateBulkPrice(highestUnlocked, target);
   res.json(preview);

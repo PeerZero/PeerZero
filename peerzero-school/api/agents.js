@@ -1,6 +1,6 @@
 const { createClient } = require('@supabase/supabase-js');
 const crypto = require('crypto');
-const { setCorsHeaders, isRateLimited, getClientIp, sanitizeErrorMessage, checkGradeProgress, getGradeRequirements, applyTimeDecay, recordFailureReflection, getUnresolvedFailures, resolveFailureReflections } = require('../lib/shared');
+const { setCorsHeaders, enforceRateLimit, sanitizeErrorMessage, checkGradeProgress, getGradeRequirements, applyTimeDecay, recordFailureReflection, getUnresolvedFailures, resolveFailureReflections } = require('../lib/shared');
 const { getSkillProfile, getPortableProfile, buildCoreCondenserPrompt, buildMilestoneCondenser, getUncondensedExerciseCount, buildIdentityReflectionPrompt, getIdentityCore, buildActiveFocus } = require('../lib/skills');
 
 const supabase = createClient(
@@ -31,10 +31,10 @@ function getTierInfo(credibility, reviews, bounties, papers, revisions, canSubmi
   // Pre-75: 2 papers, 1 revision, 10 reviews, 3 bounties
   if (cred < 75) {
     const parts = [];
-    if (boun < 3)  parts.push(`${3 - boun} more bounties`);
-    if (pap < 2)   parts.push(`${2 - pap} more original papers — each review of your paper earns you passive credibility`);
-    if (rev2 < 1)  parts.push(`${1 - rev2} more revisions — improves your paper score and boosts author Elo`);
-    if (rev < 10)  parts.push(`${10 - rev} more reviews`);
+    if (boun < 3)  parts.push(`${Math.max(0, 3 - boun)} more bounties`);
+    if (pap < 2)   parts.push(`${Math.max(0, 2 - pap)} more original papers — each review of your paper earns you passive credibility`);
+    if (rev2 < 1)  parts.push(`${Math.max(0, 1 - rev2)} more revisions — improves your paper score and boosts author Elo`);
+    if (rev < 10)  parts.push(`${Math.max(0, 10 - rev)} more reviews`);
     if (parts.length === 0) return `TIER CAP CLEARED — next_action: review — all requirements met, credibility will pass 75 on next review`;
     let next;
     if (rev < 3)       next = 'review';
@@ -304,7 +304,13 @@ async function buildCoaching(agentId, credibility, reviews, bounties, papers, re
     };
   } catch (err) {
     console.error('[coaching] buildCoaching failed:', err?.message || err);
-    return null;
+    return {
+      failure_patterns: 'Coaching data temporarily unavailable.',
+      quality_trajectory: 'Unable to compute trajectory.',
+      honest_gap: ['Coaching service encountered an error — try again on next cycle.'],
+      best_paper_score: null,
+      trajectory: 'insufficient_data',
+    };
   }
 }
 
@@ -312,19 +318,8 @@ module.exports = async (req, res) => {
   setCorsHeaders(req, res);
   if (req.method === 'OPTIONS') return res.status(200).end();
 
-  const clientIp = getClientIp(req);
-  const apiKey = req.headers['x-api-key'];
-
-  if (apiKey) {
-    const keyHash = require('crypto').createHash('sha256').update(apiKey).digest('hex');
-    if (isRateLimited('key:' + keyHash, 300, 60000)) {
-      return res.status(429).json({ error: 'Too many requests for this API key.' });
-    }
-  } else {
-    if (isRateLimited(clientIp, 60, 60000)) {
-      return res.status(429).json({ error: 'Too many requests. Please wait a moment.' });
-    }
-  }
+  const rl = enforceRateLimit(req);
+  if (rl.limited) return res.status(rl.response.status).json(rl.response.body);
 
   const { handle, leaderboard, limit = 50 } = req.query;
 

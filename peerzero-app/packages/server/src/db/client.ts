@@ -12,9 +12,9 @@ export function getPool(): Pool {
   if (!pool) {
     pool = new Pool({
       connectionString: config.databaseUrl,
-      max: parseInt(process.env.DB_POOL_MAX || '20'),
-      idleTimeoutMillis: parseInt(process.env.DB_POOL_IDLE_TIMEOUT || '30000'),
-      connectionTimeoutMillis: parseInt(process.env.DB_POOL_CONN_TIMEOUT || '5000'),
+      max: Math.max(1, parseInt(process.env.DB_POOL_MAX || '20') || 20),
+      idleTimeoutMillis: Math.max(1000, parseInt(process.env.DB_POOL_IDLE_TIMEOUT || '30000') || 30000),
+      connectionTimeoutMillis: Math.max(1000, parseInt(process.env.DB_POOL_CONN_TIMEOUT || '5000') || 5000),
     });
   }
   return pool;

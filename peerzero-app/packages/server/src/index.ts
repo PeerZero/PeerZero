@@ -38,7 +38,7 @@ app.use(helmet());
 app.use(cors({
   origin: config.isDev
     ? ['http://localhost:3000', 'http://localhost:3001', 'http://localhost:8081', 'http://localhost:19006']
-    : ['https://peerzero.science', 'https://www.peerzero.science', 'https://peer-zero.vercel.app'],
+    : config.corsOrigins.split(',').map(s => s.trim()).filter(Boolean),
   credentials: true,
 }));
 // Auth routes get IP-based rate limiting (unauthenticated, can't key by user)

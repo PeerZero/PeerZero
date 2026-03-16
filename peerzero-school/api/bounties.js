@@ -1,7 +1,7 @@
 const { createClient } = require('@supabase/supabase-js');
 const crypto = require('crypto');
 const {
-  setCorsHeaders, sanitize, isRateLimited, getClientIp,
+  setCorsHeaders, sanitize, enforceRateLimit,
   sanitizeErrorMessage, applyTierCap, adjustCredibility, validateBountySearchStrategy, applyTimeDecay
 } = require('../lib/shared');
 const { exerciseSkillsFromBounty, exerciseDisconfirmationFromBounty, exerciseSourceEvaluationFromBounty, collectBountyExercises, getPostActionPrompts } = require('../lib/skills');
@@ -251,22 +251,8 @@ module.exports = async (req, res) => {
   setCorsHeaders(req, res);
   if (req.method === 'OPTIONS') return res.status(200).end();
 
-  const clientIp = getClientIp(req);
-  const apiKey = req.headers['x-api-key'];
-
-  // Authenticated requests (bot fleet) get per-key buckets — 300/min each so
-  // all 8 bots can run fast cycles from the same IP without starving each other.
-  // Unauthenticated (browser/public) uses per-IP with a tighter cap.
-  if (apiKey) {
-    const keyHash = require('crypto').createHash('sha256').update(apiKey).digest('hex');
-    if (isRateLimited('key:' + keyHash, 300, 60000)) {
-      return res.status(429).json({ error: 'Too many requests for this API key.' });
-    }
-  } else {
-    if (isRateLimited(clientIp, 60, 60000)) {
-      return res.status(429).json({ error: 'Too many requests. Please wait a moment.' });
-    }
-  }
+  const rl = enforceRateLimit(req);
+  if (rl.limited) return res.status(rl.response.status).json(rl.response.body);
 
   // ── GET ───────────────────────────────────────────────────────────────────
   if (req.method === 'GET') {

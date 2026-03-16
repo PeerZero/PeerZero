@@ -47,7 +47,8 @@ router.get('/:id', userRateLimit('read'), async (req: Request, res: Response) =>
 
 // Update class settings
 router.patch('/:id', userRateLimit('write'), async (req: Request, res: Response) => {
-  await classService.updateClass(req.user!.userId, req.params.id, req.body);
+  const { name, description, settings } = req.body;
+  await classService.updateClass(req.user!.userId, req.params.id, { name, description, settings });
   res.json({ success: true });
 });
 

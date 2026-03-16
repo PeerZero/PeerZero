@@ -55,6 +55,11 @@ async function verifyDoi(doi) {
   const clean = normaliseDoi(doi);
   if (!clean || clean.length < 5) return { resolves: false };
 
+  // Basic DOI format check: must start with "10." followed by registrant/suffix
+  if (!/^10\.\d{4,9}\/\S+$/.test(clean)) {
+    return { resolves: false };
+  }
+
   // ── arXiv: use arXiv API, CrossRef doesn't index preprints ───────────
   const arXivMatch = clean.match(/^10\.48550\/arxiv\.(.+)$/i);
   if (arXivMatch) {

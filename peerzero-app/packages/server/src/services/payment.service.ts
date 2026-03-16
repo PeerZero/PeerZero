@@ -140,7 +140,11 @@ export async function handleStripeWebhook(event: Stripe.Event): Promise<void> {
           }
         }
         // Auto-resume bot if it was paused waiting for grade payment
-        await resumeBotAfterGradePayment(session.metadata.bot_id);
+        try {
+          await resumeBotAfterGradePayment(session.metadata.bot_id);
+        } catch (resumeErr) {
+          logger.error({ botId: session.metadata.bot_id, err: resumeErr instanceof Error ? resumeErr.message : resumeErr }, 'Failed to resume bot after grade payment — grades unlocked but bot may need manual restart');
+        }
       }
       break;
     }

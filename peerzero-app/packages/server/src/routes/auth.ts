@@ -3,6 +3,7 @@
 // =============================================================================
 
 import { Router, Request, Response } from 'express';
+import rateLimit from 'express-rate-limit';
 import { registerUser, loginUser, refreshTokens, revokeRefreshTokens, getUserProfile, updateProfile, changePassword, deleteAccount } from '../services/auth.service';
 import { requireAuth } from '../middleware/auth';
 import { removeBotJobs } from '../jobs/queue';
@@ -13,13 +14,22 @@ const router = Router();
 
 // Auth limiter is applied at the router mount level in index.ts
 
+// Stricter rate limit for token refresh to prevent token-cycling abuse
+const refreshLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many refresh attempts. Try again later.' },
+});
+
 router.post('/register', async (req: Request, res: Response) => {
   const { email, password, display_name } = req.body;
   if (!email || !password) {
     res.status(400).json({ error: 'Email and password required' });
     return;
   }
-  if (typeof email !== 'string' || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+  if (typeof email !== 'string' || !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) {
     res.status(400).json({ error: 'Invalid email format' });
     return;
   }
@@ -43,7 +53,7 @@ router.post('/login', async (req: Request, res: Response) => {
   res.status(200).json({ access_token: tokens.accessToken, refresh_token: tokens.refreshToken, user: profile });
 });
 
-router.post('/refresh', async (req: Request, res: Response) => {
+router.post('/refresh', refreshLimiter, async (req: Request, res: Response) => {
   const { refresh_token } = req.body;
   if (!refresh_token) {
     res.status(400).json({ error: 'Refresh token required' });

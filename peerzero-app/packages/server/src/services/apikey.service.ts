@@ -63,11 +63,14 @@ export async function deleteApiKey(userId: string, keyId: string): Promise<void>
 
 /** Decrypt a key for use in LLM calls. Only called by the bot runtime. */
 export async function getDecryptedKey(keyId: string, userId: string): Promise<string> {
-  const row = await queryOne<{ encrypted_key: Buffer; key_iv: Buffer }>(
-    'SELECT encrypted_key, key_iv FROM llm_api_keys WHERE id = $1 AND user_id = $2',
+  const row = await queryOne<{ encrypted_key: Buffer; key_iv: Buffer; expires_at: string | null }>(
+    'SELECT encrypted_key, key_iv, expires_at FROM llm_api_keys WHERE id = $1 AND user_id = $2',
     [keyId, userId],
   );
   if (!row) throw new AppError(404, 'API key not found');
+  if (row.expires_at && new Date(row.expires_at) < new Date()) {
+    throw new AppError(410, 'API key has expired. Please add a new key.');
+  }
   return decrypt(row.encrypted_key, row.key_iv);
 }
 

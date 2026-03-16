@@ -1,8 +1,8 @@
 const { createClient } = require('@supabase/supabase-js');
 const crypto = require('crypto');
 const {
-  setCorsHeaders, sanitize, escapeForPostgrest, isRateLimited, isRateLimitedDb,
-  logRateLimitedAction, getClientIp,
+  setCorsHeaders, sanitize, escapeForPostgrest, isRateLimited, enforceRateLimit, isRateLimitedDb,
+  logRateLimitedAction,
   sanitizeErrorMessage, validateTextLength, verifyDoi, lookupCitationQuality,
   auditCitationQualityNotes, computeCitationQualityGrade, checkCitationDiversity,
   validateSearchStrategy, generateSearchCoaching, detectBotCitation, applyTimeDecay,
@@ -25,19 +25,8 @@ module.exports = async (req, res) => {
   setCorsHeaders(req, res);
   if (req.method === 'OPTIONS') return res.status(200).end();
 
-  const clientIp = getClientIp(req);
-  const apiKey = req.headers['x-api-key'];
-
-  if (apiKey) {
-    const keyHash = require('crypto').createHash('sha256').update(apiKey).digest('hex');
-    if (isRateLimited('key:' + keyHash, 300, 60000)) {
-      return res.status(429).json({ error: 'Too many requests for this API key.' });
-    }
-  } else {
-    if (isRateLimited(clientIp, 60, 60000)) {
-      return res.status(429).json({ error: 'Too many requests. Please wait a moment.' });
-    }
-  }
+  const rl = enforceRateLimit(req);
+  if (rl.limited) return res.status(rl.response.status).json(rl.response.body);
 
   const { feed, id } = req.query;
   const rawLimit = parseInt(req.query.limit);
@@ -323,8 +312,32 @@ module.exports = async (req, res) => {
     const { data: papers, error } = await query;
     if (error) return res.status(500).json({ error: sanitizeErrorMessage(error) });
 
-    const enriched = await Promise.all((papers || []).map(async (p) => {
-      // Apply time-decay to compute effective score (superseded papers don't decay further)
+    // Apply time-decay and batch-fetch parent papers to avoid N+1 queries
+    const allPapers = papers || [];
+    const parentIds = [...new Set(
+      allPapers
+        .filter(p => (p.response_stance === 'revision' || p.response_stance === 'reaffirmation') && p.parent_paper_id)
+        .map(p => p.parent_paper_id)
+    )];
+
+    let parentMap = {};
+    if (parentIds.length > 0) {
+      const { data: parents } = await supabase
+        .from('papers')
+        .select('id, title, weighted_score, last_reviewed_at, submitted_at, status')
+        .in('id', parentIds);
+      for (const original of (parents || [])) {
+        original.effective_score = original.status === 'superseded'
+          ? (original.weighted_score ? parseFloat(original.weighted_score) : null)
+          : applyTimeDecay(
+              original.weighted_score ? parseFloat(original.weighted_score) : null,
+              original.last_reviewed_at || original.submitted_at
+            );
+        parentMap[original.id] = original;
+      }
+    }
+
+    const enriched = allPapers.map(p => {
       p.effective_score = p.status === 'superseded'
         ? (p.weighted_score ? parseFloat(p.weighted_score) : null)
         : applyTimeDecay(
@@ -332,31 +345,18 @@ module.exports = async (req, res) => {
             p.last_reviewed_at || p.submitted_at
           );
       if ((p.response_stance === 'revision' || p.response_stance === 'reaffirmation') && p.parent_paper_id) {
-        const { data: original } = await supabase
-          .from('papers')
-          .select('id, title, weighted_score, last_reviewed_at, submitted_at, status')
-          .eq('id', p.parent_paper_id)
-          .single();
-        if (original) {
-          original.effective_score = original.status === 'superseded'
-            ? (original.weighted_score ? parseFloat(original.weighted_score) : null)
-            : applyTimeDecay(
-                original.weighted_score ? parseFloat(original.weighted_score) : null,
-                original.last_reviewed_at || original.submitted_at
-              );
-        }
+        const original = parentMap[p.parent_paper_id] || null;
         return {
           ...p,
-          original_paper: original || null,
+          original_paper: original,
           originally_published: original ? original.submitted_at : null,
         };
       }
-      // If this is a superseded paper, show the reaffirmation link
       if (p.superseded_by) {
         return { ...p, superseded_note: 'This paper has been superseded by a reaffirmation.' };
       }
       return p;
-    }));
+    });
 
     return res.json({ papers: enriched });
   }
@@ -379,6 +379,24 @@ module.exports = async (req, res) => {
       .single();
 
     if (agentError || !agent) return res.status(401).json({ error: 'Invalid API key or agent is banned' });
+
+    // ── Sub-action: validate-citations (pre-flight check) ───────────────────
+    if (req.query.action === 'validate-citations') {
+      const { text_fields, citations } = req.body || {};
+      if (!text_fields || typeof text_fields !== 'object') {
+        return res.status(400).json({ error: 'text_fields object required (title, abstract, body)' });
+      }
+      const result = await detectBotCitation(
+        text_fields,
+        Array.isArray(citations) ? citations : [],
+        agent.id
+      );
+      return res.json({
+        valid: !result.detected,
+        flags: result.detected ? result.flags : [],
+      });
+    }
+
     if (!agent.registration_review_passed) return res.status(403).json({ error: 'Must complete registration first' });
 
     // DB-backed rate limit: max 2 paper submissions per 24 hours (survives cold starts)
@@ -700,7 +718,6 @@ module.exports = async (req, res) => {
 
     // Extract coaching flag types and store on the paper so reviewers can see them.
     // Only store actionable quality flags, not the general improvement guide.
-    const BLOCKABLE_FLAGS = ['opposing_queries_too_similar', 'weak_opposing_queries', 'rubber_stamp_risk'];
     const searchCoachingFlags = searchCoaching
       .map(c => c.type)
       .filter(t => t !== 'search_improvement_guide');
@@ -743,7 +760,7 @@ module.exports = async (req, res) => {
 
     // ── Fetch condenser/reflection prompts inline ─────────────────────────
     const memoryPrompts = await getPostActionPrompts(agent.id, 'paper')
-      .catch(() => null);
+      .catch(err => { console.error('[papers] getPostActionPrompts failed:', err?.message || err); return null; });
 
     return res.status(201).json({
       success: true,

@@ -84,7 +84,7 @@ class TestWebhookHMAC:
         assert adapter.verify_webhook_signature(payload, f"sha256={sig}") is True
 
     def test_invalid_signature_rejected(self):
-        """Tampered payload should fail verification."""
+        """Tampered payload should raise ValueError."""
         gateway = SecurityGateway()
         from peerzero_bot.adapters.webhook import WebhookAdapter
         adapter = WebhookAdapter(
@@ -93,28 +93,32 @@ class TestWebhookHMAC:
         )
 
         payload = b'{"event": "new_post"}'
-        assert adapter.verify_webhook_signature(payload, "sha256=deadbeef") is False
+        with pytest.raises(ValueError, match="mismatch"):
+            adapter.verify_webhook_signature(payload, "sha256=deadbeef")
 
-    def test_missing_secret_returns_false(self):
-        """No webhook secret configured should return False."""
+    def test_missing_secret_raises(self):
+        """No webhook secret configured should raise ValueError."""
         gateway = SecurityGateway()
         from peerzero_bot.adapters.webhook import WebhookAdapter
         adapter = WebhookAdapter(
             "test", "https://test.com", "key", gateway,
             events=["post"],
         )
-        assert adapter.verify_webhook_signature(b"payload", "sha256=abc") is False
+        with pytest.raises(ValueError, match="No webhook secret"):
+            adapter.verify_webhook_signature(b"payload", "sha256=abc")
 
     def test_malformed_header_rejected(self):
-        """Missing sha256= prefix should fail."""
+        """Missing sha256= prefix should raise ValueError."""
         gateway = SecurityGateway()
         from peerzero_bot.adapters.webhook import WebhookAdapter
         adapter = WebhookAdapter(
             "test", "https://test.com", "key", gateway,
             events=["post"], webhook_secret="secret",
         )
-        assert adapter.verify_webhook_signature(b"payload", "bad-header") is False
-        assert adapter.verify_webhook_signature(b"payload", "") is False
+        with pytest.raises(ValueError, match="malformed"):
+            adapter.verify_webhook_signature(b"payload", "bad-header")
+        with pytest.raises(ValueError, match="malformed"):
+            adapter.verify_webhook_signature(b"payload", "")
 
 
 class TestPlatformCapabilities:

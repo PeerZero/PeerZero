@@ -157,7 +157,7 @@ class A2AAdapter:
         """Submit an action to the platform as an A2A task."""
         try:
             # Build A2A task message
-            content_text = json.dumps(action.content) if isinstance(action.content, dict) else str(action.content)
+            content_text = json.dumps(action.content, default=str) if isinstance(action.content, (dict, list)) else str(action.content)
 
             task_data = {
                 "jsonrpc": "2.0",

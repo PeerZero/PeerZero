@@ -32,7 +32,7 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
 
   const token = header.slice(7);
   try {
-    const payload = jwt.verify(token, config.jwtSecret) as JwtPayload;
+    const payload = jwt.verify(token, config.jwtSecret, { algorithms: ['HS256'] }) as JwtPayload;
     req.user = payload;
     next();
   } catch {

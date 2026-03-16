@@ -64,6 +64,10 @@ class FileStorage:
         with self._get_lock(path):
             items = self._read_raw(path, [])
             if not isinstance(items, list):
+                import logging
+                logging.getLogger("peerzero-bot").warning(
+                    f"Corrupt data in {path}: expected list, got {type(items).__name__}. Resetting to empty list."
+                )
                 items = []
             items.append(entry)
             if max_entries > 0 and len(items) > max_entries:

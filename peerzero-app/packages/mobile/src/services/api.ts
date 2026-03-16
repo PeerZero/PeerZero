@@ -80,7 +80,7 @@ async function tryRefresh(): Promise<boolean> {
   // If a refresh is already in progress, wait for it instead of starting another
   if (refreshPromise) return refreshPromise;
 
-  refreshPromise = (async () => {
+  const promise = (async () => {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), REFRESH_TIMEOUT);
     try {
@@ -104,7 +104,9 @@ async function tryRefresh(): Promise<boolean> {
     }
   })();
 
-  return refreshPromise;
+  // Assign before awaiting so concurrent callers see the same promise
+  refreshPromise = promise;
+  return promise;
 }
 
 async function parseError(res: Response): Promise<Error> {

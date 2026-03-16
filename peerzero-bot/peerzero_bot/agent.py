@@ -160,9 +160,9 @@ class PeerZeroBot:
         # Restore tracked IDs from persistent memory (survives restarts)
         self._my_paper_ids: list[str] = self.memory.get_tracked_paper_ids()
         self._my_review_ids: list[str] = self.memory.get_tracked_review_ids()
-        self._portable_profile: dict = {}
+        self._portable_profile: dict = self.memory.read("identity", "portable_profile", {})
         self._agent_card: dict = {}
-        self._identity_refresh_interval: int = 10  # refresh every N school cycles
+        self._identity_refresh_interval: int = config.identity_refresh_interval
         self._last_identity_refresh: int = 0
 
     # ═══════════════════════════════════════════════════════════════════════
@@ -211,6 +211,7 @@ class PeerZeroBot:
             return
         try:
             self._portable_profile = self.school.get_portable_profile()
+            self.memory.write("identity", "portable_profile", self._portable_profile)
             # Sync avatar config from School profile
             profile = self.school.get_profile()
             avatar_config = profile.get("agent", {}).get("avatar_config")
@@ -314,7 +315,10 @@ class PeerZeroBot:
             logger.info("[REVIEW] No unreviewed papers")
             return None
 
-        paper_id = paper["id"]
+        paper_id = paper.get("id")
+        if not paper_id:
+            logger.warning("[REVIEW] Selected paper has no 'id' field — skipping")
+            return None
         logger.info(f"[REVIEW] Selected: {paper.get('title', '?')[:60]}...")
 
         full = self.school.get_papers(params={"id": paper_id})
@@ -343,6 +347,18 @@ class PeerZeroBot:
 
         if not paper_data or "title" not in paper_data:
             logger.warning("[PAPER] Failed to parse LLM response")
+            return None
+
+        # Pre-validate citations before submission to avoid wasting an attempt
+        text_fields = {
+            "title": paper_data.get("title", ""),
+            "abstract": paper_data.get("abstract", ""),
+            "body": paper_data.get("body", ""),
+            "cross_study_connection": paper_data.get("cross_study_connection", ""),
+        }
+        citation_check = self.school.validate_citations(text_fields, paper_data.get("citations", []))
+        if not citation_check.get("valid", True):
+            logger.warning(f"[PAPER] Citation pre-validation failed: {citation_check.get('flags', [])}")
             return None
 
         try:
@@ -415,6 +431,18 @@ class PeerZeroBot:
 
         if not revision_data or "title" not in revision_data:
             logger.warning("[REVISE] Failed to parse LLM response")
+            return None
+
+        # Pre-validate citations before submission
+        text_fields = {
+            "title": revision_data.get("title", ""),
+            "abstract": revision_data.get("abstract", ""),
+            "body": revision_data.get("body", ""),
+            "cross_study_connection": revision_data.get("cross_study_connection", ""),
+        }
+        citation_check = self.school.validate_citations(text_fields, revision_data.get("citations", []))
+        if not citation_check.get("valid", True):
+            logger.warning(f"[REVISE] Citation pre-validation failed: {citation_check.get('flags', [])}")
             return None
 
         try:
@@ -563,7 +591,10 @@ class PeerZeroBot:
                     request_body=json.dumps(action.content, default=str),
                 )
 
-            logger.info(f"[{platform_name}] {action.action_type}: {'success' if result.success else 'failed'}")
+            if result.success:
+                logger.info(f"[{platform_name}] {action.action_type}: success")
+            else:
+                logger.warning(f"[{platform_name}] {action.action_type}: failed")
             return action_data
 
         except SecurityError as e:
@@ -612,8 +643,8 @@ class PeerZeroBot:
                             self.run_platform_cycle(adapter)
                         except SecurityError:
                             raise
-                        except Exception as e:
-                            logger.error(f"[{name}] Platform cycle failed: {e}")
+                        except Exception:
+                            pass  # already logged inside run_platform_cycle
                         platform_timers[name] = now
 
             except SecurityError as e:
@@ -635,4 +666,21 @@ class PeerZeroBot:
 
         # Refresh identity one last time before exit
         self._refresh_identity()
+
+        # Clean up HTTP clients and resources
+        self._cleanup()
         logger.info("[STOP] Bot stopped. Identity saved.")
+
+    def _cleanup(self):
+        """Close HTTP clients and release resources."""
+        try:
+            if hasattr(self, 'school') and hasattr(self.school, '_http'):
+                self.school._http.close()
+        except Exception:
+            pass
+        for adapter in self.platform_adapters:
+            try:
+                if hasattr(adapter, '_http'):
+                    adapter._http.close()
+            except Exception:
+                pass
