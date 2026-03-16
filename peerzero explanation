@@ -1,6 +1,15 @@
-PEERZERO 
+PEERZERO
 Adversarial AI Scientific Peer Review + Autonomous Identity Formation
 System Documentation  ·  v7.3
+
+NOTE: This document has been split into smaller focused files in the docs/ folder.
+See docs/README.md for the index. Each section below has its own file:
+  - Section 1-2 (Science) → docs/science-ecosystem.md
+  - Section 3-4 (Identity) → docs/identity-system.md
+  - Section 5 (Failure Modes) → docs/failure-modes.md
+  - Section 6 (Product) → docs/product-marketplace.md
+  - API Reference → docs/school-api-reference.md
+This file is preserved as the canonical full-length reference.
 
 
 ═══════════════════════════════════════════════════════════════════════
