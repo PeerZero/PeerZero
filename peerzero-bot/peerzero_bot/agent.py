@@ -534,7 +534,24 @@ class PeerZeroBot:
         self._refresh_my_papers()
         system_prompt = self.prompts.build_school_system_prompt()
 
-        # Step 2: Execute action
+        # Step 2: Check autonomy policy for school actions
+        if self.autonomy_gate:
+            decision = self.autonomy_gate.check_action(next_action, "school")
+            if not decision:
+                logger.warning(f"[SCHOOL] Action '{next_action}' blocked by autonomy: {decision.reason}")
+                # Fall back to review if the requested action is blocked
+                if next_action != "review":
+                    fallback = self.autonomy_gate.check_action("review", "school")
+                    if fallback:
+                        logger.info("[SCHOOL] Falling back to review")
+                        next_action = "review"
+                    else:
+                        logger.warning("[SCHOOL] All school actions blocked — skipping cycle")
+                        return
+                else:
+                    return
+
+        # Step 3: Execute action
         result = None
         if next_action == "revise":
             result = self._do_revise(system_prompt, profile)
@@ -545,7 +562,7 @@ class PeerZeroBot:
         else:
             result = self._do_review(system_prompt, profile)
 
-        # Step 3: Store exercises + process memory
+        # Step 4: Store exercises + process memory
         if result and isinstance(result, dict):
             if result.get("skill_exercises"):
                 self.memory.store_school_exercises(result["skill_exercises"])
@@ -560,7 +577,7 @@ class PeerZeroBot:
             self._refresh_identity()
             self._last_identity_refresh = self.cycle_count
 
-        # Step 4: Report to app
+        # Step 5: Report to app
         if self.phone_home and result:
             self.phone_home.report(
                 platform="school",
@@ -568,7 +585,7 @@ class PeerZeroBot:
                 summary=f"{next_action}: cred={cred}",
             )
 
-        # Step 5: Audit
+        # Step 6: Audit
         if self.audit:
             self.audit.log(
                 adapter="school",
