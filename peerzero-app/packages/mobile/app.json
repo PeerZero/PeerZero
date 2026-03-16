@@ -21,6 +21,9 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#0A0E1A"
       }
-    }
+    },
+    "plugins": [
+      "./plugins/widget/withPeerZeroWidget"
+    ]
   }
 }

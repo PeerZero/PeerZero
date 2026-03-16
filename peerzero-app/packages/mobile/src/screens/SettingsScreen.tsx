@@ -3,14 +3,14 @@
 // =============================================================================
 
 import React, { useState, useCallback } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Alert, TextInput, Switch, ScrollView } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Alert, TextInput, Switch, ScrollView, Platform, Linking } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { useAuth } from '../hooks/useAuth';
-import { apiKeys as keysApi, notifications as notifApi, auth as authApi } from '../services/api';
+import { apiKeys as keysApi, notifications as notifApi, auth as authApi, widgets as widgetsApi, bots as botsApi } from '../services/api';
 import { colors } from '../theme/colors';
 import { spacing, fontSize, borderRadius } from '../theme/spacing';
 import { NOTIFICATION_TYPES, NOTIFICATION_LABELS, DEFAULT_NOTIFICATION_PREFS } from '@peerzero/shared';
-import type { ApiKeyInfo } from '@peerzero/shared';
+import type { ApiKeyInfo, BotSummary } from '@peerzero/shared';
 
 export default function SettingsScreen() {
   const { user, logout, refreshUser } = useAuth();
@@ -31,6 +31,13 @@ export default function SettingsScreen() {
   const [confirmPassword, setConfirmPassword] = useState('');
 
   const [notifPrefs, setNotifPrefs] = useState<Record<string, boolean>>(DEFAULT_NOTIFICATION_PREFS);
+
+  // Widget settings
+  const [widgetToken, setWidgetToken] = useState<string | null>(null);
+  const [widgetTokenCopied, setWidgetTokenCopied] = useState(false);
+  const [widgetBots, setWidgetBots] = useState<BotSummary[]>([]);
+  const [selectedWidgetBot, setSelectedWidgetBot] = useState<string | null>(null);
+  const [widgetEnabled, setWidgetEnabled] = useState(false);
 
   const loadNotifPrefs = useCallback(async () => {
     try {
@@ -60,11 +67,62 @@ export default function SettingsScreen() {
     }
   }, []);
 
+  const loadWidgetBots = useCallback(async () => {
+    try {
+      const data = await botsApi.list() as BotSummary[];
+      setWidgetBots(data);
+    } catch { /* ignore */ }
+  }, []);
+
+  const handleEnableWidget = async () => {
+    try {
+      const result = await widgetsApi.generateToken();
+      setWidgetToken(result.widget_token);
+      setWidgetEnabled(true);
+      // On a real device, the token would be written to shared keychain (iOS)
+      // or EncryptedSharedPreferences (Android) via a native module.
+      // For now, we show it for manual setup.
+      Alert.alert(
+        'Widget Enabled',
+        Platform.OS === 'ios'
+          ? 'Add the PeerZero widget from your home screen. Long-press your home screen and tap the + button.'
+          : 'Add the PeerZero widget from your home screen, or enable the floating overlay in your system settings.',
+      );
+    } catch (err: any) {
+      Alert.alert('Error', err?.message || 'Failed to enable widget');
+    }
+  };
+
+  const handleDisableWidget = async () => {
+    Alert.alert('Disable Widget', 'This will revoke the widget token. Your widgets will stop updating.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Disable', style: 'destructive',
+        onPress: async () => {
+          try {
+            await widgetsApi.revokeToken();
+            setWidgetToken(null);
+            setWidgetEnabled(false);
+          } catch (err: any) {
+            Alert.alert('Error', err?.message || 'Failed to disable widget');
+          }
+        },
+      },
+    ]);
+  };
+
+  const handleOpenOverlaySettings = () => {
+    if (Platform.OS === 'android') {
+      Linking.openSettings();
+    }
+  };
+
   useFocusEffect(useCallback(() => {
     loadKeys();
     loadNotifPrefs();
+    loadWidgetBots();
     if (user?.display_name) setDisplayName(user.display_name);
-  }, [loadKeys, loadNotifPrefs, user?.display_name]));
+  }, [loadKeys, loadNotifPrefs, loadWidgetBots, user?.display_name]));
 
   const handleAddKey = async () => {
     if (!newLabel || !newKey) return;
@@ -333,6 +391,80 @@ export default function SettingsScreen() {
             </View>
           );
         })}
+      </View>
+
+      {/* Widget Settings */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Home Screen Widget</Text>
+        <Text style={styles.hint}>
+          {Platform.OS === 'ios'
+            ? 'Show your bot on your home screen. See its status and what it\'s thinking at a glance.'
+            : 'Show your bot on your home screen or as a floating overlay. See its status and what it\'s thinking at a glance.'}
+        </Text>
+
+        {!widgetEnabled ? (
+          <TouchableOpacity style={styles.saveButton} onPress={handleEnableWidget}>
+            <Text style={styles.saveButtonText}>Enable Widget</Text>
+          </TouchableOpacity>
+        ) : (
+          <View>
+            <View style={[styles.keyCard, { borderColor: colors.accent.success + '40', borderWidth: 1 }]}>
+              <View style={styles.keyInfo}>
+                <Text style={[styles.keyLabel, { color: colors.accent.success }]}>Widget Active</Text>
+                <Text style={styles.keyFingerprint}>
+                  {Platform.OS === 'ios'
+                    ? 'Long-press home screen → tap + → search PeerZero'
+                    : 'Long-press home screen → Widgets → PeerZero'}
+                </Text>
+              </View>
+            </View>
+
+            {/* Bot selector for widget */}
+            {widgetBots.length > 1 && (
+              <View style={{ marginTop: spacing.sm }}>
+                <Text style={[styles.hint, { marginBottom: spacing.xs }]}>Which bot to show:</Text>
+                {widgetBots.map(bot => (
+                  <TouchableOpacity
+                    key={bot.id}
+                    style={[
+                      styles.keyCard,
+                      selectedWidgetBot === bot.id && { borderColor: colors.accent.primary, borderWidth: 1 },
+                    ]}
+                    onPress={() => setSelectedWidgetBot(bot.id)}
+                  >
+                    <Text style={styles.keyLabel}>{bot.name}</Text>
+                    {selectedWidgetBot === bot.id && (
+                      <Text style={{ color: colors.accent.primary, fontWeight: '600', fontSize: fontSize.sm }}>Selected</Text>
+                    )}
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+
+            {/* Floating overlay toggle (Android only) */}
+            {Platform.OS === 'android' && (
+              <TouchableOpacity
+                style={[styles.keyCard, { marginTop: spacing.sm }]}
+                onPress={handleOpenOverlaySettings}
+              >
+                <View style={styles.keyInfo}>
+                  <Text style={styles.keyLabel}>Floating Overlay</Text>
+                  <Text style={styles.keyFingerprint}>
+                    Draggable bot that floats on your screen. Requires "Display over other apps" permission.
+                  </Text>
+                </View>
+                <Text style={styles.editText}>Open Settings</Text>
+              </TouchableOpacity>
+            )}
+
+            <TouchableOpacity
+              style={[styles.logoutButton, { marginTop: spacing.md }]}
+              onPress={handleDisableWidget}
+            >
+              <Text style={styles.deleteText}>Disable Widget</Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </View>
 
       {/* Logout */}

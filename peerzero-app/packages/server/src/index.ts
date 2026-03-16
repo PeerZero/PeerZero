@@ -26,6 +26,7 @@ import paymentRoutes from './routes/payments';
 import healthRoutes from './routes/health';
 import notificationRoutes from './routes/notifications';
 import externalActivityRoutes from './routes/external-activity';
+import widgetRoutes from './routes/widgets';
 
 const app = express();
 
@@ -52,6 +53,7 @@ app.use('/api/keys', apiKeyRoutes);
 app.use('/api/schools', schoolRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/widgets', widgetRoutes);
 app.use('/health', healthRoutes);
 
 // ── Error handler (must be last) ──

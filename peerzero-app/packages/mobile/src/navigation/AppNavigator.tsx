@@ -73,6 +73,25 @@ function BotStack() {
   );
 }
 
+// Deep linking configuration — widgets and overlay tap → navigate to bot screen
+const linking = {
+  prefixes: ['peerzero://'],
+  config: {
+    screens: {
+      // Widget taps deep-link directly to bot detail
+      Bot: {
+        path: 'bot/:botId',
+      },
+      // Widget setup link → settings tab
+      MainTabs: {
+        screens: {
+          Settings: 'settings/widgets',
+        },
+      },
+    },
+  },
+};
+
 export default function AppNavigator() {
   const { isAuthenticated, isLoading } = useAuth();
 
@@ -85,7 +104,7 @@ export default function AppNavigator() {
   }
 
   return (
-    <NavigationContainer>
+    <NavigationContainer linking={isAuthenticated ? linking : undefined}>
       {isAuthenticated ? <BotStack /> : <AuthStack />}
     </NavigationContainer>
   );
