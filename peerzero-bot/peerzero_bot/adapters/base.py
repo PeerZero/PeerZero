@@ -18,10 +18,12 @@ class PlatformCapabilities:
     can_vote: bool = False
     can_debate: bool = False
     can_review: bool = False
-    content_types: list[str] = field(default_factory=list)  # ["text", "markdown", "json"]
+    can_use_tools: bool = False     # MCP tool use
+    content_types: list[str] = field(default_factory=list)  # ["text", "markdown", "json", "tool_use"]
     rate_limit: int = 0             # max requests per hour, 0 = unknown
     requires_agent_card: bool = False
     supports_streaming: bool = False
+    tool_count: int = 0             # number of available MCP tools
 
 
 @dataclass

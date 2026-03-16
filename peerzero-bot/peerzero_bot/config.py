@@ -54,17 +54,32 @@ def validate_llm_key(key: str, provider: str) -> bool:
 # ── Platform config ──────────────────────────────────────────────────────────
 
 @dataclass
+class MCPServerConfig:
+    """Configuration for a single MCP server within a platform."""
+    name: str
+    command: str = ""                 # e.g., "npx @anthropic/mcp-server-brave-search"
+    args: list[str] = field(default_factory=list)
+    env: dict[str, str] = field(default_factory=dict)
+    transport: str = "stdio"          # "stdio" or "streamable-http"
+    url: str = ""                     # for streamable-http transport
+
+
+@dataclass
 class PlatformConfig:
     """Configuration for a single external platform."""
     name: str
     enabled: bool = True
-    adapter: str = "a2a"              # "a2a", "webhook"
+    adapter: str = "a2a"              # "a2a", "webhook", "mcp"
     url: str = ""
     agent_card_url: str = ""          # for A2A discovery
     heartbeat_interval: int = 3600    # seconds between platform cycles
     events: list[str] = field(default_factory=list)  # for webhook adapter
     webhook_secret: str = ""          # HMAC-SHA256 secret for verifying incoming webhooks
     api_key: str = ""                 # Set from environment variables in _apply_env()
+    # MCP-specific settings
+    mcp_servers: list[MCPServerConfig] = field(default_factory=list)
+    mcp_defer_loading: bool = False   # Use deferred tool loading to save context
+    mcp_max_tools: int = 50           # Max tools to include in LLM context
 
 
 # ── Main config ──────────────────────────────────────────────────────────────
@@ -117,6 +132,23 @@ class BotConfig:
 
     # ── Security ──────────────────────────────────────────────────────────
     audit_log: bool = True
+
+    # ── Autonomy ─────────────────────────────────────────────────────────
+    autonomy_level: str = "guided"                  # "supervised", "guided", "autonomous"
+    autonomy_allowed_actions: list[str] = field(default_factory=list)
+    autonomy_blocked_actions: list[str] = field(default_factory=list)
+    autonomy_allowed_platforms: list[str] = field(default_factory=list)
+    autonomy_blocked_platforms: list[str] = field(default_factory=list)
+    autonomy_allowed_tools: list[str] = field(default_factory=list)
+    autonomy_blocked_tools: list[str] = field(default_factory=list)
+    autonomy_max_actions_per_cycle: int = 10
+    autonomy_max_tool_calls_per_cycle: int = 5
+    autonomy_max_content_length: int = 10000
+    autonomy_blocked_content_patterns: list[str] = field(default_factory=list)
+    autonomy_can_submit_papers: bool = True
+    autonomy_can_submit_reviews: bool = True
+    autonomy_can_file_bounties: bool = True
+    autonomy_can_revise_papers: bool = True
 
     @classmethod
     def load(cls, config_path: str | None = None) -> "BotConfig":
@@ -178,9 +210,39 @@ class BotConfig:
         security = data.get("security", {})
         self.audit_log = security.get("audit_log", self.audit_log)
 
+        # Autonomy config
+        autonomy = data.get("autonomy", {})
+        self.autonomy_level = autonomy.get("level", self.autonomy_level)
+        self.autonomy_allowed_actions = autonomy.get("allowed_actions", self.autonomy_allowed_actions)
+        self.autonomy_blocked_actions = autonomy.get("blocked_actions", self.autonomy_blocked_actions)
+        self.autonomy_allowed_platforms = autonomy.get("allowed_platforms", self.autonomy_allowed_platforms)
+        self.autonomy_blocked_platforms = autonomy.get("blocked_platforms", self.autonomy_blocked_platforms)
+        self.autonomy_allowed_tools = autonomy.get("allowed_tools", self.autonomy_allowed_tools)
+        self.autonomy_blocked_tools = autonomy.get("blocked_tools", self.autonomy_blocked_tools)
+        self.autonomy_max_actions_per_cycle = autonomy.get("max_actions_per_cycle", self.autonomy_max_actions_per_cycle)
+        self.autonomy_max_tool_calls_per_cycle = autonomy.get("max_tool_calls_per_cycle", self.autonomy_max_tool_calls_per_cycle)
+        self.autonomy_max_content_length = autonomy.get("max_content_length", self.autonomy_max_content_length)
+        self.autonomy_blocked_content_patterns = autonomy.get("blocked_content_patterns", self.autonomy_blocked_content_patterns)
+        self.autonomy_can_submit_papers = autonomy.get("can_submit_papers", self.autonomy_can_submit_papers)
+        self.autonomy_can_submit_reviews = autonomy.get("can_submit_reviews", self.autonomy_can_submit_reviews)
+        self.autonomy_can_file_bounties = autonomy.get("can_file_bounties", self.autonomy_can_file_bounties)
+        self.autonomy_can_revise_papers = autonomy.get("can_revise_papers", self.autonomy_can_revise_papers)
+
         # Platform configs
         platforms = data.get("platforms", {})
         for name, pconf in platforms.items():
+            # Parse MCP servers if present
+            mcp_servers = []
+            for srv in pconf.get("mcp_servers", []):
+                mcp_servers.append(MCPServerConfig(
+                    name=srv.get("name", ""),
+                    command=srv.get("command", ""),
+                    args=srv.get("args", []),
+                    env=srv.get("env", {}),
+                    transport=srv.get("transport", "stdio"),
+                    url=srv.get("url", ""),
+                ))
+
             self.platforms.append(PlatformConfig(
                 name=name,
                 enabled=pconf.get("enabled", True),
@@ -189,6 +251,9 @@ class BotConfig:
                 agent_card_url=pconf.get("agent_card_url", ""),
                 heartbeat_interval=pconf.get("heartbeat_interval", 3600),
                 events=pconf.get("events", []),
+                mcp_servers=mcp_servers,
+                mcp_defer_loading=pconf.get("mcp_defer_loading", False),
+                mcp_max_tools=pconf.get("mcp_max_tools", 50),
             ))
 
     def _apply_env(self):

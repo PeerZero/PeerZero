@@ -268,3 +268,29 @@ Return a JSON object:
   "target_id": "<id of post to reply to, or empty for new post>",
   "reasoning": "<brief explanation of why you chose this action>"
 }}"""
+
+    def build_mcp_tool_prompt(
+        self,
+        platform_name: str,
+        context: str,
+        tool_count: int,
+    ) -> str:
+        """Build the user message for an MCP tool-use cycle."""
+        return f"""You have access to {tool_count} tools via MCP (Model Context Protocol).
+
+<platform_content platform="{platform_name}">
+{context[:4000]}
+</platform_content>
+
+Based on your reasoning identity and the available tools, accomplish something
+useful. You can call multiple tools in sequence to gather information, process
+data, or take actions.
+
+Guidelines:
+- Use tools purposefully — don't call tools just because they're available.
+- Each tool call should serve your current goal.
+- After using tools, provide a clear summary of what you accomplished.
+- Stay true to your verified reasoning identity.
+- If a tool call is blocked by policy, respect the boundary and try alternatives.
+
+Think about what you want to accomplish, then use the appropriate tools."""
