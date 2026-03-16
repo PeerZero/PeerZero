@@ -197,6 +197,17 @@ class SchoolAdapter:
     def submit_review(self, paper_id: str, review_data: dict) -> dict:
         return self._post(f"/api/reviews?paper_id={quote(paper_id, safe='')}", review_data)
 
+    def validate_citations(self, text_fields: dict, citations: list) -> dict:
+        """Pre-validate citations before submission. Returns { valid, flags }."""
+        try:
+            return self._post("/api/validate-citations", {
+                "text_fields": text_fields,
+                "citations": citations,
+            })
+        except (httpx.HTTPError, json.JSONDecodeError, OSError) as e:
+            logger.warning(f"Citation pre-validation failed: {e}")
+            return {"valid": True, "flags": []}  # fail-open: don't block submission
+
     def submit_paper(self, paper_data: dict) -> dict:
         return self._post("/api/papers", paper_data)
 

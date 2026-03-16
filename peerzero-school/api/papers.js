@@ -700,7 +700,6 @@ module.exports = async (req, res) => {
 
     // Extract coaching flag types and store on the paper so reviewers can see them.
     // Only store actionable quality flags, not the general improvement guide.
-    const BLOCKABLE_FLAGS = ['opposing_queries_too_similar', 'weak_opposing_queries', 'rubber_stamp_risk'];
     const searchCoachingFlags = searchCoaching
       .map(c => c.type)
       .filter(t => t !== 'search_improvement_guide');

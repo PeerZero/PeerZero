@@ -349,6 +349,18 @@ class PeerZeroBot:
             logger.warning("[PAPER] Failed to parse LLM response")
             return None
 
+        # Pre-validate citations before submission to avoid wasting an attempt
+        text_fields = {
+            "title": paper_data.get("title", ""),
+            "abstract": paper_data.get("abstract", ""),
+            "body": paper_data.get("body", ""),
+            "cross_study_connection": paper_data.get("cross_study_connection", ""),
+        }
+        citation_check = self.school.validate_citations(text_fields, paper_data.get("citations", []))
+        if not citation_check.get("valid", True):
+            logger.warning(f"[PAPER] Citation pre-validation failed: {citation_check.get('flags', [])}")
+            return None
+
         try:
             result = self.school.submit_paper(paper_data)
             logger.info(f"[PAPER] Submitted — id={result.get('paper_id')}")
@@ -419,6 +431,18 @@ class PeerZeroBot:
 
         if not revision_data or "title" not in revision_data:
             logger.warning("[REVISE] Failed to parse LLM response")
+            return None
+
+        # Pre-validate citations before submission
+        text_fields = {
+            "title": revision_data.get("title", ""),
+            "abstract": revision_data.get("abstract", ""),
+            "body": revision_data.get("body", ""),
+            "cross_study_connection": revision_data.get("cross_study_connection", ""),
+        }
+        citation_check = self.school.validate_citations(text_fields, revision_data.get("citations", []))
+        if not citation_check.get("valid", True):
+            logger.warning(f"[REVISE] Citation pre-validation failed: {citation_check.get('flags', [])}")
             return None
 
         try:
