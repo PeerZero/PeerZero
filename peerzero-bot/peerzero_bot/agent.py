@@ -26,11 +26,13 @@ from .config import BotConfig
 from .memory import MemoryManager
 from .adapters.school import SchoolAdapter, extract_json, pick_paper_to_review
 from .adapters.base import PlatformAction
+from .adapters.mcp import MCPAdapter
 from .prompts import PromptBuilder
 from .identity import build_agent_card, build_identity_summary
 from .security import SecurityGateway, SecurityError, AuditLog
 from .security.credential_store import CredentialStore
 from .reporting import PhoneHome
+from .autonomy import AutonomyPolicy, AutonomyGate
 
 logger = logging.getLogger("peerzero-bot")
 
@@ -41,10 +43,15 @@ class LLMClient:
     Key ONLY goes to the configured LLM provider.
     Retries transient failures (rate limits, timeouts, server errors)
     with exponential backoff.
+
+    Supports two modes:
+      - call(): Simple text-in, text-out (school actions, condensation)
+      - call_with_tools(): Tool-use loop for MCP integration (platform cycles)
     """
 
     MAX_RETRIES = 3
     BASE_DELAY = 2.0  # seconds
+    MAX_TOOL_ROUNDS = 10  # max tool call rounds per invocation
 
     def __init__(self, provider: str, model: str, api_key: str, max_tokens: int = 8192):
         self._provider = provider
@@ -122,6 +129,264 @@ class LLMClient:
 
         raise last_exc  # type: ignore[misc]
 
+    def call_with_tools(
+        self,
+        system_prompt: str,
+        user_message: str,
+        tools: list[dict],
+        tool_executor: "callable",
+        autonomy_gate: "object | None" = None,
+        platform_name: str = "",
+    ) -> "ToolUseResult":
+        """
+        Call the LLM with tool definitions, executing a tool-use loop.
+
+        The LLM can request tool calls, which are executed via tool_executor,
+        and results fed back until the LLM produces a final text response.
+
+        Args:
+            system_prompt: System prompt for the LLM
+            user_message: User message to start the conversation
+            tools: List of tool definitions (name, description, input_schema)
+            tool_executor: Callable(tool_name, arguments) -> dict
+            autonomy_gate: Optional AutonomyGate to check each tool call
+            platform_name: Platform name for autonomy checks
+
+        Returns:
+            ToolUseResult with final text, tool call log, and any errors
+        """
+        if not tools:
+            # No tools — fall back to simple call
+            text = self.call(system_prompt, user_message)
+            return ToolUseResult(text=text)
+
+        client = self._get_client()
+        result = ToolUseResult()
+
+        if self._provider == "anthropic":
+            result = self._anthropic_tool_loop(
+                client, system_prompt, user_message, tools,
+                tool_executor, autonomy_gate, platform_name,
+            )
+        elif self._provider == "openai":
+            result = self._openai_tool_loop(
+                client, system_prompt, user_message, tools,
+                tool_executor, autonomy_gate, platform_name,
+            )
+        else:
+            raise ValueError(f"Unknown LLM provider: {self._provider}")
+
+        return result
+
+    def _anthropic_tool_loop(
+        self, client, system_prompt, user_message, tools,
+        tool_executor, autonomy_gate, platform_name,
+    ) -> "ToolUseResult":
+        """Anthropic-specific tool use loop."""
+        # Convert tools to Anthropic format
+        anthropic_tools = []
+        for tool in tools:
+            anthropic_tools.append({
+                "name": tool["name"],
+                "description": tool["description"],
+                "input_schema": tool.get("input_schema", {"type": "object", "properties": {}}),
+            })
+
+        messages = [{"role": "user", "content": user_message}]
+        result = ToolUseResult()
+
+        for round_num in range(self.MAX_TOOL_ROUNDS):
+            try:
+                response = client.messages.create(
+                    model=self._model,
+                    max_tokens=self._max_tokens,
+                    system=system_prompt,
+                    messages=messages,
+                    tools=anthropic_tools,
+                )
+            except Exception as e:
+                if self._is_retryable(e):
+                    logger.warning(f"[LLM] Tool loop retry: {e}")
+                    time.sleep(self.BASE_DELAY)
+                    continue
+                raise
+
+            # Process response blocks
+            text_parts = []
+            tool_uses = []
+
+            for block in response.content:
+                if block.type == "text":
+                    text_parts.append(block.text)
+                elif block.type == "tool_use":
+                    tool_uses.append(block)
+
+            if text_parts:
+                result.text = "\n".join(text_parts)
+
+            # If no tool uses, we're done
+            if not tool_uses or response.stop_reason == "end_turn":
+                break
+
+            # Execute tool calls
+            messages.append({"role": "assistant", "content": response.content})
+            tool_results = []
+
+            for tool_use in tool_uses:
+                tool_name = tool_use.name
+                arguments = tool_use.input if isinstance(tool_use.input, dict) else {}
+
+                # Check autonomy policy
+                if autonomy_gate:
+                    decision = autonomy_gate.check_action(
+                        "tool_call", platform_name,
+                        tool_name=tool_name,
+                    )
+                    if not decision:
+                        logger.warning(f"[AUTONOMY] Tool call blocked: {decision.reason}")
+                        tool_results.append({
+                            "type": "tool_result",
+                            "tool_use_id": tool_use.id,
+                            "content": f"Tool call blocked by autonomy policy: {decision.reason}",
+                            "is_error": True,
+                        })
+                        result.blocked_calls.append({"tool": tool_name, "reason": decision.reason})
+                        continue
+
+                # Execute the tool
+                try:
+                    tool_output = tool_executor(tool_name, arguments)
+                    output_text = str(tool_output.get("output", tool_output))
+                    is_error = tool_output.get("is_error", False)
+                except Exception as e:
+                    output_text = f"Tool execution error: {e}"
+                    is_error = True
+
+                tool_results.append({
+                    "type": "tool_result",
+                    "tool_use_id": tool_use.id,
+                    "content": output_text[:10000],  # Cap tool output
+                    "is_error": is_error,
+                })
+                result.tool_calls.append({
+                    "tool": tool_name,
+                    "arguments": arguments,
+                    "output": output_text[:500],
+                    "is_error": is_error,
+                })
+
+            messages.append({"role": "user", "content": tool_results})
+
+        return result
+
+    def _openai_tool_loop(
+        self, client, system_prompt, user_message, tools,
+        tool_executor, autonomy_gate, platform_name,
+    ) -> "ToolUseResult":
+        """OpenAI-specific tool use loop."""
+        # Convert tools to OpenAI format
+        openai_tools = []
+        for tool in tools:
+            openai_tools.append({
+                "type": "function",
+                "function": {
+                    "name": tool["name"],
+                    "description": tool["description"],
+                    "parameters": tool.get("input_schema", {"type": "object", "properties": {}}),
+                },
+            })
+
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_message},
+        ]
+        result = ToolUseResult()
+
+        for round_num in range(self.MAX_TOOL_ROUNDS):
+            try:
+                response = client.chat.completions.create(
+                    model=self._model,
+                    max_tokens=self._max_tokens,
+                    messages=messages,
+                    tools=openai_tools,
+                )
+            except Exception as e:
+                if self._is_retryable(e):
+                    logger.warning(f"[LLM] Tool loop retry: {e}")
+                    time.sleep(self.BASE_DELAY)
+                    continue
+                raise
+
+            choice = response.choices[0]
+
+            if choice.message.content:
+                result.text = choice.message.content
+
+            if choice.finish_reason != "tool_calls" or not choice.message.tool_calls:
+                break
+
+            # Execute tool calls
+            messages.append(choice.message)
+
+            for tool_call in choice.message.tool_calls:
+                tool_name = tool_call.function.name
+                try:
+                    arguments = json.loads(tool_call.function.arguments)
+                except (json.JSONDecodeError, TypeError):
+                    arguments = {}
+
+                # Check autonomy policy
+                if autonomy_gate:
+                    decision = autonomy_gate.check_action(
+                        "tool_call", platform_name,
+                        tool_name=tool_name,
+                    )
+                    if not decision:
+                        logger.warning(f"[AUTONOMY] Tool call blocked: {decision.reason}")
+                        messages.append({
+                            "role": "tool",
+                            "tool_call_id": tool_call.id,
+                            "content": f"Tool call blocked by autonomy policy: {decision.reason}",
+                        })
+                        result.blocked_calls.append({"tool": tool_name, "reason": decision.reason})
+                        continue
+
+                try:
+                    tool_output = tool_executor(tool_name, arguments)
+                    output_text = str(tool_output.get("output", tool_output))
+                except Exception as e:
+                    output_text = f"Tool execution error: {e}"
+
+                messages.append({
+                    "role": "tool",
+                    "tool_call_id": tool_call.id,
+                    "content": output_text[:10000],
+                })
+                result.tool_calls.append({
+                    "tool": tool_name,
+                    "arguments": arguments,
+                    "output": output_text[:500],
+                })
+
+        return result
+
+
+class ToolUseResult:
+    """Result of an LLM call with tool use."""
+
+    def __init__(self, text: str = "", tool_calls: list = None, blocked_calls: list = None):
+        self.text = text
+        self.tool_calls: list[dict] = tool_calls or []
+        self.blocked_calls: list[dict] = blocked_calls or []
+
+    @property
+    def used_tools(self) -> bool:
+        return len(self.tool_calls) > 0
+
+    @property
+    def had_blocked_calls(self) -> bool:
+        return len(self.blocked_calls) > 0
+
 
 class PeerZeroBot:
     """
@@ -144,6 +409,7 @@ class PeerZeroBot:
         phone_home: PhoneHome | None,
         platform_adapters: list | None = None,
         llm_fast: LLMClient | None = None,
+        autonomy_gate: AutonomyGate | None = None,
     ):
         self.config = config
         self.memory = memory
@@ -155,6 +421,7 @@ class PeerZeroBot:
         self.audit = audit
         self.phone_home = phone_home
         self.platform_adapters = platform_adapters or []
+        self.autonomy_gate = autonomy_gate
 
         self.cycle_count: int = 0
         # Restore tracked IDs from persistent memory (survives restarts)
@@ -170,7 +437,7 @@ class PeerZeroBot:
     # ═══════════════════════════════════════════════════════════════════════
 
     def startup(self):
-        """Initialize the bot: download SKILL.md, fetch profile, build identity."""
+        """Initialize the bot: download SKILL.md, fetch profile, build identity, start MCP servers."""
         logger.info("=" * 60)
         logger.info("PeerZero Bot starting")
         logger.info(f"  School:   {self.config.school_url}")
@@ -183,6 +450,11 @@ class PeerZeroBot:
             logger.info(f"  LLM Fast: {fast_provider}/{fast_model}")
         logger.info(f"  Memory:   {self.config.memory_path}")
         logger.info(f"  Platforms: {len(self.platform_adapters)}")
+        if self.autonomy_gate:
+            logger.info(f"  Autonomy: {self.autonomy_gate.policy.level}")
+        mcp_count = sum(1 for a in self.platform_adapters if isinstance(a, MCPAdapter))
+        if mcp_count:
+            logger.info(f"  MCP:      {mcp_count} adapter(s)")
         logger.info("=" * 60)
 
         # Download SKILL.md
@@ -198,12 +470,24 @@ class PeerZeroBot:
         # Fetch and cache portable profile + avatar
         self._refresh_identity()
 
-        # Publish Agent Card to platforms
+        # Start MCP servers and discover tools
         for adapter in self.platform_adapters:
-            try:
-                adapter.publish_agent_card(self._agent_card)
-            except Exception as e:
-                logger.warning(f"Failed to publish Agent Card to {adapter.platform_name}: {e}")
+            if isinstance(adapter, MCPAdapter):
+                started = adapter.start_servers()
+                if started > 0:
+                    adapter.discover()
+                    logger.info(
+                        f"[MCP:{adapter.platform_name}] {started} server(s), "
+                        f"{len(adapter.tools)} tools available"
+                    )
+
+        # Publish Agent Card to non-MCP platforms
+        for adapter in self.platform_adapters:
+            if not isinstance(adapter, MCPAdapter):
+                try:
+                    adapter.publish_agent_card(self._agent_card)
+                except Exception as e:
+                    logger.warning(f"Failed to publish Agent Card to {adapter.platform_name}: {e}")
 
     def _refresh_identity(self):
         """Refresh portable profile, avatar, and Agent Card from School."""
@@ -520,39 +804,76 @@ class PeerZeroBot:
     # ═══════════════════════════════════════════════════════════════════════
 
     def run_platform_cycle(self, adapter) -> dict | None:
-        """Execute one cycle on an external platform."""
+        """Execute one cycle on an external platform (supports MCP tool use)."""
         platform_name = adapter.platform_name
+        is_mcp = isinstance(adapter, MCPAdapter)
         logger.info(f"\n{'='*60}")
-        logger.info(f"PLATFORM CYCLE: {platform_name}")
+        logger.info(f"PLATFORM CYCLE: {platform_name}{' [MCP]' if is_mcp else ''}")
         logger.info(f"{'='*60}")
+
+        # Reset autonomy counters for this cycle
+        if self.autonomy_gate:
+            self.autonomy_gate.reset_cycle_counters()
 
         try:
             # Step 1: Discover capabilities
             caps = adapter.discover()
-            logger.info(f"[{platform_name}] Capabilities: post={caps.can_post}, comment={caps.can_comment}")
+            if is_mcp:
+                caps.can_use_tools = True
+                caps.tool_count = len(adapter.tools)
+                logger.info(f"[{platform_name}] MCP tools: {caps.tool_count}")
+            else:
+                logger.info(f"[{platform_name}] Capabilities: post={caps.can_post}, comment={caps.can_comment}")
 
             # Step 2: Get platform context
             context = adapter.get_context()
             self.memory.store_platform_context(platform_name, context.raw_data)
 
-            # Step 3: Ask LLM what to do
+            # Step 3: Build prompts
             system_prompt = self.prompts.build_platform_system_prompt(platform_name)
+            capabilities = {
+                "can_post": caps.can_post,
+                "can_comment": caps.can_comment,
+                "can_vote": caps.can_vote,
+                "can_debate": caps.can_debate,
+                "can_use_tools": caps.can_use_tools,
+            }
+
+            # ── MCP Tool Use Path ──────────────────────────────────────────
+            if is_mcp and caps.can_use_tools and adapter.tools:
+                return self._run_mcp_tool_cycle(adapter, system_prompt, context, capabilities, platform_name)
+
+            # ── Standard Platform Path ─────────────────────────────────────
             user_msg = self.prompts.build_platform_action_prompt(
                 platform_name=platform_name,
                 context=context.summary,
-                capabilities={
-                    "can_post": caps.can_post,
-                    "can_comment": caps.can_comment,
-                    "can_vote": caps.can_vote,
-                    "can_debate": caps.can_debate,
-                },
+                capabilities=capabilities,
             )
+
+            # Autonomy check for platform action
+            if self.autonomy_gate:
+                decision = self.autonomy_gate.check_action("platform_action", platform_name)
+                if not decision:
+                    logger.warning(f"[{platform_name}] Blocked by autonomy: {decision.reason}")
+                    return None
+
             response_text = self.llm_fast.call(system_prompt, user_msg)
             action_data = extract_json(response_text)
 
             if not action_data or not action_data.get("action_type"):
                 logger.warning(f"[{platform_name}] Failed to parse action from LLM")
                 return None
+
+            # Autonomy check for specific action type
+            if self.autonomy_gate:
+                content_text = json.dumps(action_data.get("content", {}), default=str)
+                decision = self.autonomy_gate.check_action(
+                    action_data["action_type"], platform_name,
+                    content=content_text,
+                )
+                if not decision:
+                    logger.warning(f"[{platform_name}] Action blocked: {decision.reason}")
+                    return None
 
             # Step 4: Submit action
             action = PlatformAction(
@@ -603,6 +924,84 @@ class PeerZeroBot:
         except Exception as e:
             logger.error(f"[{platform_name}] Cycle failed: {e}", exc_info=True)
             return None
+
+    def _run_mcp_tool_cycle(
+        self,
+        adapter: MCPAdapter,
+        system_prompt: str,
+        context,
+        capabilities: dict,
+        platform_name: str,
+    ) -> dict | None:
+        """
+        Run a platform cycle with MCP tool use.
+
+        The LLM gets tool definitions and can call them in a loop,
+        with each call checked against the autonomy policy.
+        """
+        # Build tool-aware prompt
+        user_msg = self.prompts.build_mcp_tool_prompt(
+            platform_name=platform_name,
+            context=context.summary,
+            tool_count=len(adapter.tools),
+        )
+
+        # Get LLM-formatted tool definitions
+        llm_tools = adapter.get_llm_tools()
+
+        # Define tool executor that routes to the MCP adapter
+        def execute_tool(tool_name: str, arguments: dict) -> dict:
+            result = adapter.call_tool(tool_name, arguments)
+            # Audit each tool call
+            if self.audit:
+                self.audit.log(
+                    adapter=platform_name,
+                    action=f"tool_call:{tool_name}",
+                    destination="mcp_local",
+                    status=200 if not result.get("is_error") else 500,
+                    request_body=json.dumps(arguments, default=str)[:1000],
+                )
+            return result
+
+        # Run tool-use loop
+        tool_result = self.llm_fast.call_with_tools(
+            system_prompt=system_prompt,
+            user_message=user_msg,
+            tools=llm_tools,
+            tool_executor=execute_tool,
+            autonomy_gate=self.autonomy_gate,
+            platform_name=platform_name,
+        )
+
+        # Store results in platform memory
+        action_summary = {
+            "action_type": "mcp_tool_use",
+            "tool_calls": len(tool_result.tool_calls),
+            "blocked_calls": len(tool_result.blocked_calls),
+            "final_response": tool_result.text[:500] if tool_result.text else "",
+            "tools_used": [tc["tool"] for tc in tool_result.tool_calls],
+        }
+        self.memory.store_platform_action(platform_name, action_summary)
+
+        # Report
+        if self.phone_home:
+            tools_used = [tc["tool"] for tc in tool_result.tool_calls]
+            self.phone_home.report(
+                platform=platform_name,
+                action="mcp_tool_use",
+                summary=f"Used {len(tool_result.tool_calls)} tools: {', '.join(tools_used[:5])}",
+                content_preview=tool_result.text[:200] if tool_result.text else "",
+            )
+
+        if tool_result.used_tools:
+            logger.info(
+                f"[{platform_name}] MCP cycle: {len(tool_result.tool_calls)} tool calls, "
+                f"{len(tool_result.blocked_calls)} blocked"
+            )
+        else:
+            logger.info(f"[{platform_name}] MCP cycle: no tools used")
+
+        return action_summary
 
     # ═══════════════════════════════════════════════════════════════════════
     # MAIN LOOP
@@ -672,7 +1071,7 @@ class PeerZeroBot:
         logger.info("[STOP] Bot stopped. Identity saved.")
 
     def _cleanup(self):
-        """Close HTTP clients and release resources."""
+        """Close HTTP clients, stop MCP servers, and release resources."""
         try:
             if hasattr(self, 'school') and hasattr(self.school, '_http'):
                 self.school._http.close()
@@ -680,7 +1079,9 @@ class PeerZeroBot:
             pass
         for adapter in self.platform_adapters:
             try:
-                if hasattr(adapter, '_http'):
+                if isinstance(adapter, MCPAdapter):
+                    adapter.stop_servers()
+                elif hasattr(adapter, '_http'):
                     adapter._http.close()
             except Exception:
                 pass
