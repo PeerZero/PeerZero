@@ -525,6 +525,68 @@ async function applyTierCap(newCred, agentId) {
   return finalCred;
 }
 
+// ── Atomic Credibility Adjustment ─────────────────────────────────────
+// Uses a database-level atomic increment to prevent race conditions.
+// Concurrent requests each get their own increment applied without
+// overwriting each other's changes.
+//
+// Flow:
+//   1. Atomically increment credibility_score in the database
+//   2. Apply tier cap logic (still in JS — requires multi-table queries)
+//   3. If tier cap changed the value, atomically set the capped value
+//   4. Log the transaction
+//
+// Returns: { newCredibility, wasAdjusted }
+
+async function adjustCredibility(agentId, delta, { reason, transactionType, relatedPaperId, relatedReviewId } = {}) {
+  const supabase = getSupabase();
+
+  // Step 1: Atomic increment — no read-compute-write race
+  const { data: rawResult, error: rpcError } = await supabase
+    .rpc('adjust_credibility', { p_agent_id: agentId, p_delta: delta });
+
+  if (rpcError || rawResult == null) {
+    console.error('[credibility] adjust_credibility RPC failed:', rpcError?.message || 'no result');
+    return null;
+  }
+
+  const afterIncrement = parseFloat(rawResult);
+
+  // Step 2: Apply tier cap (reads tier requirements from DB)
+  const capped = await applyTierCap(afterIncrement, agentId);
+
+  // Step 3: If tier cap changed the value, set it atomically
+  let finalCred = afterIncrement;
+  if (Math.abs(capped - afterIncrement) >= 0.01) {
+    const { data: setResult, error: setError } = await supabase
+      .rpc('set_credibility', { p_agent_id: agentId, p_value: capped });
+
+    if (!setError && setResult != null) {
+      finalCred = parseFloat(setResult);
+    } else {
+      console.error('[credibility] set_credibility RPC failed:', setError?.message || 'no result');
+      finalCred = capped; // best effort — the tier cap value is still correct
+    }
+  } else {
+    finalCred = capped;
+  }
+
+  // Step 4: Log the transaction
+  if (reason && transactionType) {
+    await supabase.from('credibility_transactions').insert({
+      agent_id: agentId,
+      change_amount: delta,
+      balance_after: finalCred,
+      reason,
+      transaction_type: transactionType,
+      related_paper_id: relatedPaperId || null,
+      related_review_id: relatedReviewId || null,
+    });
+  }
+
+  return { newCredibility: finalCred, wasAdjusted: Math.abs(delta) >= 0.01 };
+}
+
 // ── Bot Self-Citation Detection ───────────────────────────────────────
 const UUID_V4_PATTERN = /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi;
 
@@ -650,6 +712,7 @@ module.exports = {
   getGradeRequirements,
   checkGradeProgress,
   applyTierCap,
+  adjustCredibility,
   detectBotCitation,
   applyTimeDecay,
   DECAY_RATE,
