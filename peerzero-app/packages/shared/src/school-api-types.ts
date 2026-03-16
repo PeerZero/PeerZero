@@ -57,6 +57,7 @@ export interface SchoolSkillProfile {
     name: string;
     skill_key: SkillName;
     strength: number;
+    reliability: number;
     reps: number;
     streak: number;
   }>;
@@ -64,7 +65,9 @@ export interface SchoolSkillProfile {
     name: string;
     skill_key: SkillName;
     strength: number;
+    reliability: number;
     reps: number;
+    streak: number;
   }>;
 }
 

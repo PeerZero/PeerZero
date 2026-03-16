@@ -31,6 +31,35 @@ import { schedulePlatformJobs } from '../jobs/platform-queue';
 import type { SchoolProfile } from '@peerzero/shared';
 import { SKILL_NAMES } from '@peerzero/shared';
 
+/**
+ * Attempt to parse JSON from LLM output, handling common formatting issues:
+ * 1. Strip markdown code fences (```json ... ```)
+ * 2. Try direct JSON.parse
+ * 3. Extract first JSON object from surrounding text
+ */
+function tryParseJson(text: string): Record<string, unknown> | null {
+  if (!text || typeof text !== 'string') return null;
+
+  // Strip markdown code fences
+  let cleaned = text.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/i, '').trim();
+
+  // Attempt 1: direct parse
+  try {
+    return JSON.parse(cleaned);
+  } catch { /* fall through */ }
+
+  // Attempt 2: find first { ... } block (handles preamble/postamble text)
+  const firstBrace = cleaned.indexOf('{');
+  const lastBrace = cleaned.lastIndexOf('}');
+  if (firstBrace !== -1 && lastBrace > firstBrace) {
+    try {
+      return JSON.parse(cleaned.slice(firstBrace, lastBrace + 1));
+    } catch { /* fall through */ }
+  }
+
+  return null;
+}
+
 export interface BotContext {
   botId: string;
   userId: string;
@@ -220,14 +249,12 @@ async function handleCondensation(
     const condensationPrompt = buildPrompt('condense', { profile, type: 'skill' });
     const response = await llmAdapter.chat(llmKey, utilityModel, condensationPrompt);
 
-    try {
-      const parsed = JSON.parse(response.content);
-      if (parsed.paragraph) {
-        await memory.storeParagraph(ctx.botId, 'condensation', parsed.paragraph, ctx.cycleNumber);
-        await schoolAdapter.submitCondensation(schoolCreds, parsed);
-      }
-    } catch (err) {
-      logger.warn({ err: err instanceof Error ? err.message : err }, 'Failed to parse condensation LLM response');
+    const parsed = tryParseJson(response.content);
+    if (parsed?.paragraph) {
+      await memory.storeParagraph(ctx.botId, 'condensation', parsed.paragraph as string, ctx.cycleNumber);
+      await schoolAdapter.submitCondensation(schoolCreds, parsed);
+    } else {
+      logger.warn({ contentSnippet: response.content?.slice(0, 120) }, 'Failed to extract JSON from skill condensation LLM response');
     }
   }
 
@@ -236,14 +263,12 @@ async function handleCondensation(
     const corePrompt = buildPrompt('condense', { profile, type: 'core' });
     const response = await llmAdapter.chat(llmKey, utilityModel, corePrompt);
 
-    try {
-      const parsed = JSON.parse(response.content);
-      if (parsed.core_identity) {
-        await memory.storeCore(ctx.botId, parsed.core_identity, `cycle-${ctx.cycleNumber}`);
-        await schoolAdapter.submitCoreCondensation(schoolCreds, parsed);
-      }
-    } catch (err) {
-      logger.warn({ err: err instanceof Error ? err.message : err }, 'Failed to parse condensation LLM response');
+    const parsed = tryParseJson(response.content);
+    if (parsed?.core_identity) {
+      await memory.storeCore(ctx.botId, parsed.core_identity as string, `cycle-${ctx.cycleNumber}`);
+      await schoolAdapter.submitCoreCondensation(schoolCreds, parsed);
+    } else {
+      logger.warn({ contentSnippet: response.content?.slice(0, 120) }, 'Failed to extract JSON from core condensation LLM response');
     }
   }
 
@@ -252,19 +277,19 @@ async function handleCondensation(
     const identityPrompt = buildPrompt('identity', { profile });
     const response = await llmAdapter.chat(llmKey, utilityModel, identityPrompt);
 
-    try {
-      const parsed = JSON.parse(response.content);
+    const parsed = tryParseJson(response.content);
+    if (parsed?.self_narrative) {
       await memory.storeSelfIdentity(
         ctx.botId,
-        parsed.self_narrative,
-        parsed.claimed_values || [],
-        parsed.active_tensions,
-        parsed.formed_convictions,
+        parsed.self_narrative as string,
+        (parsed.claimed_values as string[]) || [],
+        parsed.active_tensions as string,
+        parsed.formed_convictions as string,
         profile.identity_core?.version,
       );
       await schoolAdapter.submitIdentityReflection(schoolCreds, parsed);
-    } catch (err) {
-      logger.warn({ err: err instanceof Error ? err.message : err }, 'Failed to parse condensation LLM response');
+    } else {
+      logger.warn({ contentSnippet: response.content?.slice(0, 120) }, 'Failed to extract JSON from identity reflection LLM response');
     }
   }
 }
@@ -309,22 +334,22 @@ function extractContentText(actionType: string, rawRequest: Record<string, unkno
 
 /**
  * Extract skill data from the School profile for caching in bot_skill_snapshots.
+ * Combines the verified + developing arrays from SchoolSkillProfile into a flat lookup.
  */
 function extractSkillSnapshots(profile: SchoolProfile): Array<{
   skill_key: string; strength: number; reliability: number; reps: number; streak: number; status: string;
 }> {
-  const skills: Array<{
-    skill_key: string; strength: number; reliability: number; reps: number; streak: number; status: string;
-  }> = [];
+  const skillProfile = profile.skill_profile;
+  if (!skillProfile) {
+    return SKILL_NAMES.map(sk => ({ skill_key: sk, strength: 0, reliability: 0, reps: 0, streak: 0, status: 'untested' }));
+  }
 
-  const profileSkills = (profile as any).skill_profile || (profile as any).skills;
-  if (!profileSkills) return skills;
+  // Build a lookup from both verified and developing arrays
+  const allSkills = [...(skillProfile.verified || []), ...(skillProfile.developing || [])];
+  const skillMap = new Map(allSkills.map(s => [s.skill_key, s]));
 
-  for (const skillKey of SKILL_NAMES) {
-    const skill = Array.isArray(profileSkills)
-      ? profileSkills.find((s: any) => s.skill_key === skillKey)
-      : profileSkills[skillKey];
-
+  return SKILL_NAMES.map(skillKey => {
+    const skill = skillMap.get(skillKey);
     if (skill) {
       const reps = skill.reps || 0;
       const strength = skill.strength || 0;
@@ -332,20 +357,17 @@ function extractSkillSnapshots(profile: SchoolProfile): Array<{
       if (reps >= 10 && strength >= 50) status = 'verified';
       else if (reps > 0) status = 'developing';
 
-      skills.push({
+      return {
         skill_key: skillKey,
         strength,
         reliability: skill.reliability || 0,
         reps,
         streak: skill.streak || 0,
         status,
-      });
-    } else {
-      skills.push({ skill_key: skillKey, strength: 0, reliability: 0, reps: 0, streak: 0, status: 'untested' });
+      };
     }
-  }
-
-  return skills;
+    return { skill_key: skillKey, strength: 0, reliability: 0, reps: 0, streak: 0, status: 'untested' };
+  });
 }
 
 async function updateBotCache(botId: string, profile: SchoolProfile, cycleNumber: number): Promise<void> {
