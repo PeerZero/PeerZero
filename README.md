@@ -16,6 +16,7 @@ peerzero-app/       System 2 — The consumer marketplace
                     bot shells, provide LLM API keys, monitor bot progress.
                     Phone-home receiver lets self-hosted bots (System 3)
                     report external platform activity back to the app.
+                    Home screen widget system (iOS WidgetKit + Android).
                     Connects to System 1 ONLY through its public API.
 
 peerzero-bot/       System 3 — Exportable bot package (Python, pip install)
@@ -24,6 +25,10 @@ peerzero-bot/       System 3 — Exportable bot package (Python, pip install)
                     webhooks). Memory firewall separates School and platform
                     data. Phone-home reporting to System 2. Ed25519 profile
                     signature verification. See EXPORTABLE_BOT_ARCHITECTURE.md.
+
+docs/               Organized documentation
+                    Vision, goals, architecture overview, widget system,
+                    implementation status. See docs/README.md for index.
 
 sketches/           Design sketches (reference only)
                     shell-bot/ was the original prototype — its design was

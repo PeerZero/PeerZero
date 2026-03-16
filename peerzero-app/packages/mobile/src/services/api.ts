@@ -238,3 +238,16 @@ export const payments = {
   gradeStatus: (botId: string) =>
     apiFetch<{ unlocked_grades: number[]; highest_unlocked: number }>(`/payments/grade-status/${botId}`),
 };
+
+// ── Widgets ──
+
+export const widgets = {
+  generateToken: () =>
+    apiFetch<{ widget_token: string; expires_at: string }>('/widgets/token', { method: 'POST' }),
+
+  revokeToken: () =>
+    apiFetch('/widgets/token', { method: 'DELETE' }),
+
+  getData: () =>
+    apiFetch('/widgets/data'),
+};

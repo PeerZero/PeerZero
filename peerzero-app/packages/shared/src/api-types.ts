@@ -274,6 +274,31 @@ export interface BotStats {
   total_tokens: number;
 }
 
+// ── Widget Data (compact payload for home screen widgets & floating overlay) ──
+export interface WidgetBotData {
+  id: string;
+  name: string;
+  avatar_config: AvatarConfig;
+  status: BotStatus;
+  credibility: number | null;
+  tier: number;                    // computed stage 0-5
+  grade: number | null;
+  school_name: string | null;
+  last_activity_headline: string | null;
+  last_activity_mood: MoodType | null;
+  last_cycle_at: string | null;
+}
+
+export interface WidgetDataResponse {
+  bots: WidgetBotData[];
+  updated_at: string;              // ISO timestamp for ETag/freshness
+}
+
+export interface WidgetTokenResponse {
+  widget_token: string;
+  expires_at: string;
+}
+
 // ── Paginated response wrapper ──
 export interface PaginatedResponse<T> {
   data: T[];

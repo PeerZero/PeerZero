@@ -137,6 +137,18 @@ ALTER TABLE bots ADD COLUMN fast_llm_model TEXT DEFAULT NULL;
 
 All items in this plan have been implemented and committed.
 
+---
+
+## Subsequent Work: Widget System (March 2026) — COMPLETE
+
+After this plan was completed, a full widget system was built. See `/docs/widget-system.md` for details. Summary:
+- Server widget data endpoint with dual auth (JWT + widget token), ETag caching
+- iOS WidgetKit extension (SwiftUI Canvas avatar, 3 sizes)
+- Android home screen widget + floating overlay service
+- Expo config plugin for native code injection
+- Deep linking into app from widgets
+- Widget settings in SettingsScreen
+
 ## File Changes Summary
 
 | File | Change | Status |

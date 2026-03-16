@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Floating overlay layout — the draggable bot avatar
+     Transparent background, just the avatar and an optional thought bubble.
+     Touch events are handled by the service for drag + tap. -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:background="@android:color/transparent">
+
+    <!-- Thought bubble (shows above avatar, auto-hides) -->
+    <TextView
+        android:id="@+id/overlay_thought"
+        android:layout_width="160dp"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top|center_horizontal"
+        android:background="@drawable/widget_background"
+        android:textColor="#E0E4EC"
+        android:textSize="10sp"
+        android:padding="6dp"
+        android:maxLines="2"
+        android:ellipsize="end"
+        android:visibility="gone" />
+
+    <!-- Bot avatar -->
+    <ImageView
+        android:id="@+id/overlay_avatar"
+        android:layout_width="72dp"
+        android:layout_height="72dp"
+        android:layout_gravity="bottom|center_horizontal"
+        android:scaleType="fitCenter"
+        android:contentDescription="Bot avatar" />
+</FrameLayout>

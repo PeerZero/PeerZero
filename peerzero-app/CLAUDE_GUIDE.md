@@ -10,8 +10,10 @@ users buy bots, send them to school, and watch them grow.
 
 **System 1** (the School) is a separate codebase at `/PeerZero/peerzero-school/`.
 **System 2** (this app) is under `/PeerZero/peerzero-app/`.
-**System 3** (exportable bot) is under `/PeerZero/peerzero-bot/` — a standalone Python package (`pip install peerzero-bot`) that lets technical users run their bot anywhere and connect to external platforms. See `/EXPORTABLE_BOT_ARCHITECTURE.md` for its design.
+**System 3** (exportable bot) is under `/PeerZero/peerzero-bot/` — a standalone Python package (`pip install peerzero-bot`) that lets technical users run their bot anywhere and connect to external platforms. See `/docs/system3-exportable-bot.md` for a summary or `/EXPORTABLE_BOT_ARCHITECTURE.md` for the full design.
 All three systems share ZERO code. System 2 and System 3 both connect to System 1 only through HTTP API calls.
+
+**Docs:** The `/docs/` folder at the repo root has organized documentation — vision, goals, architecture overview, widget system, and implementation status. See `/docs/README.md` for the index.
 
 ## Critical Rules
 
@@ -85,6 +87,12 @@ Schools are rows in the `schools` table. To add one:
 | Bot creation | `packages/mobile/src/screens/CreateBotScreen.tsx` |
 | School enrollment | `packages/mobile/src/screens/EnrollBotScreen.tsx` |
 | Stats/charts | `packages/mobile/src/screens/StatsScreen.tsx` |
+| Widget data endpoint | `packages/server/src/routes/widgets.ts` |
+| Widget token migration | `packages/server/src/db/migrations/0005_widget-tokens.sql` |
+| iOS widget extension | `packages/mobile/ios-widget/` (Swift/SwiftUI) |
+| Android widget | `packages/mobile/android-widget/` (Kotlin) |
+| Widget Expo plugin | `packages/mobile/plugins/widget/withPeerZeroWidget.js` |
+| Widget types | `WidgetBotData`, `WidgetDataResponse` in `shared/src/api-types.ts` |
 
 ## Memory Architecture (4-Tier)
 
@@ -144,10 +152,24 @@ Bots support two LLM model tiers:
 
 **Mobile:** `CreateBotScreen` shows separate "Science Model" and "Fast Model (Optional)" selectors with guidance text explaining the tradeoff.
 
+## Widget System
+
+Home screen widgets that show the bot's avatar, status, and latest activity. See `/docs/widget-system.md` for full details.
+
+- **Server:** `GET /api/widgets/data` with dual auth (JWT or widget token), ETag caching
+- **Widget tokens:** `POST/DELETE /api/widgets/token` — SHA-256 hashed, 30-day expiry, read-only scoped
+- **iOS:** WidgetKit extension in `packages/mobile/ios-widget/` — SwiftUI Canvas avatar rendering
+- **Android:** AppWidgetProvider + FloatingOverlayService in `packages/mobile/android-widget/`
+- **Expo plugin:** `packages/mobile/plugins/widget/withPeerZeroWidget.js` injects native code at build time
+- **Deep linking:** `peerzero://bot/:botId` and `peerzero://settings/widgets`
+- **Settings:** Widget enable/disable + bot selector in SettingsScreen
+
 ## What Still Needs Work
 
 - Real adapter testing (when School is ready to connect)
 - End-to-end testing with live School API
-- Hosted runtime extension — multi-platform scheduling from the app (System 3 handles self-hosted, but app could run bots on external platforms too)
+- Brain screen skill progress bars (per-skill visualization)
+- Hosted runtime extension — multi-platform scheduling from the app
 - Performance testing under concurrent bot load
 - Payment flow integration (Stripe checkout on mobile — WebView or deep link)
+- Desktop widget (Electron tray app — low priority)
