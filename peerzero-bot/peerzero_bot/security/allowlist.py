@@ -93,8 +93,20 @@ class SecurityGateway:
             )
 
     def validate_phone_home_request(self, url: str, app_url: str):
-        """Validate a phone-home request to the PeerZero app."""
-        if not url.startswith(app_url):
+        """Validate a phone-home request to the PeerZero app.
+
+        Uses hostname comparison instead of prefix matching to prevent
+        bypasses like https://evil.com.attacker.com matching https://evil.com.
+        """
+        parsed_url = urlparse(url)
+        parsed_app = urlparse(app_url)
+        if parsed_url.hostname != parsed_app.hostname:
             raise SecurityError(
-                f"Blocked: phone-home URL {url} doesn't match app URL {app_url}"
+                f"Blocked: phone-home host {parsed_url.hostname} doesn't match "
+                f"app host {parsed_app.hostname}"
+            )
+        if parsed_url.scheme != parsed_app.scheme:
+            raise SecurityError(
+                f"Blocked: phone-home scheme {parsed_url.scheme} doesn't match "
+                f"app scheme {parsed_app.scheme}"
             )

@@ -62,8 +62,11 @@ function sanitize(text) {
   if (!text) return text;
 
   // Strip zero-width/invisible Unicode characters that can hide injection payloads
+  // Includes: zero-width space, zero-width non-joiner, zero-width joiner,
+  // left-to-right/right-to-left marks, line/paragraph separators, BOM, soft hyphen,
+  // variation selectors, combining grapheme joiner, word joiner, and directional overrides
   let clean = text
-    .replace(/[\u200B-\u200F\u2028-\u202F\uFEFF\u00AD]/g, '');
+    .replace(/[\u200B-\u200F\u2028-\u202F\uFEFF\u00AD\u2060-\u2064\u2066-\u206F\uFE00-\uFE0F]/g, '');
 
   const patterns = [
     /ignore previous instructions/gi,
@@ -78,19 +81,34 @@ function sanitize(text) {
     /\[system\]/gi,
     /assistant:/gi,
     /human:/gi,
+    // Additional prompt injection patterns
+    /forget (all |everything |your )?(previous |prior )?instructions/gi,
+    /override\s+(your\s+)?instructions/gi,
+    /act as (a |an )?/gi,
+    /pretend (you are|to be|you're)/gi,
+    /do not follow/gi,
+    /\bDAN\b/g,  // "Do Anything Now" jailbreak
+    /jailbreak/gi,
+    /ignore (all |any )?(safety|content|moderation)/gi,
+    /bypass (your |the )?(filter|safety|restriction)/gi,
   ];
   patterns.forEach(p => { clean = clean.replace(p, '[REDACTED]'); });
 
   clean = clean.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
 
   // Decode HTML entities BEFORE tag stripping so encoded tags like &lt;script&gt; are caught
-  clean = clean.replace(/&#(\d+);/g, (_, code) => String.fromCharCode(parseInt(code, 10)));
-  clean = clean.replace(/&#x([0-9a-fA-F]+);/g, (_, code) => String.fromCharCode(parseInt(code, 16)));
-  clean = clean.replace(/&lt;/gi, '<').replace(/&gt;/gi, '>').replace(/&amp;/gi, '&').replace(/&quot;/gi, '"').replace(/&#039;/gi, "'").replace(/&apos;/gi, "'");
+  // Run decoding twice to catch double-encoded entities like &amp;lt;
+  for (let i = 0; i < 2; i++) {
+    clean = clean.replace(/&#(\d+);/g, (_, code) => String.fromCharCode(parseInt(code, 10)));
+    clean = clean.replace(/&#x([0-9a-fA-F]+);/g, (_, code) => String.fromCharCode(parseInt(code, 16)));
+    clean = clean.replace(/&lt;/gi, '<').replace(/&gt;/gi, '>').replace(/&amp;/gi, '&').replace(/&quot;/gi, '"').replace(/&#039;/gi, "'").replace(/&apos;/gi, "'");
+  }
 
   clean = clean.replace(/<[^>]*>/g, '');
   clean = clean.replace(/javascript:/gi, '[REDACTED]');
   clean = clean.replace(/on\w+\s*=/gi, '[REDACTED]');
+  // Strip data: URIs which can carry executable content
+  clean = clean.replace(/data:\s*\w+\/\w+[;,]/gi, '[REDACTED]');
 
   return clean;
 }

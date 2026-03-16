@@ -87,6 +87,12 @@ class MemoryManager:
         """Store exercises from a School action response."""
         if not exercises:
             return
+        current_count = len(self.get_school_exercises())
+        if current_count >= MAX_GENERAL_ENTRIES - 5:
+            logger.warning(
+                f"[MEMORY] School exercises nearing capacity ({current_count}/{MAX_GENERAL_ENTRIES}). "
+                f"Oldest entries will be pruned. Consider triggering condensation."
+            )
         self._storage.append("school", "exercises", {
             "stored_at": datetime.now(timezone.utc).isoformat(),
             "data": exercises,
@@ -107,6 +113,12 @@ class MemoryManager:
     def store_identity_paragraph(self, paragraph: str):
         if not paragraph or len(paragraph.strip()) < 50:
             return
+        current_count = len(self.get_identity_paragraphs())
+        if current_count >= MAX_IDENTITY_PARAGRAPHS - 3:
+            logger.warning(
+                f"[MEMORY] Identity paragraphs nearing capacity ({current_count}/{MAX_IDENTITY_PARAGRAPHS}). "
+                f"Oldest paragraphs will be pruned. Consider triggering core condensation."
+            )
         self._storage.append("school", "paragraphs", {
             "condensed_at": datetime.now(timezone.utc).isoformat(),
             "paragraph": paragraph.strip(),
@@ -153,6 +165,12 @@ class MemoryManager:
         """Store a platform interaction. NEVER sent to School."""
         if not action:
             return
+        current_count = len(self.get_platform_history(platform_name))
+        if current_count >= MAX_PLATFORM_ENTRIES - 5:
+            logger.info(
+                f"[MEMORY] Platform '{platform_name}' history nearing capacity "
+                f"({current_count}/{MAX_PLATFORM_ENTRIES}). Oldest entries will be pruned."
+            )
         action["stored_at"] = datetime.now(timezone.utc).isoformat()
         self._storage.append(
             f"platform_{platform_name}", "history", action,
@@ -167,6 +185,29 @@ class MemoryManager:
         """Cache platform context for next cycle."""
         context["cached_at"] = datetime.now(timezone.utc).isoformat()
         self._storage.write(f"platform_{platform_name}", "context", context)
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # TRACKING IDs (persist across restarts)
+    # ═══════════════════════════════════════════════════════════════════════
+
+    def get_tracked_paper_ids(self) -> list[str]:
+        """Get IDs of papers this bot has authored (survives restarts)."""
+        return self._storage.read("school", "my_paper_ids", [])
+
+    def store_tracked_paper_ids(self, paper_ids: list[str]):
+        """Persist authored paper IDs."""
+        self._storage.write("school", "my_paper_ids", paper_ids)
+
+    def get_tracked_review_ids(self) -> list[str]:
+        """Get IDs of papers this bot has reviewed (survives restarts)."""
+        return self._storage.read("school", "my_review_ids", [])
+
+    def add_tracked_review_id(self, paper_id: str):
+        """Add a reviewed paper ID to the persistent set."""
+        ids = self.get_tracked_review_ids()
+        if paper_id not in ids:
+            ids.append(paper_id)
+            self._storage.write("school", "my_review_ids", ids)
 
     # ═══════════════════════════════════════════════════════════════════════
     # AVATAR CONFIG (travels with the bot)

@@ -23,26 +23,84 @@ logger = logging.getLogger("peerzero-bot.school")
 
 
 def extract_json(text: str) -> dict | None:
-    """Extract JSON from LLM output. Handles pure JSON, code fences, embedded."""
+    """Extract JSON from LLM output. Handles pure JSON, code fences, embedded.
+
+    Tries multiple strategies in order of reliability:
+    1. Direct parse (cleanest)
+    2. Code-fence extraction (```json ... ```)
+    3. Outermost brace extraction with nested brace matching
+    4. Lenient cleanup (trailing commas, single quotes) as last resort
+
+    Logs warnings on fallback strategies so parsing issues are visible.
+    """
     if not text:
         return None
     text = text.strip()
+
+    # Strategy 1: Direct parse
     try:
-        return json.loads(text)
+        result = json.loads(text)
+        if isinstance(result, dict):
+            return result
     except json.JSONDecodeError:
         pass
+
+    # Strategy 2: Code fence extraction
     fence_match = re.search(r'```(?:json)?\s*\n?(.*?)\n?\s*```', text, re.DOTALL)
     if fence_match:
         try:
-            return json.loads(fence_match.group(1).strip())
+            result = json.loads(fence_match.group(1).strip())
+            if isinstance(result, dict):
+                return result
         except json.JSONDecodeError:
             pass
+
+    # Strategy 3: Balanced brace extraction (handles nested objects)
+    start = text.find('{')
+    if start != -1:
+        depth = 0
+        in_string = False
+        escape_next = False
+        for i in range(start, len(text)):
+            c = text[i]
+            if escape_next:
+                escape_next = False
+                continue
+            if c == '\\' and in_string:
+                escape_next = True
+                continue
+            if c == '"' and not escape_next:
+                in_string = not in_string
+                continue
+            if not in_string:
+                if c == '{':
+                    depth += 1
+                elif c == '}':
+                    depth -= 1
+                    if depth == 0:
+                        candidate = text[start:i + 1]
+                        try:
+                            result = json.loads(candidate)
+                            if isinstance(result, dict):
+                                return result
+                        except json.JSONDecodeError:
+                            break
+
+    # Strategy 4: Lenient cleanup (trailing commas, single quotes)
     brace_match = re.search(r'\{.*\}', text, re.DOTALL)
     if brace_match:
+        candidate = brace_match.group(0)
+        # Remove trailing commas before } or ]
+        cleaned = re.sub(r',\s*([}\]])', r'\1', candidate)
         try:
-            return json.loads(brace_match.group(0))
+            result = json.loads(cleaned)
+            if isinstance(result, dict):
+                logger.warning("[extract_json] Parsed after trailing-comma cleanup")
+                return result
         except json.JSONDecodeError:
             pass
+
+    logger.warning(f"[extract_json] Failed to extract JSON from {len(text)}-char response")
     return None
 
 

@@ -7,8 +7,13 @@ import { queryOne, queryRows, query } from '../db/client';
 import { AppError } from '../middleware/error-handler';
 import { encrypt, decrypt } from './encryption.service';
 import { getSchoolAdapter } from '../adapters/adapter.factory';
-import type { BotSummary, BotDetail } from '@peerzero/shared';
-import { SUPPORTED_MODEL_IDS, sanitizeAvatarConfig, getGradePriceCents } from '@peerzero/shared';
+import type { BotSummary, BotDetail, BotStatus } from '@peerzero/shared';
+import { SUPPORTED_MODEL_IDS, BOT_STATUSES, sanitizeAvatarConfig, getGradePriceCents } from '@peerzero/shared';
+
+// DB row shape for getBotDetail query (includes columns not in BotDetail)
+interface BotDetailRow extends BotDetail {
+  cache_updated_at: string | null;
+}
 
 export async function createBot(
   userId: string,
@@ -41,14 +46,14 @@ export async function createBot(
   if (!key) throw new AppError(400, 'Invalid API key');
 
   const model = llmModel || 'claude-opus-4-6';
-  if (!SUPPORTED_MODEL_IDS.includes(model as any)) {
+  if (!(SUPPORTED_MODEL_IDS as readonly string[]).includes(model)) {
     throw new AppError(400, `Unsupported LLM model: ${model}. Supported: ${SUPPORTED_MODEL_IDS.join(', ')}`);
   }
 
   const safeAvatar = sanitizeAvatarConfig(avatarConfig);
 
   // Validate fast model if provided
-  if (fastLlmModel && !SUPPORTED_MODEL_IDS.includes(fastLlmModel as any)) {
+  if (fastLlmModel && !(SUPPORTED_MODEL_IDS as readonly string[]).includes(fastLlmModel)) {
     throw new AppError(400, `Unsupported fast LLM model: ${fastLlmModel}`);
   }
 
@@ -76,7 +81,7 @@ export async function getUserBots(userId: string): Promise<BotSummary[]> {
 }
 
 export async function getBotDetail(userId: string, botId: string): Promise<BotDetail> {
-  const bot = await queryOne<BotDetail & { cache_updated_at: string | null }>(
+  const bot = await queryOne<BotDetailRow>(
     `SELECT b.id, b.name, b.avatar_config, b.status,
             b.cached_credibility, b.cached_grade, b.cached_tier,
             s.name as school_name, b.cycle_count, b.last_cycle_at,
@@ -99,7 +104,7 @@ export async function getBotDetail(userId: string, botId: string): Promise<BotDe
   // Grade unlock info
   const { getHighestUnlockedGrade } = await import('./payment.service');
   const highestUnlocked = await getHighestUnlockedGrade(botId);
-  const currentGrade = (bot as any).cached_grade || 1;
+  const currentGrade = bot.cached_grade || 1;
   const gradePaymentRequired = currentGrade > highestUnlocked;
   const nextGradePriceCents = gradePaymentRequired
     ? getGradePriceCents(currentGrade)
@@ -112,7 +117,7 @@ export async function getBotDetail(userId: string, botId: string): Promise<BotDe
     highest_unlocked_grade: highestUnlocked,
     grade_payment_required: gradePaymentRequired,
     next_grade_price_cents: nextGradePriceCents,
-  } as any;
+  } as BotDetail;
 }
 
 export async function updateBot(userId: string, botId: string, updates: Partial<{
@@ -248,10 +253,8 @@ export async function isBotGradeUnlocked(botId: string, grade: number): Promise<
   return !!result;
 }
 
-const VALID_STATUSES = ['stopped', 'running', 'paused', 'error'] as const;
-
 export async function setBotStatus(botId: string, status: string, errorMessage?: string): Promise<void> {
-  if (!VALID_STATUSES.includes(status as any)) {
+  if (!(BOT_STATUSES as readonly string[]).includes(status)) {
     throw new Error(`Invalid bot status: ${status}`);
   }
   await query(
