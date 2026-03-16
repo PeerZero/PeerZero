@@ -182,7 +182,7 @@ function isRateLimited(identifier, maxRequests = 60, windowMs = 60000) {
     return false;
   }
   bucket.count++;
-  return bucket.count > maxRequests;
+  return bucket.count >= maxRequests;
 }
 
 // ── DB-backed rate limiter (survives cold starts, shared across instances) ──
@@ -218,6 +218,27 @@ async function logRateLimitedAction(agentId, action) {
   } catch (err) {
     console.error('[rate_limit_db] Log failed:', err?.message);
   }
+}
+
+/**
+ * Enforce rate limiting for a request. Uses API key hash if present, falls back to IP.
+ * Returns { limited: true, response } if rate-limited, { limited: false } otherwise.
+ */
+function enforceRateLimit(req, { keyLimit = 300, keyWindowMs = 60000, ipLimit = 60, ipWindowMs = 60000 } = {}) {
+  const apiKey = req.headers['x-api-key'];
+  if (apiKey) {
+    const crypto = require('crypto');
+    const keyHash = crypto.createHash('sha256').update(apiKey).digest('hex');
+    if (isRateLimited('key:' + keyHash, keyLimit, keyWindowMs)) {
+      return { limited: true, response: { status: 429, body: { error: 'Too many requests for this API key.' } } };
+    }
+  } else {
+    const clientIp = getClientIp(req);
+    if (isRateLimited(clientIp, ipLimit, ipWindowMs)) {
+      return { limited: true, response: { status: 429, body: { error: 'Too many requests. Please wait a moment.' } } };
+    }
+  }
+  return { limited: false };
 }
 
 function getClientIp(req) {
@@ -755,6 +776,7 @@ module.exports = {
   sanitize,
   escapeForPostgrest,
   isRateLimited,
+  enforceRateLimit,
   isRateLimitedDb,
   logRateLimitedAction,
   getClientIp,

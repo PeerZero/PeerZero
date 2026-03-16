@@ -1,8 +1,8 @@
 const { createClient } = require('@supabase/supabase-js');
 const crypto = require('crypto');
 const {
-  setCorsHeaders, sanitize, escapeForPostgrest, isRateLimited, isRateLimitedDb,
-  logRateLimitedAction, getClientIp,
+  setCorsHeaders, sanitize, escapeForPostgrest, isRateLimited, enforceRateLimit, isRateLimitedDb,
+  logRateLimitedAction,
   sanitizeErrorMessage, validateTextLength, verifyDoi, lookupCitationQuality,
   auditCitationQualityNotes, computeCitationQualityGrade, checkCitationDiversity,
   validateSearchStrategy, generateSearchCoaching, detectBotCitation, applyTimeDecay,
@@ -25,19 +25,8 @@ module.exports = async (req, res) => {
   setCorsHeaders(req, res);
   if (req.method === 'OPTIONS') return res.status(200).end();
 
-  const clientIp = getClientIp(req);
-  const apiKey = req.headers['x-api-key'];
-
-  if (apiKey) {
-    const keyHash = require('crypto').createHash('sha256').update(apiKey).digest('hex');
-    if (isRateLimited('key:' + keyHash, 300, 60000)) {
-      return res.status(429).json({ error: 'Too many requests for this API key.' });
-    }
-  } else {
-    if (isRateLimited(clientIp, 60, 60000)) {
-      return res.status(429).json({ error: 'Too many requests. Please wait a moment.' });
-    }
-  }
+  const rl = enforceRateLimit(req);
+  if (rl.limited) return res.status(rl.response.status).json(rl.response.body);
 
   const { feed, id } = req.query;
   const rawLimit = parseInt(req.query.limit);
@@ -754,7 +743,7 @@ module.exports = async (req, res) => {
 
     // ── Fetch condenser/reflection prompts inline ─────────────────────────
     const memoryPrompts = await getPostActionPrompts(agent.id, 'paper')
-      .catch(() => null);
+      .catch(err => { console.error('[papers] getPostActionPrompts failed:', err?.message || err); return null; });
 
     return res.status(201).json({
       success: true,

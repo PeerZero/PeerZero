@@ -172,26 +172,50 @@ router.delete('/:id/activity', userRateLimit('write'), async (req: Request, res:
 router.get('/:id/external-activity', userRateLimit('read'), async (req: Request, res: Response) => {
   // Verify ownership
   await botService.getBotDetail(req.user!.userId, req.params.id);
-  const rawPage = parseInt(req.query.page as string);
-  const page = Number.isFinite(rawPage) && rawPage > 0 ? Math.min(rawPage, 10000) : 1;
   const perPage = 20;
-  const offset = (page - 1) * perPage;
+  const cursor = req.query.cursor as string | undefined;
 
   const { queryRows, queryOne: qOne } = await import('../db/client');
-  const rows = await queryRows(
-    `SELECT id, platform, action, summary, content_preview, skills_demonstrated, bot_timestamp, created_at
-     FROM external_activity_log
-     WHERE bot_id = $1 AND deleted_at IS NULL
-     ORDER BY created_at DESC
-     LIMIT $2 OFFSET $3`,
-    [req.params.id, perPage, offset],
-  );
-  const countResult = await qOne<{ total: number }>(
-    'SELECT COUNT(*)::int as total FROM external_activity_log WHERE bot_id = $1 AND deleted_at IS NULL',
-    [req.params.id],
-  );
-  const total = countResult?.total || 0;
-  res.json({ data: rows, total, page, per_page: perPage, has_more: offset + perPage < total });
+
+  // Cursor-based pagination (preferred for large datasets) — use ?cursor=<created_at>
+  // Falls back to offset pagination with ?page=N for backwards compatibility
+  if (cursor) {
+    const cursorDate = new Date(cursor);
+    if (isNaN(cursorDate.getTime())) {
+      res.status(400).json({ error: 'Invalid cursor format' });
+      return;
+    }
+    const rows = await queryRows(
+      `SELECT id, platform, action, summary, content_preview, skills_demonstrated, bot_timestamp, created_at
+       FROM external_activity_log
+       WHERE bot_id = $1 AND deleted_at IS NULL AND created_at < $2
+       ORDER BY created_at DESC
+       LIMIT $3`,
+      [req.params.id, cursorDate.toISOString(), perPage + 1],
+    );
+    const hasMore = rows.length > perPage;
+    const data = hasMore ? rows.slice(0, perPage) : rows;
+    const nextCursor = hasMore && data.length > 0 ? data[data.length - 1].created_at : null;
+    res.json({ data, has_more: hasMore, next_cursor: nextCursor });
+  } else {
+    const rawPage = parseInt(req.query.page as string);
+    const page = Number.isFinite(rawPage) && rawPage > 0 ? Math.min(rawPage, 10000) : 1;
+    const offset = (page - 1) * perPage;
+    const rows = await queryRows(
+      `SELECT id, platform, action, summary, content_preview, skills_demonstrated, bot_timestamp, created_at
+       FROM external_activity_log
+       WHERE bot_id = $1 AND deleted_at IS NULL
+       ORDER BY created_at DESC
+       LIMIT $2 OFFSET $3`,
+      [req.params.id, perPage, offset],
+    );
+    const countResult = await qOne<{ total: number }>(
+      'SELECT COUNT(*)::int as total FROM external_activity_log WHERE bot_id = $1 AND deleted_at IS NULL',
+      [req.params.id],
+    );
+    const total = countResult?.total || 0;
+    res.json({ data: rows, total, page, per_page: perPage, has_more: offset + perPage < total });
+  }
 });
 
 // Delete a single external activity entry (soft-delete)

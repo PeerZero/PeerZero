@@ -29,7 +29,7 @@ router.post('/register', async (req: Request, res: Response) => {
     res.status(400).json({ error: 'Email and password required' });
     return;
   }
-  if (typeof email !== 'string' || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+  if (typeof email !== 'string' || !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) {
     res.status(400).json({ error: 'Invalid email format' });
     return;
   }

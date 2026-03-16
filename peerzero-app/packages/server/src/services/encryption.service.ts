@@ -5,6 +5,7 @@
 
 import crypto from 'crypto';
 import { config } from '../config';
+import { logger } from '../lib/logger';
 
 const ALGORITHM = 'aes-256-gcm';
 const IV_LENGTH = 16;       // 128 bits
@@ -49,6 +50,7 @@ export function encrypt(plaintext: string): EncryptedPayload {
   const hash = crypto.createHash('sha256').update(plaintext).digest('hex');
   const fingerprint = `${hash.slice(0, 8)}...${plaintext.slice(-4)}`;
 
+  logger.debug({ fingerprint }, 'Encrypted API key');
   return { encrypted: combined, iv, fingerprint };
 }
 
@@ -68,5 +70,6 @@ export function decrypt(encrypted: Buffer, iv: Buffer): string {
     decipher.final(),
   ]);
 
+  logger.debug('Decrypted API key');
   return decrypted.toString('utf8');
 }

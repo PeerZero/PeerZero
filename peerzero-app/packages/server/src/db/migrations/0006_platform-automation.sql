@@ -103,3 +103,12 @@ VALUES
   ('custom-webhook', 'Custom Webhook', 'Connect to any REST API with webhook support', 'webhook',
    '{"events": ["post", "comment"], "heartbeat_interval": 3600}', 'api_key')
 ON CONFLICT (slug) DO NOTHING;
+
+-- ── DOWN ──────────────────────────────────────────────────────────────────────
+-- Uncomment and run manually to roll back this migration:
+--
+-- DROP TABLE IF EXISTS bot_skill_snapshots CASCADE;
+-- DROP TABLE IF EXISTS class_members CASCADE;
+-- DROP TABLE IF EXISTS classes CASCADE;
+-- DROP TABLE IF EXISTS platform_registry CASCADE;
+-- DROP TABLE IF EXISTS bot_platforms CASCADE;

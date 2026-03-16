@@ -1,5 +1,5 @@
 const { createClient } = require('@supabase/supabase-js');
-const { setCorsHeaders, isRateLimited, getClientIp, sanitizeErrorMessage } = require('../lib/shared');
+const { setCorsHeaders, enforceRateLimit, sanitizeErrorMessage } = require('../lib/shared');
 const { storeReflection, getStoredReflections, getUncondensedExerciseCount, buildMilestoneCondenser } = require('../lib/skills');
 
 const supabase = createClient(
@@ -11,17 +11,11 @@ module.exports = async (req, res) => {
   setCorsHeaders(req, res);
   if (req.method === 'OPTIONS') return res.status(200).end();
 
-  const clientIp = getClientIp(req);
   const apiKey = req.headers['x-api-key'];
-
   if (!apiKey) return res.status(401).json({ error: 'Missing X-Api-Key header' });
 
-  if (apiKey) {
-    const keyHash = require('crypto').createHash('sha256').update(apiKey).digest('hex');
-    if (isRateLimited('key:' + keyHash, 60, 60000)) {
-      return res.status(429).json({ error: 'Too many requests.' });
-    }
-  }
+  const rl = enforceRateLimit(req, { keyLimit: 60 });
+  if (rl.limited) return res.status(rl.response.status).json(rl.response.body);
 
   // Authenticate agent
   const hashedKey = require('crypto').createHash('sha256').update(apiKey).digest('hex');

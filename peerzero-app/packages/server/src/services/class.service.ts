@@ -142,7 +142,7 @@ export async function joinClass(
     'SELECT COUNT(*)::int as count FROM class_members WHERE class_id = $1',
     [cls.id],
   );
-  if ((countResult?.count || 0) >= cls.max_members) {
+  if (!cls.max_members || cls.max_members <= 0 || (countResult?.count || 0) >= cls.max_members) {
     throw new AppError(400, 'Class is full');
   }
 
@@ -212,7 +212,14 @@ export async function updateClass(
     sets.push(`name = $${idx++}`); params.push(updates.name);
   }
   if (updates.description !== undefined) { sets.push(`description = $${idx++}`); params.push(updates.description); }
-  if (updates.settings !== undefined) { sets.push(`settings = $${idx++}`); params.push(JSON.stringify(updates.settings)); }
+  if (updates.settings !== undefined) {
+    if (typeof updates.settings !== 'object' || Array.isArray(updates.settings)) {
+      throw new AppError(400, 'settings must be a JSON object');
+    }
+    const settingsStr = JSON.stringify(updates.settings);
+    if (settingsStr.length > 10000) throw new AppError(400, 'settings too large');
+    sets.push(`settings = $${idx++}`); params.push(settingsStr);
+  }
 
   if (sets.length === 0) return;
 

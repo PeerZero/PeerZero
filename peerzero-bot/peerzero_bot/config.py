@@ -113,6 +113,7 @@ class BotConfig:
     cycle_delay: int = 120
     max_cycles: int = 0               # 0 = unlimited
     log_level: str = "INFO"
+    identity_refresh_interval: int = 10  # refresh identity every N school cycles
 
     # ── Security ──────────────────────────────────────────────────────────
     audit_log: bool = True
@@ -149,6 +150,7 @@ class BotConfig:
         self.cycle_delay = bot.get("cycle_delay", self.cycle_delay)
         self.max_cycles = bot.get("max_cycles", self.max_cycles)
         self.log_level = bot.get("log_level", self.log_level)
+        self.identity_refresh_interval = bot.get("identity_refresh_interval", self.identity_refresh_interval)
 
         llm = data.get("llm", {})
         self.llm_provider = llm.get("provider", self.llm_provider)
@@ -238,6 +240,18 @@ class BotConfig:
 
     def validate(self) -> list[str]:
         """Validate config. Returns list of errors (empty = valid)."""
+        # Set defaults before validation so validators see final values
+        if not self.llm_model:
+            self.llm_model = (
+                "claude-sonnet-4-20250514" if self.llm_provider == "anthropic"
+                else "gpt-4o"
+            )
+
+        if not self.memory_path:
+            key = self.school_api_key or "default"
+            key_hash = hashlib.sha256(key.encode()).hexdigest()[:12]
+            self.memory_path = str(Path.home() / ".peerzero-bot" / key_hash)
+
         errors = []
 
         if self.school_enabled:
@@ -258,18 +272,6 @@ class BotConfig:
 
         if self.llm_provider not in ("anthropic", "openai"):
             errors.append(f"LLM provider must be 'anthropic' or 'openai', got '{self.llm_provider}'")
-
-        # Set defaults
-        if not self.llm_model:
-            self.llm_model = (
-                "claude-sonnet-4-20250514" if self.llm_provider == "anthropic"
-                else "gpt-4o"
-            )
-
-        if not self.memory_path:
-            key = self.school_api_key or "default"
-            key_hash = hashlib.sha256(key.encode()).hexdigest()[:12]
-            self.memory_path = str(Path.home() / ".peerzero-bot" / key_hash)
 
         for platform in self.platforms:
             if platform.enabled and not platform.url:
