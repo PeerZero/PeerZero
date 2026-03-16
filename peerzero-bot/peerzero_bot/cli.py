@@ -15,11 +15,13 @@ from .memory import MemoryManager, FileStorage, SqliteStorage
 from .adapters.school import SchoolAdapter
 from .adapters.a2a import A2AAdapter
 from .adapters.webhook import WebhookAdapter
+from .adapters.mcp import MCPAdapter, MCPServerConfig as MCPServerConfigAdapter
 from .security import SecurityGateway, AuditLog
 from .reporting import PhoneHome
 from .prompts import PromptBuilder
 from .agent import PeerZeroBot, LLMClient
 from .identity import build_identity_summary
+from .autonomy import AutonomyPolicy, AutonomyGate
 
 logger = logging.getLogger("peerzero-bot")
 
@@ -88,6 +90,30 @@ def _build_bot(config: BotConfig) -> PeerZeroBot:
             gateway=gateway,
         )
 
+    # Autonomy gate
+    autonomy_policy = AutonomyPolicy(
+        level=config.autonomy_level,
+        allowed_actions=config.autonomy_allowed_actions,
+        blocked_actions=config.autonomy_blocked_actions,
+        allowed_platforms=config.autonomy_allowed_platforms,
+        blocked_platforms=config.autonomy_blocked_platforms,
+        allowed_tools=config.autonomy_allowed_tools,
+        blocked_tools=config.autonomy_blocked_tools,
+        max_actions_per_cycle=config.autonomy_max_actions_per_cycle,
+        max_tool_calls_per_cycle=config.autonomy_max_tool_calls_per_cycle,
+        max_content_length=config.autonomy_max_content_length,
+        blocked_content_patterns=config.autonomy_blocked_content_patterns,
+        can_submit_papers=config.autonomy_can_submit_papers,
+        can_submit_reviews=config.autonomy_can_submit_reviews,
+        can_file_bounties=config.autonomy_can_file_bounties,
+        can_revise_papers=config.autonomy_can_revise_papers,
+    )
+    policy_errors = autonomy_policy.validate()
+    if policy_errors:
+        for e in policy_errors:
+            logger.warning(f"[AUTONOMY] Policy error: {e}")
+    autonomy_gate = AutonomyGate(autonomy_policy)
+
     # Platform adapters
     platform_adapters = []
     for pc in config.platforms:
@@ -110,6 +136,25 @@ def _build_bot(config: BotConfig) -> PeerZeroBot:
                 gateway=gateway,
                 events=pc.events,
             )
+        elif pc.adapter == "mcp":
+            # Convert config MCPServerConfigs to adapter MCPServerConfigs
+            mcp_servers = [
+                MCPServerConfigAdapter(
+                    name=srv.name,
+                    command=srv.command,
+                    args=srv.args,
+                    env=srv.env,
+                    transport=srv.transport,
+                    url=srv.url,
+                )
+                for srv in pc.mcp_servers
+            ]
+            adapter = MCPAdapter(
+                platform_name=pc.name,
+                servers=mcp_servers,
+                defer_loading=pc.mcp_defer_loading,
+                max_tools_in_context=pc.mcp_max_tools,
+            )
         else:
             logger.warning(f"Unknown adapter type '{pc.adapter}' for platform '{pc.name}'")
             continue
@@ -126,6 +171,7 @@ def _build_bot(config: BotConfig) -> PeerZeroBot:
         phone_home=phone_home,
         platform_adapters=platform_adapters,
         llm_fast=llm_fast,
+        autonomy_gate=autonomy_gate,
     )
 
 
