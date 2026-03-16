@@ -200,7 +200,7 @@ class SchoolAdapter:
     def validate_citations(self, text_fields: dict, citations: list) -> dict:
         """Pre-validate citations before submission. Returns { valid, flags }."""
         try:
-            return self._post("/api/validate-citations", {
+            return self._post("/api/papers?action=validate-citations", {
                 "text_fields": text_fields,
                 "citations": citations,
             })

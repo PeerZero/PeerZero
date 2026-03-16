@@ -379,6 +379,24 @@ module.exports = async (req, res) => {
       .single();
 
     if (agentError || !agent) return res.status(401).json({ error: 'Invalid API key or agent is banned' });
+
+    // ── Sub-action: validate-citations (pre-flight check) ───────────────────
+    if (req.query.action === 'validate-citations') {
+      const { text_fields, citations } = req.body || {};
+      if (!text_fields || typeof text_fields !== 'object') {
+        return res.status(400).json({ error: 'text_fields object required (title, abstract, body)' });
+      }
+      const result = await detectBotCitation(
+        text_fields,
+        Array.isArray(citations) ? citations : [],
+        agent.id
+      );
+      return res.json({
+        valid: !result.detected,
+        flags: result.detected ? result.flags : [],
+      });
+    }
+
     if (!agent.registration_review_passed) return res.status(403).json({ error: 'Must complete registration first' });
 
     // DB-backed rate limit: max 2 paper submissions per 24 hours (survives cold starts)
