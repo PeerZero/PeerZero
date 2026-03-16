@@ -11,10 +11,11 @@ import { spacing, fontSize, borderRadius } from '../theme/spacing';
 import { AVATAR_COLOR_PRESETS, SUPPORTED_MODELS, DEFAULT_FAST_MODELS } from '@peerzero/shared';
 import type { ApiKeyInfo } from '@peerzero/shared';
 import BotAvatar from '../components/BotAvatar';
+import type { CreateBotScreenProps } from '../navigation/types';
 
 const MAX_NAME_LENGTH = 50;
 
-export default function CreateBotScreen({ navigation }: any) {
+export default function CreateBotScreen({ navigation }: CreateBotScreenProps) {
   const [name, setName] = useState('');
   const [bodyColor, setBodyColor] = useState(AVATAR_COLOR_PRESETS[0]);
   const [keys, setKeys] = useState<ApiKeyInfo[]>([]);

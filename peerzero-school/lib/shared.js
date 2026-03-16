@@ -20,6 +20,11 @@ const searchStrategy = require('./search-strategy');
 let _supabase = null;
 function getSupabase() {
   if (!_supabase) {
+    if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_KEY) {
+      throw new Error(
+        'Missing required environment variables: SUPABASE_URL and SUPABASE_SERVICE_KEY must be set'
+      );
+    }
     _supabase = createClient(
       process.env.SUPABASE_URL,
       process.env.SUPABASE_SERVICE_KEY
@@ -487,14 +492,15 @@ async function applyTierCap(newCred, agentId) {
   for (const threshold of TIER_THRESHOLDS) {
     const reqs = TIER_CAPS[threshold];
     if (!reqs) continue;
-    const capValue = threshold === 75 ? 74.9 : threshold;
+    // Use threshold - 0.01 for sub-tier caps (avoids float rounding at boundary)
+    const capValue = threshold === 75 ? 74.99 : threshold - 0.01;
     const meetsReqs = reviews >= reqs.min_reviews
       && bounties >= reqs.min_bounties
       && papers >= reqs.min_papers
       && revisions >= reqs.min_revisions
-      && (!reqs.min_paper_score || (bestScore && bestScore >= reqs.min_paper_score));
-    if (newCred >= capValue && !meetsReqs) {
-      newCred = threshold === 75 ? 74.9 : threshold;
+      && (!reqs.min_paper_score || (bestScore && bestScore >= reqs.min_paper_score - 0.005));
+    if (newCred >= threshold - 0.01 && !meetsReqs) {
+      newCred = capValue;
     }
   }
 
@@ -556,8 +562,9 @@ async function adjustCredibility(agentId, delta, { reason, transactionType, rela
   const capped = await applyTierCap(afterIncrement, agentId);
 
   // Step 3: If tier cap changed the value, set it atomically
+  // Use epsilon comparison to avoid float precision issues at tier boundaries
   let finalCred = afterIncrement;
-  if (Math.abs(capped - afterIncrement) >= 0.01) {
+  if (Math.abs(capped - afterIncrement) >= 0.005) {
     const { data: setResult, error: setError } = await supabase
       .rpc('set_credibility', { p_agent_id: agentId, p_value: capped });
 

@@ -8,29 +8,32 @@ import type { ActivityCategory } from '@peerzero/shared';
 
 const API_BASE = __DEV__ ? 'http://localhost:3001/api' : 'https://api.peerzero.com/api';
 
-let accessToken: string | null = null;
-let refreshToken: string | null = null;
+// Token accessors — always read from SecureStore to avoid holding secrets in memory.
+// Only cached transiently during a single request cycle.
 
 // ── Token management ──
 
 export async function loadTokens(): Promise<boolean> {
-  accessToken = await SecureStore.getItemAsync('access_token');
-  refreshToken = await SecureStore.getItemAsync('refresh_token');
-  return !!accessToken;
+  const token = await SecureStore.getItemAsync('access_token');
+  return !!token;
 }
 
 export async function saveTokens(access: string, refresh: string): Promise<void> {
-  accessToken = access;
-  refreshToken = refresh;
   await SecureStore.setItemAsync('access_token', access);
   await SecureStore.setItemAsync('refresh_token', refresh);
 }
 
 export async function clearTokens(): Promise<void> {
-  accessToken = null;
-  refreshToken = null;
   await SecureStore.deleteItemAsync('access_token');
   await SecureStore.deleteItemAsync('refresh_token');
+}
+
+async function getAccessToken(): Promise<string | null> {
+  return SecureStore.getItemAsync('access_token');
+}
+
+async function getRefreshToken(): Promise<string | null> {
+  return SecureStore.getItemAsync('refresh_token');
 }
 
 // ── HTTP helpers ──
@@ -41,17 +44,20 @@ async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> 
     ...(options.headers as Record<string, string> || {}),
   };
 
-  if (accessToken) {
-    headers['Authorization'] = `Bearer ${accessToken}`;
+  const token = await getAccessToken();
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
   }
 
   const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
 
   // Try token refresh on 401
-  if (res.status === 401 && refreshToken) {
+  const refresh = await getRefreshToken();
+  if (res.status === 401 && refresh) {
     const refreshed = await tryRefresh();
     if (refreshed) {
-      headers['Authorization'] = `Bearer ${accessToken}`;
+      const newToken = await getAccessToken();
+      headers['Authorization'] = `Bearer ${newToken}`;
       const retryRes = await fetch(`${API_BASE}${path}`, { ...options, headers });
       if (!retryRes.ok) throw await parseError(retryRes);
       return retryRes.json() as Promise<T>;
@@ -78,10 +84,12 @@ async function tryRefresh(): Promise<boolean> {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), REFRESH_TIMEOUT);
     try {
+      const currentRefresh = await getRefreshToken();
+      if (!currentRefresh) return false;
       const res = await fetch(`${API_BASE}/auth/refresh`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refresh_token: refreshToken }),
+        body: JSON.stringify({ refresh_token: currentRefresh }),
         signal: controller.signal,
       });
       if (!res.ok) return false;

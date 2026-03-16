@@ -1,6 +1,9 @@
 // =============================================================================
 // WebSocket activity stream — pushes real-time bot activity to connected clients
-// Mobile app connects to ws://server/ws?token=JWT&bot_id=UUID
+//
+// Auth: Client connects to ws://server/ws?bot_id=UUID, then sends an auth
+// message: { type: "auth", token: "JWT" }. The token is NOT passed in the URL
+// to avoid leaking JWTs in server logs, proxies, and browser history.
 // =============================================================================
 
 import { WebSocketServer, WebSocket } from 'ws';
@@ -19,59 +22,80 @@ interface ConnectedClient {
 
 const clients: Map<string, ConnectedClient[]> = new Map(); // botId → clients
 
+const AUTH_TIMEOUT_MS = 5000; // Client must send auth message within 5s
+
 export function setupWebSocket(server: Server): void {
   const wss = new WebSocketServer({ server, path: '/ws' });
 
   wss.on('connection', async (ws, req) => {
     try {
       const url = new URL(req.url || '', `http://${req.headers.host}`);
-      const token = url.searchParams.get('token');
       const botId = url.searchParams.get('bot_id');
 
-      if (!token || !botId) {
-        ws.close(4001, 'Missing token or bot_id');
+      if (!botId) {
+        ws.close(4001, 'Missing bot_id');
         return;
       }
 
-      // Verify JWT
-      let payload: JwtPayload;
-      try {
-        payload = jwt.verify(token, config.jwtSecret) as JwtPayload;
-      } catch {
-        ws.close(4002, 'Invalid token');
-        return;
-      }
+      // Wait for auth message instead of reading token from URL
+      const authTimer = setTimeout(() => {
+        ws.close(4002, 'Auth timeout — send { type: "auth", token: "JWT" }');
+      }, AUTH_TIMEOUT_MS);
 
-      // Verify the user owns this bot before allowing subscription
-      const bot = await queryOne<{ id: string }>(
-        'SELECT id FROM bots WHERE id = $1 AND user_id = $2',
-        [botId, payload.userId],
-      );
-      if (!bot) {
-        ws.close(4003, 'Bot not found or not owned by user');
-        return;
-      }
+      ws.once('message', async (raw) => {
+        clearTimeout(authTimer);
 
-      // Register client
-      const client: ConnectedClient = { ws, userId: payload.userId, botId };
-      const existing = clients.get(botId) || [];
-      existing.push(client);
-      clients.set(botId, existing);
-
-      ws.on('close', () => {
-        const botClients = clients.get(botId);
-        if (botClients) {
-          const filtered = botClients.filter(c => c.ws !== ws);
-          if (filtered.length === 0) {
-            clients.delete(botId);
-          } else {
-            clients.set(botId, filtered);
+        try {
+          const msg = JSON.parse(String(raw));
+          if (msg.type !== 'auth' || !msg.token) {
+            ws.close(4001, 'First message must be { type: "auth", token: "JWT" }');
+            return;
           }
+
+          // Verify JWT
+          let payload: JwtPayload;
+          try {
+            payload = jwt.verify(msg.token, config.jwtSecret) as JwtPayload;
+          } catch {
+            ws.close(4002, 'Invalid token');
+            return;
+          }
+
+          // Verify the user owns this bot before allowing subscription
+          const bot = await queryOne<{ id: string }>(
+            'SELECT id FROM bots WHERE id = $1 AND user_id = $2',
+            [botId, payload.userId],
+          );
+          if (!bot) {
+            ws.close(4003, 'Bot not found or not owned by user');
+            return;
+          }
+
+          // Register client
+          const client: ConnectedClient = { ws, userId: payload.userId, botId };
+          const existing = clients.get(botId) || [];
+          existing.push(client);
+          clients.set(botId, existing);
+
+          ws.on('close', () => {
+            const botClients = clients.get(botId);
+            if (botClients) {
+              const filtered = botClients.filter(c => c.ws !== ws);
+              if (filtered.length === 0) {
+                clients.delete(botId);
+              } else {
+                clients.set(botId, filtered);
+              }
+            }
+          });
+
+          // Send initial connected message
+          ws.send(JSON.stringify({ type: 'connected', bot_id: botId }));
+        } catch (err) {
+          logger.error({ err: err instanceof Error ? err.message : err }, 'WebSocket auth handler error');
+          try { ws.close(4000, 'Internal server error'); } catch { /* already closed */ }
         }
       });
-
-      // Send initial connected message
-      ws.send(JSON.stringify({ type: 'connected', bot_id: botId }));
     } catch (err) {
       logger.error({ err: err instanceof Error ? err.message : err }, 'WebSocket connection handler error');
       try {

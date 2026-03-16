@@ -93,7 +93,7 @@ def _build_bot(config: BotConfig) -> PeerZeroBot:
     for pc in config.platforms:
         if not pc.enabled:
             continue
-        api_key = getattr(pc, '_api_key', '')
+        api_key = pc.api_key
         if pc.adapter == "a2a":
             adapter = A2AAdapter(
                 platform_name=pc.name,

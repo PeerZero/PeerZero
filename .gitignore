@@ -1,7 +1,37 @@
 __pycache__/
 *.pyc
 keys.json
-.env
-.claude/
 node_modules/
 dist/
+build/
+out/
+
+# Environment files (secrets)
+.env
+.env.local
+.env.*.local
+
+# IDE / editor
+.idea/
+.vscode/settings.json
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Python
+venv/
+env/
+*.egg-info/
+
+# JS tooling
+.turbo/
+.next/
+coverage/
+*.tsbuildinfo
+
+# Claude Code
+.claude/

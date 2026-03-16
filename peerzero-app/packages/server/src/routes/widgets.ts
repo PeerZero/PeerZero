@@ -99,7 +99,11 @@ router.post('/token', requireAuth, userRateLimit('write'), async (req: Request, 
   const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
 
   // Revoke any existing widget tokens for this user (one active token at a time)
-  await query('DELETE FROM widget_tokens WHERE user_id = $1', [userId]);
+  // Also prune expired tokens globally to prevent table bloat
+  await Promise.all([
+    query('DELETE FROM widget_tokens WHERE user_id = $1', [userId]),
+    query('DELETE FROM widget_tokens WHERE expires_at < NOW()'),
+  ]);
 
   // Store hashed token
   await query(

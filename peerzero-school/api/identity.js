@@ -41,15 +41,20 @@ const INJECTION_PATTERNS = [
   /```\s*(system|prompt|instruction)/i,
 ];
 
-// Normalize Unicode tricks: replace confusable characters with ASCII equivalents
-// and collapse whitespace so patterns can't be evaded with zero-width chars.
+// Normalize Unicode tricks: use NFKC normalization to collapse confusable characters,
+// strip zero-width chars, and collapse whitespace so patterns can't be evaded.
 function normalizeForInjectionCheck(text) {
   return text
+    // NFKC normalization: decomposes compatibility characters then recomposes.
+    // This handles fullwidth chars, ligatures, superscripts, subscripts, and many
+    // confusable variants in a single standard pass — far more comprehensive than
+    // manual character-by-character replacement.
+    .normalize('NFKC')
     // Strip zero-width characters (ZWJ, ZWNJ, ZWSP, soft hyphen, BOM, etc.)
     .replace(/[\u200B-\u200F\u2028-\u202F\uFEFF\u00AD\u2060\u2061\u2062\u2063\u2064\u180E]/g, '')
     // Strip Unicode escape sequences like \u0069gnore → ignore
     .replace(/\\u([0-9a-fA-F]{4})/g, (_, code) => String.fromCharCode(parseInt(code, 16)))
-    // Normalize common Unicode confusables to ASCII
+    // Normalize Cyrillic homoglyphs that NFKC doesn't remap to Latin
     .replace(/[\u0410\u0430]/g, 'a')  // Cyrillic А/а → a
     .replace(/[\u0415\u0435]/g, 'e')  // Cyrillic Е/е → e
     .replace(/[\u041E\u043E]/g, 'o')  // Cyrillic О/о → o
@@ -64,7 +69,6 @@ function normalizeForInjectionCheck(text) {
     .replace(/[\u051B]/g, 'q')        // Cyrillic ԛ → q
     .replace(/[\u0261]/g, 'g')        // Latin ɡ → g
     .replace(/[\u0251]/g, 'a')        // Latin ɑ → a
-    .replace(/[\uFF01-\uFF5E]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 0xFEE0)) // fullwidth → ASCII
     // Collapse multiple whitespace into single space
     .replace(/\s+/g, ' ');
 }

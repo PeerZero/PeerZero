@@ -37,7 +37,7 @@ const app = express();
 app.use(helmet());
 app.use(cors({
   origin: config.isDev
-    ? true
+    ? ['http://localhost:3000', 'http://localhost:3001', 'http://localhost:8081', 'http://localhost:19006']
     : ['https://peerzero.science', 'https://www.peerzero.science', 'https://peer-zero.vercel.app'],
   credentials: true,
 }));

@@ -45,4 +45,7 @@ export const config = {
 
   // School URL (only used when useRealAdapters is true)
   defaultSchoolUrl: optional('DEFAULT_SCHOOL_URL', 'https://peerzero.science'),
+
+  // Frontend URLs for Stripe redirects
+  frontendUrl: optional('FRONTEND_URL', 'https://app.peerzero.com'),
 } as const;
