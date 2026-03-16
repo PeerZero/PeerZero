@@ -4,27 +4,42 @@ File-backed storage — JSON files with restricted permissions.
 Each namespace gets its own subdirectory.
 Each key gets its own JSON file.
 All files are owner-only (0o600).
+
+Thread safety: all read-modify-write operations use a per-path lock
+to prevent concurrent writes from losing data.
 """
 
 import json
 import stat
+import threading
 from pathlib import Path
+from typing import Any
 
 
 class FileStorage:
-    """File-backed storage implementation."""
+    """File-backed storage implementation with thread-safe writes."""
 
     def __init__(self, base_dir: str):
         self._base = Path(base_dir)
         self._base.mkdir(parents=True, exist_ok=True)
         self._base.chmod(stat.S_IRWXU)
+        self._locks: dict[str, threading.Lock] = {}
+        self._locks_guard = threading.Lock()
+
+    def _get_lock(self, path: Path) -> threading.Lock:
+        """Get or create a per-path lock for thread-safe file access."""
+        key = str(path)
+        with self._locks_guard:
+            if key not in self._locks:
+                self._locks[key] = threading.Lock()
+            return self._locks[key]
 
     def _path(self, namespace: str, key: str) -> Path:
         ns_dir = self._base / namespace
         ns_dir.mkdir(parents=True, exist_ok=True)
         return ns_dir / f"{key}.json"
 
-    def _read_raw(self, path: Path, default=None):
+    def _read_raw(self, path: Path, default: Any = None) -> Any:
         if not path.exists():
             return default
         try:
@@ -32,27 +47,31 @@ class FileStorage:
         except (json.JSONDecodeError, OSError):
             return default
 
-    def _write_raw(self, path: Path, data):
+    def _write_raw(self, path: Path, data: Any) -> None:
         path.write_text(json.dumps(data, indent=2, default=str), encoding="utf-8")
         path.chmod(stat.S_IRUSR | stat.S_IWUSR)
 
-    def read(self, namespace: str, key: str, default=None):
+    def read(self, namespace: str, key: str, default: Any = None) -> Any:
         return self._read_raw(self._path(namespace, key), default)
 
-    def write(self, namespace: str, key: str, data):
-        self._write_raw(self._path(namespace, key), data)
-
-    def append(self, namespace: str, key: str, entry: dict, max_entries: int = 0):
+    def write(self, namespace: str, key: str, data: Any) -> None:
         path = self._path(namespace, key)
-        items = self._read_raw(path, [])
-        if not isinstance(items, list):
-            items = []
-        items.append(entry)
-        if max_entries > 0 and len(items) > max_entries:
-            items = items[-max_entries:]
-        self._write_raw(path, items)
+        with self._get_lock(path):
+            self._write_raw(path, data)
 
-    def clear(self, namespace: str, key: str):
+    def append(self, namespace: str, key: str, entry: dict, max_entries: int = 0) -> None:
         path = self._path(namespace, key)
-        if path.exists():
-            self._write_raw(path, [])
+        with self._get_lock(path):
+            items = self._read_raw(path, [])
+            if not isinstance(items, list):
+                items = []
+            items.append(entry)
+            if max_entries > 0 and len(items) > max_entries:
+                items = items[-max_entries:]
+            self._write_raw(path, items)
+
+    def clear(self, namespace: str, key: str) -> None:
+        path = self._path(namespace, key)
+        with self._get_lock(path):
+            if path.exists():
+                self._write_raw(path, [])

@@ -72,8 +72,8 @@ export async function createCheckout(
       product_id: productId,
       ...metadata,
     },
-    success_url: `${config.isDev ? 'http://localhost:3001' : 'https://app.peerzero.com'}/payment/success?session_id={CHECKOUT_SESSION_ID}`,
-    cancel_url: `${config.isDev ? 'http://localhost:3001' : 'https://app.peerzero.com'}/payment/cancel`,
+    success_url: `${config.frontendUrl}/payment/success?session_id={CHECKOUT_SESSION_ID}`,
+    cancel_url: `${config.frontendUrl}/payment/cancel`,
   });
 
   // Store session ID
@@ -258,8 +258,8 @@ async function createDynamicGradeCheckout(
       grade: String(grade),
       type: 'grade_advancement',
     },
-    success_url: `${config.isDev ? 'http://localhost:3001' : 'https://app.peerzero.com'}/payment/success?session_id={CHECKOUT_SESSION_ID}`,
-    cancel_url: `${config.isDev ? 'http://localhost:3001' : 'https://app.peerzero.com'}/payment/cancel`,
+    success_url: `${config.frontendUrl}/payment/success?session_id={CHECKOUT_SESSION_ID}`,
+    cancel_url: `${config.frontendUrl}/payment/cancel`,
   });
 
   await query('UPDATE purchases SET stripe_session_id = $1 WHERE id = $2', [session.id, purchase!.id]);
@@ -408,8 +408,8 @@ export async function createBulkGradeCheckout(
       grades: gradesToUnlock.join(','),
       type: 'grade_advancement_bulk',
     },
-    success_url: `${config.isDev ? 'http://localhost:3001' : 'https://app.peerzero.com'}/payment/success?session_id={CHECKOUT_SESSION_ID}`,
-    cancel_url: `${config.isDev ? 'http://localhost:3001' : 'https://app.peerzero.com'}/payment/cancel`,
+    success_url: `${config.frontendUrl}/payment/success?session_id={CHECKOUT_SESSION_ID}`,
+    cancel_url: `${config.frontendUrl}/payment/cancel`,
   });
 
   await query('UPDATE purchases SET stripe_session_id = $1 WHERE id = $2', [session.id, purchase!.id]);

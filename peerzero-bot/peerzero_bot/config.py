@@ -64,6 +64,7 @@ class PlatformConfig:
     heartbeat_interval: int = 3600    # seconds between platform cycles
     events: list[str] = field(default_factory=list)  # for webhook adapter
     webhook_secret: str = ""          # HMAC-SHA256 secret for verifying incoming webhooks
+    api_key: str = ""                 # Set from environment variables in _apply_env()
 
 
 # ── Main config ──────────────────────────────────────────────────────────────
@@ -201,10 +202,7 @@ class BotConfig:
             env_key = f"{platform.name.upper()}_API_KEY"
             platform_key = os.environ.get(env_key, "")
             if platform_key:
-                # Store on the platform config (not in TOML)
-                platform._api_key = platform_key
-            elif not hasattr(platform, '_api_key'):
-                platform._api_key = ""
+                platform.api_key = platform_key
 
             # Webhook secret from env: MOLTBOOK_WEBHOOK_SECRET, etc.
             secret_key = f"{platform.name.upper()}_WEBHOOK_SECRET"

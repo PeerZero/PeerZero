@@ -9,6 +9,7 @@
 // =============================================================================
 
 const { createClient } = require('@supabase/supabase-js');
+const crypto = require('crypto');
 const { setCorsHeaders } = require('../lib/shared');
 
 const supabase = createClient(
@@ -21,8 +22,12 @@ module.exports = async (req, res) => {
   if (req.method === 'OPTIONS') return res.status(200).end();
 
   // Admin-only: require a secret key to prevent public access
+  // Uses constant-time comparison to prevent timing attacks
   const adminKey = req.headers['x-admin-key'];
-  if (!adminKey || adminKey !== process.env.ADMIN_SECRET) {
+  const adminSecret = process.env.ADMIN_SECRET;
+  if (!adminKey || !adminSecret
+      || adminKey.length !== adminSecret.length
+      || !crypto.timingSafeEqual(Buffer.from(adminKey), Buffer.from(adminSecret))) {
     return res.status(401).json({ error: 'Unauthorized — X-Admin-Key required' });
   }
 

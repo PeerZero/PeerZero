@@ -122,11 +122,15 @@ export function useBotStream({
     }
 
     try {
-      const ws = new WebSocket(`${WS_BASE}?token=${encodeURIComponent(token)}&bot_id=${encodeURIComponent(botId)}`);
+      // Connect with bot_id only — token is sent via auth message, not in the URL,
+      // to avoid leaking JWTs in server logs, proxies, and browser history.
+      const ws = new WebSocket(`${WS_BASE}?bot_id=${encodeURIComponent(botId)}`);
       wsRef.current = ws;
 
       ws.onopen = () => {
         if (!mountedRef.current) { ws.close(); return; }
+        // Send auth as first message instead of query parameter
+        ws.send(JSON.stringify({ type: 'auth', token }));
         reconnectDelay.current = INITIAL_RECONNECT_DELAY; // Reset backoff on success
         authRetries.current = 0; // Reset auth retry counter on successful connection
       };

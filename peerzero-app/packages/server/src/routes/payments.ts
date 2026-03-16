@@ -56,8 +56,8 @@ router.post('/grade-checkout-bulk', requireAuth, async (req: Request, res: Respo
     target = through_grade;
   } else {
     target = parseInt(through_grade, 10);
-    if (!Number.isFinite(target) || target < 1) {
-      res.status(400).json({ error: 'through_grade must be a grade number, "graduation", or "all"' });
+    if (!Number.isFinite(target) || target < 1 || target > 100) {
+      res.status(400).json({ error: 'through_grade must be a grade number (1-100), "graduation", or "all"' });
       return;
     }
   }

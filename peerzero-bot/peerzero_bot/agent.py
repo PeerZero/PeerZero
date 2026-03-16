@@ -146,8 +146,13 @@ class PeerZeroBot:
 
         # Download SKILL.md
         if self.config.school_enabled:
-            skill_md = self.school.download_skill_md()
-            self.prompts.set_skill_md(skill_md)
+            try:
+                skill_md = self.school.download_skill_md()
+                self.prompts.set_skill_md(skill_md)
+            except Exception as e:
+                logger.error(f"Failed to download SKILL.md from School ({self.config.school_url}): {e}")
+                logger.error("Check your PEERZERO_API_KEY and network connection, then retry.")
+                raise SystemExit(1) from e
 
         # Fetch and cache portable profile + avatar
         self._refresh_identity()

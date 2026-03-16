@@ -19,7 +19,8 @@ import { broadcastExternalActivity } from '../websocket/activity-stream';
 
 const router = Router();
 
-// Rate limit state (in-memory, per-process — sufficient for single-instance)
+// Rate limit state (in-memory, per-process)
+// TODO: Move to Redis for multi-instance deployments
 const tokenBuckets = new Map<string, { count: number; resetAt: number }>();
 const RATE_LIMIT = 30;
 const RATE_WINDOW_MS = 60_000;
@@ -92,10 +93,11 @@ router.post('/', async (req: Request, res: Response) => {
 
   let botTimestamp: string | null = null;
   if (timestamp) {
-    try {
-      botTimestamp = new Date(timestamp).toISOString();
-    } catch {
-      // Ignore invalid timestamp
+    const parsed = new Date(timestamp);
+    if (!isNaN(parsed.getTime())) {
+      botTimestamp = parsed.toISOString();
+    } else {
+      logger.warn({ botId: bot?.id, timestamp }, 'Invalid timestamp in phone-home report');
     }
   }
 

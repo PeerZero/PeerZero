@@ -6,6 +6,7 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { config } from '../config';
+import { logger } from '../lib/logger';
 
 export interface JwtPayload {
   userId: string;
@@ -35,6 +36,8 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
     req.user = payload;
     next();
   } catch {
+    const ip = req.headers['x-forwarded-for']?.toString().split(',')[0]?.trim() || req.ip || 'unknown';
+    logger.warn({ ip, path: req.path }, 'Auth failed: invalid or expired token');
     res.status(401).json({ error: 'Invalid or expired token' });
   }
 }

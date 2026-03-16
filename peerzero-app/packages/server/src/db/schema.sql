@@ -90,6 +90,7 @@ CREATE TABLE bots (
   -- LLM connection
   llm_api_key_id  UUID REFERENCES llm_api_keys(id) ON DELETE SET NULL,
   llm_model       TEXT DEFAULT 'claude-opus-4-6',
+  fast_llm_model  TEXT DEFAULT NULL,
 
   -- Runtime state
   status          TEXT DEFAULT 'stopped' CHECK (status IN ('stopped', 'running', 'paused', 'error')),
@@ -105,6 +106,7 @@ CREATE TABLE bots (
   cached_next_action TEXT,
   cached_profile   JSONB,
   cache_updated_at TIMESTAMPTZ,
+  cache_stale      BOOLEAN DEFAULT FALSE,
 
   created_at      TIMESTAMPTZ DEFAULT NOW(),
   updated_at      TIMESTAMPTZ DEFAULT NOW()

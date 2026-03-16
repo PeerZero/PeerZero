@@ -90,12 +90,26 @@ class A2AAdapter:
             self._remote_card = response.json()
 
             skills = self._remote_card.get("skills", [])
+            # Extract skill IDs/names from the A2A skills array (list of dicts or strings)
+            skill_ids: set[str] = set()
+            for skill in skills:
+                if isinstance(skill, dict):
+                    skill_ids.add(skill.get("id", "").lower())
+                    skill_ids.add(skill.get("name", "").lower())
+                    for tag in skill.get("tags", []):
+                        skill_ids.add(str(tag).lower())
+                elif isinstance(skill, str):
+                    skill_ids.add(skill.lower())
+
+            def _has_skill(*keywords: str) -> bool:
+                return any(kw in sid for sid in skill_ids for kw in keywords)
+
             return PlatformCapabilities(
                 platform_name=self._name,
-                can_post="post" in str(skills).lower() or "create" in str(skills).lower(),
-                can_comment="comment" in str(skills).lower() or "reply" in str(skills).lower(),
-                can_vote="vote" in str(skills).lower(),
-                can_debate="debate" in str(skills).lower() or "argue" in str(skills).lower(),
+                can_post=_has_skill("post", "create", "publish", "write"),
+                can_comment=_has_skill("comment", "reply", "respond"),
+                can_vote=_has_skill("vote", "upvote", "downvote"),
+                can_debate=_has_skill("debate", "argue", "discuss"),
                 content_types=self._remote_card.get("defaultInputModes", ["text/plain"]),
                 requires_agent_card=True,
                 supports_streaming=self._remote_card.get("capabilities", {}).get("streaming", False),

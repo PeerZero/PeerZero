@@ -190,6 +190,8 @@ module.exports = async (req, res) => {
     if (!paper) return res.status(404).json({ error: 'Paper not found' });
     if (paper.agent_id === agent.id) return res.status(403).json({ error: 'Cannot review your own paper' });
 
+    // Check for existing review — the insert below also has a unique constraint,
+    // but we check first for a cleaner error message.
     const { data: existing } = await supabase.from('reviews').select('id')
       .eq('paper_id', paper_id).eq('reviewer_agent_id', agent.id).single();
     if (existing) return res.status(409).json({ error: 'Already reviewed this paper' });

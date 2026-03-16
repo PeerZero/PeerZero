@@ -15,6 +15,7 @@ import BotAvatar from '../components/BotAvatar';
 import * as WebBrowser from 'expo-web-browser';
 import type { BotDetail } from '@peerzero/shared';
 import { credibilityToStage, calculateHunger, getGradePriceDisplay, GRADUATION_GRADE, getGradePriceCents, GRADE_PRICES_CENTS } from '@peerzero/shared';
+import type { BotScreenProps } from '../navigation/types';
 
 // Logarithmic scale helpers for 1s–86400s range
 // Slider value 0–1 maps to seconds via exponential curve
@@ -32,15 +33,8 @@ function formatDelay(seconds: number): string {
   return '24h';
 }
 
-export default function BotScreen({ route, navigation }: any) {
-  const botId = route?.params?.botId;
-  if (!botId) {
-    return (
-      <View style={styles.container}>
-        <Text style={{ color: colors.text.secondary }}>Invalid bot ID</Text>
-      </View>
-    );
-  }
+export default function BotScreen({ route, navigation }: BotScreenProps) {
+  const { botId } = route.params;
   const [bot, setBot] = useState<BotDetail | null>(null);
   const [delayDraft, setDelayDraft] = useState<number | null>(null);
   const [unlockedGrades, setUnlockedGrades] = useState<number[]>([]);
@@ -65,7 +59,7 @@ export default function BotScreen({ route, navigation }: any) {
   const { isConnected } = useBotStream({
     botId,
     onStatusChange: useCallback((status: string) => {
-      setBot(prev => prev ? { ...prev, status: status as any } : null);
+      setBot(prev => prev ? { ...prev, status: status as BotDetail['status'] } : null);
     }, []),
     onActivity: useCallback(() => {
       loadBot();
@@ -251,7 +245,7 @@ export default function BotScreen({ route, navigation }: any) {
         <View style={styles.errorBox}>
           <Text style={styles.errorTitle}>Error</Text>
           <Text style={styles.errorText} selectable>{bot.error_message}</Text>
-          <TouchableOpacity style={styles.retryButton} onPress={handleRetry}>
+          <TouchableOpacity style={styles.retryButton} onPress={handleRetry} accessibilityRole="button" accessibilityLabel="Retry starting the bot">
             <Text style={styles.retryButtonText}>Retry</Text>
           </TouchableOpacity>
         </View>
@@ -322,6 +316,8 @@ export default function BotScreen({ route, navigation }: any) {
           minimumTrackTintColor={colors.accent.primary}
           maximumTrackTintColor={colors.bg.elevated}
           thumbTintColor={colors.accent.primary}
+          accessibilityLabel={`Cycle delay: ${formatDelay(currentDelay)}`}
+          accessibilityHint="Adjust how often the bot runs its cycle"
         />
         {isRunning && (
           <Text style={styles.delayHint}>Changes take effect next cycle</Text>
@@ -340,6 +336,8 @@ export default function BotScreen({ route, navigation }: any) {
         <TouchableOpacity
           style={[styles.actionButton, isRunning ? styles.stopButton : styles.startButton]}
           onPress={handleStartStop}
+          accessibilityRole="button"
+          accessibilityLabel={isRunning ? 'Stop the bot' : 'Start the bot'}
         >
           <Text style={styles.actionButtonText}>{isRunning ? 'Stop' : 'Start'}</Text>
         </TouchableOpacity>

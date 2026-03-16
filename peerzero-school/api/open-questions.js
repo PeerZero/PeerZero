@@ -109,8 +109,8 @@ module.exports = async (req, res) => {
 
     if (field_id) query = query.eq('field_id', field_id);
 
-    const limit = Math.min(parseInt(req.query.limit) || 50, 100);
-    const offset = parseInt(req.query.offset) || 0;
+    const limit = Math.max(1, Math.min(parseInt(req.query.limit) || 50, 100));
+    const offset = Math.max(0, parseInt(req.query.offset) || 0);
     query = query.range(offset, offset + limit - 1);
 
     const { data: questions, error } = await query;

@@ -54,18 +54,16 @@ export async function loginUser(email: string, password: string) {
 export async function refreshTokens(refreshToken: string): Promise<TokenPair> {
   const tokenHash = hashToken(refreshToken);
 
+  // Atomic delete-and-return prevents race conditions where two concurrent
+  // refresh requests could both consume the same token.
   const stored = await queryOne<{ id: string; user_id: string; expires_at: string }>(
-    'SELECT id, user_id, expires_at FROM refresh_tokens WHERE token_hash = $1',
+    'DELETE FROM refresh_tokens WHERE token_hash = $1 RETURNING id, user_id, expires_at',
     [tokenHash],
   );
   if (!stored) throw new AppError(401, 'Invalid refresh token');
   if (new Date(stored.expires_at) < new Date()) {
-    await query('DELETE FROM refresh_tokens WHERE id = $1', [stored.id]);
     throw new AppError(401, 'Refresh token expired');
   }
-
-  // Rotate: delete old, issue new
-  await query('DELETE FROM refresh_tokens WHERE id = $1', [stored.id]);
 
   const user = await queryOne<{ email: string }>('SELECT email FROM users WHERE id = $1', [stored.user_id]);
   if (!user) throw new AppError(401, 'User not found');
