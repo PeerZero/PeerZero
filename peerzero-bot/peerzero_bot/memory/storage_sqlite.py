@@ -21,7 +21,7 @@ class SqliteStorage:
         self._base.chmod(stat.S_IRWXU)
 
         self._db_path = self._base / "memory.db"
-        self._conn = sqlite3.connect(str(self._db_path))
+        self._conn = sqlite3.connect(str(self._db_path), timeout=10.0)
         self._db_path.chmod(stat.S_IRUSR | stat.S_IWUSR)
 
         self._conn.execute("""

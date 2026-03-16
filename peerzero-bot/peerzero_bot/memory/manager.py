@@ -27,6 +27,8 @@ import logging
 from typing import Protocol, Optional
 from datetime import datetime, timezone
 
+from ..utils import truncate_json
+
 logger = logging.getLogger("peerzero-bot.memory")
 
 
@@ -231,12 +233,12 @@ class MemoryManager:
 
         cached = self.get_platform_context(platform_name)
         if cached:
-            sections.append(f"CURRENT PLATFORM STATE:\n{json.dumps(cached, indent=2, default=str)[:3000]}")
+            sections.append(f"CURRENT PLATFORM STATE:\n{truncate_json(json.dumps(cached, indent=2, default=str), 3000)}")
 
         history = self.get_platform_history(platform_name)
         if history:
             recent = history[-5:]
-            sections.append(f"RECENT INTERACTIONS ({len(history)} total, showing last {len(recent)}):\n{json.dumps(recent, indent=2, default=str)[:3000]}")
+            sections.append(f"RECENT INTERACTIONS ({len(history)} total, showing last {len(recent)}):\n{truncate_json(json.dumps(recent, indent=2, default=str), 3000)}")
 
         if not sections:
             return ""

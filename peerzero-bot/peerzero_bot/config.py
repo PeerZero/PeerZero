@@ -209,9 +209,15 @@ class BotConfig:
         if os.environ.get("PEERZERO_URL"):
             self.school_url = os.environ["PEERZERO_URL"]
         if os.environ.get("CYCLE_DELAY"):
-            self.cycle_delay = int(os.environ["CYCLE_DELAY"])
+            try:
+                self.cycle_delay = int(os.environ["CYCLE_DELAY"])
+            except ValueError:
+                logger.warning(f"CYCLE_DELAY is not a valid integer: {os.environ['CYCLE_DELAY']!r}, using default {self.cycle_delay}")
         if os.environ.get("MAX_CYCLES"):
-            self.max_cycles = int(os.environ["MAX_CYCLES"])
+            try:
+                self.max_cycles = int(os.environ["MAX_CYCLES"])
+            except ValueError:
+                logger.warning(f"MAX_CYCLES is not a valid integer: {os.environ['MAX_CYCLES']!r}, using default {self.max_cycles}")
         if os.environ.get("MEMORY_DIR"):
             self.memory_path = os.environ["MEMORY_DIR"]
         if os.environ.get("LOG_LEVEL"):

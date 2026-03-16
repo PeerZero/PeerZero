@@ -44,14 +44,18 @@ router.post('/', async (req: Request, res: Response) => {
     res.status(401).json({ error: 'Missing phone-home token' });
     return;
   }
-  const token = authHeader.slice(7);
-  if (!token || token.length < 32) {
+  const token = authHeader.slice(7).trim();
+  if (!token || token.length < 32 || token.length > 256) {
     res.status(401).json({ error: 'Invalid token format' });
     return;
   }
 
   // Hash token for lookup
   const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+  if (tokenHash.length !== 64) {
+    res.status(401).json({ error: 'Invalid token' });
+    return;
+  }
 
   // Rate limit
   if (!checkPhoneHomeRateLimit(tokenHash)) {

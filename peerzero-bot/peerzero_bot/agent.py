@@ -119,6 +119,8 @@ class PeerZeroBot:
         self._my_review_ids: list[str] = []
         self._portable_profile: dict = {}
         self._agent_card: dict = {}
+        self._identity_refresh_interval: int = 10  # refresh every N school cycles
+        self._last_identity_refresh: int = 0
 
     # ═══════════════════════════════════════════════════════════════════════
     # STARTUP
@@ -215,6 +217,11 @@ class PeerZeroBot:
 
         self._process_memory_triggers(profile)
         self.school.validate_bounties()
+
+        # Periodic identity refresh to avoid using expired profiles
+        if self.cycle_count - self._last_identity_refresh >= self._identity_refresh_interval:
+            self._refresh_identity()
+            self._last_identity_refresh = self.cycle_count
 
         # Step 4: Report to app
         if self.phone_home and result:
