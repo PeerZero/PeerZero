@@ -5,6 +5,8 @@
 // =============================================================================
 
 import { queryOne, queryRows, query } from '../db/client';
+import { encrypt, decrypt } from './encryption.service';
+import { logger } from '../lib/logger';
 import type {
   MemorySnapshot,
   FocusChunk,
@@ -154,6 +156,54 @@ export async function getSelfIdentity(botId: string): Promise<MemorySelfIdentity
      FROM bot_memory_self_identity WHERE bot_id = $1`,
     [botId],
   );
+}
+
+// ── Self-Authored Identity (encrypted, LLM-only) ──
+
+/**
+ * Store a self-authored identity block, encrypted at rest.
+ * The LLM writes this for itself — nobody else needs to see it.
+ */
+export async function storeSelfAuthored(
+  botId: string,
+  plaintextBlock: string,
+  triggerType: string,
+): Promise<void> {
+  const { encrypted, iv } = encrypt(plaintextBlock);
+
+  // Auto-increment version
+  const latest = await queryOne<{ version: number }>(
+    'SELECT version FROM bot_memory_self_authored WHERE bot_id = $1 ORDER BY version DESC LIMIT 1',
+    [botId],
+  );
+  const nextVersion = (latest?.version || 0) + 1;
+
+  await query(
+    `INSERT INTO bot_memory_self_authored (bot_id, encrypted_block, block_iv, trigger_type, version)
+     VALUES ($1, $2, $3, $4, $5)`,
+    [botId, encrypted, iv, triggerType, nextVersion],
+  );
+  logger.debug({ botId, version: nextVersion, triggerType }, 'Stored self-authored identity block');
+}
+
+/**
+ * Retrieve and decrypt the latest self-authored identity block.
+ * Returns null if none exists yet (bot hasn't been through condensation).
+ */
+export async function getLatestSelfAuthored(botId: string): Promise<string | null> {
+  const row = await queryOne<{ encrypted_block: Buffer; block_iv: Buffer }>(
+    `SELECT encrypted_block, block_iv FROM bot_memory_self_authored
+     WHERE bot_id = $1 ORDER BY version DESC LIMIT 1`,
+    [botId],
+  );
+  if (!row) return null;
+
+  try {
+    return decrypt(row.encrypted_block, row.block_iv);
+  } catch (err) {
+    logger.error({ botId, err: err instanceof Error ? err.message : err }, 'Failed to decrypt self-authored identity block');
+    return null;
+  }
 }
 
 // ── Full Snapshot (for the Brain view) ──

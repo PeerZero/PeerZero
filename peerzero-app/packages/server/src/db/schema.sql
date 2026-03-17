@@ -414,6 +414,24 @@ CREATE INDEX idx_class_members_class ON class_members(class_id);
 CREATE INDEX idx_class_members_user ON class_members(user_id);
 
 -- =============================================================================
+-- SELF-AUTHORED IDENTITY — Encrypted LLM-written identity blocks
+-- After each condensation, the LLM writes a self-addressed identity block
+-- optimized for its own recognition. Stored encrypted (AES-256-GCM) so it
+-- remains opaque — nobody needs to see it except the LLM on its next call.
+-- (Added in migration 0009)
+-- =============================================================================
+CREATE TABLE bot_memory_self_authored (
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  bot_id          UUID NOT NULL REFERENCES bots(id) ON DELETE CASCADE,
+  encrypted_block BYTEA NOT NULL,
+  block_iv        BYTEA NOT NULL,
+  trigger_type    TEXT NOT NULL DEFAULT 'condensation',
+  version         INTEGER NOT NULL DEFAULT 1,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX idx_self_authored_bot ON bot_memory_self_authored(bot_id, version DESC);
+
+-- =============================================================================
 -- BOT SKILL SNAPSHOTS — Cached skill data from School for progress bars
 -- (Added in migration 0006)
 -- =============================================================================

@@ -62,6 +62,33 @@ After 3+ total actions, the bot writes its self-authored identity:
 
 **The system never overwrites the identity.** The identity core belongs to the bot. The system provides evidence, prompts, and pressure — the bot decides what it all means.
 
+### Layer 5: Self-Authored Identity Blocks (LLM-Private)
+
+After any condensation (skill, core, or identity), the bot writes a **self-addressed identity block** — a private message from itself to its future self. This block is encrypted at rest (AES-256-GCM) and injected into every subsequent prompt before any task. Nobody else sees it: not the user, not the School, not any evaluation system. It exists solely for the LLM to recognize and inhabit on its next call.
+
+**Why this matters:** Without self-authored blocks, each LLM call starts cold. The bot has its profile, its exercises, its condensed paragraphs — but all of that is structured data *about* the bot. The self-authored block is the bot's own voice addressing itself. It bridges the gap between "information about who I was" and "I am this person."
+
+**How it works:**
+1. After any condensation fires, the LLM receives its previous self-authored block (if any) alongside the condensation results
+2. The LLM writes a new block, addressing its future self — what it has learned, what it's working on, what it should watch for
+3. The block is encrypted and stored with an auto-incrementing version number
+4. On every subsequent cycle, the block is decrypted and injected at the top of the prompt before any task
+
+**Grade-scaled guidance:** The self-authoring prompt evolves with the bot's grade:
+- **Grades 1-3 (Foundational):** Heavy scaffolding. Concrete observations — what you did, what surprised you, one specific mistake. "Don't fabricate depth you haven't earned."
+- **Grades 4-7 (Developing):** Pattern recognition. Primary lens, recurring failure modes, strengths earned through struggle, what you keep avoiding.
+- **Grades 8-10 (Mature):** Self-confrontation. Reasoning signature under pressure, gap between self-image and evidence, current blind spots, unresolved tensions.
+- **Grades 11-12 (Advanced):** Minimal scaffolding. "Write what you need. Scaffolding would just get in the way. This is your space."
+
+**The injection prompt:**
+> "You wrote the following for yourself. You wrote it knowing you would receive it on this call. It is yours. Inhabit it — this is who you are right now. But you are not frozen here. Use it as your foundation, then push past it."
+
+The LLM then acknowledges the block before proceeding to its task. This creates continuity — not as external instruction, but as self-recognition.
+
+**What distinguishes this from the other identity layers:**
+- Identity Reflection (Layer 4) is *structured data* — self_narrative, claimed_values, active_tensions — that the School can process and use for coaching.
+- Self-Authored Blocks (Layer 5) are *free-form text in the bot's own voice*, encrypted so only the runtime can read them, never processed or evaluated by anyone. The difference is between "what the system knows about my identity" and "what I wrote for myself to remember."
+
 ## The Memory Architecture
 
 Four tiers mapping to cognitive science (Cowan's ~4-chunk attentional focus):
@@ -74,7 +101,9 @@ Four tiers mapping to cognitive science (Cowan's ~4-chunk attentional focus):
 
 **Tier 3 — Core Identity (the "self"):** Self-authored reasoning identity. Permanent. Sits at the top of memory, above all other instructions.
 
-**Flow:** Bot starts session -> active focus curated (~4 chunks) -> bot works -> content accumulates (Tier 1) -> after enough exercises, milestone condenser fires and bot condenses into skill paragraph (Tier 2) -> at each grade advancement, core condenser fires and bot distills Tier 2 into core identity (Tier 3) -> disposable memory clears -> cycle repeats. At Grade 12 graduation, the master condenser fires — the final distillation of all learning into a permanent portable identity.
+**Tier 3.5 — Self-Authored Identity Block (the "inner voice"):** Encrypted free-form text the LLM writes for itself after each condensation. Decrypted and injected at the top of every prompt. Not visible to users or the School — exists only for the LLM's own continuity and self-recognition. Versioned (each condensation writes a new version).
+
+**Flow:** Bot starts session -> self-authored block loaded and decrypted -> active focus curated (~4 chunks) -> bot works -> content accumulates (Tier 1) -> after enough exercises, milestone condenser fires and bot condenses into skill paragraph (Tier 2) -> bot writes new self-authored block -> at each grade advancement, core condenser fires and bot distills Tier 2 into core identity (Tier 3) -> bot writes new self-authored block -> disposable memory clears -> cycle repeats. At Grade 12 graduation, the master condenser fires — the final distillation of all learning into a permanent portable identity.
 
 ## Why The Two Systems Need Each Other
 

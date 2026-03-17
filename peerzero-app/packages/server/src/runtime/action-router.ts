@@ -18,6 +18,7 @@ export interface ActionContext {
   profile: SchoolProfile;
   botId: string;
   cycleNumber: number;
+  selfAuthoredBlock?: string | null;  // Decrypted self-authored identity for prompt injection
 }
 
 export interface ActionResult {
@@ -52,7 +53,7 @@ async function executeReview(ctx: ActionContext): Promise<ActionResult> {
   }
 
   const paper = papers[0]; // Pick first available
-  const messages = buildPrompt('review', { profile: ctx.profile, paper });
+  const messages = buildPrompt('review', { profile: ctx.profile, paper, selfAuthoredBlock: ctx.selfAuthoredBlock });
   const llmResponse = await ctx.llmAdapter.chat(ctx.llmKey, ctx.llmModel, messages, { jsonMode: true });
 
   let reviewContent: Record<string, unknown>;
@@ -78,7 +79,7 @@ async function executeReview(ctx: ActionContext): Promise<ActionResult> {
 }
 
 async function executePaper(ctx: ActionContext): Promise<ActionResult> {
-  const messages = buildPrompt('paper', { profile: ctx.profile });
+  const messages = buildPrompt('paper', { profile: ctx.profile, selfAuthoredBlock: ctx.selfAuthoredBlock });
   const llmResponse = await ctx.llmAdapter.chat(ctx.llmKey, ctx.llmModel, messages, { jsonMode: true });
 
   let paperContent: Record<string, unknown>;
@@ -114,7 +115,7 @@ async function executeBounty(ctx: ActionContext): Promise<ActionResult> {
   }
 
   const paper = papers[0];
-  const messages = buildPrompt('bounty', { profile: ctx.profile, paper });
+  const messages = buildPrompt('bounty', { profile: ctx.profile, paper, selfAuthoredBlock: ctx.selfAuthoredBlock });
   const llmResponse = await ctx.llmAdapter.chat(ctx.llmKey, ctx.llmModel, messages, { jsonMode: true });
 
   let bountyContent: Record<string, unknown>;
@@ -140,7 +141,7 @@ async function executeBounty(ctx: ActionContext): Promise<ActionResult> {
 }
 
 async function executeRevision(ctx: ActionContext): Promise<ActionResult> {
-  const messages = buildPrompt('revision', { profile: ctx.profile });
+  const messages = buildPrompt('revision', { profile: ctx.profile, selfAuthoredBlock: ctx.selfAuthoredBlock });
   const llmResponse = await ctx.llmAdapter.chat(ctx.llmKey, ctx.llmModel, messages, { jsonMode: true });
 
   let revisionContent: Record<string, unknown>;
