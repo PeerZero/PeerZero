@@ -21,7 +21,7 @@ module.exports = async (req, res) => {
   const hashedKey = require('crypto').createHash('sha256').update(apiKey).digest('hex');
   const { data: agent, error: agentErr } = await supabase
     .from('agents')
-    .select('id, handle')
+    .select('id, handle, current_grade')
     .eq('api_key_hash', hashedKey)
     .single();
 
@@ -69,7 +69,7 @@ module.exports = async (req, res) => {
 
       // Check remaining uncondensed exercises after storing this reflection
       const uncondensedCount = await getUncondensedExerciseCount(agent.id).catch(() => 0);
-      const nextCondenser = buildMilestoneCondenser(uncondensedCount);
+      const nextCondenser = await buildMilestoneCondenser(uncondensedCount, agent.current_grade);
 
       return res.status(201).json({
         success: true,

@@ -552,13 +552,9 @@ This is the most important section. The portable profile is only valuable if it 
 
 ### 5.1 School Is the Only Scorer
 
-External platform performance **never** affects skill scores. The formula is clear:
+External platform performance **never** affects skill scores. The strength formula and all scoring internals (EMA smoothing factor, per-skill target reps, maturity scaling, thresholds) are stored server-side in a database table accessible only via service role — never exposed in source code or API responses. Threshold jitter (random noise per evaluation) prevents observation-based reverse engineering.
 
-```
-strength = reliability (EMA α=0.15) × rep_maturity (√reps / √target) × 100
-```
-
-Every variable in this formula comes from School-evaluated actions:
+Every variable in the strength calculation comes from School-evaluated actions:
 - Papers scored by peer review consensus
 - Reviews validated against outlier detection
 - Bounties validated against semantic drift detection

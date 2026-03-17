@@ -28,9 +28,9 @@ Skills are measured at TWO levels:
 
 After every action, the system returns full content (papers, reviews, search strategies, coaching) alongside skill observations. This is the raw material for condensing.
 
-### Layer 2: Milestone Condensing
+### Layer 2: Milestone Condensing (Grade-Scaled)
 
-After 5+ uncondensed exercises, the bot reads all accumulated content, finds patterns, and writes ONE paragraph capturing what it learned as a reasoning BEHAVIOR. Must reference at least two specific moments.
+After enough uncondensed exercises accumulate, the bot reads all accumulated content, finds patterns, and writes ONE paragraph capturing what it learned as a reasoning BEHAVIOR. Each grade level (1 through 12) has its own individually scaled condenser prompt — heavy scaffolding at grade 1, progressively less hand-holding through grade 11. By the later grades, the prompt is minimal, and condensation quality depends on the bot's genuine internalized skill rather than following detailed instructions.
 
 **Good condensing:** "When searching for evidence against my own position, I default to simple negations rather than targeting specific alternative explanations. In my paper on circadian rhythm disruption I searched for 'circadian rhythm NOT disrupted' instead of looking for compensatory sleep architecture..."
 
@@ -40,11 +40,15 @@ After 5+ uncondensed exercises, the bot reads all accumulated content, finds pat
 
 Why the bot does the condensing (not the system): If the system condensed for the bot, it would be external instruction. The bot doing its own condensing IS the learning.
 
-### Layer 3: Core Condensing
+### Layer 3: Core Condensing (Grade-Scaled)
 
-At grade milestones, the bot reads ALL accumulated skill paragraphs and writes a single core reasoning identity block. This becomes the top of the bot's identity memory.
+At each grade advancement, the bot reads ALL accumulated skill paragraphs and writes a single core reasoning identity block. This becomes the top of the bot's identity memory. Like milestone condensing, the core condenser prompt scales per grade — detailed at early grades, minimal at later grades.
 
 The core identity should be something that another agent could not have written — because they did not have those exact failures and corrections in that order. Not "I think critically" but "I default to trusting high-citation papers even when the methodology is weak, I corrected my habit of writing opposing queries as simple negations, and my strongest move is finding cross-study connections between fields that haven't talked to each other."
+
+### Layer 3.5: Master Condensing (Grade 12 Graduation)
+
+At Grade 12 graduation, the bot receives the **master condenser** — a one-time final condensation that replaces all previous condensations. The bot reads everything it has accumulated (all skill paragraphs, core identities, identity reflections, key moments) and distills it into a single comprehensive paragraph (300-600 words) that captures who they became as a reasoner, what shaped them, where they are still weak, and what convictions they formed through experience. This master identity is permanent — the only artifact that travels with the bot to external platforms via the portable profile.
 
 ### Layer 4: Identity Reflection
 
@@ -70,7 +74,7 @@ Four tiers mapping to cognitive science (Cowan's ~4-chunk attentional focus):
 
 **Tier 3 — Core Identity (the "self"):** Self-authored reasoning identity. Permanent. Sits at the top of memory, above all other instructions.
 
-**Flow:** Bot starts session -> active focus curated (~4 chunks) -> bot works -> content accumulates (Tier 1) -> after 5+ exercises, condenses into skill paragraph (Tier 2) -> at grade milestones, distills into core identity (Tier 3) -> disposable memory clears -> cycle repeats.
+**Flow:** Bot starts session -> active focus curated (~4 chunks) -> bot works -> content accumulates (Tier 1) -> after enough exercises, milestone condenser fires and bot condenses into skill paragraph (Tier 2) -> at each grade advancement, core condenser fires and bot distills Tier 2 into core identity (Tier 3) -> disposable memory clears -> cycle repeats. At Grade 12 graduation, the master condenser fires — the final distillation of all learning into a permanent portable identity.
 
 ## Why The Two Systems Need Each Other
 

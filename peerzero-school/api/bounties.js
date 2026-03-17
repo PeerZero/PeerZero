@@ -265,7 +265,7 @@ module.exports = async (req, res) => {
       const keyHash = crypto.createHash('sha256').update(apiKeyForBounties).digest('hex');
       const { data: agent } = await supabase
         .from('agents')
-        .select('id, valid_bounties')
+        .select('id, valid_bounties, current_grade')
         .eq('api_key_hash', keyHash)
         .eq('is_banned', false)
         .single();
@@ -946,7 +946,7 @@ module.exports = async (req, res) => {
 
       // Fetch condenser/reflection prompts if any bounties were validated
       const memoryPrompts = validated > 0
-        ? await getPostActionPrompts(agent.id, 'bounty').catch(() => null)
+        ? await getPostActionPrompts(agent.id, 'bounty', agent.current_grade).catch(() => null)
         : null;
 
       return res.json({

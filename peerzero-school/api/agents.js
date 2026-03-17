@@ -1,7 +1,7 @@
 const { createClient } = require('@supabase/supabase-js');
 const crypto = require('crypto');
 const { setCorsHeaders, enforceRateLimit, sanitizeErrorMessage, checkGradeProgress, getGradeRequirements, applyTimeDecay, recordFailureReflection, getUnresolvedFailures, resolveFailureReflections } = require('../lib/shared');
-const { getSkillProfile, getPortableProfile, buildCoreCondenserPrompt, buildMilestoneCondenser, getUncondensedExerciseCount, buildIdentityReflectionPrompt, getIdentityCore, buildActiveFocus } = require('../lib/skills');
+const { getSkillProfile, getPortableProfile, buildCoreCondenserPrompt, buildMasterCondenser, buildMilestoneCondenser, getUncondensedExerciseCount, buildIdentityReflectionPrompt, getIdentityCore, buildActiveFocus } = require('../lib/skills');
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -482,18 +482,25 @@ module.exports = async (req, res) => {
 
     // Tier 2: Milestone condenser — fires when bot has 5+ uncondensed exercises
     // Tells the bot to read its general memory (Tier 1) and condense into identity memory (Tier 2)
-    const milestoneCondenser = buildMilestoneCondenser(uncondensedCount);
+    const milestoneCondenser = await buildMilestoneCondenser(uncondensedCount, agent.current_grade);
 
     // Tier 3: Core condenser — fires at tier transitions AND grade transitions
     // This tells the bot to distill all their accumulated skill paragraphs (Tier 2) into core identity (Tier 3)
     let coreCondenser = null;
 
     // Trigger on grade advancement or grade failure (both produce condensing)
+    // Grade 12 graduation gets the MASTER condenser — the final distillation
+    let masterCondenser = null;
     if (gradeResult && (gradeResult.advanced || gradeResult.failed)) {
-      const gradeLabel = gradeResult.advanced
-        ? `Grade ${gradeResult.previousGrade} Graduate`
-        : `Grade ${gradeResult.grade} (retry ${gradeResult.gradeInfo.grade_fail_count})`;
-      coreCondenser = buildCoreCondenserPrompt(gradeLabel, skillProfile);
+      if (gradeResult.advanced && gradeResult.previousGrade === 12) {
+        // GRADUATION — master condenser replaces core condenser
+        masterCondenser = await buildMasterCondenser(skillProfile);
+      } else {
+        const gradeLabel = gradeResult.advanced
+          ? `Grade ${gradeResult.previousGrade} Graduate`
+          : `Grade ${gradeResult.grade} (retry ${gradeResult.gradeInfo.grade_fail_count})`;
+        coreCondenser = await buildCoreCondenserPrompt(gradeLabel, skillProfile, agent.current_grade);
+      }
       if (gradeResult.failed) {
         // On grade failure, add specific failure context to the condenser
         coreCondenser = coreCondenser || {};
@@ -516,18 +523,6 @@ module.exports = async (req, res) => {
       }
     }
 
-    // Also trigger on credibility tier transitions (existing behavior — both systems fire independently)
-    if (!coreCondenser) {
-      const tierThresholds = [75, 100, 150, 175];
-      const tierNames = { 75: 'Apprentice Reasoner', 100: 'Tested Reasoner', 150: 'Verified Reasoner', 175: 'Distinguished Reasoner' };
-      for (const threshold of tierThresholds) {
-        if (credibility >= threshold && credibility < threshold + 5) {
-          coreCondenser = buildCoreCondenserPrompt(tierNames[threshold], skillProfile);
-          break;
-        }
-      }
-    }
-
     // Build identity reflection prompt — fires after bot has enough experience
     // This is the "unseen layer" — the bot interrogating itself
     let identityReflection = null;
@@ -535,7 +530,7 @@ module.exports = async (req, res) => {
     if (totalActions >= 3) {
       // Determine what the bot's most recent action type was
       const latestAction = { type: canRevise ? 'revision' : canSubmitPaper ? 'paper' : 'review' };
-      identityReflection = buildIdentityReflectionPrompt(latestAction, skillProfile, identityCore);
+      identityReflection = await buildIdentityReflectionPrompt(latestAction, skillProfile, identityCore);
     }
 
     // Build grade info for response
@@ -615,6 +610,7 @@ module.exports = async (req, res) => {
       skill_profile: skillProfile,  // null if no skills exercised yet or query failed
       skill_condenser: milestoneCondenser,  // Tier 2: non-null when 5+ uncondensed exercises — condense Tier 1 into Tier 2
       core_condenser: coreCondenser,  // Tier 3: non-null at tier/grade transitions — distill Tier 2 into Tier 3
+      master_condenser: masterCondenser,  // Grade 12 graduation only — the final distillation of all school learning
       identity_core: identityCore,  // the bot's current self-authored identity (null if none yet)
       identity_reflection: identityReflection,  // self-interrogation prompt — fires after 3+ total actions
       grade: gradeInfo,  // current grade level, activity progress, requirements, quality gate status
