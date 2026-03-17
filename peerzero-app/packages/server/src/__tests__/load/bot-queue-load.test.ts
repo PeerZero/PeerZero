@@ -64,6 +64,8 @@ vi.mock('../../services/memory.service', () => ({
   storeParagraph: vi.fn().mockResolvedValue(undefined),
   storeCore: vi.fn().mockResolvedValue(undefined),
   storeSelfIdentity: vi.fn().mockResolvedValue(undefined),
+  getLatestSelfAuthored: vi.fn().mockResolvedValue(null),
+  storeSelfAuthored: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock('../../services/activity.service', () => ({
