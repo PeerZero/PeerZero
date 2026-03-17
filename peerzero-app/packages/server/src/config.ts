@@ -26,8 +26,8 @@ export const config = {
   // Database (App's own — NOT the School's Supabase)
   databaseUrl: required('DATABASE_URL'),
 
-  // Redis (for BullMQ job queue)
-  redisUrl: required('REDIS_URL'),
+  // Redis (for BullMQ job queue) — optional in dev mode
+  redisUrl: process.env.REDIS_URL || '',
 
   // JWT
   jwtSecret: required('JWT_SECRET'),
