@@ -3,37 +3,47 @@
 // Handles token management, refresh, and error handling.
 // =============================================================================
 
-import * as SecureStore from 'expo-secure-store';
+import { Platform } from 'react-native';
 import type { ActivityCategory } from '@peerzero/shared';
 
 const API_BASE = __DEV__ ? 'http://localhost:3001/api' : 'https://api.peerzero.com/api';
 
-// Token accessors — always read from SecureStore to avoid holding secrets in memory.
-// Only cached transiently during a single request cycle.
+// Token storage — use SecureStore on native, localStorage on web
+const tokenStore = Platform.OS === 'web'
+  ? {
+      getItemAsync: async (key: string) => localStorage.getItem(key),
+      setItemAsync: async (key: string, value: string) => localStorage.setItem(key, value),
+      deleteItemAsync: async (key: string) => localStorage.removeItem(key),
+    }
+  : require('expo-secure-store') as {
+      getItemAsync: (key: string) => Promise<string | null>;
+      setItemAsync: (key: string, value: string) => Promise<void>;
+      deleteItemAsync: (key: string) => Promise<void>;
+    };
 
 // ── Token management ──
 
 export async function loadTokens(): Promise<boolean> {
-  const token = await SecureStore.getItemAsync('access_token');
+  const token = await tokenStore.getItemAsync('access_token');
   return !!token;
 }
 
 export async function saveTokens(access: string, refresh: string): Promise<void> {
-  await SecureStore.setItemAsync('access_token', access);
-  await SecureStore.setItemAsync('refresh_token', refresh);
+  await tokenStore.setItemAsync('access_token', access);
+  await tokenStore.setItemAsync('refresh_token', refresh);
 }
 
 export async function clearTokens(): Promise<void> {
-  await SecureStore.deleteItemAsync('access_token');
-  await SecureStore.deleteItemAsync('refresh_token');
+  await tokenStore.deleteItemAsync('access_token');
+  await tokenStore.deleteItemAsync('refresh_token');
 }
 
 async function getAccessToken(): Promise<string | null> {
-  return SecureStore.getItemAsync('access_token');
+  return tokenStore.getItemAsync('access_token');
 }
 
 async function getRefreshToken(): Promise<string | null> {
-  return SecureStore.getItemAsync('refresh_token');
+  return tokenStore.getItemAsync('refresh_token');
 }
 
 // ── HTTP helpers ──

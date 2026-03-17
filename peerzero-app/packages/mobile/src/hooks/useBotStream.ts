@@ -17,8 +17,20 @@
 // =============================================================================
 
 import { useEffect, useRef, useCallback, useState } from 'react';
-import * as SecureStore from 'expo-secure-store';
+import { Platform } from 'react-native';
 import type { ActivityEntry } from '@peerzero/shared';
+
+const tokenStore = Platform.OS === 'web'
+  ? {
+      getItemAsync: async (key: string) => localStorage.getItem(key),
+      setItemAsync: async (key: string, value: string) => localStorage.setItem(key, value),
+      deleteItemAsync: async (key: string) => localStorage.removeItem(key),
+    }
+  : require('expo-secure-store') as {
+      getItemAsync: (key: string) => Promise<string | null>;
+      setItemAsync: (key: string, value: string) => Promise<void>;
+      deleteItemAsync: (key: string) => Promise<void>;
+    };
 
 const WS_BASE = __DEV__ ? 'ws://localhost:3001/ws' : 'wss://api.peerzero.com/ws';
 const API_BASE = __DEV__ ? 'http://localhost:3001/api' : 'https://api.peerzero.com/api';
@@ -66,7 +78,7 @@ interface UseBotStreamResult {
  */
 async function refreshAccessToken(): Promise<string | null> {
   try {
-    const refreshToken = await SecureStore.getItemAsync('refresh_token');
+    const refreshToken = await tokenStore.getItemAsync('refresh_token');
     if (!refreshToken) return null;
 
     const res = await fetch(`${API_BASE}/auth/refresh`, {
@@ -78,8 +90,8 @@ async function refreshAccessToken(): Promise<string | null> {
     if (!res.ok) return null;
 
     const data = await res.json() as { access_token: string; refresh_token: string };
-    await SecureStore.setItemAsync('access_token', data.access_token);
-    await SecureStore.setItemAsync('refresh_token', data.refresh_token);
+    await tokenStore.setItemAsync('access_token', data.access_token);
+    await tokenStore.setItemAsync('refresh_token', data.refresh_token);
     return data.access_token;
   } catch {
     return null;
@@ -112,7 +124,7 @@ export function useBotStream({
   const connect = useCallback(async () => {
     if (!botId || !enabled || !mountedRef.current) return;
 
-    let token = await SecureStore.getItemAsync('access_token');
+    let token = await tokenStore.getItemAsync('access_token');
     if (!token) return;
 
     // Clean up existing connection

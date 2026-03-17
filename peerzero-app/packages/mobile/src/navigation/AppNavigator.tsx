@@ -5,12 +5,16 @@
 
 import React from 'react';
 import { NavigationContainer, LinkingOptions } from '@react-navigation/native';
-import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { ActivityIndicator, View } from 'react-native';
+import { ActivityIndicator, View, Platform } from 'react-native';
 import { useAuth } from '../hooks/useAuth';
 import { colors } from '../theme/colors';
 import type { RootStackParamList } from '../navigation/types';
+
+// Use JS-based stack navigator on web (native-stack doesn't render on web)
+const createStack = Platform.OS === 'web'
+  ? require('@react-navigation/stack').createStackNavigator
+  : require('@react-navigation/native-stack').createNativeStackNavigator;
 
 // Screens
 import LoginScreen from '../screens/LoginScreen';
@@ -29,8 +33,8 @@ import ConnectPlatformScreen from '../screens/ConnectPlatformScreen';
 import ClassesScreen from '../screens/ClassesScreen';
 import ClassDetailScreen from '../screens/ClassDetailScreen';
 
-const Stack = createNativeStackNavigator<RootStackParamList>();
-const AuthStackNav = createNativeStackNavigator();
+const Stack = createStack<RootStackParamList>();
+const AuthStackNav = createStack();
 const Tab = createBottomTabNavigator();
 
 function AuthStack() {

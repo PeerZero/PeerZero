@@ -11,24 +11,28 @@
 // =============================================================================
 
 import { useEffect, useRef } from 'react';
-import * as Notifications from 'expo-notifications';
-import * as Device from 'expo-device';
 import { Platform } from 'react-native';
 import { notifications as notifApi } from '../services/api';
 
-// Configure how notifications appear when the app is in the foreground
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: false,
-  }),
-});
+// Push notifications are not supported on web
+if (Platform.OS !== 'web') {
+  const Notifications = require('expo-notifications');
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldShowAlert: true,
+      shouldPlaySound: true,
+      shouldSetBadge: false,
+    }),
+  });
+}
 
 export function usePushNotifications(isAuthenticated: boolean): void {
   const tokenRef = useRef<string | null>(null);
 
   useEffect(() => {
+    // Push notifications are not supported on web
+    if (Platform.OS === 'web') return;
+
     if (!isAuthenticated) {
       // Clean up token on logout
       if (tokenRef.current) {
@@ -37,6 +41,9 @@ export function usePushNotifications(isAuthenticated: boolean): void {
       }
       return;
     }
+
+    const Notifications = require('expo-notifications');
+    const Device = require('expo-device');
 
     // Only register on real devices (not simulators)
     if (!Device.isDevice) return;
