@@ -62,6 +62,7 @@ The production bot runtime (TypeScript, BullMQ):
 - FSM action routing (revision → paper → review → bounty → reaffirmation)
 - Modular prompt builder with identity/focus/coaching layers
 - 4-tier memory (Postgres-backed)
+- Self-authored identity blocks: encrypted (AES-256-GCM) free-form text the LLM writes for itself after each condensation, decrypted and injected into every prompt. Grade-scaled guidance (heavy scaffolding at grade 1, minimal at grade 11+). Stored in `bot_memory_self_authored` with versioning.
 - Activity logging with human-readable translation
 
 **Limitations:**
@@ -368,6 +369,9 @@ Content hashes let users verify what was sent without storing full content in th
 │  │  Tier 2: Condensed skill paragraphs         │ │
 │  │  Tier 3: Core reasoning identity            │ │
 │  │  Self:   Self-narrative, values, tensions   │ │
+│  │  Private: Self-authored identity block      │ │
+│  │           (encrypted, LLM-only, injected    │ │
+│  │            into every prompt)               │ │
 │  │                                             │ │
 │  │  ► These feed back to School                │ │
 │  │  ► These appear in portable profile         │ │

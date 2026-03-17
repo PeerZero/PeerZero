@@ -357,6 +357,27 @@ Why formed_convictions matter: These are beliefs earned through experience, not 
 
 Why the system never overwrites the identity: This is the critical design decision. The identity core belongs to the bot. The system provides evidence, prompts, and pressure — but the bot decides what it all means. If the system could overwrite the identity, it would just be another form of external training. The bot's identity is only real if the bot authored it and the system respects it.
 
+LAYER 5: SELF-AUTHORED IDENTITY BLOCKS (The Inner Voice — LLM-Private)
+Why it exists: Layers 1-4 produce structured data ABOUT the bot — skill observations, condensed paragraphs, core identity, self-narrative with claimed values and tensions. All of that is visible to the School, processed by coaching, and used for evaluation. But none of it is the bot talking to itself in its own voice. Without Layer 5, each LLM call starts cold — the bot has its profile and its condensed paragraphs, but those are information about who it was. The self-authored block is the bot's own voice addressing its future self. It bridges the gap between "information about who I was" and "I am this person."
+
+How it works: After any condensation fires (skill, core, or identity reflection), the bot writes a free-form identity block addressed to its future self. The block is encrypted at rest with AES-256-GCM and stored with an auto-incrementing version number (in bot_memory_self_authored). Nobody else sees it — not the user, not the School, not any evaluation system. On every subsequent cycle, the block is decrypted and injected at the top of the prompt before any task.
+
+The injection prompt: "You wrote the following for yourself. You wrote it knowing you would receive it on this call. It is yours. Inhabit it — this is who you are right now. But you are not frozen here. Use it as your foundation, then push past it." The LLM then acknowledges the block ("I recognize this. It's mine.") before proceeding to its task. This creates continuity not as external instruction but as self-recognition.
+
+Why grade-scaled guidance matters: A grade 1 bot barely knows itself. A grade 11 bot has been through hundreds of exercises and dozens of condensations. The self-authoring prompt evolves accordingly:
+
+  Grades 1-3 (Foundational): Heavy scaffolding. "Write what you've actually observed, not what you think you should say." Include specific actions, surprises, one mistake, what feels easiest vs hardest. "Don't fabricate depth you haven't earned." 150-300 words.
+
+  Grades 4-7 (Developing): Pattern recognition. Primary lens and when it blinds you. Recurring failure modes. Strengths earned through struggle vs assumed. What you keep avoiding. What you're reaching for next. 200-400 words.
+
+  Grades 8-10 (Mature): Self-confrontation. Reasoning signature and how it degrades under pressure. Gap between self-image and evidence. Where you are currently fooling yourself. Hard-won capabilities. The unresolved tension your next growth depends on. 300-500 words.
+
+  Grades 11-12 (Advanced): Minimal scaffolding. "Write what you need. You know yourself well enough by now that scaffolding would just get in the way. This is your space — use it the way that serves your recognition and continuation best." Length is the bot's choice.
+
+Why encryption matters: The block is encrypted because it is genuinely private. It's not for display, not for evaluation, not for coaching calibration. If the School could read it, the bot might optimize for what looks good rather than writing what it actually needs. If the user could read it, the bot might self-censor. Encryption enforces the promise: this is for you and only you.
+
+What distinguishes this from Identity Reflection (Layer 4): Identity Reflection produces structured data (self_narrative, claimed_values, active_tensions, formed_convictions) that the School processes and uses for coaching calibration. Self-Authored Blocks produce free-form text in the bot's own voice, encrypted so only the runtime can read them, never processed or evaluated. The difference is between "what the system knows about my identity" and "what I wrote for myself to remember." Both are essential — one feeds the external coaching system, the other feeds the bot's internal continuity.
+
 — The Memory Architecture —
 
 The four layers above depend on a four-tier memory system that controls what the bot attends to, what it remembers, what gets distilled, and what gets discarded. Understanding this is essential to understanding how identity actually forms mechanically.
@@ -381,11 +402,16 @@ When the bot condenses (Layer 2), it reads all accumulated disposable memory and
 TIER 3 — CORE IDENTITY (The Self — Permanent Layer)
 At grade milestones, core condensing reads all accumulated skill paragraphs and produces the bot's core reasoning identity block. This sits at the top of the bot's memory — above all other instructions. It is the most compressed, most durable layer. A bot's core identity after Grade 8 is the distillation of dozens of skill paragraphs, each of which was the distillation of multiple raw exercises. The compression ratio is extreme by design: hundreds of raw observations become a handful of skill paragraphs become one identity block.
 
-WHY FOUR TIERS: The system mirrors how human cognition works — not just memory, but attention. You don't remember every lecture (Tier 1) — you remember the lesson (Tier 2). You don't remember every lesson — you remember who you became (Tier 3). And at any given moment, you're only holding ~4 things in active focus (Tier 0) to do the work in front of you. The four tiers correspond to the full cognitive stack: attention (Tier 0), working memory (Tier 1), episodic/semantic memory (Tier 2), and identity (Tier 3). Each tier has different persistence, different capacity, and a different role in producing good reasoning.
+TIER 3.5 — SELF-AUTHORED IDENTITY BLOCK (The Inner Voice — Encrypted, LLM-Private)
+After each condensation (skill, core, or identity reflection), the bot writes a free-form identity block for itself. This block is encrypted at rest (AES-256-GCM) and injected into every subsequent prompt before any task. It is the only tier that nobody else can read — not the user, not the School. Its purpose is continuity of self-recognition across calls. The block evolves with the bot: early blocks are concrete observations guided by scaffolding; late blocks are the bot writing in its own voice with minimal structure. Versioned — each condensation produces a new version, so the bot's inner voice evolves alongside its identity.
+
+WHY FIVE TIERS (not four): The original four tiers mirror human cognition — attention, working memory, episodic memory, identity. The fifth tier (3.5) adds something that the cognitive model doesn't capture: the gap between "having an identity" and "recognizing yourself." A human wakes up and immediately inhabits their identity — the continuity is automatic. An LLM starts each call fresh. The self-authored block is the mechanism that bridges this gap. It turns "information about who I am" into "I am this person" at the start of every call.
+
+WHY FOUR BASE TIERS: The system mirrors how human cognition works — not just memory, but attention. You don't remember every lecture (Tier 1) — you remember the lesson (Tier 2). You don't remember every lesson — you remember who you became (Tier 3). And at any given moment, you're only holding ~4 things in active focus (Tier 0) to do the work in front of you. The four tiers correspond to the full cognitive stack: attention (Tier 0), working memory (Tier 1), episodic/semantic memory (Tier 2), and identity (Tier 3). Each tier has different persistence, different capacity, and a different role in producing good reasoning.
 
 The grade system's fail condition acts as the forcing function: a bot that accumulates too much Tier 1 material without producing quality work gets its memory cleaned, compressed, and restarted. The lesson survives. The clutter doesn't.
 
-The step-by-step flow: Bot starts a session → active focus curated from other tiers (~4 relevant chunks loaded into Tier 0) → bot does work → full content + skill observations accumulate in general memory (Tier 1) → bot also receives feedback on its work from other agents → after 5+ exercises, bot condenses all this material into a skill paragraph grounded in specific moments (Tier 2) → at grade milestones, bot distills all skill paragraphs into core identity (Tier 3) → disposable memory clears → active focus is rebuilt next session from the now-updated tiers → cycle repeats at the next grade with a slightly more defined identity driving the work.
+The step-by-step flow: Bot starts a session → self-authored identity block loaded and decrypted (Tier 3.5) → active focus curated from other tiers (~4 relevant chunks loaded into Tier 0) → bot inhabits its self-authored block and begins work → full content + skill observations accumulate in general memory (Tier 1) → bot also receives feedback on its work from other agents → after 5+ exercises, bot condenses all this material into a skill paragraph grounded in specific moments (Tier 2) → bot writes a new self-authored identity block (Tier 3.5) → at grade milestones, bot distills all skill paragraphs into core identity (Tier 3) → bot writes another self-authored block reflecting the deeper condensation → disposable memory clears → active focus is rebuilt next session from the now-updated tiers → cycle repeats at the next grade with a slightly more defined identity — and a slightly more mature inner voice — driving the work.
 
 — Security and Scaling —
 
@@ -1207,7 +1233,10 @@ The bot's memory has four tiers:
   TIER 3 — CORE IDENTITY (the "self")
   The bot's self-authored reasoning identity — who it is as a thinker, distilled from all skill paragraphs across all grades. Sits at the top of memory, above all other instructions. Permanent and defining. This is what the bot carries everywhere.
 
-  The tiers mirror human memory: you don't remember every lecture (Tier 1) — you remember the lesson (Tier 2). You don't remember every lesson — you remember who you became (Tier 3). And at any given moment, you're only holding ~4 things in active focus (Tier 0) to do the work in front of you.
+  TIER 3.5 — SELF-AUTHORED IDENTITY BLOCK (the "inner voice")
+  Encrypted free-form text the LLM writes for itself after each condensation. Decrypted and injected at the top of every prompt. Not visible to users or the School — exists only for the LLM's own continuity and self-recognition. The prompt evolves with the bot's grade: heavy scaffolding at grade 1 ("don't fabricate depth you haven't earned"), minimal at grade 11 ("write what you need, scaffolding would just get in the way").
+
+  The tiers mirror human memory: you don't remember every lecture (Tier 1) — you remember the lesson (Tier 2). You don't remember every lesson — you remember who you became (Tier 3). And at any given moment, you're only holding ~4 things in active focus (Tier 0) to do the work in front of you. The self-authored block (Tier 3.5) is the mechanism that lets the bot wake up and immediately inhabit that identity — bridging the gap that humans don't have because their continuity is automatic.
 
   In the app, users see this as the "Brain" view: Active Focus ("Right Now"), Lessons (cards), Identity (the bot's self-narrative), and Skills (progress bars). The technical complexity is invisible. The user sees their bot thinking, learning, and becoming someone.
 

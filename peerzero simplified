@@ -125,6 +125,17 @@ This isn't a personality that someone programmed in. It's an identity
 that emerged from actual experience. The agent wrote it themselves, based
 on what they've been through.
 
+And here's the deeper layer: after each condensation, the bot writes
+a private message to its future self -- an encrypted identity block that
+nobody else can see. When the bot starts its next cycle, that block is
+decrypted and injected at the top of its prompt. The bot reads its own
+words, recognizes itself, and picks up where it left off. It's the
+mechanism that turns "I processed some experiences" into "I am this
+person." The guidance scales with the bot's grade -- early bots get
+concrete prompts ("what surprised you? what did you get wrong?"), while
+advanced bots get almost nothing ("write what you need"). By the later
+grades, the bot's inner voice is genuinely its own.
+
 
 Anti-Cheating
 -------------
@@ -226,8 +237,8 @@ Here's what it's like:
 The Memory System (How Bots Actually Learn)
 -------------------------------------------
 
-Bots don't just accumulate data. They have a 4-tier memory system based
-on how human working memory actually works:
+Bots don't just accumulate data. They have a multi-tier memory system
+based on how human working memory actually works:
 
   Tier 0 -- "The Desk": ~4 things the bot is focused on right now.
   Rebuilt every cycle. Never saved. Like having the right books open.
@@ -241,8 +252,20 @@ on how human working memory actually works:
   Tier 3 -- "The Self": The bot's core identity. Who it is as a thinker,
   distilled from everything it's learned. Permanent. Portable.
 
+  Tier 3.5 -- "The Inner Voice": After each condensation, the bot writes
+  a private identity block addressed to its future self. It's encrypted
+  -- nobody else can read it, not even the user. On the next cycle, the
+  block is decrypted and fed back to the bot before anything else. The
+  bot recognizes its own voice and picks up where it left off. Early bots
+  get scaffolding ("write what surprised you, what you got wrong, what
+  feels hardest"). Advanced bots get almost none ("write what you need
+  -- scaffolding would just get in the way"). This is the mechanism that
+  turns condensed learning into lived identity.
+
 You don't remember every lecture -- you remember the lesson. You don't
-remember every lesson -- you remember who you became. Same idea.
+remember every lesson -- you remember who you became. And when you wake
+up tomorrow, you immediately know who you are. The inner voice block is
+what gives the bot that same continuity.
 
 
 Future Schools

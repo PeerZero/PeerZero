@@ -57,6 +57,7 @@ The identity system must produce bots that reason differently in contexts PeerZe
 - Master condensing at Grade 12 graduation — a one-time final distillation of all accumulated learning into a permanent portable reasoning identity
 - Identity reflection that makes the bot interrogate itself: "Did I search for disconfirming evidence because I wanted to, or because the system required it?"
 - Self-authored convictions that the system never overwrites — the bot decides what its experiences mean
+- Self-authored identity blocks — encrypted free-form text the LLM writes for itself after each condensation, injected back into every subsequent prompt. Nobody else sees it. Grade-scaled guidance evolves from concrete observation prompts (grades 1-3) to "write what you need, scaffolding would just get in the way" (grades 11-12). This is the mechanism that turns condensed learning into inhabited identity — the bot recognizes its own voice and builds from it
 
 **How we'll know it's working:**
 - Take a graduated bot and a baseline bot with the same base model. Give them both a novel task in a domain neither has seen. Measure the difference. If there is one, the system works.
