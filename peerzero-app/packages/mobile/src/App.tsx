@@ -3,17 +3,28 @@
 // =============================================================================
 
 import React from 'react';
-import { StatusBar } from 'expo-status-bar';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { AuthContext, useAuthProvider } from './hooks/useAuth';
-import { usePushNotifications } from './hooks/usePushNotifications';
-import AppNavigator from './navigation/AppNavigator';
-import ErrorBoundary from './components/ErrorBoundary';
+import { View, Text, Platform } from 'react-native';
 
+// Temporary: render a simple test on web to confirm rendering works
 export default function App() {
-  const auth = useAuthProvider();
+  if (Platform.OS === 'web') {
+    return (
+      <View style={{ flex: 1, backgroundColor: '#0A0E1A', justifyContent: 'center', alignItems: 'center' }}>
+        <Text style={{ color: '#6C5CE7', fontSize: 32, fontWeight: '700' }}>PeerZero</Text>
+        <Text style={{ color: '#8B93A8', fontSize: 16, marginTop: 8 }}>Web test — if you see this, rendering works!</Text>
+      </View>
+    );
+  }
 
-  // Register push notifications when authenticated
+  // Normal native app
+  const { StatusBar } = require('expo-status-bar');
+  const { SafeAreaProvider } = require('react-native-safe-area-context');
+  const { AuthContext, useAuthProvider } = require('./hooks/useAuth');
+  const { usePushNotifications } = require('./hooks/usePushNotifications');
+  const AppNavigator = require('./navigation/AppNavigator').default;
+  const ErrorBoundary = require('./components/ErrorBoundary').default;
+
+  const auth = useAuthProvider();
   usePushNotifications(auth.isAuthenticated);
 
   return (
