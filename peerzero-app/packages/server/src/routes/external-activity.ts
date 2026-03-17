@@ -13,36 +13,86 @@
 
 import crypto from 'crypto';
 import { Router, Request, Response } from 'express';
+import IORedis from 'ioredis';
 import { query, queryOne } from '../db/client';
+import { config } from '../config';
 import { logger } from '../lib/logger';
 import { broadcastExternalActivity } from '../websocket/activity-stream';
 
 const router = Router();
 
-// Rate limit state (in-memory, per-process)
-// TODO: Move to Redis for multi-instance deployments
-const tokenBuckets = new Map<string, { count: number; resetAt: number }>();
 const RATE_LIMIT = 30;
-const RATE_WINDOW_MS = 60_000;
+const RATE_WINDOW_SECONDS = 60;
 
-// Periodically clean up expired buckets to prevent memory leak from cycled tokens
-setInterval(() => {
-  const now = Date.now();
-  for (const [key, bucket] of tokenBuckets) {
-    if (now > bucket.resetAt) tokenBuckets.delete(key);
+// ── Redis connection (lazy, shared with rate-limit pattern) ─────────────────
+let redis: IORedis | null = null;
+
+function getRedis(): IORedis {
+  if (!redis) {
+    redis = new IORedis(config.redisUrl, { maxRetriesPerRequest: 3 });
+    redis.on('error', (err) => {
+      logger.error({ err: err.message }, 'Phone-home rate-limit Redis error');
+    });
   }
-}, RATE_WINDOW_MS);
+  return redis;
+}
 
-function checkPhoneHomeRateLimit(tokenHash: string): boolean {
+// ── In-memory fallback when Redis is unavailable ────────────────────────────
+const fallbackBuckets = new Map<string, { count: number; resetAt: number }>();
+
+function checkFallbackRateLimit(tokenHash: string): boolean {
   const now = Date.now();
-  const bucket = tokenBuckets.get(tokenHash);
+  const bucket = fallbackBuckets.get(tokenHash);
   if (!bucket || now > bucket.resetAt) {
-    tokenBuckets.set(tokenHash, { count: 1, resetAt: now + RATE_WINDOW_MS });
+    fallbackBuckets.set(tokenHash, { count: 1, resetAt: now + RATE_WINDOW_SECONDS * 1000 });
     return true;
   }
   if (bucket.count >= RATE_LIMIT) return false;
   bucket.count++;
   return true;
+}
+
+// Clean up expired fallback buckets periodically
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, bucket] of fallbackBuckets) {
+    if (now > bucket.resetAt) fallbackBuckets.delete(key);
+  }
+}, RATE_WINDOW_SECONDS * 1000);
+
+// ── Redis sliding window rate limiter (same pattern as rate-limit.ts) ───────
+async function checkPhoneHomeRateLimit(tokenHash: string): Promise<boolean> {
+  const key = `rate:phonehome:${tokenHash}`;
+  const now = Date.now();
+  const windowStart = now - RATE_WINDOW_SECONDS * 1000;
+
+  try {
+    const r = getRedis();
+    const pipeline = r.pipeline();
+    pipeline.zremrangebyscore(key, 0, windowStart);
+    pipeline.zcard(key);
+    const results = await pipeline.exec();
+    if (!results) return true;
+
+    const count = (results[1]?.[1] as number) || 0;
+    if (count >= RATE_LIMIT) return false;
+
+    const member = `${now}:${Math.random().toString(36).slice(2, 8)}`;
+    await r.zadd(key, now, member);
+    await r.expire(key, RATE_WINDOW_SECONDS + 1);
+    return true;
+  } catch (err) {
+    logger.error({ err: err instanceof Error ? err.message : err }, 'Phone-home rate-limit Redis failed, using in-memory fallback');
+    return checkFallbackRateLimit(tokenHash);
+  }
+}
+
+/** Graceful shutdown for phone-home rate limit Redis connection. */
+export async function closePhoneHomeRedis(): Promise<void> {
+  if (redis) {
+    await redis.quit();
+    redis = null;
+  }
 }
 
 // POST /api/external-activity
@@ -69,8 +119,8 @@ router.post('/', async (req: Request, res: Response) => {
     return;
   }
 
-  // Rate limit
-  if (!checkPhoneHomeRateLimit(tokenHash)) {
+  // Rate limit (Redis sliding window with in-memory fallback)
+  if (!(await checkPhoneHomeRateLimit(tokenHash))) {
     res.status(429).json({ error: 'Too many reports — slow down' });
     return;
   }
