@@ -561,7 +561,7 @@ module.exports = async (req, res) => {
 
     // ── Fetch condenser/reflection prompts inline ─────────────────────────
     // Eliminates the extra profile fetch — bot gets everything in one response
-    const memoryPrompts = await getPostActionPrompts(agent.id, 'review')
+    const memoryPrompts = await getPostActionPrompts(agent.id, 'review', agent.current_grade)
       .catch(() => null);
 
     return res.status(201).json({

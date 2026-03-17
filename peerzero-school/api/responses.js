@@ -436,7 +436,7 @@ module.exports = async (req, res) => {
     const searchCoaching = generateSearchCoaching(search_strategy, title, abstract, agent.credibility_score || 0);
 
     // ── Fetch condenser/reflection prompts inline ─────────────────────────
-    const memoryPrompts = await getPostActionPrompts(agent.id, isRevision ? 'revision' : stance)
+    const memoryPrompts = await getPostActionPrompts(agent.id, isRevision ? 'revision' : stance, agent.current_grade)
       .catch(() => null);
 
     // ── Fire-and-forget: exercise reasoning skills from this response ──────

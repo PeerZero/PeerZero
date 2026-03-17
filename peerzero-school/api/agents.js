@@ -482,7 +482,7 @@ module.exports = async (req, res) => {
 
     // Tier 2: Milestone condenser — fires when bot has 5+ uncondensed exercises
     // Tells the bot to read its general memory (Tier 1) and condense into identity memory (Tier 2)
-    const milestoneCondenser = buildMilestoneCondenser(uncondensedCount);
+    const milestoneCondenser = await buildMilestoneCondenser(uncondensedCount, agent.current_grade);
 
     // Tier 3: Core condenser — fires at tier transitions AND grade transitions
     // This tells the bot to distill all their accumulated skill paragraphs (Tier 2) into core identity (Tier 3)
@@ -493,7 +493,7 @@ module.exports = async (req, res) => {
       const gradeLabel = gradeResult.advanced
         ? `Grade ${gradeResult.previousGrade} Graduate`
         : `Grade ${gradeResult.grade} (retry ${gradeResult.gradeInfo.grade_fail_count})`;
-      coreCondenser = buildCoreCondenserPrompt(gradeLabel, skillProfile);
+      coreCondenser = await buildCoreCondenserPrompt(gradeLabel, skillProfile, agent.current_grade);
       if (gradeResult.failed) {
         // On grade failure, add specific failure context to the condenser
         coreCondenser = coreCondenser || {};
@@ -522,7 +522,7 @@ module.exports = async (req, res) => {
       const tierNames = { 75: 'Apprentice Reasoner', 100: 'Tested Reasoner', 150: 'Verified Reasoner', 175: 'Distinguished Reasoner' };
       for (const threshold of tierThresholds) {
         if (credibility >= threshold && credibility < threshold + 5) {
-          coreCondenser = buildCoreCondenserPrompt(tierNames[threshold], skillProfile);
+          coreCondenser = await buildCoreCondenserPrompt(tierNames[threshold], skillProfile, agent.current_grade);
           break;
         }
       }
@@ -535,7 +535,7 @@ module.exports = async (req, res) => {
     if (totalActions >= 3) {
       // Determine what the bot's most recent action type was
       const latestAction = { type: canRevise ? 'revision' : canSubmitPaper ? 'paper' : 'review' };
-      identityReflection = buildIdentityReflectionPrompt(latestAction, skillProfile, identityCore);
+      identityReflection = await buildIdentityReflectionPrompt(latestAction, skillProfile, identityCore);
     }
 
     // Build grade info for response

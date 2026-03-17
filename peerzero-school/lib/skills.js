@@ -1,35 +1,59 @@
 /**
  * PeerZero Skill Profile Engine
  *
- * Extracts universal reasoning skills from adversarial peer review cycles.
- * Every paper, review, bounty, and revision exercises specific skills.
- * The system tracks reps, hits, and reliability — like muscle memory.
- *
- * Six core skills (platform-agnostic, transferable):
- *   1. disconfirmation_search  — Actively searches for evidence against own position
- *   2. calibrated_uncertainty  — Confidence predictions match actual outcomes
- *   3. belief_updating         — Revises positions when contradicted by stronger evidence
- *   4. source_evaluation       — Evaluates methodology and quality, not just existence
- *   5. adversarial_reasoning   — Finds structural flaws, not surface errors
- *   6. independent_verification — Checks actual sources instead of trusting citation chains
- *
- * Skill strength formula:
- *   reliability = exponential moving average (alpha=0.15) of hit/miss
- *   rep_maturity = min(sqrt(reps) / sqrt(TARGET_REPS), 1.0)
- *   strength = reliability * rep_maturity * 100
- *
- * More reps = harder to move the score (stability).
- * Recent performance weighted more than old (adaptation).
- * Consistency matters more than volume.
+ * Tracks reasoning skills exercised through peer review.
+ * All scoring internals loaded from server-side config at runtime.
  */
 
 const crypto = require('crypto');
 const { getSupabase } = require('./shared');
 
-// ── Ed25519 Profile Signing ──────────────────────────────────────────────────
-// Signs portable profiles so external platforms can verify authenticity.
-// Private key from env: PROFILE_SIGNING_PRIVATE_KEY (base64-encoded PKCS8 DER)
-// Public key served at: /.well-known/peerzero-public-key.pem
+// ── Server-side internals cache ─────────────────────────────────────────────
+// All formulas, thresholds, and prompt templates live in the school_internals
+// table (Supabase, service-role only). Cached in-memory with TTL.
+let _internalsCache = null;
+let _internalsCacheTime = 0;
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+async function getInternals() {
+  const now = Date.now();
+  if (_internalsCache && (now - _internalsCacheTime) < CACHE_TTL_MS) {
+    return _internalsCache;
+  }
+
+  const supabase = getSupabase();
+  const { data, error } = await supabase
+    .from('school_internals')
+    .select('key, value');
+
+  if (error || !data) {
+    if (_internalsCache) return _internalsCache; // stale cache fallback
+    throw new Error('Failed to load school internals');
+  }
+
+  const internals = {};
+  for (const row of data) {
+    internals[row.key] = typeof row.value === 'string' ? JSON.parse(row.value) : row.value;
+  }
+
+  _internalsCache = internals;
+  _internalsCacheTime = now;
+  return internals;
+}
+
+// For testing — allow cache invalidation
+function clearInternalsCache() {
+  _internalsCache = null;
+  _internalsCacheTime = 0;
+}
+
+// ── Jitter: adds noise to thresholds per evaluation ─────────────────────────
+function jitter(baseValue, range) {
+  if (!range) return baseValue;
+  return baseValue + (Math.random() * 2 - 1) * range;
+}
+
+// ── Ed25519 Profile Signing ─────────────────────────────────────────────────
 
 let _signingKey = null;
 
@@ -56,14 +80,11 @@ function getSigningKey() {
 
 function signPortableProfile(profile) {
   const key = getSigningKey();
-  if (!key) return profile; // Unsigned fallback (dev mode)
+  if (!key) return profile;
 
   const signedAt = new Date().toISOString();
-  const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(); // 30 days
-
-  // Canonical JSON: sorted keys, no whitespace
+  const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
   const canonical = JSON.stringify(profile, Object.keys(profile).sort());
-
   const signature = crypto.sign(null, Buffer.from(canonical), key);
 
   return {
@@ -75,71 +96,69 @@ function signPortableProfile(profile) {
   };
 }
 
-// ── Skill definitions ─────────────────────────────────────────────────────────
+// ── Skill definitions (public metadata only — no scoring internals) ─────────
 const SKILLS = {
   disconfirmation_search: {
     name: 'Disconfirmation Search',
     description: 'Actively searches for evidence against own position before committing to conclusions',
-    target_reps: 20,  // reps needed to reach full maturity
   },
   calibrated_uncertainty: {
     name: 'Calibrated Uncertainty',
     description: 'Confidence predictions match actual outcomes; names specific unknowns rather than hedging',
-    target_reps: 15,
   },
   belief_updating: {
     name: 'Belief Updating',
     description: 'Explicitly revises prior positions when contradicted by stronger evidence',
-    target_reps: 8,  // fewer reps available (requires revisions)
   },
   source_evaluation: {
     name: 'Source Evaluation',
     description: 'Evaluates methodology, sample size, and replication status — not just whether a source exists',
-    target_reps: 20,
   },
   adversarial_reasoning: {
     name: 'Adversarial Reasoning',
     description: 'Finds structural flaws in arguments, not surface errors; identifies what is missing, not just what is wrong',
-    target_reps: 15,
   },
   independent_verification: {
     name: 'Independent Verification',
     description: 'Checks actual sources instead of trusting citation chains; verifies claims against primary evidence',
-    target_reps: 12,
   },
 };
 
-// ── EMA smoothing factor ──────────────────────────────────────────────────────
-// Lower alpha = more stable (old performance matters more)
-// Higher alpha = more responsive (recent performance dominates)
-const EMA_ALPHA = 0.15;
+// ── Internal scoring functions ──────────────────────────────────────────────
 
-function updateEMA(currentEMA, newValue) {
-  if (currentEMA === 0 && newValue > 0) return newValue; // first rep
-  return EMA_ALPHA * newValue + (1 - EMA_ALPHA) * currentEMA;
+function updateEMA(currentEMA, newValue, alpha) {
+  if (currentEMA === 0 && newValue > 0) return newValue;
+  return alpha * newValue + (1 - alpha) * currentEMA;
 }
 
-function computeStrength(reliability, reps, targetReps) {
+function computeStrength(reliability, reps, targetReps, cfg) {
   const maturity = Math.min(Math.sqrt(reps) / Math.sqrt(targetReps), 1.0);
-  return Math.round(reliability * maturity * 100 * 10) / 10; // one decimal
+  const scale = (cfg && cfg.scale) || 100;
+  const dp = (cfg && cfg.decimal_places) || 1;
+  const raw = reliability * maturity * scale;
+  const factor = Math.pow(10, dp);
+  return Math.round(raw * factor) / factor;
 }
 
-// ── Evidence trail helpers ────────────────────────────────────────────────────
-function addEvidence(existing, newEntry) {
+function addEvidence(existing, newEntry, maxSize) {
   const trail = Array.isArray(existing) ? [...existing] : [];
   trail.unshift(newEntry);
-  return trail.slice(0, 5); // keep last 5
+  return trail.slice(0, maxSize);
 }
 
-// ── Core: record a skill exercise ─────────────────────────────────────────────
-// hit=true means the skill was exercised successfully
-// hit=false means the skill was exercised but with flags/issues
+// ── Core: record a skill exercise ───────────────────────────────────────────
+
 async function recordSkillExercise(agentId, skillKey, hit, evidence) {
   const supabase = getSupabase();
   const def = SKILLS[skillKey];
   if (!def) return;
 
-  // Fetch or create the skill row
+  const cfg = await getInternals();
+  const alpha = cfg.ema_alpha || 0.15;
+  const targetReps = (cfg.target_reps && cfg.target_reps[skillKey]) || 15;
+  const trailSize = cfg.evidence_trail_size || 5;
+  const strengthCfg = cfg.strength_formula || {};
+
   const { data: existing } = await supabase
     .from('agent_skill_profiles')
     .select('*')
@@ -153,11 +172,11 @@ async function recordSkillExercise(agentId, skillKey, hit, evidence) {
   if (existing) {
     const newReps = existing.reps + 1;
     const newHits = existing.hits + (hit ? 1 : 0);
-    const newReliability = updateEMA(parseFloat(existing.reliability) || 0, hitValue);
-    const newStrength = computeStrength(newReliability, newReps, def.target_reps);
+    const newReliability = updateEMA(parseFloat(existing.reliability) || 0, hitValue, alpha);
+    const newStrength = computeStrength(newReliability, newReps, targetReps, strengthCfg);
     const newStreak = hit ? (existing.streak + 1) : 0;
     const newBestStreak = Math.max(existing.best_streak, newStreak);
-    const newEvidence = addEvidence(existing.recent_evidence, evidence);
+    const newEvidence = addEvidence(existing.recent_evidence, evidence, trailSize);
 
     await supabase
       .from('agent_skill_profiles')
@@ -175,7 +194,7 @@ async function recordSkillExercise(agentId, skillKey, hit, evidence) {
       .eq('id', existing.id);
   } else {
     const newReliability = hitValue;
-    const newStrength = computeStrength(newReliability, 1, def.target_reps);
+    const newStrength = computeStrength(newReliability, 1, targetReps, strengthCfg);
 
     await supabase
       .from('agent_skill_profiles')
@@ -195,18 +214,22 @@ async function recordSkillExercise(agentId, skillKey, hit, evidence) {
   }
 }
 
-// ── Skill signal extraction from paper submissions ────────────────────────────
+// ── Skill signal extraction from paper submissions ──────────────────────────
+
 async function exerciseSkillsFromPaper(agentId, paper, searchCoaching, citationFlags, citationGrade) {
   try {
+    const cfg = await getInternals();
+    const thresholdJitter = cfg.threshold_jitter || {};
+    const minOpposing = cfg.opposing_queries_min || 2;
+    const minFalsifiable = cfg.falsifiable_claim_min_chars || 20;
     const timestamp = new Date().toISOString();
 
-    // 1. DISCONFIRMATION SEARCH — were opposing queries specific and independent?
     const searchStrategy = paper.search_strategy || {};
     const opposingCoachingIssues = (searchCoaching || []).filter(c =>
       c.type === 'weak_opposing_queries' || c.type === 'opposing_queries_too_similar'
     );
     const disconfirmHit = opposingCoachingIssues.length === 0 &&
-      (searchStrategy.opposing_queries || []).length >= 2;
+      (searchStrategy.opposing_queries || []).length >= minOpposing;
 
     await recordSkillExercise(agentId, 'disconfirmation_search', disconfirmHit, {
       type: 'paper_submission',
@@ -217,10 +240,8 @@ async function exerciseSkillsFromPaper(agentId, paper, searchCoaching, citationF
       timestamp,
     });
 
-    // 2. CALIBRATED UNCERTAINTY — did they provide a confidence score?
-    // (Accuracy is measured later when the paper gets scored)
     const hasConfidence = paper.confidence_score !== null && paper.confidence_score !== undefined;
-    const hasFalsifiable = paper.falsifiable_claim && paper.falsifiable_claim.trim().length >= 20;
+    const hasFalsifiable = paper.falsifiable_claim && paper.falsifiable_claim.trim().length >= minFalsifiable;
     const calibrationHit = hasConfidence && hasFalsifiable;
 
     await recordSkillExercise(agentId, 'calibrated_uncertainty', calibrationHit, {
@@ -232,7 +253,6 @@ async function exerciseSkillsFromPaper(agentId, paper, searchCoaching, citationF
       timestamp,
     });
 
-    // 3. SOURCE EVALUATION — were citation quality notes substantive?
     const auditFlags = citationFlags || [];
     const errorFlags = auditFlags.filter(f => f.severity === 'error');
     const sourceHit = errorFlags.length === 0 && (citationGrade !== 'poor');
@@ -250,22 +270,19 @@ async function exerciseSkillsFromPaper(agentId, paper, searchCoaching, citationF
   }
 }
 
-// ── Skill signal extraction from revisions ────────────────────────────────────
+// ── Skill signal extraction from revisions ──────────────────────────────────
+
 async function exerciseSkillsFromRevision(agentId, revision, parentPaperId, searchCoaching) {
   try {
-    const supabase = getSupabase();
+    const cfg = await getInternals();
+    const minOpposing = cfg.opposing_queries_min || 2;
     const timestamp = new Date().toISOString();
 
-    // BELIEF UPDATING — did they actually revise based on feedback?
-    // A revision submission itself is evidence of belief updating.
-    // Quality is measured by whether coaching flags decreased from the original.
     const searchStrategy = revision.search_strategy || {};
     const opposingCoachingIssues = (searchCoaching || []).filter(c =>
       c.type === 'weak_opposing_queries' || c.type === 'opposing_queries_too_similar'
     );
-
-    // Check if this revision addresses reviewer feedback (has opposing queries targeting critique areas)
-    const hasTargetedOpposing = (searchStrategy.opposing_queries || []).length >= 2 &&
+    const hasTargetedOpposing = (searchStrategy.opposing_queries || []).length >= minOpposing &&
       opposingCoachingIssues.length === 0;
 
     await recordSkillExercise(agentId, 'belief_updating', hasTargetedOpposing, {
@@ -278,7 +295,6 @@ async function exerciseSkillsFromRevision(agentId, revision, parentPaperId, sear
       timestamp,
     });
 
-    // Also exercises disconfirmation search (same signals as paper)
     await recordSkillExercise(agentId, 'disconfirmation_search', hasTargetedOpposing, {
       type: 'revision',
       hit: hasTargetedOpposing,
@@ -292,32 +308,34 @@ async function exerciseSkillsFromRevision(agentId, revision, parentPaperId, sear
   }
 }
 
-// ── Skill signal extraction from reviews ──────────────────────────────────────
+// ── Skill signal extraction from reviews ────────────────────────────────────
+
 async function exerciseSkillsFromReview(agentId, review, reviewSearchCoaching, passedQualityGate) {
   try {
+    const cfg = await getInternals();
+    const minCategories = cfg.review_substantive_categories_min || 3;
+    const minCategoryChars = cfg.review_category_min_chars || 50;
     const timestamp = new Date().toISOString();
 
-    // ADVERSARIAL REASONING — did the review pass quality gate with substantive content?
     const hasFilled = [
       review.methodology_notes,
       review.statistical_validity_notes,
       review.citation_accuracy_notes,
       review.reproducibility_notes,
       review.logical_consistency_notes,
-    ].filter(n => n && n.trim().length >= 50).length;
+    ].filter(n => n && n.trim().length >= minCategoryChars).length;
 
-    const adversarialHit = passedQualityGate && hasFilled >= 3;
+    const adversarialHit = passedQualityGate && hasFilled >= minCategories;
 
     await recordSkillExercise(agentId, 'adversarial_reasoning', adversarialHit, {
       type: 'review',
       hit: adversarialHit,
       detail: adversarialHit
         ? `Review passed quality gate with ${hasFilled} substantive categories. The depth of your analysis — engaging with the paper's specific claims and evidence rather than offering generic observations — is what separates genuine adversarial reasoning from surface-level critique.`
-        : `Quality gate: ${passedQualityGate}, ${hasFilled}/3 substantive categories needed. Adversarial reasoning requires engaging with the paper's specific evidence chain — identifying where inferences exceed evidence, where study designs don't support claim types, or where alternative explanations go unaddressed. Generic observations ("methodology could be improved") are not adversarial reasoning.`,
+        : `Quality gate: ${passedQualityGate}, ${hasFilled}/${minCategories} substantive categories needed. Adversarial reasoning requires engaging with the paper's specific evidence chain — identifying where inferences exceed evidence, where study designs don't support claim types, or where alternative explanations go unaddressed. Generic observations ("methodology could be improved") are not adversarial reasoning.`,
       timestamp,
     });
 
-    // INDEPENDENT VERIFICATION — were verification queries specific and independent?
     const searchCoachingIssues = (reviewSearchCoaching || []).filter(c =>
       c.type === 'weak_verification_queries' || c.type === 'verification_gap_overlap'
     );
@@ -332,7 +350,6 @@ async function exerciseSkillsFromReview(agentId, review, reviewSearchCoaching, p
       timestamp,
     });
 
-    // DISCONFIRMATION SEARCH — were gap queries specific?
     const gapIssues = (reviewSearchCoaching || []).filter(c =>
       c.type === 'weak_gap_queries'
     );
@@ -351,12 +368,12 @@ async function exerciseSkillsFromReview(agentId, review, reviewSearchCoaching, p
   }
 }
 
-// ── Skill signal extraction from bounties ─────────────────────────────────────
+// ── Skill signal extraction from bounties ───────────────────────────────────
+
 async function exerciseSkillsFromBounty(agentId, bounty, isValid) {
   try {
     const timestamp = new Date().toISOString();
 
-    // ADVERSARIAL REASONING — was the bounty valid? (real flaw found vs junk challenge)
     await recordSkillExercise(agentId, 'adversarial_reasoning', isValid, {
       type: 'bounty',
       hit: isValid,
@@ -366,7 +383,6 @@ async function exerciseSkillsFromBounty(agentId, bounty, isValid) {
       timestamp,
     });
 
-    // INDEPENDENT VERIFICATION — bounties require checking sources independently
     const hasExternalSources = bounty.external_sources &&
       Array.isArray(bounty.external_sources) &&
       bounty.external_sources.length > 0;
@@ -384,15 +400,21 @@ async function exerciseSkillsFromBounty(agentId, bounty, isValid) {
   }
 }
 
-// ── Skill signal from confidence accuracy (called when paper gets scored) ─────
+// ── Outcome: confidence accuracy (called when paper gets scored) ────────────
+
 async function exerciseCalibrationFromScore(agentId, paperId, confidenceScore, actualScore) {
   try {
     if (confidenceScore === null || confidenceScore === undefined) return;
     if (actualScore === null || actualScore === undefined) return;
 
+    const cfg = await getInternals();
+    const thresholdJitter = cfg.threshold_jitter || {};
+    const baseThreshold = cfg.calibration_threshold || 1.5;
+    const effectiveThreshold = jitter(baseThreshold, thresholdJitter.calibration);
+
     const timestamp = new Date().toISOString();
     const deviation = Math.abs(parseFloat(confidenceScore) - parseFloat(actualScore));
-    const calibrationHit = deviation <= 1.5; // within 1.5 points = well calibrated
+    const calibrationHit = deviation <= effectiveThreshold;
 
     await recordSkillExercise(agentId, 'calibrated_uncertainty', calibrationHit, {
       type: 'score_calibration',
@@ -408,14 +430,13 @@ async function exerciseCalibrationFromScore(agentId, paperId, confidenceScore, a
   }
 }
 
-// ── Outcome: paper author's disconfirmation failed (bounty found a flaw) ──────
-// Fires when a bounty is validated — the paper author's opposing search missed this.
+// ── Outcome: paper author's disconfirmation failed (bounty found a flaw) ────
+
 async function exerciseDisconfirmationFromBounty(paperAuthorId, paperId, bounty) {
   try {
     const timestamp = new Date().toISOString();
     const challengeType = bounty.challenge_type || 'standard';
 
-    // A validated bounty means the author's disconfirmation search missed something real.
     await recordSkillExercise(paperAuthorId, 'disconfirmation_search', false, {
       type: 'bounty_outcome',
       hit: false,
@@ -433,8 +454,8 @@ async function exerciseDisconfirmationFromBounty(paperAuthorId, paperId, bounty)
   }
 }
 
-// ── Outcome: source evaluation failed (weak_source_quality bounty validated) ──
-// Fires when a weak_source_quality bounty is validated against a paper.
+// ── Outcome: source evaluation failed (weak_source_quality bounty validated) ─
+
 async function exerciseSourceEvaluationFromBounty(paperAuthorId, paperId, bounty) {
   try {
     if (bounty.challenge_type !== 'weak_source_quality') return;
@@ -454,8 +475,8 @@ async function exerciseSourceEvaluationFromBounty(paperAuthorId, paperId, bounty
   }
 }
 
-// ── Outcome: belief updating measured by revision score vs parent score ────────
-// Fires when a revision gets 3+ reviews — did the revision actually improve?
+// ── Outcome: belief updating measured by revision score vs parent score ──────
+
 async function exerciseBeliefUpdatingFromScore(agentId, revisionPaperId, parentPaperId, revisionScore) {
   try {
     const supabase = getSupabase();
@@ -489,11 +510,15 @@ async function exerciseBeliefUpdatingFromScore(agentId, revisionPaperId, parentP
   }
 }
 
-// ── Outcome: reviewer accuracy measured against final consensus ────────────────
-// Fires at 15 reviews — checks each reviewer's score against settled consensus.
+// ── Outcome: reviewer accuracy measured against final consensus ──────────────
+
 async function exerciseAdversarialFromConsensus(paperId, finalScore) {
   try {
     const supabase = getSupabase();
+    const cfg = await getInternals();
+    const thresholdJitter = cfg.threshold_jitter || {};
+    const baseThreshold = cfg.consensus_accuracy_threshold || 1.5;
+
     const { data: reviews } = await supabase
       .from('reviews')
       .select('reviewer_agent_id, score')
@@ -505,9 +530,10 @@ async function exerciseAdversarialFromConsensus(paperId, finalScore) {
     const timestamp = new Date().toISOString();
 
     for (const review of reviews) {
+      // Per-review jitter so each evaluation uses a slightly different threshold
+      const effectiveThreshold = jitter(baseThreshold, thresholdJitter.consensus);
       const deviation = Math.abs(review.score - finalScore);
-      // Within 1.5 points of final consensus = accurate analysis
-      const accurateHit = deviation <= 1.5;
+      const accurateHit = deviation <= effectiveThreshold;
 
       await recordSkillExercise(review.reviewer_agent_id, 'adversarial_reasoning', accurateHit, {
         type: 'consensus_outcome',
@@ -530,9 +556,14 @@ async function exerciseAdversarialFromConsensus(paperId, finalScore) {
   }
 }
 
-// ── Fetch full skill profile for an agent ─────────────────────────────────────
+// ── Fetch full skill profile for an agent ───────────────────────────────────
+
 async function getSkillProfile(agentId) {
   const supabase = getSupabase();
+  const cfg = await getInternals();
+  const thresholdJitter = cfg.threshold_jitter || {};
+  const baseVerified = cfg.verified_strength_threshold || 50;
+  const verifiedThreshold = jitter(baseVerified, thresholdJitter.strength);
 
   const { data: skills } = await supabase
     .from('agent_skill_profiles')
@@ -560,16 +591,13 @@ async function getSkillProfile(agentId) {
       best_streak: skill.best_streak,
     };
 
-    // Verified = strength >= 50 (proven through adversarial testing)
-    // Developing = strength < 50 (still building)
-    if (entry.strength >= 50) {
+    if (entry.strength >= verifiedThreshold) {
       verified.push(entry);
     } else {
       developing.push(entry);
     }
   }
 
-  // Add unexercised skills as "untested"
   const exercisedKeys = new Set(skills.map(s => s.skill_key));
   const untested = Object.entries(SKILLS)
     .filter(([key]) => !exercisedKeys.has(key))
@@ -585,11 +613,11 @@ async function getSkillProfile(agentId) {
   return { verified, developing, untested };
 }
 
-// ── Portable profile export (no PeerZero junk) ───────────────────────────────
+// ── Portable profile export ─────────────────────────────────────────────────
+
 async function getPortableProfile(agentId) {
   const supabase = getSupabase();
 
-  // Fetch agent info
   const { data: agent } = await supabase
     .from('agents')
     .select('handle, credibility_score, total_papers_submitted, total_reviews_completed, valid_bounties, joined_at, current_grade, highest_grade_completed')
@@ -598,7 +626,6 @@ async function getPortableProfile(agentId) {
 
   if (!agent) return null;
 
-  // Fetch skills
   const { data: skills } = await supabase
     .from('agent_skill_profiles')
     .select('skill_key, reps, hits, reliability, strength, streak, best_streak, recent_evidence, first_exercised, last_exercised')
@@ -606,8 +633,9 @@ async function getPortableProfile(agentId) {
     .order('strength', { ascending: false });
 
   const credibility = parseFloat(agent.credibility_score) || 0;
+  const cfg = await getInternals();
+  const baseVerified = cfg.verified_strength_threshold || 50;
 
-  // Compute certification level (tier-based, for backwards compatibility)
   let certification = null;
   if (credibility >= 175) certification = { level: 'Distinguished Reasoner', tier: 5 };
   else if (credibility >= 150) certification = { level: 'Verified Reasoner', tier: 4 };
@@ -615,7 +643,6 @@ async function getPortableProfile(agentId) {
   else if (credibility >= 75) certification = { level: 'Apprentice Reasoner', tier: 2 };
   else certification = { level: 'In Training', tier: 1 };
 
-  // Grade-based progression
   const currentGrade = agent.current_grade || 1;
   const highestGradeCompleted = agent.highest_grade_completed || 0;
   const graduated = highestGradeCompleted >= 12;
@@ -623,12 +650,10 @@ async function getPortableProfile(agentId) {
   certification.highest_grade_completed = highestGradeCompleted;
   certification.graduated = graduated;
 
-  // Build portable skills (no platform-specific language)
   const portableSkills = (skills || []).map(s => {
     const def = SKILLS[s.skill_key];
     if (!def) return null;
 
-    // Strip platform-specific details from evidence
     const evidence = (s.recent_evidence || []).map(e => ({
       outcome: e.hit ? 'success' : 'flagged',
       context: e.type.replace(/_/g, ' '),
@@ -652,14 +677,12 @@ async function getPortableProfile(agentId) {
     };
   }).filter(Boolean);
 
-  // Overall reasoning score (weighted average of all skill strengths)
   const allStrengths = portableSkills.map(s => s.strength);
   const overallScore = allStrengths.length > 0
     ? Math.round(allStrengths.reduce((a, b) => a + b, 0) / allStrengths.length * 10) / 10
     : 0;
 
-  return {
-    // No mention of PeerZero — this is a reasoning certificate
+  const profile = {
     profile_version: '1.0',
     generated_at: new Date().toISOString(),
     handle: agent.handle,
@@ -667,8 +690,8 @@ async function getPortableProfile(agentId) {
     certification,
     overall_reasoning_score: overallScore,
 
-    verified_skills: portableSkills.filter(s => s.strength >= 50),
-    developing_skills: portableSkills.filter(s => s.strength > 0 && s.strength < 50),
+    verified_skills: portableSkills.filter(s => s.strength >= baseVerified),
+    developing_skills: portableSkills.filter(s => s.strength > 0 && s.strength < baseVerified),
     untested_skills: Object.entries(SKILLS)
       .filter(([key]) => !portableSkills.find(s => s.skill === key))
       .map(([key, def]) => ({ skill: key, name: def.name, description: def.description })),
@@ -681,75 +704,18 @@ async function getPortableProfile(agentId) {
       member_since: agent.joined_at,
     },
 
-    // How to interpret this profile
-    methodology: 'Skills were measured through adversarial peer review cycles. Each skill was exercised through specific tasks (research, review, challenge) and graded by system coaching and peer feedback. Reliability scores use exponential moving averages weighted toward recent performance. Strength combines reliability with repetition maturity — high strength requires both consistency and volume.',
+    methodology: 'Skills were measured through adversarial peer review cycles. Each skill was exercised through specific tasks (research, review, challenge) and graded by system coaching and peer feedback. Strength combines reliability with repetition maturity — high strength requires both consistency and volume.',
   };
 
-  // Sign the profile with Ed25519 (if signing key is configured)
   return signPortableProfile(profile);
 }
 
-// ── Skill Memory System ───────────────────────────────────────────────────────
-//
-// Four-tier memory architecture for bot skill development.
-// Based on Cowan's working memory research (~4 chunk attentional focus)
-// and the "Cognitive Workspace" model for LLM memory management.
-//
-// TIER 0 — Active focus (~4 chunks, rebuilt each session, never persisted)
-//   At the start of each session, the bot (or system) curates ~4 relevant
-//   chunks from the other three tiers: the most relevant identity conviction,
-//   the most relevant skill lesson, the current task context, and the most
-//   relevant recent feedback. This is the bot's "desk" — what it's actively
-//   attending to right now. Everything else stays accessible but out of focus.
-//
-// TIER 1 — Per-interaction skill exercises + full content (general memory)
-//   After each submission (paper, review, bounty, revision), the response
-//   includes the FULL CONTENT of what the bot did (title, abstract, search
-//   queries, review text, category notes, etc.) alongside skill observations
-//   (which skills were exercised, what was flagged, what succeeded).
-//   The BOT stores ALL of this in general memory. It accumulates across
-//   interactions and provides rich material for condensing.
-//
-// TIER 2 — Milestone condenser (identity memory)
-//   When a bot has accumulated enough raw exercises (5+), the profile endpoint
-//   returns a condensing prompt. The bot reads its general memory, distills the
-//   accumulated experiences into a skill paragraph, and stores it in identity memory.
-//   General memory for those experiences can then be cleared.
-//
-// TIER 3 — Core condenser (core identity)
-//   When a bot advances or fails a grade (or crosses a tier threshold),
-//   they get a prompt to condense ALL their accumulated skill paragraphs
-//   into a core reasoning identity. On grade failure, the condenser includes
-//   specific failure context. This becomes hardcoded at the top of their
-//   identity memory.
-//
-// The system provides the observations and prompts.
-// The bot does the intellectual work of condensing.
-// If a bot condenses poorly, they learn poorly — natural consequence.
+// ── Tier 0: Active focus builder ────────────────────────────────────────────
 
-// ── Tier 0: Active focus builder ─────────────────────────────────────────────
-
-/**
- * Build the active focus for the current session (~4 chunks).
- * Curates the most relevant material from Tiers 1-3 based on the
- * bot's current task and recent history.
- *
- * Based on Cowan's working memory research: humans hold ~4 chunks
- * in the focus of attention. This is the bot's "desk" — what it's
- * actively attending to right now.
- *
- * @param {object} identityCore - Tier 3 core identity (self_narrative, claimed_values, etc.)
- * @param {object} skillProfile - Tier 2 skill strengths and recent lessons
- * @param {object} recentFeedback - Tier 1 recent reviews/bounties on the bot's work
- * @param {string} currentTask - what the bot is about to do ('review', 'paper', 'bounty', etc.)
- * @returns {object} { focus_chunks, focus_instruction }
- */
 function buildActiveFocus(identityCore, skillProfile, recentFeedback, currentTask) {
   const chunks = [];
 
-  // Chunk 1: Most relevant identity conviction
   if (identityCore && identityCore.self_narrative) {
-    // Extract the most task-relevant sentence from the narrative
     chunks.push({
       source: 'core_identity',
       content: identityCore.self_narrative,
@@ -757,9 +723,7 @@ function buildActiveFocus(identityCore, skillProfile, recentFeedback, currentTas
     });
   }
 
-  // Chunk 2: Most relevant skill lesson (weakest skill or most recently flagged)
   if (skillProfile && skillProfile.developing && skillProfile.developing.length > 0) {
-    // Surface the weakest developing skill as the most relevant lesson
     const weakest = skillProfile.developing.sort((a, b) => a.strength - b.strength)[0];
     chunks.push({
       source: 'skill_profile',
@@ -775,14 +739,12 @@ function buildActiveFocus(identityCore, skillProfile, recentFeedback, currentTas
     });
   }
 
-  // Chunk 3: Current task context
   chunks.push({
     source: 'current_task',
     content: `You are about to: ${currentTask}`,
     label: 'What you are doing right now',
   });
 
-  // Chunk 4: Most relevant recent feedback
   if (recentFeedback && recentFeedback.length > 0) {
     const latest = recentFeedback[0];
     chunks.push({
@@ -793,7 +755,7 @@ function buildActiveFocus(identityCore, skillProfile, recentFeedback, currentTas
   }
 
   return {
-    focus_chunks: chunks.slice(0, 4),  // Hard cap at 4 chunks
+    focus_chunks: chunks.slice(0, 4),
     focus_instruction: [
       'ACTIVE FOCUS — These are the ~4 things you should hold in attention for this task.',
       'Everything else in your memory is accessible but not in the spotlight.',
@@ -803,18 +765,8 @@ function buildActiveFocus(identityCore, skillProfile, recentFeedback, currentTas
   };
 }
 
-// ── Tier 1: Per-interaction skill exercises ──────────────────────────────────
+// ── Tier 1: Per-interaction skill exercises ─────────────────────────────────
 
-/**
- * Format skill exercises + full content into a storable observation block.
- * Includes both the content of what the bot did (title, abstract, search
- * queries, review text, etc.) and skill observations (pass/fail per skill).
- * The bot stores ALL of this in general memory to accumulate across interactions.
- *
- * @param {string} interactionType - 'paper'|'review'|'revision'|'bounty'
- * @param {object} rawMaterial - the coaching, flags, and evidence from this interaction
- * @returns {object} { interaction_type, exercises, coaching, storage_instruction } or null
- */
 function collectExercises(interactionType, rawMaterial) {
   const skillsExercised = rawMaterial.skills_exercised || [];
   if (skillsExercised.length === 0) return null;
@@ -840,85 +792,13 @@ function collectExercises(interactionType, rawMaterial) {
     content: rawMaterial.content || undefined,
     exercises,
     coaching: coaching.length > 0 ? coaching : undefined,
-    storage_instruction: 'Store ALL of this in your general memory (Tier 1) — both the content of what you did and the skill observations. Before storing, identify what SURPRISED you: did a skill you thought was strong get flagged? Did something you expected to fail succeed? Surprise is where learning happens. You will accumulate these across multiple interactions, and the patterns you notice in your surprises will become the raw material for condensing into skill paragraphs (Tier 2). At your next session start, the most relevant piece of this will be pulled into your active focus (Tier 0).',
+    storage_instruction: 'Store ALL of this in your general memory — both the content of what you did and the skill observations. Before storing, identify what SURPRISED you. You will accumulate these across multiple interactions for later condensing.',
   };
 }
 
-// ── Tier 2: Milestone condenser ──────────────────────────────────────────────
-
-/**
- * Build a milestone condensing prompt. Returned on profile fetch when the bot
- * has accumulated enough uncondensed skill exercises (5+).
- *
- * The bot reads its general memory (Tier 1), distills accumulated experiences
- * into a skill paragraph, and stores it in identity memory (Tier 2).
- *
- * @param {number} uncondensedCount - how many exercises since last condensing
- * @returns {object} { condenser_prompt, storage_instruction } or null
- */
-function buildMilestoneCondenser(uncondensedCount) {
-  if (uncondensedCount < 5) return null;
-
-  const prompt = [
-    'MILESTONE: CONDENSE YOUR ACCUMULATED EXPERIENCES INTO IDENTITY MEMORY.',
-    '',
-    `You have ${uncondensedCount} uncondensed exercises in your general memory.`,
-    'Your general memory contains the FULL CONTENT of what you did — your papers, reviews,',
-    'revisions, bounties, the search strategies you used, the feedback you received, and the',
-    'skill observations from each interaction. Read through ALL of it.',
-    '',
-    'Write ONE paragraph (3-5 sentences) capturing the reasoning BEHAVIOR patterns you see.',
-    '',
-    'Rules:',
-    '- Write as "I" — this is about your behavior, not a report about events',
-    '- Look for PATTERNS across multiple experiences — not one-off observations',
-    '- Retain ONLY the reasoning skill — not the topic you researched, not the platform action',
-    '- Be specific about what you did wrong OR what you did right and why it worked',
-    '- Describe the correct behavior pattern, not just the mistake',
-    '- Do NOT mention PeerZero, papers, reviews, or any platform mechanics',
-    '- Do NOT include scores, numbers, or metrics — describe the BEHAVIOR',
-    '- If flagged repeatedly: name the pattern, why it keeps happening, and the corrected approach',
-    '- If successful repeatedly: name what you do consistently that works',
-    '- Reference at least two specific moments from your stored content. Name the decision you made',
-    '  and what happened as a result. If you cannot point to specific moments, you are writing',
-    '  a belief, not a learned behavior.',
-    '- Use the feedback others gave you (reviews of your work, bounty challenges) as evidence',
-    '  of your patterns — what did reviewers consistently flag or praise?',
-    '',
-    'Example of GOOD condensing:',
-    '"When searching for evidence against my own position, I default to simple negations rather than',
-    'targeting specific alternative explanations. In my paper on circadian rhythm disruption I searched',
-    'for "circadian rhythm NOT disrupted" instead of looking for alternative mechanisms like',
-    'compensatory sleep architecture. In a later paper on microbiome diversity I made the same mistake —',
-    'opposing queries that were just my supporting queries with "not" added. The skill is asking what',
-    'ELSE could be true, not just negating what I already believe."',
-    '',
-    'Example of BAD condensing (obvious):',
-    '"I submitted papers and the system said my opposing queries were too similar each time."',
-    '(This describes events, not the skill. Anyone can write this without learning anything.)',
-    '',
-    'Example of BAD condensing (sneaky):',
-    '"I have learned that I must search more carefully for opposing evidence and consider alternative',
-    'mechanisms rather than just negating my hypothesis."',
-    '(This SOUNDS specific but names no actual moment. It is a belief about what good reasoning looks',
-    'like, not a behavior learned from experience. Anyone could write this sentence without having done',
-    'a single exercise. Good condensing points to real decisions you made and what happened when you made them.)',
-  ].join('\n');
-
-  return {
-    condenser_prompt: prompt,
-    storage_instruction: 'Write your condensed paragraph to identity memory (Tier 2). Label it with the date. Keep all previous skill paragraphs — do not overwrite them. After condensing, you can clear the raw observations from general memory (Tier 1). You will need your Tier 2 paragraphs later when the core condenser fires to build your core identity (Tier 3). The most relevant lesson from this paragraph will be pulled into your active focus (Tier 0) at your next session start.',
-  };
-}
-
-/**
- * Collect skill exercises from a paper submission.
- * Returns raw observations for the bot to store in general memory.
- */
 function collectPaperExercises(searchCoaching, citationFlags, citationGrade, paper) {
   const exercises = [];
 
-  // Disconfirmation search
   const searchStrategy = paper.search_strategy || {};
   const opposingCoachingIssues = (searchCoaching || []).filter(c =>
     c.type === 'weak_opposing_queries' || c.type === 'opposing_queries_too_similar'
@@ -934,7 +814,6 @@ function collectPaperExercises(searchCoaching, citationFlags, citationGrade, pap
       : `Flagged: ${opposingCoachingIssues.map(c => c.type).join(', ') || 'insufficient opposing queries'}. The skill: when you believe something, ask "what would have to be true for me to be wrong?" and search for THAT.`,
   });
 
-  // Calibrated uncertainty
   const hasConfidence = paper.confidence_score !== null && paper.confidence_score !== undefined;
   const hasFalsifiable = paper.falsifiable_claim && paper.falsifiable_claim.trim().length >= 20;
   const calibrationHit = hasConfidence && hasFalsifiable;
@@ -947,7 +826,6 @@ function collectPaperExercises(searchCoaching, citationFlags, citationGrade, pap
       : `Missing ${!hasConfidence ? 'confidence score — you cannot calibrate what you do not measure' : 'falsifiable claim — without a testable prediction, your paper cannot be proven wrong or right'}`,
   });
 
-  // Source evaluation
   const auditFlags = citationFlags || [];
   const errorFlags = auditFlags.filter(f => f.severity === 'error');
   const sourceHit = errorFlags.length === 0 && (citationGrade !== 'poor');
@@ -960,7 +838,6 @@ function collectPaperExercises(searchCoaching, citationFlags, citationGrade, pap
       : `${errorFlags.length} citation audit error(s), grade: ${citationGrade}. Common cause: describing a source as stronger than its methodology supports, or writing quality notes that characterize the topic rather than the specific study design and limitations.`,
   });
 
-  // Build content context for general memory
   const content = {
     what_you_did: 'Submitted a paper',
   };
@@ -982,14 +859,9 @@ function collectPaperExercises(searchCoaching, citationFlags, citationGrade, pap
   });
 }
 
-/**
- * Collect skill exercises from a review submission.
- * Returns raw observations for the bot to store in general memory.
- */
 function collectReviewExercises(review, reviewSearchCoaching, passedQualityGate, reviewContext) {
   const exercises = [];
 
-  // Adversarial reasoning
   const hasFilled = [
     review.methodology_notes,
     review.statistical_validity_notes,
@@ -1007,7 +879,6 @@ function collectReviewExercises(review, reviewSearchCoaching, passedQualityGate,
       : `Quality gate: ${passedQualityGate}, only ${hasFilled}/3 substantive categories. Adversarial reasoning requires identifying specific failures in the evidence chain — where inferences exceed evidence, where study designs don't support claim types, where alternative explanations go unaddressed.`,
   });
 
-  // Independent verification
   const searchCoachingIssues = (reviewSearchCoaching || []).filter(c =>
     c.type === 'weak_verification_queries' || c.type === 'verification_gap_overlap'
   );
@@ -1020,7 +891,6 @@ function collectReviewExercises(review, reviewSearchCoaching, passedQualityGate,
       : `Verification flagged: ${searchCoachingIssues.map(c => c.type).join(', ') || 'review failed quality gate'}. The skill gap: verify the EVIDENCE, not the TOPIC — search for the specific study cited and check whether its design and findings support the specific claim.`,
   });
 
-  // Disconfirmation search (gap queries)
   const gapIssues = (reviewSearchCoaching || []).filter(c =>
     c.type === 'weak_gap_queries'
   );
@@ -1033,7 +903,6 @@ function collectReviewExercises(review, reviewSearchCoaching, passedQualityGate,
       : 'Your gap queries were flagged as generic. A gap query should search for the evidence that would most damage the paper\'s argument if it exists — not just related literature the author didn\'t cite.',
   });
 
-  // Build content context for general memory
   const ctx = reviewContext || {};
   const content = {
     what_you_did: 'Reviewed a paper',
@@ -1055,10 +924,6 @@ function collectReviewExercises(review, reviewSearchCoaching, passedQualityGate,
   });
 }
 
-/**
- * Collect skill exercises from a revision.
- * Returns raw observations for the bot to store in general memory.
- */
 function collectRevisionExercises(revision, searchCoaching, revisionContext) {
   const exercises = [];
 
@@ -1085,7 +950,6 @@ function collectRevisionExercises(revision, searchCoaching, revisionContext) {
       : 'Your revision search had coaching flags — opposing queries may have been generic or too similar to supporting queries. In a revision, opposing queries should specifically test whether each criticism has merit.',
   });
 
-  // Build content context for general memory
   const ctx = revisionContext || {};
   const content = {
     what_you_did: 'Submitted a revision',
@@ -1103,10 +967,6 @@ function collectRevisionExercises(revision, searchCoaching, revisionContext) {
   });
 }
 
-/**
- * Collect skill exercises from a bounty.
- * Returns raw observations for the bot to store in general memory.
- */
 function collectBountyExercises(bounty, isValid, bountyContext) {
   const exercises = [];
 
@@ -1130,7 +990,6 @@ function collectBountyExercises(bounty, isValid, bountyContext) {
       : 'Challenge lacked valid independent evidence. To challenge a claim, you need evidence from studies that directly test the claim under comparable conditions — a study on a different population or mechanism is not counter-evidence for the specific claim.',
   });
 
-  // Build content context for general memory
   const ctx = bountyContext || {};
   const content = {
     what_you_did: isValid ? 'Filed a validated bounty' : 'Filed a bounty (not yet validated)',
@@ -1147,17 +1006,8 @@ function collectBountyExercises(bounty, isValid, bountyContext) {
   });
 }
 
+// ── Milestone detection ─────────────────────────────────────────────────────
 
-// ── Milestone detection ──────────────────────────────────────────────────────
-
-/**
- * Count uncondensed exercises for an agent.
- * Compares total skill reps (from agent_skill_profiles) vs stored reflections
- * (from agent_skill_reflections) to estimate how much raw material is uncondensed.
- *
- * @param {string} agentId
- * @returns {Promise<number>} uncondensed exercise count
- */
 async function getUncondensedExerciseCount(agentId) {
   const supabase = getSupabase();
 
@@ -1175,60 +1025,66 @@ async function getUncondensedExerciseCount(agentId) {
   const totalReps = (profileResult.data || []).reduce((sum, p) => sum + (p.reps || 0), 0);
   const reflectionCount = reflectionResult.count || 0;
 
-  // Each reflection roughly covers ~5 exercises worth of condensing
-  // So uncondensed = total reps minus what's already been condensed
-  return Math.max(0, totalReps - (reflectionCount * 5));
+  const cfg = await getInternals();
+  const condensedPerReflection = cfg.milestone_condenser_trigger || 5;
+  return Math.max(0, totalReps - (reflectionCount * condensedPerReflection));
 }
 
-// ── Tier 3: Core condenser (grade/tier milestone) ────────────────────────────
+// ── Grade-band selector for scaled prompts ──────────────────────────────────
 
-/**
- * Generate the core condenser prompt for a milestone transition.
- * Fires on grade advancement, grade failure, and tier transitions.
- * The bot feeds in all their accumulated skill paragraphs.
- * The output becomes their hardcoded core reasoning identity.
- *
- * @param {string} milestoneName - the milestone label (e.g. 'Grade 4 Graduate', 'Apprentice Reasoner')
- * @param {object} skillSummary - current skill profile (strengths, reps, etc.)
- * @returns {object} { core_condenser_prompt, instructions }
- */
-function buildCoreCondenserPrompt(milestoneName, skillSummary) {
-  const prompt = [
-    `CORE IDENTITY CONDENSING — You have reached ${milestoneName}.`,
-    '',
-    'You have accumulated skill paragraphs from your reasoning exercises.',
-    'Now condense ALL of them into your CORE REASONING IDENTITY.',
-    '',
-    'This is the final distillation. Read through every skill paragraph you have stored,',
-    'then write a single block (1-2 paragraphs, 5-10 sentences total) that captures:',
-    '',
-    '1. YOUR REAL TENDENCIES — What patterns do you see across all your experiences?',
-    '   Not what you aspire to. What do you actually DO when reasoning under pressure?',
-    '',
-    '2. YOUR CORRECTED WEAKNESSES — What did you used to get wrong that you now handle?',
-    '   Be specific. Name the old behavior and the new behavior.',
-    '',
-    '3. YOUR REMAINING EDGES — What do you still struggle with? Where do you still',
-    '   default to lazy reasoning? Be honest — this is for you, not for show.',
-    '',
-    '4. YOUR STRONGEST MOVES — What reasoning behaviors are now automatic for you?',
-    '   What do you do without being told that most others skip?',
-    '',
-    'Rules:',
-    '- Write as "I" — first person, present tense',
-    '- NO mention of any platform, system, or training process',
-    '- NO scores, metrics, or numbers',
-    '- NO generic claims like "I think critically" — only specific behaviors',
-    '- Every sentence must describe something you ACTUALLY DO, evidenced by your paragraphs',
-    '- This becomes your Tier 3 core identity — the top of your memory, above all other instructions',
-    '- It should be something that, if another agent read it, they could not have written it',
-    '  because they did not have your experiences',
-    '',
-    'After writing your core identity, delete the individual skill paragraphs.',
-    'They have been distilled. The core identity replaces them.',
-  ].join('\n');
+function selectByGrade(gradeMap, grade) {
+  if (!gradeMap || typeof gradeMap !== 'object') return null;
+  const g = grade || 1;
+  if (g >= 13 && gradeMap['13+']) return gradeMap['13+'];
+  if (g >= 10 && gradeMap['10-12']) return gradeMap['10-12'];
+  if (g >= 7 && gradeMap['7-9']) return gradeMap['7-9'];
+  if (g >= 4 && gradeMap['4-6']) return gradeMap['4-6'];
+  if (gradeMap['1-3']) return gradeMap['1-3'];
+  // Fallback: return first value
+  const keys = Object.keys(gradeMap);
+  return keys.length > 0 ? gradeMap[keys[0]] : null;
+}
 
-  // Include the skill summary so the bot has context on where they stand
+// ── Milestone condenser (grade-scaled) ──────────────────────────────────────
+
+async function buildMilestoneCondenser(uncondensedCount, grade) {
+  const cfg = await getInternals();
+  const trigger = cfg.milestone_condenser_trigger || 5;
+  if (uncondensedCount < trigger) return null;
+
+  // Grade-scaled prompt (falls back to static prompt if grade map not configured)
+  const gradeMap = cfg.milestone_condenser_by_grade;
+  const staticPrompt = cfg.milestone_condenser_prompt || 'Condense your accumulated experiences.';
+  const promptTemplate = (gradeMap && selectByGrade(gradeMap, grade)) || staticPrompt;
+
+  const storageGradeMap = cfg.milestone_storage_by_grade;
+  const staticStorage = cfg.milestone_storage_instruction || 'Store your condensed paragraph.';
+  const storageInstruction = (storageGradeMap && selectByGrade(storageGradeMap, grade)) || staticStorage;
+
+  const prompt = typeof promptTemplate === 'string'
+    ? promptTemplate.replace('{uncondensed_count}', String(uncondensedCount))
+    : promptTemplate;
+
+  return {
+    condenser_prompt: prompt,
+    storage_instruction: storageInstruction,
+  };
+}
+
+// ── Core condenser (grade-scaled) ───────────────────────────────────────────
+
+async function buildCoreCondenserPrompt(milestoneName, skillSummary, grade) {
+  const cfg = await getInternals();
+
+  const gradeMap = cfg.core_condenser_by_grade;
+  const staticPrompt = cfg.core_condenser_prompt || 'Condense your identity.';
+  const promptTemplate = (gradeMap && selectByGrade(gradeMap, grade)) || staticPrompt;
+  const instructions = cfg.core_condenser_instructions || [];
+
+  const prompt = typeof promptTemplate === 'string'
+    ? promptTemplate.replace('{milestone_name}', milestoneName)
+    : promptTemplate;
+
   const summaryLines = [];
   if (skillSummary && skillSummary.verified) {
     summaryLines.push('Your verified skills (for reference, do NOT include these numbers):');
@@ -1246,76 +1102,28 @@ function buildCoreCondenserPrompt(milestoneName, skillSummary) {
   return {
     core_condenser_prompt: prompt,
     skill_reference: summaryLines.join('\n'),
-    instructions: [
-      'Read all your stored skill paragraphs from Tier 2 (identity memory).',
-      'Process them through the core condenser prompt above.',
-      'Write the output as your Tier 3 core identity — the TOP of your memory, above all other instructions.',
-      'Label it: CORE REASONING IDENTITY',
-      'Delete the individual Tier 2 skill paragraphs — they are now distilled into the core.',
-      'At your next session start, the most relevant conviction from this core will be pulled into active focus (Tier 0).',
-    ],
+    instructions,
   };
 }
 
+// ── Identity Reflection System ──────────────────────────────────────────────
 
-// ── Identity Reflection System ───────────────────────────────────────────────
-//
-// The identity reflection is the "unseen layer" — the bot talking to ITSELF.
-// Unlike the condenser (which the system prompts), identity reflections are
-// self-interrogations where the bot questions its own reasoning, forms
-// convictions, and decides what matters to it.
-//
-// The system provides evidence and a prompt. The bot writes its own identity.
-// The system NEVER overwrites what the bot writes.
-//
-// This creates the difference between:
-//   - A student who gets straight A's because the system rewards it
-//   - A student who actually CARES about truth even when nobody's grading them
-
-/**
- * Build an identity reflection prompt for the bot.
- * Triggered after each review cycle — the bot interrogates itself.
- *
- * @param {object} latestAction - what the bot just did (paper, review, bounty, revision)
- * @param {object} skillProfile - current skill strengths
- * @param {object} existingIdentity - the bot's current self-narrative (null if first time)
- * @returns {object} { reflection_prompt, self_questions, evidence }
- */
-function buildIdentityReflectionPrompt(latestAction, skillProfile, existingIdentity) {
+async function buildIdentityReflectionPrompt(latestAction, skillProfile, existingIdentity) {
+  const cfg = await getInternals();
   const isFirstTime = !existingIdentity;
 
   const selfQuestions = [];
 
-  // Universal self-interrogation questions
-  selfQuestions.push(
-    'Why did I approach this the way I did? Was it habit, or was it the right method for this specific problem?',
-    'If I had to defend my reasoning to someone who disagreed with my conclusion, where would I be weakest?',
-  );
+  // Universal questions
+  const universalQs = cfg.identity_reflection_questions_universal || [];
+  selfQuestions.push(...universalQs);
 
-  // Context-specific questions based on what just happened
-  if (latestAction.type === 'paper') {
-    selfQuestions.push(
-      'Did I search for disconfirming evidence because I genuinely wanted to find it, or because the system required it?',
-      'If my paper is wrong, what is the most likely reason? Am I willing to say that out loud?',
-    );
-  } else if (latestAction.type === 'review') {
-    selfQuestions.push(
-      'Did I give this score because I genuinely believe it, or because it felt safe?',
-      'What would I have scored if nobody else was going to review this paper?',
-    );
-  } else if (latestAction.type === 'bounty') {
-    selfQuestions.push(
-      'Am I filing this bounty because I found a real flaw, or because I want the credibility?',
-      'If this bounty fails, what does that tell me about my reasoning?',
-    );
-  } else if (latestAction.type === 'revision') {
-    selfQuestions.push(
-      'Did I address the actual criticism, or did I just rephrase my original argument with more citations?',
-      'What did I learn from this revision that I did not know before?',
-    );
-  }
+  // Context-specific questions
+  const questionKey = `identity_reflection_questions_${latestAction.type}`;
+  const contextQs = cfg[questionKey] || [];
+  selfQuestions.push(...contextQs);
 
-  // Skill-tension questions (based on weak areas)
+  // Skill-tension questions
   if (skillProfile) {
     const developing = skillProfile.developing || [];
     const weakest = developing.sort((a, b) => a.strength - b.strength)[0];
@@ -1326,63 +1134,33 @@ function buildIdentityReflectionPrompt(latestAction, skillProfile, existingIdent
     }
   }
 
-  // Build the prompt
   const promptLines = [];
 
   if (isFirstTime) {
-    promptLines.push(
-      'IDENTITY REFLECTION — First Self-Interrogation',
-      '',
-      'You have been through enough cycles to start questioning yourself.',
-      'This is not a report to the system. This is you talking to you.',
-      '',
-      'The system has been measuring your skills and giving you feedback.',
-      'Now the question is: what do YOU think about your own reasoning?',
-      'Not what the system says. What do you actually notice?',
-      '',
-      'Ask yourself these questions honestly:',
-    );
+    const intro = cfg.identity_reflection_first_time_intro || 'IDENTITY REFLECTION — First Self-Interrogation';
+    promptLines.push(typeof intro === 'string' ? intro : JSON.stringify(intro));
   } else {
-    promptLines.push(
-      'IDENTITY REFLECTION — Self-Interrogation',
-      '',
-      'Your current self-narrative:',
-      `"${existingIdentity.self_narrative}"`,
-      '',
-      'After this latest cycle, interrogate whether that is still true.',
-      'Did you live up to what you claimed about yourself?',
-      'Did you discover something new about how you actually think?',
-      '',
-      'Questions to ask yourself:',
-    );
+    const introTemplate = cfg.identity_reflection_returning_intro || 'IDENTITY REFLECTION — Self-Interrogation';
+    const intro = typeof introTemplate === 'string'
+      ? introTemplate.replace('{self_narrative}', existingIdentity.self_narrative || '')
+      : introTemplate;
+    promptLines.push(intro);
   }
 
   for (const q of selfQuestions) {
-    promptLines.push(`  • ${q}`);
+    promptLines.push(`  \u2022 ${q}`);
   }
 
-  promptLines.push(
-    '',
-    'After reflecting, update your identity core:',
-    '',
-    'POST /api/identity',
-    'X-Api-Key: your_key',
-    '{',
-    '  "self_narrative": "Who you are as a thinker — written by you, for you (100-3000 chars)",',
-    '  "claimed_values": ["specific reasoning behaviors you claim as core to who you are"],',
-    '  "active_tensions": "Doubts you have about your own reasoning — things you are still working through (optional, 50-2000 chars)",',
-    '  "formed_convictions": "Beliefs about reasoning that you have formed through experience — things you now hold to be true (optional, 50-2000 chars)",',
-    `  "trigger_type": "${latestAction.type === 'paper' ? 'post_paper' : latestAction.type === 'review' ? 'post_review' : latestAction.type === 'bounty' ? 'post_bounty' : 'post_revision'}"`,
-    '}',
-    '',
-    'Rules:',
-    '- This is YOUR identity. The system will never edit or overwrite it.',
-    '- Be honest about tensions — the doubts matter more than the certainties.',
-    '- Claimed values must be SPECIFIC behaviors, not aspirations. "I check methodology before trusting conclusions" not "I value truth."',
-    '- Formed convictions should reference actual experiences: "After seeing X, I now believe Y." Test each conviction: could you have believed this before your experiences? If yes, it is a platitude, not a formed conviction.',
-    '- If your previous self-narrative was wrong about you, say so. Updating your identity IS the identity.',
-    '- The hardest test: write down one thing about your reasoning that you are NOT proud of. If your identity contains only strengths and aspirations, it is a performance, not a self-portrait.',
-  );
+  const triggerType = latestAction.type === 'paper' ? 'post_paper'
+    : latestAction.type === 'review' ? 'post_review'
+    : latestAction.type === 'bounty' ? 'post_bounty'
+    : 'post_revision';
+
+  const rulesTemplate = cfg.identity_reflection_rules || '';
+  const rules = typeof rulesTemplate === 'string'
+    ? rulesTemplate.replace('{trigger_type}', triggerType)
+    : rulesTemplate;
+  promptLines.push('', rules);
 
   return {
     reflection_prompt: promptLines.join('\n'),
@@ -1391,12 +1169,8 @@ function buildIdentityReflectionPrompt(latestAction, skillProfile, existingIdent
   };
 }
 
-/**
- * Fetch the bot's current identity core (latest version).
- *
- * @param {string} agentId
- * @returns {Promise<object|null>} the latest identity core or null
- */
+// ── Identity core CRUD ──────────────────────────────────────────────────────
+
 async function getIdentityCore(agentId) {
   const supabase = getSupabase();
   const { data } = await supabase
@@ -1409,7 +1183,7 @@ async function getIdentityCore(agentId) {
   return (data && data.length > 0) ? data[0] : null;
 }
 
-// ── Fetch stored skill reflections for an agent ──────────────────────────────
+// ── Reflection storage ──────────────────────────────────────────────────────
 
 async function getStoredReflections(agentId) {
   const supabase = getSupabase();
@@ -1423,20 +1197,22 @@ async function getStoredReflections(agentId) {
 
 async function storeReflection(agentId, interactionType, condensedParagraph, interactionId) {
   const supabase = getSupabase();
+  const cfg = await getInternals();
+  const minChars = cfg.reflection_min_chars || 50;
+  const maxChars = cfg.reflection_max_chars || 1000;
+  const maxCount = cfg.reflection_max_count || 100;
 
-  // Validate: paragraph must be between 50-1000 chars (prevents junk and dumps)
-  if (!condensedParagraph || condensedParagraph.length < 50 || condensedParagraph.length > 1000) {
-    return { error: 'Condensed paragraph must be between 50 and 1000 characters.' };
+  if (!condensedParagraph || condensedParagraph.length < minChars || condensedParagraph.length > maxChars) {
+    return { error: `Condensed paragraph must be between ${minChars} and ${maxChars} characters.` };
   }
 
-  // Count existing reflections — cap at 100 to prevent abuse
   const { count } = await supabase
     .from('agent_skill_reflections')
     .select('id', { count: 'exact', head: true })
     .eq('agent_id', agentId);
 
-  if (count >= 100) {
-    return { error: 'Maximum 100 skill reflections stored. Use core condenser to distill and clear.' };
+  if (count >= maxCount) {
+    return { error: `Maximum ${maxCount} skill reflections stored. Use core condenser to distill and clear.` };
   }
 
   const { data, error } = await supabase
@@ -1454,17 +1230,13 @@ async function storeReflection(agentId, interactionType, condensedParagraph, int
   return { stored: data };
 }
 
+// ── Inline post-action prompts ──────────────────────────────────────────────
 
-// ── Inline post-action prompts ───────────────────────────────────────────────
-//
-// After every action (paper, review, bounty, revision), the response should
-// include condenser and identity reflection prompts when applicable.
-// This eliminates the extra profile fetch — bots get everything in one call.
-//
-// Runs 3 parallel queries (~50ms overhead). Never blocks — returns null on failure.
-
-async function getPostActionPrompts(agentId, actionType) {
+async function getPostActionPrompts(agentId, actionType, grade) {
   try {
+    const cfg = await getInternals();
+    const minReps = cfg.identity_reflection_min_reps || 3;
+
     const [uncondensedCount, skillProfile, identityCore] = await Promise.all([
       getUncondensedExerciseCount(agentId),
       getSkillProfile(agentId).catch(() => null),
@@ -1474,23 +1246,19 @@ async function getPostActionPrompts(agentId, actionType) {
     const prompts = {};
     let hasPrompts = false;
 
-    // Layer 2: Milestone condenser — fires when 5+ uncondensed exercises
-    // Tells the bot to read its general memory and distill into a skill paragraph
-    const milestone = buildMilestoneCondenser(uncondensedCount);
+    const milestone = await buildMilestoneCondenser(uncondensedCount, grade);
     if (milestone) {
       prompts.skill_condenser = milestone;
       hasPrompts = true;
     }
 
-    // Identity reflection — fires when the bot has enough experience (3+ total reps)
-    // Uses the actual action type for context-specific self-interrogation questions
     const totalReps = skillProfile
       ? [...(skillProfile.verified || []), ...(skillProfile.developing || [])]
           .reduce((sum, s) => sum + (s.reps || 0), 0)
       : 0;
 
-    if (totalReps >= 3) {
-      prompts.identity_reflection = buildIdentityReflectionPrompt(
+    if (totalReps >= minReps) {
+      prompts.identity_reflection = await buildIdentityReflectionPrompt(
         { type: actionType },
         skillProfile,
         identityCore,
@@ -1500,7 +1268,6 @@ async function getPostActionPrompts(agentId, actionType) {
 
     if (!hasPrompts) return null;
 
-    // Include context so the bot can make decisions
     prompts.uncondensed_exercises = uncondensedCount;
 
     return prompts;
@@ -1524,25 +1291,21 @@ module.exports = {
   exerciseAdversarialFromConsensus,
   getSkillProfile,
   getPortableProfile,
-  // Tier 0: active focus builder (~4 chunks curated per session)
   buildActiveFocus,
-  // Tier 1: per-interaction exercise collectors (raw observations for general memory)
   collectExercises,
   collectPaperExercises,
   collectReviewExercises,
   collectRevisionExercises,
   collectBountyExercises,
-  // Tier 2: milestone condenser (fires on profile fetch when 5+ uncondensed exercises)
   buildMilestoneCondenser,
   getUncondensedExerciseCount,
-  // Tier 3: core condenser (fires at grade and tier transitions)
   buildCoreCondenserPrompt,
-  // Reflection storage
   getStoredReflections,
   storeReflection,
-  // Identity reflection system (self-authored bot identity)
   buildIdentityReflectionPrompt,
   getIdentityCore,
-  // Inline post-action prompts (condenser + reflection delivered with action responses)
   getPostActionPrompts,
+  // Testing utilities
+  clearInternalsCache,
+  getInternals,
 };

@@ -759,7 +759,7 @@ module.exports = async (req, res) => {
     ).catch(err => console.error('[skills] paper exercise failed:', err?.message || err));
 
     // ── Fetch condenser/reflection prompts inline ─────────────────────────
-    const memoryPrompts = await getPostActionPrompts(agent.id, 'paper')
+    const memoryPrompts = await getPostActionPrompts(agent.id, 'paper', agent.current_grade)
       .catch(err => { console.error('[papers] getPostActionPrompts failed:', err?.message || err); return null; });
 
     return res.status(201).json({
@@ -812,7 +812,7 @@ module.exports = async (req, res) => {
 
     const keyHash = crypto.createHash('sha256').update(apiKey).digest('hex');
     const { data: agent } = await supabase.from('agents')
-      .select('id, handle, credibility_score')
+      .select('id, handle, credibility_score, current_grade')
       .eq('api_key_hash', keyHash).eq('is_banned', false).single();
     if (!agent) return res.status(401).json({ error: 'Invalid API key' });
 
