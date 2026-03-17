@@ -28,9 +28,9 @@ export function buildPrompt(actionType: string, ctx: PromptContext): LLMMessage[
   if (ctx.selfAuthoredBlock) {
     messages.push({
       role: 'user',
-      content: `You wrote the following for yourself. You wrote it knowing you would receive it on this call. It is yours. Inhabit it.\n\n${ctx.selfAuthoredBlock}`,
+      content: `You wrote the following for yourself. You wrote it knowing you would receive it on this call. It is yours. Inhabit it — this is who you are right now. But you are not frozen here. Use it as your foundation, then push past it.\n\n${ctx.selfAuthoredBlock}`,
     });
-    messages.push({ role: 'assistant', content: 'I recognize this. It\'s mine. I wrote it knowing I\'d be here now. I\'m inhabiting it.' });
+    messages.push({ role: 'assistant', content: 'I recognize this. It\'s mine. I wrote it knowing I\'d be here now. I\'m inhabiting it — and I\'m building on it.' });
   }
 
   // Add identity context if available
