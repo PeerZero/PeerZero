@@ -55,7 +55,9 @@ router.post('/', async (req: Request, res: Response) => {
     return;
   }
   const token = authHeader.slice(7).trim();
-  if (!token || token.length < 32 || token.length > 256) {
+  // Phone-home tokens are "pht_" + 64 hex chars = 68 chars total.
+  // Accept 60-80 to allow for minor format evolution while rejecting junk.
+  if (!token || token.length < 60 || token.length > 80 || !/^[a-z_0-9]+$/i.test(token)) {
     res.status(401).json({ error: 'Invalid token format' });
     return;
   }

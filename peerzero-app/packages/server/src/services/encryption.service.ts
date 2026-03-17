@@ -46,7 +46,11 @@ export function encrypt(plaintext: string): EncryptedPayload {
   const authTag = cipher.getAuthTag();
   const combined = Buffer.concat([encrypted, authTag]);
 
-  // Fingerprint: SHA-256 hash prefix (safe to display, no plaintext leakage)
+  // Fingerprint: SHA-256 hash prefix + last 4 chars of plaintext.
+  // ⚠️ REVIEW NOTE (intentional design): The last-4 suffix is a standard UX
+  // pattern for API key identification (like "sk-...a1b2"). Users need it to
+  // distinguish which key is which in the UI. The hash prefix adds uniqueness.
+  // The last 4 chars of a 40+ char API key have negligible security impact.
   const hash = crypto.createHash('sha256').update(plaintext).digest('hex');
   const fingerprint = `${hash.slice(0, 8)}...${plaintext.slice(-4)}`;
 

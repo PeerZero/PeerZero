@@ -104,7 +104,7 @@ export async function runOneCycle(ctx: BotContext): Promise<void> {
       // Notify user that payment is needed
       const botRow = await queryOne<{ name: string }>('SELECT name FROM bots WHERE id = $1', [ctx.botId]);
       const priceCents = getGradePriceCents(currentGrade);
-      notifyGradePaymentNeeded(ctx.userId, ctx.botId, botRow?.name || 'Your bot', currentGrade, priceCents);
+      await notifyGradePaymentNeeded(ctx.userId, ctx.botId, botRow?.name || 'Your bot', currentGrade, priceCents);
       return;
     }
 

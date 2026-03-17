@@ -3,9 +3,21 @@
 // =============================================================================
 
 import { Router, Request, Response } from 'express';
+import rateLimit from 'express-rate-limit';
 import { requireAuth } from '../middleware/auth';
 import { userRateLimit } from '../middleware/rate-limit';
 import * as paymentService from '../services/payment.service';
+
+// IP-based rate limit for the Stripe webhook endpoint.
+// Stripe retries with exponential backoff, so 100/min is generous.
+// This prevents abuse from non-Stripe sources hammering the endpoint.
+const webhookLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many webhook requests' },
+});
 
 const router = Router();
 
@@ -37,8 +49,16 @@ router.post('/grade-checkout', requireAuth, userRateLimit('write'), async (req: 
   res.json(result);
 });
 
-// Authenticated: get grade unlock status for a bot
+// Authenticated: get grade unlock status for a bot (verifies ownership)
 router.get('/grade-status/:botId', requireAuth, async (req: Request, res: Response) => {
+  // Verify the requesting user owns this bot before returning grade data
+  const bot = await import('../db/client').then(({ queryOne }) =>
+    queryOne('SELECT id FROM bots WHERE id = $1 AND user_id = $2', [req.params.botId, req.user!.userId]),
+  );
+  if (!bot) {
+    res.status(404).json({ error: 'Bot not found' });
+    return;
+  }
   const grades = await paymentService.getUnlockedGrades(req.params.botId);
   const highest = grades.length > 0 ? Math.max(...grades) : 0;
   res.json({ unlocked_grades: grades, highest_unlocked: highest });
@@ -77,19 +97,31 @@ router.get('/grade-price-preview/:botId', requireAuth, userRateLimit('read'), as
 });
 
 // Stripe webhook (raw body required — handled in index.ts)
-router.post('/webhook', async (req: Request, res: Response) => {
+router.post('/webhook', webhookLimiter, async (req: Request, res: Response) => {
   const signature = req.headers['stripe-signature'] as string;
   if (!signature) {
     res.status(400).json({ error: 'Missing stripe-signature header' });
     return;
   }
 
+  // Step 1: Verify signature (auth failure → 400)
+  let event;
   try {
-    const event = paymentService.verifyWebhookSignature(req.body, signature);
+    event = paymentService.verifyWebhookSignature(req.body, signature);
+  } catch (err) {
+    res.status(400).json({ error: 'Webhook signature verification failed' });
+    return;
+  }
+
+  // Step 2: Handle event (processing failure → 500, so Stripe retries)
+  try {
     await paymentService.handleStripeWebhook(event);
     res.json({ received: true });
   } catch (err) {
-    res.status(400).json({ error: 'Webhook signature verification failed' });
+    const msg = err instanceof Error ? err.message : 'Unknown error';
+    // Log internally but don't leak details to Stripe
+    (await import('../lib/logger')).logger.error({ err: msg, eventType: event.type }, 'Webhook handler failed');
+    res.status(500).json({ error: 'Webhook processing failed' });
   }
 });
 

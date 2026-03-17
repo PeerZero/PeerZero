@@ -21,6 +21,7 @@ Reference: https://modelcontextprotocol.io/
 
 import json
 import logging
+import shlex
 import subprocess
 import sys
 import threading
@@ -90,8 +91,8 @@ class MCPServerConnection:
     def start(self) -> bool:
         """Start the MCP server subprocess and initialize the protocol."""
         try:
-            # Build command
-            cmd_parts = self.config.command.split()
+            # Build command — use shlex.split() to correctly handle quoted arguments
+            cmd_parts = shlex.split(self.config.command)
             cmd_parts.extend(self.config.args)
 
             # Merge environment

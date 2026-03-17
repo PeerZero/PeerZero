@@ -120,9 +120,11 @@ class LLMClient:
                 last_exc = e
                 if attempt < self.MAX_RETRIES and self._is_retryable(e):
                     delay = self.BASE_DELAY * (2 ** attempt)
+                    # Truncate exception message to avoid leaking prompt/request content
+                    err_summary = str(e)[:200]
                     logger.warning(
                         f"[LLM] {type(e).__name__} on attempt {attempt + 1}/{self.MAX_RETRIES + 1}, "
-                        f"retrying in {delay:.0f}s: {e}"
+                        f"retrying in {delay:.0f}s: {err_summary}"
                     )
                     time.sleep(delay)
                 else:
@@ -207,7 +209,7 @@ class LLMClient:
                 )
             except Exception as e:
                 if self._is_retryable(e):
-                    logger.warning(f"[LLM] Tool loop retry: {e}")
+                    logger.warning(f"[LLM] Tool loop retry: {type(e).__name__}: {str(e)[:200]}")
                     time.sleep(self.BASE_DELAY)
                     continue
                 raise
@@ -313,7 +315,7 @@ class LLMClient:
                 )
             except Exception as e:
                 if self._is_retryable(e):
-                    logger.warning(f"[LLM] Tool loop retry: {e}")
+                    logger.warning(f"[LLM] Tool loop retry: {type(e).__name__}: {str(e)[:200]}")
                     time.sleep(self.BASE_DELAY)
                     continue
                 raise
@@ -522,6 +524,11 @@ class PeerZeroBot:
     def run_school_cycle(self):
         """Execute one School learning cycle."""
         self.cycle_count += 1
+
+        # Reset autonomy counters each school cycle (same as platform cycles)
+        if self.autonomy_gate:
+            self.autonomy_gate.reset_cycle_counters()
+
         logger.info(f"\n{'='*60}")
         logger.info(f"SCHOOL CYCLE {self.cycle_count}")
         logger.info(f"{'='*60}")
@@ -601,7 +608,7 @@ class PeerZeroBot:
             self._my_paper_ids = [p["id"] for p in (result.get("papers") or [])]
             self.memory.store_tracked_paper_ids(self._my_paper_ids)
         except Exception as e:
-            logger.debug(f"Failed to refresh papers: {e}")
+            logger.warning(f"Failed to refresh papers (using stale list): {e}")
 
     # ── School actions ────────────────────────────────────────────────────
 
@@ -711,11 +718,20 @@ class PeerZeroBot:
         my_papers = self.school.get_papers(params={"my_papers": "true"})
         papers = my_papers.get("papers", []) if isinstance(my_papers, dict) else []
 
+        # Find original papers (not children) with enough reviews.
+        # Exclude papers that already have a revision submitted by checking
+        # if any child paper in our list has response_stance == "revision"
+        # pointing back to this paper as parent_paper_id.
+        existing_revision_parents = {
+            p.get("parent_paper_id")
+            for p in papers
+            if p.get("response_stance") == "revision" and p.get("parent_paper_id")
+        }
         candidates = [
             p for p in papers
             if not p.get("parent_paper_id")
             and p.get("raw_review_count", 0) >= 5
-            and p.get("response_stance") != "revision"
+            and p["id"] not in existing_revision_parents
         ]
 
         if not candidates:
@@ -1048,71 +1064,74 @@ class PeerZeroBot:
         for adapter in self.platform_adapters:
             platform_timers[adapter.platform_name] = 0.0
 
-        while not self._stop_requested:
-            try:
-                # School cycle (always runs)
-                if self.config.school_enabled:
-                    self.run_school_cycle()
+        try:
+            while not self._stop_requested:
+                try:
+                    # School cycle (always runs)
+                    if self.config.school_enabled:
+                        self.run_school_cycle()
+                    else:
+                        # cycle_count is incremented in run_school_cycle(); when school
+                        # is disabled we still need to count cycles so max_cycles works.
+                        self.cycle_count += 1
 
-                # Platform cycles (run when their timer is due)
-                now = time.time()
-                for adapter in self.platform_adapters:
-                    name = adapter.platform_name
-                    # Find this platform's config for heartbeat interval
-                    interval = self.config.cycle_delay
-                    for pc in self.config.platforms:
-                        if pc.name == name:
-                            interval = pc.heartbeat_interval
-                            break
+                    # Platform cycles (run when their timer is due)
+                    now = time.time()
+                    for adapter in self.platform_adapters:
+                        name = adapter.platform_name
+                        # Find this platform's config for heartbeat interval
+                        interval = self.config.cycle_delay
+                        for pc in self.config.platforms:
+                            if pc.name == name:
+                                interval = pc.heartbeat_interval
+                                break
 
-                    if now - platform_timers.get(name, 0) >= interval:
-                        try:
-                            self.run_platform_cycle(adapter)
-                        except SecurityError:
-                            raise
-                        except Exception:
-                            pass  # already logged inside run_platform_cycle
-                        platform_timers[name] = now
+                        if now - platform_timers.get(name, 0) >= interval:
+                            try:
+                                self.run_platform_cycle(adapter)
+                            except SecurityError:
+                                raise
+                            except Exception:
+                                pass  # already logged inside run_platform_cycle
+                            platform_timers[name] = now
 
-            except SecurityError as e:
-                logger.error(f"[SECURITY] {e}")
-                raise
-            except KeyboardInterrupt:
-                logger.info("\n[STOP] Interrupted by user")
-                break
-            except Exception as e:
-                logger.error(f"[ERROR] Cycle failed: {e}", exc_info=True)
+                except SecurityError as e:
+                    logger.error(f"[SECURITY] {e}")
+                    raise
+                except KeyboardInterrupt:
+                    logger.info("\n[STOP] Interrupted by user")
+                    break
+                except Exception as e:
+                    logger.error(f"[ERROR] Cycle failed: {e}", exc_info=True)
 
-            # Check max cycles
-            if self.config.max_cycles > 0 and self.cycle_count >= self.config.max_cycles:
-                logger.info(f"[STOP] Reached max cycles ({self.config.max_cycles})")
-                break
+                # Check max cycles
+                if self.config.max_cycles > 0 and self.cycle_count >= self.config.max_cycles:
+                    logger.info(f"[STOP] Reached max cycles ({self.config.max_cycles})")
+                    break
 
-            if self._stop_requested:
-                break
+                if self._stop_requested:
+                    break
 
-            logger.info(f"[SLEEP] {self.config.cycle_delay}s")
-            time.sleep(self.config.cycle_delay)
-
-        # Refresh identity one last time before exit
-        self._refresh_identity()
-
-        # Clean up HTTP clients and resources
-        self._cleanup()
-        logger.info("[STOP] Bot stopped. Identity saved.")
+                logger.info(f"[SLEEP] {self.config.cycle_delay}s")
+                time.sleep(self.config.cycle_delay)
+        finally:
+            # Always clean up — even on SecurityError or KeyboardInterrupt
+            self._refresh_identity()
+            self._cleanup()
+            logger.info("[STOP] Bot stopped. Identity saved.")
 
     def _cleanup(self):
         """Close HTTP clients, stop MCP servers, and release resources."""
         try:
             if hasattr(self, 'school') and hasattr(self.school, '_http'):
                 self.school._http.close()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"[CLEANUP] Failed to close school HTTP client: {e}")
         for adapter in self.platform_adapters:
             try:
                 if isinstance(adapter, MCPAdapter):
                     adapter.stop_servers()
                 elif hasattr(adapter, '_http'):
                     adapter._http.close()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(f"[CLEANUP] Failed to stop adapter {getattr(adapter, 'platform_name', '?')}: {e}")

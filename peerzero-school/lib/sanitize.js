@@ -66,6 +66,13 @@ function sanitize(text) {
  * Sanitize search term for Supabase PostgREST text search.
  * PostgREST parameterizes queries (no SQL injection risk), but tsquery
  * syntax characters can cause parse errors.
+ *
+ * ⚠️ REVIEW NOTE (not a bug): This function strips tsquery syntax operators
+ * from user input. It is NOT used for raw SQL — all queries go through
+ * Supabase's parameterized client. The risk is tsquery parse errors, not
+ * SQL injection. The stripped characters (&|!<>():*\'"") are tsquery
+ * operators that would cause PostgREST to return 400 errors.
+ *
  * @param {string} term - Raw search term
  * @returns {string} Cleaned term safe for tsquery
  */

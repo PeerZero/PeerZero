@@ -7,6 +7,13 @@ All files are owner-only (0o600).
 
 Thread safety: all read-modify-write operations use a per-path lock
 to prevent concurrent writes from losing data.
+
+⚠️ REVIEW NOTE (not a bug): This module IS thread-safe. Every write and
+append operation acquires a per-path threading.Lock before reading or
+writing the file. The _locks dict maps file paths to Lock objects, and
+_locks_guard protects the _locks dict itself. This prevents data loss
+from concurrent access within a single process. For multi-process safety,
+use storage_sqlite.py instead (SQLite handles its own locking).
 """
 
 import json

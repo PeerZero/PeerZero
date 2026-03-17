@@ -25,7 +25,12 @@ export default function LoginScreen({ navigation }: any) {
     try {
       await login(email, password);
     } catch (err: any) {
-      Alert.alert('Login Failed', err.message);
+      // Show user-safe message — avoid leaking internal paths or stack traces
+      const msg = err?.message || 'Something went wrong';
+      const safeMsg = msg.startsWith('HTTP ') || msg.includes('/') || msg.includes('\\')
+        ? 'Unable to sign in. Please check your credentials and try again.'
+        : msg;
+      Alert.alert('Login Failed', safeMsg);
     } finally {
       setLoading(false);
     }
