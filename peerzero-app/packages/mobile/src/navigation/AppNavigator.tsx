@@ -4,12 +4,13 @@
 // =============================================================================
 
 import React from 'react';
-import { NavigationContainer } from '@react-navigation/native';
+import { NavigationContainer, LinkingOptions } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { ActivityIndicator, View } from 'react-native';
 import { useAuth } from '../hooks/useAuth';
 import { colors } from '../theme/colors';
+import type { RootStackParamList } from '../navigation/types';
 
 // Screens
 import LoginScreen from '../screens/LoginScreen';
@@ -28,15 +29,16 @@ import ConnectPlatformScreen from '../screens/ConnectPlatformScreen';
 import ClassesScreen from '../screens/ClassesScreen';
 import ClassDetailScreen from '../screens/ClassDetailScreen';
 
-const Stack = createNativeStackNavigator();
+const Stack = createNativeStackNavigator<RootStackParamList>();
+const AuthStackNav = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
 
 function AuthStack() {
   return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="Login" component={LoginScreen} />
-      <Stack.Screen name="Register" component={RegisterScreen} />
-    </Stack.Navigator>
+    <AuthStackNav.Navigator screenOptions={{ headerShown: false }}>
+      <AuthStackNav.Screen name="Login" component={LoginScreen} />
+      <AuthStackNav.Screen name="Register" component={RegisterScreen} />
+    </AuthStackNav.Navigator>
   );
 }
 
@@ -82,7 +84,7 @@ function BotStack() {
 }
 
 // Deep linking configuration — widgets and overlay tap → navigate to bot screen
-const linking = {
+const linking: LinkingOptions<RootStackParamList> = {
   prefixes: ['peerzero://'],
   config: {
     screens: {

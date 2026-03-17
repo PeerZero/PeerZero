@@ -17,7 +17,7 @@ const MAX_NAME_LENGTH = 50;
 
 export default function CreateBotScreen({ navigation }: CreateBotScreenProps) {
   const [name, setName] = useState('');
-  const [bodyColor, setBodyColor] = useState(AVATAR_COLOR_PRESETS[0]);
+  const [bodyColor, setBodyColor] = useState<string>(AVATAR_COLOR_PRESETS[0]);
   const [keys, setKeys] = useState<ApiKeyInfo[]>([]);
   const [selectedKeyId, setSelectedKeyId] = useState<string | null>(null);
   const [selectedModel, setSelectedModel] = useState('claude-opus-4-6');

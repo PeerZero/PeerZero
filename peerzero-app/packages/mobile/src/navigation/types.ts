@@ -1,8 +1,16 @@
 // Navigation param list types for type-safe screen props
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import type { NavigatorScreenParams } from '@react-navigation/native';
+
+export type TabParamList = {
+  Lab: undefined;
+  Schools: undefined;
+  Classes: undefined;
+  Settings: undefined;
+};
 
 export type RootStackParamList = {
-  MainTabs: { screen?: string } | undefined;
+  MainTabs: NavigatorScreenParams<TabParamList> | undefined;
   Bot: { botId: string };
   Brain: { botId: string };
   Log: { botId: string };
