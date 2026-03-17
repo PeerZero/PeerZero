@@ -223,5 +223,5 @@ class AutonomyGate:
         """Check if a tool name matches a pattern (supports * wildcard)."""
         if "*" in pattern:
             regex = pattern.replace("*", ".*")
-            return bool(re.match(regex, name, re.IGNORECASE))
+            return bool(re.fullmatch(regex, name, re.IGNORECASE))
         return name.lower() == pattern.lower()

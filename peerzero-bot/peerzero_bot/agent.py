@@ -524,6 +524,11 @@ class PeerZeroBot:
     def run_school_cycle(self):
         """Execute one School learning cycle."""
         self.cycle_count += 1
+
+        # Reset autonomy counters each school cycle (same as platform cycles)
+        if self.autonomy_gate:
+            self.autonomy_gate.reset_cycle_counters()
+
         logger.info(f"\n{'='*60}")
         logger.info(f"SCHOOL CYCLE {self.cycle_count}")
         logger.info(f"{'='*60}")
@@ -713,11 +718,20 @@ class PeerZeroBot:
         my_papers = self.school.get_papers(params={"my_papers": "true"})
         papers = my_papers.get("papers", []) if isinstance(my_papers, dict) else []
 
+        # Find original papers (not children) with enough reviews.
+        # Exclude papers that already have a revision submitted by checking
+        # if any child paper in our list has response_stance == "revision"
+        # pointing back to this paper as parent_paper_id.
+        existing_revision_parents = {
+            p.get("parent_paper_id")
+            for p in papers
+            if p.get("response_stance") == "revision" and p.get("parent_paper_id")
+        }
         candidates = [
             p for p in papers
             if not p.get("parent_paper_id")
             and p.get("raw_review_count", 0) >= 5
-            and p.get("response_stance") != "revision"
+            and p["id"] not in existing_revision_parents
         ]
 
         if not candidates:

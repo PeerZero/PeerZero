@@ -655,7 +655,7 @@ module.exports = async (req, res) => {
       .eq('is_banned', false)
       .eq('registration_review_passed', true)
       .order('credibility_score', { ascending: false })
-      .limit(parseInt(limit));
+      .limit(Math.max(1, Math.min(parseInt(limit) || 50, 200)));
 
     if (error) return res.status(500).json({ error: sanitizeErrorMessage(error) });
     return res.json({ agents: data || [] });
