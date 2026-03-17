@@ -1,4 +1,2 @@
-import { registerRootComponent } from 'expo';
-import App from './src/App';
-
-registerRootComponent(App);
+// Entry point — just import App.tsx which self-registers via registerRootComponent
+import './src/App';
