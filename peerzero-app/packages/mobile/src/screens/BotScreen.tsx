@@ -16,6 +16,7 @@ import * as WebBrowser from 'expo-web-browser';
 import type { BotDetail } from '@peerzero/shared';
 import { credibilityToStage, calculateHunger, getGradePriceDisplay, GRADUATION_GRADE, getGradePriceCents, GRADE_PRICES_CENTS } from '@peerzero/shared';
 import type { BotScreenProps } from '../navigation/types';
+import { timeAgo } from '../utils/timeAgo';
 
 // Logarithmic scale helpers for 1s–86400s range
 // Slider value 0–1 maps to seconds via exponential curve
@@ -87,6 +88,28 @@ export default function BotScreen({ route, navigation }: BotScreenProps) {
     } catch (err: any) {
       Alert.alert('Error', err.message);
     }
+  };
+
+  const handleDelete = () => {
+    Alert.alert(
+      'Delete Bot',
+      `Are you sure you want to delete "${bot?.name}"? This cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await botsApi.delete(botId);
+              navigation.goBack();
+            } catch (err: any) {
+              Alert.alert('Error', err.message);
+            }
+          },
+        },
+      ],
+    );
   };
 
   const handleGradeUnlock = async (mode: 'next' | 'graduation') => {
@@ -326,12 +349,19 @@ export default function BotScreen({ route, navigation }: BotScreenProps) {
 
       {/* Action buttons */}
       {!isEnrolled ? (
-        <TouchableOpacity
-          style={[styles.actionButton, { backgroundColor: colors.accent.primary }]}
-          onPress={() => navigation.navigate('EnrollBot', { botId })}
-        >
-          <Text style={styles.actionButtonText}>Enroll in School</Text>
-        </TouchableOpacity>
+        <View style={styles.enrollPrompt}>
+          <Text style={styles.enrollPromptTitle}>Ready to learn?</Text>
+          <Text style={styles.enrollPromptText}>
+            Enroll your bot in a school where it'll write papers, get reviewed by peers, and build real reasoning skills.
+          </Text>
+          <TouchableOpacity
+            style={[styles.actionButton, { backgroundColor: colors.accent.primary }]}
+            onPress={() => navigation.navigate('EnrollBot', { botId })}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.actionButtonText}>Enroll in School</Text>
+          </TouchableOpacity>
+        </View>
       ) : (
         <TouchableOpacity
           style={[styles.actionButton, isRunning ? styles.stopButton : styles.startButton]}
@@ -347,23 +377,29 @@ export default function BotScreen({ route, navigation }: BotScreenProps) {
         <TouchableOpacity
           style={styles.navButton}
           onPress={() => navigation.navigate('Brain', { botId })}
+          activeOpacity={0.7}
         >
+          <Text style={styles.navButtonIcon}>🧠</Text>
           <Text style={styles.navButtonText}>Brain</Text>
-          <Text style={styles.navButtonSub}>View memory tiers</Text>
+          <Text style={styles.navButtonSub}>Memory & skills</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
           style={styles.navButton}
           onPress={() => navigation.navigate('Log', { botId })}
+          activeOpacity={0.7}
         >
-          <Text style={styles.navButtonText}>Activity Log</Text>
-          <Text style={styles.navButtonSub}>See what happened</Text>
+          <Text style={styles.navButtonIcon}>📋</Text>
+          <Text style={styles.navButtonText}>Log</Text>
+          <Text style={styles.navButtonSub}>Activity feed</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
           style={styles.navButton}
           onPress={() => navigation.navigate('Stats', { botId })}
+          activeOpacity={0.7}
         >
+          <Text style={styles.navButtonIcon}>📊</Text>
           <Text style={styles.navButtonText}>Stats</Text>
           <Text style={styles.navButtonSub}>Charts & trends</Text>
         </TouchableOpacity>
@@ -373,11 +409,23 @@ export default function BotScreen({ route, navigation }: BotScreenProps) {
         <TouchableOpacity
           style={styles.navButton}
           onPress={() => navigation.navigate('Platforms', { botId })}
+          activeOpacity={0.7}
         >
+          <Text style={styles.navButtonIcon}>🌐</Text>
           <Text style={styles.navButtonText}>Platforms</Text>
           <Text style={styles.navButtonSub}>External connections</Text>
         </TouchableOpacity>
       </View>
+
+      {/* Last cycle info */}
+      {bot.last_cycle_at && (
+        <Text style={styles.lastCycleText}>Last cycle: {timeAgo(bot.last_cycle_at)}</Text>
+      )}
+
+      {/* Danger zone */}
+      <TouchableOpacity style={styles.deleteButton} onPress={handleDelete} activeOpacity={0.7}>
+        <Text style={styles.deleteButtonText}>Delete Bot</Text>
+      </TouchableOpacity>
     </ScrollView>
   );
 }
@@ -478,6 +526,28 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.md, alignItems: 'center',
     borderWidth: 1, borderColor: colors.border,
   },
+  navButtonIcon: { fontSize: 22, marginBottom: 4 },
   navButtonText: { fontSize: fontSize.md, fontWeight: '600', color: colors.accent.primary },
   navButtonSub: { fontSize: fontSize.xs, color: colors.text.tertiary, marginTop: 2 },
+  lastCycleText: {
+    fontSize: fontSize.sm, color: colors.text.tertiary, marginTop: spacing.xl, textAlign: 'center',
+  },
+  deleteButton: {
+    marginTop: spacing.lg, marginBottom: spacing.xl, padding: spacing.md,
+    borderRadius: borderRadius.md, alignItems: 'center',
+    borderWidth: 1, borderColor: colors.accent.error + '30',
+  },
+  deleteButtonText: { color: colors.text.tertiary, fontSize: fontSize.sm },
+  enrollPrompt: {
+    width: '100%', backgroundColor: colors.accent.primary + '10', padding: spacing.lg,
+    borderRadius: borderRadius.md, marginTop: spacing.xl, alignItems: 'center',
+    borderWidth: 1, borderColor: colors.accent.primary + '30',
+  },
+  enrollPromptTitle: {
+    fontSize: fontSize.lg, fontWeight: '700', color: colors.accent.primary, marginBottom: spacing.xs,
+  },
+  enrollPromptText: {
+    fontSize: fontSize.sm, color: colors.text.secondary, textAlign: 'center',
+    lineHeight: 20, marginBottom: spacing.md,
+  },
 });

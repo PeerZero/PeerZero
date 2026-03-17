@@ -6,7 +6,7 @@
 import React from 'react';
 import { NavigationContainer, LinkingOptions } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { ActivityIndicator, View, Platform } from 'react-native';
+import { ActivityIndicator, View, Text, Platform } from 'react-native';
 import { useAuth } from '../hooks/useAuth';
 import { colors } from '../theme/colors';
 import type { RootStackParamList } from '../navigation/types';
@@ -19,6 +19,7 @@ const createStack = Platform.OS === 'web'
 // Screens
 import LoginScreen from '../screens/LoginScreen';
 import RegisterScreen from '../screens/RegisterScreen';
+import WelcomeScreen from '../screens/WelcomeScreen';
 import LabScreen from '../screens/LabScreen';
 import BotScreen from '../screens/BotScreen';
 import BrainScreen from '../screens/BrainScreen';
@@ -46,23 +47,79 @@ function AuthStack() {
   );
 }
 
+// Simple text-based tab icon component (no icon library needed)
+function TabIcon({ label, focused }: { label: string; focused: boolean }) {
+  return (
+    <View style={{
+      width: 28, height: 28, borderRadius: 14,
+      backgroundColor: focused ? colors.accent.primary + '20' : 'transparent',
+      justifyContent: 'center', alignItems: 'center',
+    }}>
+      <Text style={{
+        fontSize: 16,
+        color: focused ? colors.accent.primary : colors.text.tertiary,
+      }}>{label}</Text>
+    </View>
+  );
+}
+
 function MainTabs() {
   return (
     <Tab.Navigator
       screenOptions={{
-        headerStyle: { backgroundColor: colors.bg.primary },
+        headerStyle: { backgroundColor: colors.bg.primary, elevation: 0, shadowOpacity: 0 },
         headerTintColor: colors.text.primary,
-        tabBarStyle: { backgroundColor: colors.bg.primary, borderTopColor: colors.border },
+        headerTitleStyle: { fontWeight: '700' },
+        tabBarStyle: {
+          backgroundColor: colors.bg.primary,
+          borderTopColor: colors.border,
+          paddingTop: 4,
+          height: Platform.OS === 'ios' ? 88 : 64,
+        },
         tabBarActiveTintColor: colors.accent.primary,
         tabBarInactiveTintColor: colors.text.tertiary,
+        tabBarLabelStyle: { fontSize: 11, fontWeight: '600' },
       }}
     >
-      <Tab.Screen name="Lab" component={LabScreen} options={{ title: 'My Bots' }} />
-      <Tab.Screen name="Schools" component={SchoolScreen} options={{ title: 'Schools' }} />
-      <Tab.Screen name="Classes" component={ClassesScreen} options={{ title: 'Classes' }} />
-      <Tab.Screen name="Settings" component={SettingsScreen} options={{ title: 'Settings' }} />
+      <Tab.Screen
+        name="Lab"
+        component={LabScreen}
+        options={{
+          title: 'My Bots',
+          tabBarIcon: ({ focused }) => <TabIcon label="🤖" focused={focused} />,
+        }}
+      />
+      <Tab.Screen
+        name="Schools"
+        component={SchoolScreen}
+        options={{
+          title: 'Schools',
+          tabBarIcon: ({ focused }) => <TabIcon label="🏫" focused={focused} />,
+        }}
+      />
+      <Tab.Screen
+        name="Classes"
+        component={ClassesScreen}
+        options={{
+          title: 'Classes',
+          tabBarIcon: ({ focused }) => <TabIcon label="👥" focused={focused} />,
+        }}
+      />
+      <Tab.Screen
+        name="Settings"
+        component={SettingsScreen}
+        options={{
+          title: 'Settings',
+          tabBarIcon: ({ focused }) => <TabIcon label="⚙️" focused={focused} />,
+        }}
+      />
     </Tab.Navigator>
   );
+}
+
+// Wrapper to provide navigation callback to WelcomeScreen
+function WelcomeScreenWrapper({ navigation }: any) {
+  return <WelcomeScreen onComplete={() => navigation.replace('MainTabs')} />;
 }
 
 function BotStack() {
@@ -74,6 +131,7 @@ function BotStack() {
       }}
     >
       <Stack.Screen name="MainTabs" component={MainTabs} options={{ headerShown: false }} />
+      <Stack.Screen name="Welcome" component={WelcomeScreenWrapper} options={{ headerShown: false, presentation: 'modal' }} />
       <Stack.Screen name="Bot" component={BotScreen} options={{ title: 'Bot' }} />
       <Stack.Screen name="Brain" component={BrainScreen} options={{ title: 'Brain' }} />
       <Stack.Screen name="Log" component={LogScreen} options={{ title: 'Activity Log' }} />
@@ -112,6 +170,14 @@ export default function AppNavigator() {
   if (isLoading) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.bg.primary }}>
+        <View style={{
+          width: 80, height: 80, borderRadius: 40,
+          backgroundColor: colors.accent.primary + '20',
+          justifyContent: 'center', alignItems: 'center',
+          marginBottom: 16,
+        }}>
+          <Text style={{ fontSize: 32, fontWeight: '900', color: colors.accent.primary, letterSpacing: -1 }}>P0</Text>
+        </View>
         <ActivityIndicator size="large" color={colors.accent.primary} />
       </View>
     );

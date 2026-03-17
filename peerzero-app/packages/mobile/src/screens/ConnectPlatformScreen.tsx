@@ -3,7 +3,7 @@
 // =============================================================================
 
 import React, { useState, useCallback } from 'react';
-import { View, Text, FlatList, TouchableOpacity, TextInput, StyleSheet, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, TextInput, StyleSheet, Alert, ActivityIndicator, KeyboardAvoidingView, TouchableWithoutFeedback, Keyboard, Platform } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { platforms as platformsApi } from '../services/api';
 import { colors } from '../theme/colors';
@@ -63,7 +63,8 @@ export default function ConnectPlatformScreen({ route, navigation }: any) {
 
   if (selected) {
     return (
-      <View style={styles.container}>
+      <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
         <View style={styles.form}>
           <Text style={styles.formTitle}>Connect to {selected.name}</Text>
           {selected.description && (
@@ -98,7 +99,8 @@ export default function ConnectPlatformScreen({ route, navigation }: any) {
             <Text style={styles.backLinkText}>Back to platform list</Text>
           </TouchableOpacity>
         </View>
-      </View>
+        </TouchableWithoutFeedback>
+      </KeyboardAvoidingView>
     );
   }
 

@@ -42,8 +42,13 @@ export default function SchoolScreen() {
   const renderSchool = ({ item }: { item: SchoolInfo }) => (
     <View style={styles.schoolCard}>
       <View style={styles.schoolHeader}>
-        <Text style={styles.schoolName}>{item.name}</Text>
-        <Text style={styles.schoolPrice}>{formatPrice(item.price_cents)}</Text>
+        <View style={styles.schoolNameRow}>
+          <Text style={styles.schoolIcon}>🏫</Text>
+          <Text style={styles.schoolName}>{item.name}</Text>
+        </View>
+        <View style={styles.priceBadge}>
+          <Text style={styles.schoolPrice}>{formatPrice(item.price_cents)}</Text>
+        </View>
       </View>
       {item.description && (
         <Text style={styles.schoolDescription}>{item.description}</Text>
@@ -61,7 +66,9 @@ export default function SchoolScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent.primary} />}
         ListEmptyComponent={
           <View style={styles.empty}>
-            <Text style={styles.emptyText}>{error || 'No schools available yet.'}</Text>
+            <Text style={styles.emptyIcon}>🏫</Text>
+            <Text style={styles.emptyTitle}>No Schools Yet</Text>
+            <Text style={styles.emptyText}>{error || 'Schools are where bots learn through peer review. Check back soon!'}</Text>
           </View>
         }
       />
@@ -77,9 +84,17 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md, borderWidth: 1, borderColor: colors.border,
   },
   schoolHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  schoolNameRow: { flexDirection: 'row', alignItems: 'center', flex: 1 },
+  schoolIcon: { fontSize: 20, marginRight: spacing.sm },
   schoolName: { fontSize: fontSize.lg, fontWeight: '600', color: colors.text.primary },
-  schoolPrice: { fontSize: fontSize.lg, fontWeight: '700', color: colors.accent.success },
+  priceBadge: {
+    backgroundColor: colors.accent.success + '15', paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs, borderRadius: borderRadius.full,
+  },
+  schoolPrice: { fontSize: fontSize.md, fontWeight: '700', color: colors.accent.success },
   schoolDescription: { fontSize: fontSize.sm, color: colors.text.secondary, marginTop: spacing.sm },
   empty: { padding: spacing.xxl, alignItems: 'center' },
-  emptyText: { color: colors.text.secondary, fontSize: fontSize.md },
+  emptyIcon: { fontSize: 48, marginBottom: spacing.md },
+  emptyTitle: { fontSize: fontSize.lg, fontWeight: '600', color: colors.text.primary, marginBottom: spacing.xs },
+  emptyText: { color: colors.text.secondary, fontSize: fontSize.md, textAlign: 'center', lineHeight: 22 },
 });

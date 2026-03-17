@@ -20,6 +20,7 @@ export type RootStackParamList = {
   Platforms: { botId: string };
   ConnectPlatform: { botId: string };
   ClassDetail: { classId: string };
+  Welcome: undefined;
 };
 
 export type BotScreenProps = NativeStackScreenProps<RootStackParamList, 'Bot'>;
