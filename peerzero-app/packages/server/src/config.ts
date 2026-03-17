@@ -3,6 +3,10 @@
 // All env vars are validated at startup — fail fast if missing.
 // =============================================================================
 
+import dotenv from 'dotenv';
+import path from 'path';
+dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
+
 function required(name: string): string {
   const val = process.env[name];
   if (!val) throw new Error(`Missing required env var: ${name}`);
