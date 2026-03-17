@@ -37,9 +37,13 @@ export default class ErrorBoundary extends Component<Props, State> {
     if (this.state.hasError) {
       return (
         <View style={styles.container}>
-          <Text style={styles.title}>Something went wrong</Text>
+          <View style={styles.iconContainer}>
+            <Text style={styles.icon}>🤖</Text>
+            <Text style={styles.iconSub}>💫</Text>
+          </View>
+          <Text style={styles.title}>Oops! Something broke</Text>
           <Text style={styles.message}>
-            The app ran into an unexpected error. You can try again or restart the app.
+            Don't worry — your bots and their memories are safe. This was just a display glitch.
           </Text>
           {__DEV__ && this.state.error && (
             <Text style={styles.errorDetail} selectable>
@@ -51,9 +55,11 @@ export default class ErrorBoundary extends Component<Props, State> {
             onPress={this.handleReset}
             accessibilityRole="button"
             accessibilityLabel="Try again"
+            activeOpacity={0.8}
           >
             <Text style={styles.buttonText}>Try Again</Text>
           </TouchableOpacity>
+          <Text style={styles.hint}>If this keeps happening, try restarting the app</Text>
         </View>
       );
     }
@@ -70,10 +76,24 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: spacing.xl,
   },
+  iconContainer: {
+    marginBottom: spacing.lg,
+    alignItems: 'center',
+    position: 'relative',
+  },
+  icon: {
+    fontSize: 64,
+  },
+  iconSub: {
+    fontSize: 24,
+    position: 'absolute',
+    bottom: -4,
+    right: -8,
+  },
   title: {
     fontSize: fontSize.xxl,
     fontWeight: '700',
-    color: colors.accent.error,
+    color: colors.text.primary,
     marginBottom: spacing.md,
   },
   message: {
@@ -99,10 +119,21 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.xl,
     borderRadius: borderRadius.md,
+    shadowColor: colors.accent.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
   },
   buttonText: {
     color: '#fff',
     fontSize: fontSize.md,
     fontWeight: '600',
+  },
+  hint: {
+    fontSize: fontSize.sm,
+    color: colors.text.tertiary,
+    marginTop: spacing.lg,
+    textAlign: 'center',
   },
 });

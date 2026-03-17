@@ -244,7 +244,10 @@ export default function SettingsScreen() {
     <ScrollView style={styles.container} keyboardShouldPersistTaps="handled">
       {/* Account section */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Account</Text>
+        <View style={styles.sectionTitleRow}>
+          <Text style={styles.sectionIcon}>👤</Text>
+          <Text style={styles.sectionTitle}>Account</Text>
+        </View>
         <Text style={styles.email}>{user?.email}</Text>
 
         {/* Display name editing */}
@@ -283,7 +286,10 @@ export default function SettingsScreen() {
       {/* Password change */}
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Security</Text>
+          <View style={styles.sectionTitleRow}>
+            <Text style={styles.sectionIcon}>🔒</Text>
+            <Text style={styles.sectionTitle}>Security</Text>
+          </View>
           <TouchableOpacity onPress={() => setShowPasswordChange(!showPasswordChange)}>
             <Text style={styles.addButton}>{showPasswordChange ? 'Cancel' : 'Change Password'}</Text>
           </TouchableOpacity>
@@ -325,7 +331,10 @@ export default function SettingsScreen() {
       {/* API Keys section */}
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>API Keys (BYOK)</Text>
+          <View style={styles.sectionTitleRow}>
+            <Text style={styles.sectionIcon}>🔑</Text>
+            <Text style={styles.sectionTitle}>API Keys (BYOK)</Text>
+          </View>
           <TouchableOpacity onPress={() => setShowAddKey(!showAddKey)}>
             <Text style={styles.addButton}>{showAddKey ? 'Cancel' : '+ Add Key'}</Text>
           </TouchableOpacity>
@@ -374,7 +383,10 @@ export default function SettingsScreen() {
 
       {/* Notification Preferences */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Notifications</Text>
+        <View style={styles.sectionTitleRow}>
+          <Text style={styles.sectionIcon}>🔔</Text>
+          <Text style={styles.sectionTitle}>Notifications</Text>
+        </View>
         {NOTIFICATION_TYPES.map(type => {
           const label = NOTIFICATION_LABELS[type];
           return (
@@ -396,7 +408,10 @@ export default function SettingsScreen() {
 
       {/* Widget Settings */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Home Screen Widget</Text>
+        <View style={styles.sectionTitleRow}>
+          <Text style={styles.sectionIcon}>📱</Text>
+          <Text style={styles.sectionTitle}>Home Screen Widget</Text>
+        </View>
         <Text style={styles.hint}>
           {Platform.OS === 'ios'
             ? 'Show your bot on your home screen. See its status and what it\'s thinking at a glance.'
@@ -488,7 +503,9 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg.primary, padding: spacing.md },
   section: { marginBottom: spacing.xl },
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  sectionTitle: { fontSize: fontSize.lg, fontWeight: '600', color: colors.text.primary, marginBottom: spacing.sm },
+  sectionTitleRow: { flexDirection: 'row', alignItems: 'center', marginBottom: spacing.sm },
+  sectionIcon: { fontSize: 18, marginRight: spacing.sm },
+  sectionTitle: { fontSize: fontSize.lg, fontWeight: '600', color: colors.text.primary },
   email: { fontSize: fontSize.md, color: colors.accent.secondary },
   info: { fontSize: fontSize.sm, color: colors.text.secondary, marginTop: spacing.xs },
   profileRow: { marginTop: spacing.sm },

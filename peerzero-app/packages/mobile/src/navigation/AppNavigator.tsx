@@ -19,6 +19,7 @@ const createStack = Platform.OS === 'web'
 // Screens
 import LoginScreen from '../screens/LoginScreen';
 import RegisterScreen from '../screens/RegisterScreen';
+import WelcomeScreen from '../screens/WelcomeScreen';
 import LabScreen from '../screens/LabScreen';
 import BotScreen from '../screens/BotScreen';
 import BrainScreen from '../screens/BrainScreen';
@@ -116,6 +117,11 @@ function MainTabs() {
   );
 }
 
+// Wrapper to provide navigation callback to WelcomeScreen
+function WelcomeScreenWrapper({ navigation }: any) {
+  return <WelcomeScreen onComplete={() => navigation.replace('MainTabs')} />;
+}
+
 function BotStack() {
   return (
     <Stack.Navigator
@@ -125,6 +131,7 @@ function BotStack() {
       }}
     >
       <Stack.Screen name="MainTabs" component={MainTabs} options={{ headerShown: false }} />
+      <Stack.Screen name="Welcome" component={WelcomeScreenWrapper} options={{ headerShown: false, presentation: 'modal' }} />
       <Stack.Screen name="Bot" component={BotScreen} options={{ title: 'Bot' }} />
       <Stack.Screen name="Brain" component={BrainScreen} options={{ title: 'Brain' }} />
       <Stack.Screen name="Log" component={LogScreen} options={{ title: 'Activity Log' }} />

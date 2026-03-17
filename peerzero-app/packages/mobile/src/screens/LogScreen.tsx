@@ -16,6 +16,7 @@ import { useBotStream } from '../hooks/useBotStream';
 import { colors } from '../theme/colors';
 import { spacing, fontSize, borderRadius } from '../theme/spacing';
 import type { ActivityEntry, MoodType, ActivityCategory, ExternalActivityEntry } from '@peerzero/shared';
+import { formatTimestamp } from '../utils/timeAgo';
 
 const MOOD_COLORS: Record<MoodType, string> = {
   positive: colors.mood.positive,
@@ -200,10 +201,7 @@ export default function LogScreen({ route }: any) {
     });
   };
 
-  const formatTime = (iso: string) => {
-    const d = new Date(iso);
-    return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  };
+  const formatTime = formatTimestamp;
 
   const renderTaskEntry = ({ item }: { item: ActivityEntry }) => {
     const mood = item.translated?.mood || 'neutral';

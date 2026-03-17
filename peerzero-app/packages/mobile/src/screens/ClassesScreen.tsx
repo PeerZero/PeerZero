@@ -3,7 +3,7 @@
 // =============================================================================
 
 import React, { useState, useCallback } from 'react';
-import { View, Text, FlatList, TouchableOpacity, TextInput, StyleSheet, Alert, ActivityIndicator, Keyboard } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, TextInput, StyleSheet, Alert, ActivityIndicator, Keyboard, Share } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { classes as classesApi } from '../services/api';
 import { colors } from '../theme/colors';
@@ -76,10 +76,15 @@ export default function ClassesScreen({ navigation }: any) {
         <Text style={styles.metaText}>{item.member_count} members</Text>
         {item.school_name && <Text style={styles.metaText}>{item.school_name}</Text>}
       </View>
-      <View style={styles.codeRow}>
+      <TouchableOpacity
+        style={styles.codeRow}
+        onPress={() => Share.share({ message: `Join my PeerZero class "${item.name}" with code: ${item.join_code}` })}
+        activeOpacity={0.7}
+      >
         <Text style={styles.codeLabel}>Join code:</Text>
-        <Text style={styles.codeValue} selectable>{item.join_code}</Text>
-      </View>
+        <Text style={styles.codeValue}>{item.join_code}</Text>
+        <Text style={styles.shareButton}>Share</Text>
+      </TouchableOpacity>
     </TouchableOpacity>
   );
 
@@ -194,7 +199,8 @@ const styles = StyleSheet.create({
   metaText: { fontSize: fontSize.xs, color: colors.text.tertiary },
   codeRow: { flexDirection: 'row', alignItems: 'center', marginTop: spacing.sm, gap: spacing.xs },
   codeLabel: { fontSize: fontSize.xs, color: colors.text.tertiary },
-  codeValue: { fontSize: fontSize.sm, fontWeight: '600', color: colors.accent.primary, fontFamily: 'monospace' },
+  codeValue: { fontSize: fontSize.sm, fontWeight: '600', color: colors.accent.primary, fontFamily: 'monospace', flex: 1 },
+  shareButton: { fontSize: fontSize.xs, fontWeight: '600', color: colors.accent.secondary },
   empty: { alignItems: 'center', paddingVertical: spacing.xxl },
   emptyTitle: { fontSize: fontSize.lg, fontWeight: '600', color: colors.text.primary },
   emptyText: { fontSize: fontSize.sm, color: colors.text.secondary, marginTop: spacing.xs, textAlign: 'center', paddingHorizontal: spacing.lg },

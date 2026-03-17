@@ -3,7 +3,7 @@
 // =============================================================================
 
 import React, { useState, useCallback } from 'react';
-import { View, Text, FlatList, TouchableOpacity, StyleSheet, Alert, ActivityIndicator, Modal, ScrollView } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, StyleSheet, Alert, ActivityIndicator, Modal, ScrollView, Share } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { classes as classesApi, bots as botsApi } from '../services/api';
 import { colors } from '../theme/colors';
@@ -134,10 +134,15 @@ export default function ClassDetailScreen({ route, navigation }: any) {
         {classInfo.description && (
           <Text style={styles.description}>{classInfo.description}</Text>
         )}
-        <View style={styles.codeRow}>
+        <TouchableOpacity
+          style={styles.codeRow}
+          onPress={() => Share.share({ message: `Join my PeerZero class "${classInfo.name}" with code: ${classInfo.join_code}` })}
+          activeOpacity={0.7}
+        >
           <Text style={styles.codeLabel}>Join code:</Text>
-          <Text style={styles.codeValue} selectable>{classInfo.join_code}</Text>
-        </View>
+          <Text style={styles.codeValue}>{classInfo.join_code}</Text>
+          <Text style={styles.shareButton}>Share</Text>
+        </TouchableOpacity>
       </View>
 
       {/* Tabs */}
@@ -332,7 +337,8 @@ const styles = StyleSheet.create({
   description: { fontSize: fontSize.sm, color: colors.text.secondary, marginTop: spacing.xs },
   codeRow: { flexDirection: 'row', alignItems: 'center', marginTop: spacing.sm, gap: spacing.xs },
   codeLabel: { fontSize: fontSize.sm, color: colors.text.tertiary },
-  codeValue: { fontSize: fontSize.md, fontWeight: '600', color: colors.accent.primary, fontFamily: 'monospace' },
+  codeValue: { fontSize: fontSize.md, fontWeight: '600', color: colors.accent.primary, fontFamily: 'monospace', flex: 1 },
+  shareButton: { fontSize: fontSize.sm, fontWeight: '600', color: colors.accent.secondary },
   tabs: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: colors.border },
   tab: { flex: 1, paddingVertical: spacing.md, alignItems: 'center' },
   activeTab: { borderBottomWidth: 2, borderBottomColor: colors.accent.primary },
