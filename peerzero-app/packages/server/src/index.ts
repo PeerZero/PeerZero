@@ -70,9 +70,13 @@ const server = createServer(app);
 // WebSocket for real-time activity
 setupWebSocket(server);
 
-// Start BullMQ workers for bot cycles and platform cycles
-startWorker();
-startPlatformWorker();
+// Start BullMQ workers for bot cycles and platform cycles (requires Redis)
+if (config.redisUrl) {
+  startWorker();
+  startPlatformWorker();
+} else {
+  logger.warn('REDIS_URL not set — job workers disabled (auth and API still work)');
+}
 
 server.listen(config.port, () => {
   logger.info({ port: config.port, env: config.nodeEnv, realAdapters: config.useRealAdapters }, 'PeerZero App Server started');
