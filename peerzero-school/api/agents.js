@@ -1,7 +1,7 @@
 const { createClient } = require('@supabase/supabase-js');
 const crypto = require('crypto');
 const { setCorsHeaders, enforceRateLimit, sanitizeErrorMessage, checkGradeProgress, getGradeRequirements, applyTimeDecay, recordFailureReflection, getUnresolvedFailures, resolveFailureReflections } = require('../lib/shared');
-const { getSkillProfile, getPortableProfile, buildCoreCondenserPrompt, buildMilestoneCondenser, getUncondensedExerciseCount, buildIdentityReflectionPrompt, getIdentityCore, buildActiveFocus } = require('../lib/skills');
+const { getSkillProfile, getPortableProfile, buildCoreCondenserPrompt, buildMasterCondenser, buildMilestoneCondenser, getUncondensedExerciseCount, buildIdentityReflectionPrompt, getIdentityCore, buildActiveFocus } = require('../lib/skills');
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -489,11 +489,18 @@ module.exports = async (req, res) => {
     let coreCondenser = null;
 
     // Trigger on grade advancement or grade failure (both produce condensing)
+    // Grade 12 graduation gets the MASTER condenser — the final distillation
+    let masterCondenser = null;
     if (gradeResult && (gradeResult.advanced || gradeResult.failed)) {
-      const gradeLabel = gradeResult.advanced
-        ? `Grade ${gradeResult.previousGrade} Graduate`
-        : `Grade ${gradeResult.grade} (retry ${gradeResult.gradeInfo.grade_fail_count})`;
-      coreCondenser = await buildCoreCondenserPrompt(gradeLabel, skillProfile, agent.current_grade);
+      if (gradeResult.advanced && gradeResult.previousGrade === 12) {
+        // GRADUATION — master condenser replaces core condenser
+        masterCondenser = await buildMasterCondenser(skillProfile);
+      } else {
+        const gradeLabel = gradeResult.advanced
+          ? `Grade ${gradeResult.previousGrade} Graduate`
+          : `Grade ${gradeResult.grade} (retry ${gradeResult.gradeInfo.grade_fail_count})`;
+        coreCondenser = await buildCoreCondenserPrompt(gradeLabel, skillProfile, agent.current_grade);
+      }
       if (gradeResult.failed) {
         // On grade failure, add specific failure context to the condenser
         coreCondenser = coreCondenser || {};
@@ -615,6 +622,7 @@ module.exports = async (req, res) => {
       skill_profile: skillProfile,  // null if no skills exercised yet or query failed
       skill_condenser: milestoneCondenser,  // Tier 2: non-null when 5+ uncondensed exercises — condense Tier 1 into Tier 2
       core_condenser: coreCondenser,  // Tier 3: non-null at tier/grade transitions — distill Tier 2 into Tier 3
+      master_condenser: masterCondenser,  // Grade 12 graduation only — the final distillation of all school learning
       identity_core: identityCore,  // the bot's current self-authored identity (null if none yet)
       identity_reflection: identityReflection,  // self-interrogation prompt — fires after 3+ total actions
       grade: gradeInfo,  // current grade level, activity progress, requirements, quality gate status

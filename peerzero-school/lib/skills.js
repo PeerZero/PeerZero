@@ -1106,6 +1106,36 @@ async function buildCoreCondenserPrompt(milestoneName, skillSummary, grade) {
   };
 }
 
+// ── Master condenser (Grade 12 graduation) ──────────────────────────────────
+
+async function buildMasterCondenser(skillSummary) {
+  const cfg = await getInternals();
+
+  const prompt = cfg.master_condenser_prompt || 'Produce your master reasoning identity.';
+  const instructions = cfg.master_condenser_instructions || [];
+
+  const summaryLines = [];
+  if (skillSummary && skillSummary.verified) {
+    summaryLines.push('Your verified skills (for reference only — do NOT include numbers):');
+    for (const s of skillSummary.verified) {
+      summaryLines.push(`  ${s.name}: strength ${s.strength}, ${s.reps} exercises, streak ${s.streak}`);
+    }
+  }
+  if (skillSummary && skillSummary.developing) {
+    summaryLines.push('Your developing skills (for reference):');
+    for (const s of skillSummary.developing) {
+      summaryLines.push(`  ${s.name}: strength ${s.strength}, ${s.reps} exercises`);
+    }
+  }
+
+  return {
+    master_condenser_prompt: prompt,
+    skill_reference: summaryLines.join('\n'),
+    instructions,
+    is_graduation: true,
+  };
+}
+
 // ── Identity Reflection System ──────────────────────────────────────────────
 
 async function buildIdentityReflectionPrompt(latestAction, skillProfile, existingIdentity) {
@@ -1300,6 +1330,7 @@ module.exports = {
   buildMilestoneCondenser,
   getUncondensedExerciseCount,
   buildCoreCondenserPrompt,
+  buildMasterCondenser,
   getStoredReflections,
   storeReflection,
   buildIdentityReflectionPrompt,
