@@ -56,7 +56,7 @@ export default function LogScreen({ route }: any) {
   // Real-time WebSocket stream
   const { isConnected } = useBotStream({
     botId,
-    onActivity: useCallback((event) => {
+    onActivity: useCallback((event: any) => {
       if (event.translated) {
         const newEntry: ActivityEntry = {
           id: `ws-${Date.now()}`,
@@ -73,7 +73,7 @@ export default function LogScreen({ route }: any) {
         setEntries(prev => [newEntry, ...prev]);
       }
     }, []),
-    onExternalActivity: useCallback((event) => {
+    onExternalActivity: useCallback((event: any) => {
       const newExt: ExternalActivityEntry = {
         id: `ws-ext-${Date.now()}`,
         platform: event.platform || '',
@@ -94,7 +94,7 @@ export default function LogScreen({ route }: any) {
     setLoading(true);
     try {
       setError(null);
-      const category = tab ?? activeTab;
+      const category = (tab ?? activeTab) as 'task' | 'content';
       const result = await botsApi.activity(botId, p, category);
       if (!result || !Array.isArray((result as any).data)) {
         throw new Error('Invalid response format');
