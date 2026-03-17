@@ -116,6 +116,7 @@ CREATE TABLE bots (
   updated_at      TIMESTAMPTZ DEFAULT NOW()
 );
 CREATE INDEX idx_bots_user ON bots(user_id);
+CREATE INDEX idx_bots_phone_home ON bots(phone_home_token_hash) WHERE phone_home_token_hash IS NOT NULL;
 CREATE INDEX idx_bots_status ON bots(status) WHERE status = 'running';
 
 -- =============================================================================

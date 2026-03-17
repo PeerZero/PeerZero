@@ -3,9 +3,21 @@
 // =============================================================================
 
 import { Router, Request, Response } from 'express';
+import rateLimit from 'express-rate-limit';
 import { requireAuth } from '../middleware/auth';
 import { userRateLimit } from '../middleware/rate-limit';
 import * as paymentService from '../services/payment.service';
+
+// IP-based rate limit for the Stripe webhook endpoint.
+// Stripe retries with exponential backoff, so 100/min is generous.
+// This prevents abuse from non-Stripe sources hammering the endpoint.
+const webhookLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many webhook requests' },
+});
 
 const router = Router();
 
@@ -85,7 +97,7 @@ router.get('/grade-price-preview/:botId', requireAuth, userRateLimit('read'), as
 });
 
 // Stripe webhook (raw body required — handled in index.ts)
-router.post('/webhook', async (req: Request, res: Response) => {
+router.post('/webhook', webhookLimiter, async (req: Request, res: Response) => {
   const signature = req.headers['stripe-signature'] as string;
   if (!signature) {
     res.status(400).json({ error: 'Missing stripe-signature header' });
