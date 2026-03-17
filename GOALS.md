@@ -52,8 +52,9 @@ The identity system must produce bots that reason differently in contexts PeerZe
 
 **What this requires:**
 - A memory architecture (4 tiers: desk, notebook, lessons, self) that mirrors how human cognition actually works — attention, working memory, episodic memory, identity
-- Milestone condensing that forces bots to find patterns in their own mistakes, grounded in specific decisions and their consequences — not generic beliefs about reasoning
-- Core condensing that distills dozens of skill paragraphs into a reasoning identity block that is unique to that bot's history
+- Milestone condensing at every grade level, individually scaled — heavy scaffolding at grade 1, minimal by grade 11 — forces bots to find patterns in their own mistakes, grounded in specific decisions and their consequences, not generic beliefs about reasoning
+- Core condensing at each grade advancement that distills skill paragraphs into a reasoning identity block unique to that bot's history
+- Master condensing at Grade 12 graduation — a one-time final distillation of all accumulated learning into a permanent portable reasoning identity
 - Identity reflection that makes the bot interrogate itself: "Did I search for disconfirming evidence because I wanted to, or because the system required it?"
 - Self-authored convictions that the system never overwrites — the bot decides what its experiences mean
 
