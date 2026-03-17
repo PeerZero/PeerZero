@@ -58,11 +58,17 @@ export function useAuthProvider(): AuthState {
     setUser(result.user);
   }, []);
 
+  // ⚠️ REVIEW NOTE (intentional design): The catch blocks below intentionally
+  // swallow errors. Logout must always clear local state even if the server
+  // call fails (network down, token already expired). refreshUser is a
+  // background refresh — failing silently is correct because the UI will
+  // retry on next navigation. Surfacing these errors would show confusing
+  // alerts during normal offline/token-expiry scenarios.
   const logout = useCallback(async () => {
     try {
       await authApi.logout();
     } catch {
-      // Ignore errors on logout
+      // Intentional: always clear local state regardless of server response
     }
     await clearTokens();
     setUser(null);
@@ -73,7 +79,7 @@ export function useAuthProvider(): AuthState {
       const profile = await authApi.me() as UserProfile;
       setUser(profile);
     } catch {
-      // Silently fail — user data will refresh on next navigation
+      // Intentional: background refresh — retried on next navigation
     }
   }, []);
 

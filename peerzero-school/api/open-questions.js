@@ -1,6 +1,6 @@
 const { createClient } = require('@supabase/supabase-js');
 const crypto = require('crypto');
-const { setCorsHeaders, enforceRateLimit, sanitizeErrorMessage } = require('../lib/shared');
+const { setCorsHeaders, enforceRateLimit, sanitizeErrorMessage, isRateLimited } = require('../lib/shared');
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -123,6 +123,7 @@ module.exports = async (req, res) => {
 
   // ── POST — create question or link paper to question ────────────────────────
   if (req.method === 'POST') {
+    const apiKey = req.headers['x-api-key'];
     if (!apiKey) return res.status(401).json({ error: 'Missing X-Api-Key header' });
 
     const keyHash = crypto.createHash('sha256').update(apiKey).digest('hex');

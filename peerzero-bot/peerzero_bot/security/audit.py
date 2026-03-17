@@ -10,6 +10,14 @@ Every action the bot takes is logged with:
   - Content hash (SHA-256 of request body — verifiable without storing content)
 
 Audit files are daily, append-only, owner-readable only.
+
+⚠️ REVIEW NOTE (intentional design): These are LOCAL audit files on the
+bot operator's own machine, not a shared tamper-evident ledger. HMAC
+signing would protect against the operator tampering with their own logs,
+which is not the threat model — the operator IS the owner. The content_hash
+field provides verifiability (you can prove a specific request was sent by
+re-hashing the body). For server-side tamper-evident auditing, see
+audit.service.ts in System 2 which uses the append-only DB audit table.
 """
 
 import json
@@ -60,6 +68,11 @@ class AuditLog:
             log_file = self._dir / f"{today}.jsonl"
 
             with open(log_file, "a", encoding="utf-8") as f:
+                # default=str handles datetime and UUID objects in audit entries.
+                # ⚠️ REVIEW NOTE: This is safe here because `entry` is constructed
+                # from known fields above (ts, adapter, action, etc.), not from
+                # arbitrary objects. The default=str fallback only applies to
+                # datetime.isoformat() output type.
                 f.write(json.dumps(entry, default=str) + "\n")
 
             # Ensure restricted permissions

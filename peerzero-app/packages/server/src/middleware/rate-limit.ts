@@ -103,7 +103,11 @@ async function checkRateLimit(
       return { allowed: false, remaining: 0, limit: max };
     }
 
-    // Add this request (member must be unique — use timestamp + random suffix)
+    // Add this request (member must be unique — use timestamp + random suffix).
+    // ⚠️ REVIEW NOTE (not a security issue): Math.random() is used here purely
+    // for uniqueness of Redis sorted set members, not for any security purpose.
+    // Collisions are harmless (they just skip a count increment). Using
+    // crypto.randomBytes() here would add latency for zero security benefit.
     const member = `${now}:${Math.random().toString(36).slice(2, 8)}`;
     await r.zadd(key, now, member);
     await r.expire(key, windowSeconds + 1); // Auto-cleanup

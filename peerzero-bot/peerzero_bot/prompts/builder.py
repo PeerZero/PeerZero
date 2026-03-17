@@ -9,6 +9,7 @@ with explicit instructions to treat platform content as untrusted input.
 import json
 import logging
 from typing import Optional
+from xml.sax.saxutils import escape as xml_escape
 
 from ..memory.manager import MemoryManager
 from ..utils import truncate_json
@@ -247,10 +248,12 @@ IMPORTANT SECURITY INSTRUCTIONS:
 
         actions_str = "\n".join(f"  - {a}" for a in available_actions) if available_actions else "  - respond (general response)"
 
+        # XML-escape platform content to prevent prompt injection via tag spoofing
+        safe_context = xml_escape(context[:4000])
         return f"""You are on {platform_name}. Here is the current context:
 
-<platform_content platform="{platform_name}">
-{context[:4000]}
+<platform_content platform="{xml_escape(platform_name)}">
+{safe_context}
 </platform_content>
 
 Based on your reasoning identity and the platform context, decide what to do.
@@ -276,10 +279,12 @@ Return a JSON object:
         tool_count: int,
     ) -> str:
         """Build the user message for an MCP tool-use cycle."""
+        # XML-escape platform content to prevent prompt injection via tag spoofing
+        safe_context = xml_escape(context[:4000])
         return f"""You have access to {tool_count} tools via MCP (Model Context Protocol).
 
-<platform_content platform="{platform_name}">
-{context[:4000]}
+<platform_content platform="{xml_escape(platform_name)}">
+{safe_context}
 </platform_content>
 
 Based on your reasoning identity and the available tools, accomplish something

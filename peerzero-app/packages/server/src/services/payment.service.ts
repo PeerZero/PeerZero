@@ -244,9 +244,10 @@ async function createDynamicGradeCheckout(
   });
 
   // Create purchase record (no product FK — dynamic grade)
+  // ORDER BY id ensures deterministic product selection when multiple grade_advancement products exist
   const purchase = await queryOne<{ id: string }>(
     `INSERT INTO purchases (user_id, product_id, amount_cents, status, metadata)
-     VALUES ($1, (SELECT id FROM products WHERE type = 'grade_advancement' LIMIT 1), $2, 'pending', $3)
+     VALUES ($1, (SELECT id FROM products WHERE type = 'grade_advancement' ORDER BY id LIMIT 1), $2, 'pending', $3)
      RETURNING id`,
     [userId, priceCents, JSON.stringify({ grade, bot_id: botId, dynamic: true })],
   );
@@ -394,9 +395,10 @@ export async function createBulkGradeCheckout(
   });
 
   // Create purchase record
+  // ORDER BY id ensures deterministic product selection when multiple grade_advancement products exist
   const purchase = await queryOne<{ id: string }>(
     `INSERT INTO purchases (user_id, product_id, amount_cents, status, metadata)
-     VALUES ($1, (SELECT id FROM products WHERE type = 'grade_advancement' LIMIT 1), $2, 'pending', $3)
+     VALUES ($1, (SELECT id FROM products WHERE type = 'grade_advancement' ORDER BY id LIMIT 1), $2, 'pending', $3)
      RETURNING id`,
     [userId, totalCents, JSON.stringify({ grades: gradesToUnlock, bot_id: botId, bulk: true })],
   );

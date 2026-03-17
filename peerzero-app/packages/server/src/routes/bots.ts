@@ -37,6 +37,10 @@ router.post('/', userRateLimit('write'), async (req: Request, res: Response) => 
     res.status(400).json({ error: 'name, avatar_config, and llm_api_key_id required' });
     return;
   }
+  if (typeof name !== 'string' || name.trim().length < 1 || name.trim().length > 100) {
+    res.status(400).json({ error: 'Bot name must be 1-100 characters' });
+    return;
+  }
   const botId = await botService.createBot(req.user!.userId, name, avatar_config, llm_api_key_id, llm_model, fast_llm_model);
   logAudit({ userId: req.user!.userId, action: 'bot.create', entityType: 'bot', entityId: botId, metadata: { name }, ipAddress: req.ip });
   const bot = await botService.getBotDetail(req.user!.userId, botId);

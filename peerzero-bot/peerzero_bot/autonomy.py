@@ -109,8 +109,11 @@ class AutonomyGate:
         self._tool_call_count: int = 0
         self._compiled_blocked_patterns: list[re.Pattern] = []
 
-        # Pre-compile blocked content patterns
+        # Pre-compile blocked content patterns with length limit to prevent ReDoS
         for pattern in policy.blocked_content_patterns:
+            if len(pattern) > 500:
+                logger.warning(f"Blocked content pattern too long ({len(pattern)} chars), skipping")
+                continue
             try:
                 self._compiled_blocked_patterns.append(re.compile(pattern, re.IGNORECASE))
             except re.error as e:
@@ -193,7 +196,8 @@ class AutonomyGate:
                     f"Content too long: {len(content)}/{policy.max_content_length} chars",
                 )
             for pattern in self._compiled_blocked_patterns:
-                if pattern.search(content):
+                # Search only first 50k chars to bound worst-case regex time
+                if pattern.search(content[:50000]):
                     return PolicyDecision(
                         False,
                         f"Content matches blocked pattern: {pattern.pattern}",

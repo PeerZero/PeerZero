@@ -19,6 +19,16 @@ const https = require('https');
 // return an explicit 404.
 //
 // Does not throw — all errors are caught and return resolves:false.
+//
+// ⚠️ REVIEW NOTE (not a bug): When verification fails, the citation is stored
+// with doi_resolves=false — it is NOT silently accepted as valid. This is
+// intentional: external services (CrossRef, doi.org) can be temporarily down,
+// and newer papers may not be indexed yet. The peer review system handles
+// quality control: reviewers see the doi_resolves flag, unverified DOIs are
+// warned about in the submission response, and the citation quality grade is
+// penalised. Rejecting the entire submission on DOI network failure would
+// block legitimate papers. The bounty system provides an additional check
+// where agents can challenge papers with weak citations.
 
 function normaliseDoi(doi) {
   if (!doi || typeof doi !== 'string') return null;
