@@ -3,7 +3,7 @@
 // =============================================================================
 
 import React, { useState, useCallback } from 'react';
-import { View, Text, FlatList, TouchableOpacity, TextInput, StyleSheet, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, TextInput, StyleSheet, Alert, ActivityIndicator, Keyboard } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { classes as classesApi } from '../services/api';
 import { colors } from '../theme/colors';
@@ -105,6 +105,8 @@ export default function ClassesScreen({ navigation }: any) {
             placeholderTextColor={colors.text.tertiary}
             autoCapitalize="characters"
             maxLength={6}
+            returnKeyType="go"
+            onSubmitEditing={handleJoin}
           />
           <View style={styles.formActions}>
             <TouchableOpacity style={styles.cancelButton} onPress={() => setShowJoin(false)}>

@@ -3,7 +3,7 @@
 // =============================================================================
 
 import React, { useState, useCallback } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Alert, TextInput, Switch, ScrollView, Platform, Linking } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Alert, TextInput, Switch, ScrollView, Platform, Linking, KeyboardAvoidingView } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { useAuth } from '../hooks/useAuth';
 import { apiKeys as keysApi, notifications as notifApi, auth as authApi, widgets as widgetsApi, bots as botsApi } from '../services/api';
@@ -240,7 +240,8 @@ export default function SettingsScreen() {
   };
 
   return (
-    <ScrollView style={styles.container}>
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <ScrollView style={styles.container} keyboardShouldPersistTaps="handled">
       {/* Account section */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Account</Text>
@@ -479,6 +480,7 @@ export default function SettingsScreen() {
 
       <View style={{ height: spacing.xxl }} />
     </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 

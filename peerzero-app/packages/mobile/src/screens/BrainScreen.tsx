@@ -90,13 +90,14 @@ export default function BrainScreen({ route }: any) {
       )}
 
       {/* Tier 0: Active Focus */}
-      <TouchableOpacity style={styles.tierHeader} onPress={() => toggleTier(0)}>
+      <TouchableOpacity style={styles.tierHeader} onPress={() => toggleTier(0)} activeOpacity={0.7}>
         <View style={[styles.tierDot, { backgroundColor: TIER_COLORS[0] }]} />
         <Text style={styles.tierTitle}>{MEMORY_TIER_LABELS[0]}</Text>
         <Text style={styles.tierCount}>{memory.tier0_focus.length} chunks</Text>
+        <Text style={styles.tierChevron}>{expandedTier === 0 ? '▾' : '▸'}</Text>
       </TouchableOpacity>
       {expandedTier === 0 && memory.tier0_focus.map((chunk, i) => (
-        <View key={i} style={styles.card}>
+        <View key={i} style={[styles.card, { borderLeftColor: TIER_COLORS[0] }]}>
           <Text style={styles.cardLabel}>{chunk.label}</Text>
           <Text style={styles.cardContent}>{chunk.content}</Text>
           <Text style={styles.cardSource}>{chunk.source}</Text>
@@ -104,15 +105,16 @@ export default function BrainScreen({ route }: any) {
       ))}
 
       {/* Tier 1: Raw Exercises */}
-      <TouchableOpacity style={styles.tierHeader} onPress={() => toggleTier(1)}>
+      <TouchableOpacity style={styles.tierHeader} onPress={() => toggleTier(1)} activeOpacity={0.7}>
         <View style={[styles.tierDot, { backgroundColor: TIER_COLORS[1] }]} />
         <Text style={styles.tierTitle}>{MEMORY_TIER_LABELS[1]}</Text>
         <Text style={styles.tierCount}>{memory.tier1_exercises.length}</Text>
+        <Text style={styles.tierChevron}>{expandedTier === 1 ? '▾' : '▸'}</Text>
       </TouchableOpacity>
       {expandedTier === 1 && (
         <>
           {memory.tier1_exercises.slice(0, 10).map((ex) => (
-            <View key={ex.id} style={styles.card}>
+            <View key={ex.id} style={[styles.card, { borderLeftColor: TIER_COLORS[1] }]}>
               <Text style={styles.cardLabel}>Cycle {ex.cycle_number} — {ex.action_type}</Text>
               <Text style={styles.cardContent} numberOfLines={3}>
                 {JSON.stringify(ex.exercise_data).slice(0, 200)}
@@ -128,34 +130,36 @@ export default function BrainScreen({ route }: any) {
       )}
 
       {/* Tier 2: Skill Paragraphs */}
-      <TouchableOpacity style={styles.tierHeader} onPress={() => toggleTier(2)}>
+      <TouchableOpacity style={styles.tierHeader} onPress={() => toggleTier(2)} activeOpacity={0.7}>
         <View style={[styles.tierDot, { backgroundColor: TIER_COLORS[2] }]} />
         <Text style={styles.tierTitle}>{MEMORY_TIER_LABELS[2]}</Text>
         <Text style={styles.tierCount}>{memory.tier2_paragraphs.length}</Text>
+        <Text style={styles.tierChevron}>{expandedTier === 2 ? '▾' : '▸'}</Text>
       </TouchableOpacity>
       {expandedTier === 2 && memory.tier2_paragraphs.map((p) => (
-        <View key={p.id} style={styles.card}>
+        <View key={p.id} style={[styles.card, { borderLeftColor: TIER_COLORS[2] }]}>
           <Text style={styles.cardLabel}>{p.interaction_type}</Text>
           <Text style={styles.cardContent}>{p.paragraph}</Text>
         </View>
       ))}
 
       {/* Tier 3: Core Identity */}
-      <TouchableOpacity style={styles.tierHeader} onPress={() => toggleTier(3)}>
+      <TouchableOpacity style={styles.tierHeader} onPress={() => toggleTier(3)} activeOpacity={0.7}>
         <View style={[styles.tierDot, { backgroundColor: TIER_COLORS[3] }]} />
         <Text style={styles.tierTitle}>{MEMORY_TIER_LABELS[3]}</Text>
         <Text style={styles.tierCount}>{memory.tier3_core ? `Identity v${memory.tier3_core.version}` : 'No core identity yet'}</Text>
+        <Text style={styles.tierChevron}>{expandedTier === 3 ? '▾' : '▸'}</Text>
       </TouchableOpacity>
       {expandedTier === 3 && (
         <>
           {memory.tier3_core && (
-            <View style={styles.card}>
+            <View style={[styles.card, { borderLeftColor: TIER_COLORS[3] }]}>
               <Text style={styles.cardLabel}>Core Identity (v{memory.tier3_core.version})</Text>
               <Text style={styles.cardContent}>{memory.tier3_core.core_identity}</Text>
             </View>
           )}
           {memory.tier3_self_identity && (
-            <View style={styles.card}>
+            <View style={[styles.card, { borderLeftColor: TIER_COLORS[3] }]}>
               <Text style={styles.cardLabel}>Self-Narrative</Text>
               <Text style={styles.cardContent}>{memory.tier3_self_identity.self_narrative}</Text>
               {memory.tier3_self_identity.formed_convictions && (
@@ -183,6 +187,7 @@ const styles = StyleSheet.create({
   tierDot: { width: 12, height: 12, borderRadius: 6, marginRight: spacing.sm },
   tierTitle: { flex: 1, fontSize: fontSize.lg, fontWeight: '600', color: colors.text.primary },
   tierCount: { fontSize: fontSize.sm, color: colors.text.secondary },
+  tierChevron: { fontSize: fontSize.md, color: colors.text.tertiary, marginLeft: spacing.sm },
   card: {
     backgroundColor: colors.bg.card, padding: spacing.md, borderRadius: borderRadius.md,
     marginTop: spacing.sm, borderLeftWidth: 3, borderLeftColor: colors.border,

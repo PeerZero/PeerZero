@@ -50,8 +50,12 @@ export default function LabScreen({ navigation }: any) {
 
   const renderBot = ({ item }: { item: BotSummary }) => (
     <TouchableOpacity
-      style={styles.botCard}
+      style={[
+        styles.botCard,
+        item.status === 'running' && styles.botCardRunning,
+      ]}
       onPress={() => navigation.navigate('Bot', { botId: item.id })}
+      activeOpacity={0.7}
     >
       <BotAvatar
         botId={item.id}
@@ -91,14 +95,26 @@ export default function LabScreen({ navigation }: any) {
         </View>
       ) : botList.length === 0 ? (
         <View style={styles.emptyState}>
-          <Text style={styles.emptyTitle}>No bots yet</Text>
-          <Text style={styles.emptySubtitle}>Create your first bot and send it to school!</Text>
+          <BotAvatar
+            botId="empty-state-preview"
+            bodyColor={colors.accent.primary}
+            tier={0}
+            status="paused"
+            hunger="curious"
+            size={120}
+          />
+          <Text style={styles.emptyTitle}>Your lab is empty</Text>
+          <Text style={styles.emptySubtitle}>
+            Create your first bot, give it a name and a color, then send it to school where it'll learn through adversarial peer review.
+          </Text>
           <TouchableOpacity
             style={styles.createButtonLarge}
             onPress={() => navigation.navigate('CreateBot')}
+            activeOpacity={0.8}
           >
-            <Text style={styles.createButtonLargeText}>Create Bot</Text>
+            <Text style={styles.createButtonLargeText}>Create Your First Bot</Text>
           </TouchableOpacity>
+          <Text style={styles.emptyHint}>It only takes 30 seconds</Text>
         </View>
       ) : (
         <FlatList
@@ -115,6 +131,7 @@ export default function LabScreen({ navigation }: any) {
         <TouchableOpacity
           style={styles.fab}
           onPress={() => navigation.navigate('CreateBot')}
+          activeOpacity={0.85}
         >
           <Text style={styles.fabText}>+</Text>
         </TouchableOpacity>
@@ -130,6 +147,13 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bg.card, borderRadius: borderRadius.lg, padding: spacing.md,
     marginBottom: spacing.md, flexDirection: 'row', alignItems: 'center',
     borderWidth: 1, borderColor: colors.border,
+    // Subtle card shadow
+    shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15, shadowRadius: 4, elevation: 2,
+  },
+  botCardRunning: {
+    borderColor: colors.accent.success + '40',
+    shadowColor: colors.accent.success, shadowOpacity: 0.2,
   },
   botInfo: { flex: 1, marginLeft: spacing.md },
   botName: { fontSize: fontSize.lg, fontWeight: '600', color: colors.text.primary },
@@ -141,7 +165,8 @@ const styles = StyleSheet.create({
   cycleText: { fontSize: fontSize.xs, color: colors.text.tertiary, marginTop: 2 },
   emptyState: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: spacing.xl },
   emptyTitle: { fontSize: fontSize.xl, fontWeight: '600', color: colors.text.primary, marginBottom: spacing.sm },
-  emptySubtitle: { fontSize: fontSize.md, color: colors.text.secondary, textAlign: 'center' },
+  emptySubtitle: { fontSize: fontSize.md, color: colors.text.secondary, textAlign: 'center', lineHeight: 22, paddingHorizontal: spacing.md },
+  emptyHint: { fontSize: fontSize.sm, color: colors.text.tertiary, marginTop: spacing.sm },
   createButtonLarge: {
     backgroundColor: colors.accent.primary, paddingVertical: spacing.md, paddingHorizontal: spacing.xl,
     borderRadius: borderRadius.md, marginTop: spacing.lg,

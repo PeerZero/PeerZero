@@ -3,7 +3,7 @@
 // =============================================================================
 
 import React, { useState, useCallback } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Alert, ActivityIndicator, Keyboard, Platform, KeyboardAvoidingView } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { bots as botsApi, apiKeys as keysApi } from '../services/api';
 import { colors } from '../theme/colors';
@@ -100,7 +100,8 @@ export default function CreateBotScreen({ navigation }: CreateBotScreenProps) {
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <ScrollView style={styles.container} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
       {/* Avatar preview */}
       <BotAvatar
         botId={name || 'preview'}
@@ -226,6 +227,7 @@ export default function CreateBotScreen({ navigation }: CreateBotScreenProps) {
         )}
       </TouchableOpacity>
     </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
