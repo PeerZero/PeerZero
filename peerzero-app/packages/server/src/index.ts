@@ -26,7 +26,7 @@ import schoolRoutes from './routes/schools';
 import paymentRoutes from './routes/payments';
 import healthRoutes from './routes/health';
 import notificationRoutes from './routes/notifications';
-import externalActivityRoutes from './routes/external-activity';
+import externalActivityRoutes, { closePhoneHomeRedis } from './routes/external-activity';
 import widgetRoutes from './routes/widgets';
 import platformRoutes from './routes/platforms';
 import classRoutes from './routes/classes';
@@ -84,6 +84,7 @@ async function shutdown() {
   await stopWorker();
   await stopPlatformWorker();
   await closeRateLimitRedis();
+  await closePhoneHomeRedis();
   await closePool();
   server.close();
   process.exit(0);
