@@ -58,7 +58,10 @@ jobs:
           cache: 'pnpm'
           cache-dependency-path: peerzero-app/pnpm-lock.yaml
       - run: pnpm install
-      - run: pnpm exec tsc --noEmit -p packages/server/tsconfig.json
+      - name: Type-check server
+        run: pnpm exec tsc --noEmit -p packages/server/tsconfig.json
+      - name: Type-check mobile
+        run: pnpm exec tsc --noEmit -p packages/mobile/tsconfig.json
       - run: pnpm --filter @peerzero/server exec vitest run
-      - name: Security audit
-        run: pnpm audit --audit-level=moderate || true
+      - name: Security audit (high/critical fail the build)
+        run: pnpm audit --audit-level=high
