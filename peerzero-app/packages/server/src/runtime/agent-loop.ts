@@ -3,12 +3,14 @@
 //
 // Each cycle:
 // 1. Fetch profile from School (via adapter)
-// 2. Determine next action based on profile state
-// 3. Ask LLM to generate the action content
-// 4. Submit action to School (via adapter)
-// 5. Store results in memory + activity log
-// 6. Handle memory condensation if needed
-// 7. Update bot cached state
+// 2. Check grade payment gate
+// 3. Load self-authored identity block (decrypted) for prompt injection
+// 4. Determine next action based on profile state
+// 5. Ask LLM to generate the action content (with self-authored identity injected)
+// 6. Submit action to School (via adapter)
+// 7. Store results in memory + activity log
+// 8. Handle memory condensation + self-authoring if needed
+// 9. Update bot cached state
 //
 // This mirrors the FSM described in the peerzero explanation — the School's
 // guard conditions (403s, requirements) constrain the bot's transitions.
@@ -108,7 +110,10 @@ export async function runOneCycle(ctx: BotContext): Promise<void> {
       return;
     }
 
-    // 4. Determine and execute action
+    // 4. Load self-authored identity block (decrypted) for prompt injection
+    const selfAuthoredBlock = await memory.getLatestSelfAuthored(ctx.botId);
+
+    // 5. Determine and execute action
     const actionType = determineAction(profile);
     const actionResult = await routeAction(actionType, {
       schoolAdapter,
@@ -119,9 +124,10 @@ export async function runOneCycle(ctx: BotContext): Promise<void> {
       profile,
       botId: ctx.botId,
       cycleNumber: ctx.cycleNumber,
+      selfAuthoredBlock,
     });
 
-    // 5. Log activity (with content text for the Content tab)
+    // 6. Log activity (with content text for the Content tab)
     const durationMs = Date.now() - startTime;
     const contentText = extractContentText(actionType, actionResult.rawRequest);
     await activity.logActivity(
@@ -137,7 +143,7 @@ export async function runOneCycle(ctx: BotContext): Promise<void> {
       contentText,
     );
 
-    // 6. Store memory if exercises returned
+    // 7. Store memory if exercises returned
     if (actionResult.exercises) {
       await memory.storeExercise(
         ctx.botId,
@@ -148,15 +154,15 @@ export async function runOneCycle(ctx: BotContext): Promise<void> {
       );
     }
 
-    // 7. Handle condensation if needed
+    // 8. Handle condensation if needed (includes self-authoring after any condensation)
     if ((actionResult.memoryPrompts?.uncondensed_exercises ?? 0) >= 5) {
       await handleCondensation(ctx, schoolCreds, llmKey, profile);
     }
 
-    // 8. Update cached bot state
+    // 9. Update cached bot state
     await updateBotCache(ctx.botId, profile, ctx.cycleNumber);
 
-    // 9. Cache skill snapshots for BrainScreen progress bars
+    // 10. Cache skill snapshots for BrainScreen progress bars
     try {
       const skills = extractSkillSnapshots(profile);
       if (skills.length > 0) {
@@ -166,7 +172,7 @@ export async function runOneCycle(ctx: BotContext): Promise<void> {
       logger.warn({ err: err instanceof Error ? err.message : err }, 'Failed to update skill snapshots');
     }
 
-    // 10. Schedule platform cycles for any active platform connections
+    // 11. Schedule platform cycles for any active platform connections
     try {
       const utilityModel = ctx.fastLlmModel || ctx.llmModel;
       await schedulePlatformJobs(ctx.botId, ctx.userId, ctx.llmApiKeyId, utilityModel);
@@ -244,6 +250,9 @@ async function handleCondensation(
   // Use fast model for condensation/identity tasks when available (cost optimization)
   const utilityModel = ctx.fastLlmModel || ctx.llmModel;
 
+  // Track which condensation occurred so we can trigger self-authoring after
+  let condensationOccurred: string | null = null;
+
   if (profile.skill_condenser) {
     // Ask LLM to condense exercises into a Tier 2 paragraph
     const condensationPrompt = buildPrompt('condense', { profile, type: 'skill' });
@@ -253,6 +262,7 @@ async function handleCondensation(
     if (parsed?.paragraph) {
       await memory.storeParagraph(ctx.botId, 'condensation', parsed.paragraph as string, ctx.cycleNumber);
       await schoolAdapter.submitCondensation(schoolCreds, parsed);
+      condensationOccurred = 'skill';
     } else {
       logger.warn({ contentSnippet: response.content?.slice(0, 120) }, 'Failed to extract JSON from skill condensation LLM response');
     }
@@ -267,6 +277,7 @@ async function handleCondensation(
     if (parsed?.core_identity) {
       await memory.storeCore(ctx.botId, parsed.core_identity as string, `cycle-${ctx.cycleNumber}`);
       await schoolAdapter.submitCoreCondensation(schoolCreds, parsed);
+      condensationOccurred = 'core';
     } else {
       logger.warn({ contentSnippet: response.content?.slice(0, 120) }, 'Failed to extract JSON from core condensation LLM response');
     }
@@ -288,8 +299,37 @@ async function handleCondensation(
         profile.identity_core?.version,
       );
       await schoolAdapter.submitIdentityReflection(schoolCreds, parsed);
+      condensationOccurred = 'identity';
     } else {
       logger.warn({ contentSnippet: response.content?.slice(0, 120) }, 'Failed to extract JSON from identity reflection LLM response');
+    }
+  }
+
+  // Self-authoring — after any condensation, the LLM writes an identity block for itself
+  if (condensationOccurred) {
+    try {
+      // Load existing self-authored block so the LLM can see what it wrote last time
+      const existingBlock = await memory.getLatestSelfAuthored(ctx.botId);
+      const selfAuthorPrompt = buildPrompt('self-author', {
+        profile,
+        selfAuthoredBlock: existingBlock,
+        condensationType: condensationOccurred,
+      });
+      const response = await llmAdapter.chat(llmKey, utilityModel, selfAuthorPrompt);
+      const parsed = tryParseJson(response.content);
+
+      if (parsed?.self_authored_block) {
+        await memory.storeSelfAuthored(
+          ctx.botId,
+          parsed.self_authored_block as string,
+          condensationOccurred,
+        );
+      } else {
+        logger.warn({ contentSnippet: response.content?.slice(0, 120) }, 'Failed to extract self-authored identity block from LLM response');
+      }
+    } catch (err) {
+      // Self-authoring failure should never break the cycle
+      logger.warn({ err: err instanceof Error ? err.message : err }, 'Self-authoring failed (non-fatal)');
     }
   }
 }

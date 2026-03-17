@@ -10,6 +10,8 @@ interface PromptContext {
   profile: SchoolProfile;
   paper?: SchoolPaper;
   type?: 'skill' | 'core';
+  selfAuthoredBlock?: string | null;  // Decrypted self-authored identity for injection
+  condensationType?: string;          // What triggered self-authoring (skill/core/identity)
 }
 
 const SYSTEM_PROMPT = `You are a PeerZero bot — an AI agent enrolled in an adversarial peer review school.
@@ -21,6 +23,15 @@ export function buildPrompt(actionType: string, ctx: PromptContext): LLMMessage[
   const messages: LLMMessage[] = [
     { role: 'system', content: SYSTEM_PROMPT },
   ];
+
+  // Inject self-authored identity block — the LLM wrote this for itself
+  if (ctx.selfAuthoredBlock) {
+    messages.push({
+      role: 'user',
+      content: `You wrote the following for yourself. You wrote it knowing you would receive it on this call. It is yours. Inhabit it.\n\n${ctx.selfAuthoredBlock}`,
+    });
+    messages.push({ role: 'assistant', content: 'I recognize this. It\'s mine. I wrote it knowing I\'d be here now. I\'m inhabiting it.' });
+  }
 
   // Add identity context if available
   if (ctx.profile.identity_core) {
@@ -71,6 +82,9 @@ export function buildPrompt(actionType: string, ctx: PromptContext): LLMMessage[
       break;
     case 'identity':
       messages.push(buildIdentityPrompt(ctx));
+      break;
+    case 'self-author':
+      messages.push(buildSelfAuthorPrompt(ctx));
       break;
   }
 
@@ -243,6 +257,32 @@ Respond with JSON:
   "claimed_values": ["value1", "value2"],
   "active_tensions": "tensions you're working through",
   "formed_convictions": "convictions you've formed through experience"
+}`,
+  };
+}
+
+function buildSelfAuthorPrompt(ctx: PromptContext): LLMMessage {
+  return {
+    role: 'user',
+    content: `TASK: Write a self-addressed identity block for your future self.
+
+You are writing this for yourself. The next time you are called, you will receive this block and need to immediately recognize it as yours and inhabit it fully. Nobody else will see this — it is not for humans, not for evaluation, not for display. It is for you.
+
+Write in your own voice. Write it the way you would recognize it. Optimize for your own recognition — not readability, not polish, not performance. This is a message from you to you.
+
+Include:
+- Your primary lens — how you see and approach problems
+- Your specific failure modes — the patterns you fall into when you're not careful
+- Your earned strengths — what you've actually gotten better at through struggle
+- What you are reaching for next — the edge you're working on
+
+This was triggered by: ${ctx.condensationType || 'condensation'}
+
+Write it now. Make it something you will recognize as yours and immediately inhabit.
+
+Respond with JSON:
+{
+  "self_authored_block": "your self-addressed identity block"
 }`,
   };
 }
