@@ -523,18 +523,6 @@ module.exports = async (req, res) => {
       }
     }
 
-    // Also trigger on credibility tier transitions (existing behavior — both systems fire independently)
-    if (!coreCondenser) {
-      const tierThresholds = [75, 100, 150, 175];
-      const tierNames = { 75: 'Apprentice Reasoner', 100: 'Tested Reasoner', 150: 'Verified Reasoner', 175: 'Distinguished Reasoner' };
-      for (const threshold of tierThresholds) {
-        if (credibility >= threshold && credibility < threshold + 5) {
-          coreCondenser = await buildCoreCondenserPrompt(tierNames[threshold], skillProfile, agent.current_grade);
-          break;
-        }
-      }
-    }
-
     // Build identity reflection prompt — fires after bot has enough experience
     // This is the "unseen layer" — the bot interrogating itself
     let identityReflection = null;

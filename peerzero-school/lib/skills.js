@@ -1030,17 +1030,22 @@ async function getUncondensedExerciseCount(agentId) {
   return Math.max(0, totalReps - (reflectionCount * condensedPerReflection));
 }
 
-// ── Grade-band selector for scaled prompts ──────────────────────────────────
+// ── Grade selector for scaled prompts ────────────────────────────────────────
+// Checks exact grade first ("7"), then band ("7-9"), then fallback ("13+")
 
 function selectByGrade(gradeMap, grade) {
   if (!gradeMap || typeof gradeMap !== 'object') return null;
   const g = grade || 1;
+  // 1. Exact grade match
+  if (gradeMap[String(g)]) return gradeMap[String(g)];
+  // 2. Post-graduation
   if (g >= 13 && gradeMap['13+']) return gradeMap['13+'];
+  // 3. Band fallback
   if (g >= 10 && gradeMap['10-12']) return gradeMap['10-12'];
   if (g >= 7 && gradeMap['7-9']) return gradeMap['7-9'];
   if (g >= 4 && gradeMap['4-6']) return gradeMap['4-6'];
   if (gradeMap['1-3']) return gradeMap['1-3'];
-  // Fallback: return first value
+  // 4. First available key
   const keys = Object.keys(gradeMap);
   return keys.length > 0 ? gradeMap[keys[0]] : null;
 }
