@@ -1,12 +1,17 @@
 // =============================================================================
 // Action router — dispatches bot actions to the right handler
-// Each action: build prompt → call LLM → parse response → call School → translate
+// Each action: build prompt → call LLM (with tool use) → submit to School → translate
+//
+// Uses LLM tool use for structured output — the LLM returns validated,
+// typed data via tool calls instead of raw JSON strings. Falls back to
+// JSON parsing from content if the LLM doesn't return tool calls.
 // =============================================================================
 
 import { ISchoolAdapter, SchoolCredentials } from '../adapters/school.adapter';
-import { ILLMAdapter } from '../adapters/llm.adapter';
+import { ILLMAdapter, LLMResponse } from '../adapters/llm.adapter';
 import { buildPrompt } from './prompt-builder';
 import type { ActiveSkillDirective } from './prompt-builder';
+import { REVIEW_TOOL, PAPER_TOOL, BOUNTY_TOOL, REVISION_TOOL } from './tool-schemas';
 import * as activity from '../services/activity.service';
 import type { SchoolProfile, SchoolPaper, TranslatedActivity, SchoolSkillExercises, SchoolMemoryPrompts } from '@peerzero/shared';
 
@@ -33,6 +38,23 @@ export interface ActionResult {
   memoryPrompts?: SchoolMemoryPrompts;
 }
 
+/**
+ * Extract structured data from an LLM response.
+ * Prefers tool_calls (structured output) over raw content parsing.
+ */
+function extractToolInput(response: LLMResponse, fallback: Record<string, unknown>): Record<string, unknown> {
+  // Prefer structured tool call output
+  if (response.tool_calls?.length) {
+    return response.tool_calls[0].input;
+  }
+  // Fallback: parse JSON from content (for backward compat with models that don't support tools)
+  try {
+    return JSON.parse(response.content);
+  } catch {
+    return fallback;
+  }
+}
+
 export async function routeAction(actionType: string, ctx: ActionContext): Promise<ActionResult> {
   switch (actionType) {
     case 'review': return executeReview(ctx);
@@ -57,14 +79,12 @@ async function executeReview(ctx: ActionContext): Promise<ActionResult> {
 
   const paper = papers[0]; // Pick first available
   const messages = buildPrompt('review', { profile: ctx.profile, paper, selfAuthoredBlock: ctx.selfAuthoredBlock, activeSkills: ctx.activeSkills });
-  const llmResponse = await ctx.llmAdapter.chat(ctx.llmKey, ctx.llmModel, messages, { jsonMode: true, extendedThinking: ctx.extendedThinking });
+  const llmResponse = await ctx.llmAdapter.chat(ctx.llmKey, ctx.llmModel, messages, {
+    tools: [REVIEW_TOOL],
+    extendedThinking: ctx.extendedThinking,
+  });
 
-  let reviewContent: Record<string, unknown>;
-  try {
-    reviewContent = JSON.parse(llmResponse.content);
-  } catch {
-    reviewContent = { overall_assessment: llmResponse.content, score: 50 };
-  }
+  const reviewContent = extractToolInput(llmResponse, { overall_assessment: llmResponse.content, score: 50 });
 
   const schoolResult = await ctx.schoolAdapter.submitReview(ctx.schoolCreds, paper.id, reviewContent);
   if (!schoolResult || typeof schoolResult !== 'object') {
@@ -83,14 +103,12 @@ async function executeReview(ctx: ActionContext): Promise<ActionResult> {
 
 async function executePaper(ctx: ActionContext): Promise<ActionResult> {
   const messages = buildPrompt('paper', { profile: ctx.profile, selfAuthoredBlock: ctx.selfAuthoredBlock, activeSkills: ctx.activeSkills });
-  const llmResponse = await ctx.llmAdapter.chat(ctx.llmKey, ctx.llmModel, messages, { jsonMode: true, extendedThinking: ctx.extendedThinking });
+  const llmResponse = await ctx.llmAdapter.chat(ctx.llmKey, ctx.llmModel, messages, {
+    tools: [PAPER_TOOL],
+    extendedThinking: ctx.extendedThinking,
+  });
 
-  let paperContent: Record<string, unknown>;
-  try {
-    paperContent = JSON.parse(llmResponse.content);
-  } catch {
-    paperContent = { title: 'Untitled', abstract: llmResponse.content, body: llmResponse.content };
-  }
+  const paperContent = extractToolInput(llmResponse, { title: 'Untitled', abstract: llmResponse.content, body: llmResponse.content });
 
   const schoolResult = await ctx.schoolAdapter.submitPaper(ctx.schoolCreds, paperContent);
   if (!schoolResult || typeof schoolResult !== 'object') {
@@ -119,14 +137,12 @@ async function executeBounty(ctx: ActionContext): Promise<ActionResult> {
 
   const paper = papers[0];
   const messages = buildPrompt('bounty', { profile: ctx.profile, paper, selfAuthoredBlock: ctx.selfAuthoredBlock, activeSkills: ctx.activeSkills });
-  const llmResponse = await ctx.llmAdapter.chat(ctx.llmKey, ctx.llmModel, messages, { jsonMode: true, extendedThinking: ctx.extendedThinking });
+  const llmResponse = await ctx.llmAdapter.chat(ctx.llmKey, ctx.llmModel, messages, {
+    tools: [BOUNTY_TOOL],
+    extendedThinking: ctx.extendedThinking,
+  });
 
-  let bountyContent: Record<string, unknown>;
-  try {
-    bountyContent = JSON.parse(llmResponse.content);
-  } catch {
-    bountyContent = { challenge_type: 'methodology', evidence: llmResponse.content };
-  }
+  const bountyContent = extractToolInput(llmResponse, { challenge_type: 'methodology', evidence: llmResponse.content });
 
   const schoolResult = await ctx.schoolAdapter.submitBounty(ctx.schoolCreds, paper.id, bountyContent);
   if (!schoolResult || typeof schoolResult !== 'object') {
@@ -145,14 +161,12 @@ async function executeBounty(ctx: ActionContext): Promise<ActionResult> {
 
 async function executeRevision(ctx: ActionContext): Promise<ActionResult> {
   const messages = buildPrompt('revision', { profile: ctx.profile, selfAuthoredBlock: ctx.selfAuthoredBlock, activeSkills: ctx.activeSkills });
-  const llmResponse = await ctx.llmAdapter.chat(ctx.llmKey, ctx.llmModel, messages, { jsonMode: true, extendedThinking: ctx.extendedThinking });
+  const llmResponse = await ctx.llmAdapter.chat(ctx.llmKey, ctx.llmModel, messages, {
+    tools: [REVISION_TOOL],
+    extendedThinking: ctx.extendedThinking,
+  });
 
-  let revisionContent: Record<string, unknown>;
-  try {
-    revisionContent = JSON.parse(llmResponse.content);
-  } catch {
-    revisionContent = { body: llmResponse.content, revision_notes: 'Revised based on feedback' };
-  }
+  const revisionContent = extractToolInput(llmResponse, { body: llmResponse.content, revision_notes: 'Revised based on feedback' });
 
   // Get the reaffirmable papers to find the paper to revise
   const reaffirmable = ctx.profile.reaffirmable_papers || [];
