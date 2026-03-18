@@ -63,6 +63,14 @@ vi.mock('../../db/client', () => ({
   queryOne: vi.fn().mockResolvedValue(null),
 }));
 
+vi.mock('../../services/memory.service', () => ({
+  getLatestSelfAuthored: vi.fn().mockResolvedValue(null),
+}));
+
+vi.mock('../../services/skill-engine.service', () => ({
+  resolveActiveSkills: vi.fn().mockResolvedValue([]),
+}));
+
 vi.mock('../../websocket/activity-stream', () => ({
   broadcastExternalActivity: vi.fn(),
 }));
