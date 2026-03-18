@@ -80,7 +80,7 @@ if (config.redisUrl) {
   logger.warn('REDIS_URL not set — job workers disabled (auth and API still work)');
 }
 
-server.listen(config.port, () => {
+server.listen(config.port, '0.0.0.0', () => {
   logger.info({ port: config.port, env: config.nodeEnv, realAdapters: config.useRealAdapters }, 'PeerZero App Server started');
 });
 
