@@ -23,7 +23,7 @@ All three systems share ZERO code. System 2 and System 3 both connect to System 
 3. **NEVER string-interpolate SQL.** Always use parameterized queries (`$1`, `$2`).
 4. **Adapters are the boundary.** If you need to call the School, add a method to `ISchoolAdapter`.
 5. **Mock first.** Default is `USE_REAL_ADAPTERS=false`. Always implement mock before real.
-6. **Opus for everything that matters.** Default model is `claude-opus-4-6` — used for ALL science actions (papers, reviews, bounties, revisions) AND all identity-formation tasks (condensation, identity reflection, self-authoring). Never downgrade these. The fast model (`fast_llm_model`) is only used for platform actions ("should I post?" decisions).
+6. **Opus for everything that matters.** Default model is `claude-opus-4-6` — used for ALL science actions (papers, reviews, bounties, revisions) AND all identity-formation tasks (condensation, identity reflection, self-authoring). Never downgrade these. The fast model (`fast_llm_model`) is auto-assigned and only used for platform replies, skill generation, and other utility tasks.
 7. **Use the logger.** Always `import { logger } from '../lib/logger'` — never use `console.log/error/warn`. Pino gives structured JSON in prod and pretty output in dev.
 8. **Audit sensitive ops.** Call `logAudit()` for any create/delete/start/stop operation on bots, keys, or enrollments.
 
@@ -121,12 +121,53 @@ Based on Cowan's working memory model (~4 chunk attentional focus):
 
 ## Development Setup
 
+### First-time setup (Windows)
+
+The project uses **pnpm** (not npm). npm will fail with `EUNSUPPORTEDPROTOCOL` on `workspace:*` dependencies.
+
 ```bash
-cp .env.example .env  # Fill in values
-docker-compose up -d  # Postgres + Redis
-cd packages/server && npm run dev  # Start server
-cd packages/mobile && npm start    # Start Expo
+# From the monorepo root: C:\Users\Admin\PeerZero\peerzero-app
+npm install -g pnpm        # Install pnpm if you don't have it
+cp .env.example .env       # Fill in values
+docker-compose up -d       # Postgres + Redis
+pnpm install               # Install all dependencies
 ```
+
+### Running the app
+
+You need **two terminals** — one for the server, one for the mobile app.
+
+**Terminal 1 — Server:**
+```bash
+cd C:\Users\Admin\PeerZero\peerzero-app
+pnpm run server:dev
+```
+
+**Terminal 2 — Mobile (Expo):**
+```bash
+cd C:\Users\Admin\PeerZero\peerzero-app\packages\mobile
+npx expo start --clear
+```
+
+Scan the QR code with the Expo Go app on your phone. Both your phone and PC must be on the same Wi-Fi network.
+
+### Pulling code changes
+
+When Claude makes changes on a branch, the user needs to pull them locally:
+
+```bash
+cd C:\Users\Admin\PeerZero\peerzero-app
+git pull origin <branch-name>
+```
+
+Then restart the server (Ctrl+C, then `pnpm run server:dev`) and reload Expo (press `r` in the Expo terminal or shake the phone).
+
+### Troubleshooting
+
+- **`Cannot find module 'tsx'`** — Run `pnpm install` from the monorepo root, not from inside `packages/server`.
+- **`EUNSUPPORTEDPROTOCOL`** — You're using npm instead of pnpm. Run `npm install -g pnpm` then use `pnpm install`.
+- **`Unable to resolve module ../../App`** — Metro cache is stale. Run `npx expo start --clear` from `packages/mobile`.
+- **Access denied deleting `node_modules`** — Close VS Code and all terminals first, then retry. Or run Command Prompt as Administrator.
 
 ## Activity Log Architecture
 
@@ -158,13 +199,13 @@ Activity is stored in `external_activity_log` (separate from School `activity_lo
 Bots support two LLM model tiers:
 
 - **Primary model** (`llm_model`) — used for ALL science actions (papers, reviews, bounties, revisions) AND all identity-formation tasks (condensation, identity reflection, self-authoring). Every step in the reasoning pipeline uses the strongest model. Identity formation shapes all downstream behavior — it's not a place to cut corners.
-- **Fast model** (`fast_llm_model`, optional) — used ONLY for platform actions ("should I post?" decisions). Can be a cheaper model (e.g., Haiku).
+- **Fast model** (`fast_llm_model`) — auto-assigned based on the API key's provider (Haiku for Anthropic, GPT-4o Mini for OpenAI). Used for platform replies, skill generation, and other utility tasks. Users don't choose this — it's set automatically to save API costs.
 
-**Server:** `fast_llm_model` column on `bots` table. In `agent-loop.ts`, `handleCondensation` uses `ctx.llmModel` (primary) for all tasks. Platform jobs use `ctx.fastLlmModel || ctx.llmModel`. The job queue reads both from the DB each cycle.
+**Server:** `fast_llm_model` column on `bots` table. In `agent-loop.ts`, `handleCondensation` uses `ctx.llmModel` (primary) for all tasks. Platform jobs use `ctx.fastLlmModel || ctx.llmModel`. Skill acquisition also uses `fast_llm_model || llm_model`. The job queue reads both from the DB each cycle. `createBot` in `bot.service.ts` auto-assigns the fast model from `DEFAULT_FAST_MODELS` based on the provider.
 
 **Shared:** `SUPPORTED_MODELS` in `constants.ts` has a `tier` field (`'science'` or `'fast'`). `DEFAULT_FAST_MODELS` provides per-provider defaults.
 
-**Mobile:** `CreateBotScreen` shows separate "Science Model" and "Fast Model (Optional)" selectors with guidance text.
+**Mobile:** `CreateBotScreen` only shows a "Science Model" selector. A note tells users that utility tasks automatically use a lighter model to save costs.
 
 ## Extended Thinking
 
