@@ -32,7 +32,6 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
     try {
       await login(email, password);
     } catch (err: unknown) {
-      // Show user-safe message — avoid leaking internal paths or stack traces
       const msg = err instanceof Error ? err.message : 'Something went wrong';
       const safeMsg = msg.startsWith('HTTP ') || msg.includes('/') || msg.includes('\\')
         ? 'Unable to sign in. Please check your credentials and try again.'
@@ -44,16 +43,16 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
   };
 
   return (
-    <KeyboardAvoidingView
-      style={styles.flex}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
+    <View style={styles.flex}>
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
         <ScrollView
           contentContainerStyle={styles.container}
           keyboardShouldPersistTaps="always"
           keyboardDismissMode="on-drag"
         >
-          {/* Brand hero */}
           <View style={styles.hero}>
             <View style={styles.logoContainer}>
               <View style={styles.logoGlow} />
@@ -119,14 +118,17 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
           >
             <Text style={styles.forgotLink}>Forgot password?</Text>
           </TouchableOpacity>
+
+          <View style={styles.keyboardSpacer} />
         </ScrollView>
-    </KeyboardAvoidingView>
+      </KeyboardAvoidingView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   flex: { flex: 1, backgroundColor: colors.bg.primary },
-  container: { flexGrow: 1, justifyContent: 'center', padding: spacing.xl },
+  container: { paddingHorizontal: spacing.xl, paddingTop: spacing.xxl, paddingBottom: spacing.xl },
   buttonDisabled: { opacity: 0.7 },
   hero: { alignItems: 'center', marginBottom: spacing.xxl },
   logoContainer: {
@@ -153,11 +155,11 @@ const styles = StyleSheet.create({
   button: {
     backgroundColor: colors.accent.primary, padding: spacing.md,
     borderRadius: borderRadius.md, alignItems: 'center', marginTop: spacing.sm,
-    // Subtle shadow for depth
     shadowColor: colors.accent.primary, shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3, shadowRadius: 8, elevation: 4,
   },
   buttonText: { color: '#fff', fontSize: fontSize.lg, fontWeight: '600' },
   link: { color: colors.accent.secondary, textAlign: 'center', marginTop: spacing.lg, fontSize: fontSize.md },
   forgotLink: { color: colors.text.tertiary, textAlign: 'center', marginTop: spacing.md, fontSize: fontSize.sm },
+  keyboardSpacer: { height: 200 },
 });
