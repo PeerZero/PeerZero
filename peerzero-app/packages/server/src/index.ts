@@ -38,7 +38,7 @@ const app = express();
 app.use(helmet());
 app.use(cors({
   origin: config.isDev
-    ? ['http://localhost:3000', 'http://localhost:3001', 'http://localhost:8081', 'http://localhost:19006']
+    ? true // Allow any origin in dev (mobile devices use the machine's LAN IP, not localhost)
     : config.corsOrigins.split(',').map(s => s.trim()).filter(Boolean),
   credentials: true,
 }));
