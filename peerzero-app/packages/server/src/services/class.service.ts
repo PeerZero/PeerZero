@@ -279,7 +279,7 @@ export async function getClassMembers(classId: string, userId: string): Promise<
     bot: r.bot_id ? {
       id: r.bot_id,
       name: r.bot_name!,
-      avatar_config: (r.bot_avatar_config as AvatarConfig) || {} as AvatarConfig,
+      avatar_config: (r.bot_avatar_config as unknown as AvatarConfig) || {} as AvatarConfig,
       status: r.bot_status as BotStatus,
       cached_credibility: r.bot_cached_credibility,
       cached_grade: r.bot_cached_grade,
