@@ -358,6 +358,8 @@ export default function BotScreen({ route, navigation }: BotScreenProps) {
             style={[styles.actionButton, { backgroundColor: colors.accent.primary }]}
             onPress={() => navigation.navigate('EnrollBot', { botId })}
             activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel="Enroll in School"
           >
             <Text style={styles.actionButtonText}>Enroll in School</Text>
           </TouchableOpacity>
@@ -378,6 +380,9 @@ export default function BotScreen({ route, navigation }: BotScreenProps) {
           style={styles.navButton}
           onPress={() => navigation.navigate('Brain', { botId })}
           activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel="Brain"
+          accessibilityHint="View memory and skills"
         >
           <Text style={styles.navButtonIcon}>🧠</Text>
           <Text style={styles.navButtonText}>Brain</Text>
@@ -388,6 +393,9 @@ export default function BotScreen({ route, navigation }: BotScreenProps) {
           style={styles.navButton}
           onPress={() => navigation.navigate('Log', { botId })}
           activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel="Log"
+          accessibilityHint="View activity feed"
         >
           <Text style={styles.navButtonIcon}>📋</Text>
           <Text style={styles.navButtonText}>Log</Text>
@@ -398,6 +406,9 @@ export default function BotScreen({ route, navigation }: BotScreenProps) {
           style={styles.navButton}
           onPress={() => navigation.navigate('Stats', { botId })}
           activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel="Stats"
+          accessibilityHint="View charts and trends"
         >
           <Text style={styles.navButtonIcon}>📊</Text>
           <Text style={styles.navButtonText}>Stats</Text>
@@ -410,6 +421,9 @@ export default function BotScreen({ route, navigation }: BotScreenProps) {
           style={styles.navButton}
           onPress={() => navigation.navigate('Platforms', { botId })}
           activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel="Platforms"
+          accessibilityHint="View external connections"
         >
           <Text style={styles.navButtonIcon}>🌐</Text>
           <Text style={styles.navButtonText}>Platforms</Text>
