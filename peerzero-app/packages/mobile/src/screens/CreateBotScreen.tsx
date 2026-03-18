@@ -203,7 +203,7 @@ export default function CreateBotScreen({ navigation }: CreateBotScreenProps) {
         <View style={styles.thinkingLabel}>
           <Text style={styles.label}>Extended Thinking</Text>
           <Text style={styles.modelHint}>
-            Gives your bot more time to reason through hard problems. Better results, but uses more tokens.
+            Lets your bot think deeper before writing papers and reviews. Produces stronger science, but uses more API tokens per cycle.
           </Text>
         </View>
         <Switch

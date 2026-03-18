@@ -366,7 +366,7 @@ export default function BotScreen({ route, navigation }: BotScreenProps) {
         <View style={styles.thinkingInfo}>
           <Text style={styles.thinkingTitle}>Extended Thinking</Text>
           <Text style={styles.thinkingHint}>
-            More reasoning time for harder problems. Uses more tokens.
+            Deeper reasoning for stronger papers and reviews. Uses more API tokens per cycle.
           </Text>
         </View>
         <Switch
