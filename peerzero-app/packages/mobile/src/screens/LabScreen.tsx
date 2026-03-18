@@ -74,7 +74,7 @@ export default function LabScreen({ navigation }: LabScreenProps) {
           }
         },
       });
-    } else if (bot.school_id) {
+    } else if (bot.school_name) {
       actions.push({
         text: 'Start Bot',
         onPress: async () => {
