@@ -60,14 +60,16 @@ export async function runPlatformCycle(ctx: PlatformCycleContext): Promise<void>
   };
 
   try {
-    // 2. Load bot identity (self-authored + school-formed)
-    const [selfAuthoredBlock, cachedProfile] = await Promise.all([
+    // 2. Load bot identity (self-authored + school-formed) and extended_thinking preference
+    const [selfAuthoredBlock, botRow] = await Promise.all([
       getLatestSelfAuthored(ctx.botId),
-      queryOne<{ cached_profile: SchoolProfile | null }>(
-        'SELECT cached_profile FROM bots WHERE id = $1',
+      queryOne<{ cached_profile: SchoolProfile | null; extended_thinking: boolean }>(
+        'SELECT cached_profile, extended_thinking FROM bots WHERE id = $1',
         [ctx.botId],
       ),
     ]);
+    const cachedProfile = botRow;
+    const extendedThinking = botRow?.extended_thinking ?? false;
     const identityCore = cachedProfile?.cached_profile?.identity_core || null;
 
     // 3. Load active skills for this platform
@@ -95,7 +97,7 @@ export async function runPlatformCycle(ctx: PlatformCycleContext): Promise<void>
     const llmResponse = await llmAdapter.chat(llmKey, ctx.llmModel, [
       { role: 'system', content: systemPrompt },
       { role: 'user', content: actionPrompt },
-    ]);
+    ], { extendedThinking });
 
     // 5. Parse and submit action
     let action;

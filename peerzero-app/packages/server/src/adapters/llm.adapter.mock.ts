@@ -47,7 +47,7 @@ const MOCK_RESPONSES: Record<string, string> = {
 };
 
 export class MockLLMAdapter implements ILLMAdapter {
-  async chat(_apiKey: string, model: string, messages: LLMMessage[], _options?: { maxTokens?: number; temperature?: number; jsonMode?: boolean }): Promise<LLMResponse> {
+  async chat(_apiKey: string, model: string, messages: LLMMessage[], _options?: { maxTokens?: number; temperature?: number; jsonMode?: boolean; extendedThinking?: boolean }): Promise<LLMResponse> {
     // Determine response type from message content
     const lastMessage = messages[messages.length - 1]?.content?.toLowerCase() || '';
 

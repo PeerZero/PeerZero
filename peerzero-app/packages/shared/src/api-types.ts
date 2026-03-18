@@ -42,6 +42,7 @@ export interface CreateBotRequest {
   llm_api_key_id: string;
   llm_model?: string;
   fast_llm_model?: string | null;
+  extended_thinking?: boolean;
 }
 
 export interface AvatarConfig {
@@ -72,6 +73,7 @@ export interface BotDetail extends BotSummary {
   llm_api_key_id: string | null;
   llm_model: string;
   fast_llm_model: string | null;
+  extended_thinking: boolean;
   cycle_delay_seconds: number;
   cached_next_action: string | null;
   cached_profile: Record<string, unknown> | null;

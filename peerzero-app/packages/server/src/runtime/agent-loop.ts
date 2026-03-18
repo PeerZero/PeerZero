@@ -69,6 +69,7 @@ export interface BotContext {
   llmApiKeyId: string;
   llmModel: string;
   fastLlmModel: string | null; // Optional fast model for utility tasks (condensation, identity)
+  extendedThinking: boolean;   // User opt-in for Claude extended thinking (higher cost, better reasoning)
   cycleNumber: number;
 }
 
@@ -124,6 +125,7 @@ export async function runOneCycle(ctx: BotContext): Promise<void> {
       llmAdapter,
       llmKey,
       llmModel: ctx.llmModel,
+      extendedThinking: ctx.extendedThinking,
       schoolCreds,
       profile,
       botId: ctx.botId,

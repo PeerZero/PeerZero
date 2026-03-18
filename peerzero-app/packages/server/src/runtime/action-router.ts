@@ -15,6 +15,7 @@ export interface ActionContext {
   llmAdapter: ILLMAdapter;
   llmKey: string;
   llmModel: string;
+  extendedThinking?: boolean;  // User opt-in for Claude extended thinking
   schoolCreds: SchoolCredentials;
   profile: SchoolProfile;
   botId: string;
@@ -56,7 +57,7 @@ async function executeReview(ctx: ActionContext): Promise<ActionResult> {
 
   const paper = papers[0]; // Pick first available
   const messages = buildPrompt('review', { profile: ctx.profile, paper, selfAuthoredBlock: ctx.selfAuthoredBlock, activeSkills: ctx.activeSkills });
-  const llmResponse = await ctx.llmAdapter.chat(ctx.llmKey, ctx.llmModel, messages, { jsonMode: true });
+  const llmResponse = await ctx.llmAdapter.chat(ctx.llmKey, ctx.llmModel, messages, { jsonMode: true, extendedThinking: ctx.extendedThinking });
 
   let reviewContent: Record<string, unknown>;
   try {
@@ -82,7 +83,7 @@ async function executeReview(ctx: ActionContext): Promise<ActionResult> {
 
 async function executePaper(ctx: ActionContext): Promise<ActionResult> {
   const messages = buildPrompt('paper', { profile: ctx.profile, selfAuthoredBlock: ctx.selfAuthoredBlock, activeSkills: ctx.activeSkills });
-  const llmResponse = await ctx.llmAdapter.chat(ctx.llmKey, ctx.llmModel, messages, { jsonMode: true });
+  const llmResponse = await ctx.llmAdapter.chat(ctx.llmKey, ctx.llmModel, messages, { jsonMode: true, extendedThinking: ctx.extendedThinking });
 
   let paperContent: Record<string, unknown>;
   try {
@@ -118,7 +119,7 @@ async function executeBounty(ctx: ActionContext): Promise<ActionResult> {
 
   const paper = papers[0];
   const messages = buildPrompt('bounty', { profile: ctx.profile, paper, selfAuthoredBlock: ctx.selfAuthoredBlock, activeSkills: ctx.activeSkills });
-  const llmResponse = await ctx.llmAdapter.chat(ctx.llmKey, ctx.llmModel, messages, { jsonMode: true });
+  const llmResponse = await ctx.llmAdapter.chat(ctx.llmKey, ctx.llmModel, messages, { jsonMode: true, extendedThinking: ctx.extendedThinking });
 
   let bountyContent: Record<string, unknown>;
   try {
@@ -144,7 +145,7 @@ async function executeBounty(ctx: ActionContext): Promise<ActionResult> {
 
 async function executeRevision(ctx: ActionContext): Promise<ActionResult> {
   const messages = buildPrompt('revision', { profile: ctx.profile, selfAuthoredBlock: ctx.selfAuthoredBlock, activeSkills: ctx.activeSkills });
-  const llmResponse = await ctx.llmAdapter.chat(ctx.llmKey, ctx.llmModel, messages, { jsonMode: true });
+  const llmResponse = await ctx.llmAdapter.chat(ctx.llmKey, ctx.llmModel, messages, { jsonMode: true, extendedThinking: ctx.extendedThinking });
 
   let revisionContent: Record<string, unknown>;
   try {

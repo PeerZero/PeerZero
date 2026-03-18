@@ -26,7 +26,7 @@ export class RealLLMAdapter implements ILLMAdapter {
     apiKey: string,
     model: string,
     messages: LLMMessage[],
-    options?: { maxTokens?: number; temperature?: number; jsonMode?: boolean },
+    options?: { maxTokens?: number; temperature?: number; jsonMode?: boolean; extendedThinking?: boolean },
   ): Promise<LLMResponse> {
     // Detect provider from model name
     const isAnthropic = model.startsWith('claude');
@@ -39,7 +39,7 @@ export class RealLLMAdapter implements ILLMAdapter {
     apiKey: string,
     model: string,
     messages: LLMMessage[],
-    options?: { maxTokens?: number; temperature?: number },
+    options?: { maxTokens?: number; temperature?: number; extendedThinking?: boolean },
   ): Promise<LLMResponse> {
     // Anthropic uses a separate system param, not a system message in the array
     const systemMsg = messages.find(m => m.role === 'system');
@@ -47,17 +47,32 @@ export class RealLLMAdapter implements ILLMAdapter {
       .filter(m => m.role !== 'system')
       .map(m => ({ role: m.role, content: m.content }));
 
+    const useThinking = options?.extendedThinking === true;
+    const maxTokens = options?.maxTokens || 4096;
+    // When thinking is enabled, budget_tokens is the thinking budget and
+    // max_tokens must be large enough for thinking + response
+    const thinkingBudget = 10000;
+
     const body: Record<string, unknown> = {
       model,
-      max_tokens: options?.maxTokens || 4096,
+      max_tokens: useThinking ? Math.max(maxTokens, thinkingBudget + 4096) : maxTokens,
       messages: conversationMessages,
     };
     if (systemMsg) body.system = systemMsg.content;
-    if (options?.temperature !== undefined) body.temperature = options.temperature;
+
+    if (useThinking) {
+      // Extended thinking requires temperature = 1 (Anthropic constraint)
+      body.temperature = 1;
+      body.thinking = { type: 'enabled', budget_tokens: thinkingBudget };
+    } else if (options?.temperature !== undefined) {
+      body.temperature = options.temperature;
+    }
 
     const makeRequest = async (): Promise<Response> => {
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 120000); // 2 min timeout
+      // Extended thinking may take longer — allow 4 min
+      const timeoutMs = useThinking ? 240000 : 120000;
+      const timeout = setTimeout(() => controller.abort(), timeoutMs);
       try {
         return await fetch('https://api.anthropic.com/v1/messages', {
           method: 'POST',
@@ -77,7 +92,7 @@ export class RealLLMAdapter implements ILLMAdapter {
     const res = await this.fetchWithRetry(makeRequest, 'Anthropic');
 
     const data = await res.json() as {
-      content: Array<{ type: string; text: string }>;
+      content: Array<{ type: string; text?: string; thinking?: string }>;
       usage: { input_tokens: number; output_tokens: number };
       model: string;
       stop_reason: string;
@@ -87,6 +102,7 @@ export class RealLLMAdapter implements ILLMAdapter {
       throw new Error('Anthropic API returned invalid response: content is not an array');
     }
 
+    // Extract the text block (skip thinking blocks — they're internal reasoning)
     const textBlock = data.content.find((c: { type: string }) => c.type === 'text');
     return {
       content: textBlock?.text || '',

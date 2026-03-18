@@ -28,6 +28,7 @@ export interface ILLMAdapter {
       maxTokens?: number;
       temperature?: number;
       jsonMode?: boolean;
+      extendedThinking?: boolean;
     },
   ): Promise<LLMResponse>;
 }
