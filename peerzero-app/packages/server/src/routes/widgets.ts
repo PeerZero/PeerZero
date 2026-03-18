@@ -205,7 +205,7 @@ router.get('/data', jwtOrWidgetToken, userRateLimit('read'), async (req: Request
   const bots: WidgetBotData[] = rows.map(r => ({
     id: r.id,
     name: r.name,
-    avatar_config: r.avatar_config as AvatarConfig,
+    avatar_config: r.avatar_config as unknown as AvatarConfig,
     status: r.status as BotStatus,
     credibility: r.cached_credibility,
     tier: credibilityToStage(r.cached_credibility),
