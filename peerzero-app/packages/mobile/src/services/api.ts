@@ -4,9 +4,12 @@
 // =============================================================================
 
 import { Platform } from 'react-native';
+import Constants from 'expo-constants';
 import type { ActivityCategory } from '@peerzero/shared';
 
-const API_BASE = __DEV__ ? 'http://localhost:3001/api' : 'https://api.peerzero.com/api';
+// In dev, Expo's debuggerHost gives us the computer's IP (e.g. "192.168.1.5:8081")
+const devHost = Constants.expoConfig?.hostUri?.split(':')[0] ?? 'localhost';
+const API_BASE = __DEV__ ? `http://${devHost}:3001/api` : 'https://api.peerzero.com/api';
 
 // Token storage — use SecureStore on native, localStorage on web
 const tokenStore = Platform.OS === 'web'

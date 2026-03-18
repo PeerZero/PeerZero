@@ -5,7 +5,7 @@
 import React, { useState, useRef } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet, Alert,
-  ScrollView, Keyboard,
+  TouchableWithoutFeedback, Keyboard,
   ActivityIndicator,
 } from 'react-native';
 import type { TextInput as TextInputType } from 'react-native';
@@ -20,7 +20,6 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const passwordRef = useRef<TextInputType>(null);
-  const scrollRef = useRef<ScrollView>(null);
 
   const handleLogin = async () => {
     if (!email || !password) return;
@@ -43,20 +42,14 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
     }
   };
 
-  const scrollToBottom = () => {
-    setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 300);
-  };
-
   return (
-    <View style={styles.flex}>
-      <ScrollView
-        ref={scrollRef}
-        contentContainerStyle={styles.container}
-        keyboardShouldPersistTaps="handled"
-        keyboardDismissMode="on-drag"
-      >
+    <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+      <View style={styles.container}>
         <View style={styles.hero}>
-          <Text style={styles.logoText}>P0</Text>
+          <View style={styles.logoContainer}>
+            <View style={styles.logoGlow} />
+            <Text style={styles.logoText}>P0</Text>
+          </View>
           <Text style={styles.title}>PeerZero</Text>
           <Text style={styles.subtitle}>Train AI that thinks for itself</Text>
         </View>
@@ -71,7 +64,6 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
           autoCapitalize="none"
           returnKeyType="next"
           onSubmitEditing={() => passwordRef.current?.focus()}
-          onFocus={scrollToBottom}
           blurOnSubmit={false}
           accessibilityLabel="Email"
           accessibilityRole="text"
@@ -86,14 +78,13 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
           secureTextEntry
           returnKeyType="go"
           onSubmitEditing={handleLogin}
-          onFocus={scrollToBottom}
           accessibilityLabel="Password"
           accessibilityRole="text"
         />
 
         <TouchableOpacity
           style={[styles.button, loading && styles.buttonDisabled]}
-          onPress={() => { Keyboard.dismiss(); handleLogin(); }}
+          onPress={handleLogin}
           disabled={loading}
           activeOpacity={0.8}
           accessibilityRole="button"
@@ -119,23 +110,30 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
         >
           <Text style={styles.forgotLink}>Forgot password?</Text>
         </TouchableOpacity>
-
-        <View style={styles.keyboardSpacer} />
-      </ScrollView>
-    </View>
+      </View>
+    </TouchableWithoutFeedback>
   );
 }
 
 const styles = StyleSheet.create({
-  flex: { flex: 1, backgroundColor: colors.bg.primary },
-  container: { paddingHorizontal: spacing.xl, paddingTop: spacing.lg, paddingBottom: spacing.xl },
+  container: { flex: 1, justifyContent: 'center', padding: spacing.xl, backgroundColor: colors.bg.primary },
   buttonDisabled: { opacity: 0.7 },
-  hero: { alignItems: 'center', marginBottom: spacing.lg },
+  hero: { alignItems: 'center', marginBottom: spacing.xxl },
+  logoContainer: {
+    width: 80, height: 80, borderRadius: 40,
+    backgroundColor: colors.accent.primary + '20',
+    justifyContent: 'center', alignItems: 'center',
+    marginBottom: spacing.lg,
+  },
+  logoGlow: {
+    position: 'absolute', width: 100, height: 100, borderRadius: 50,
+    backgroundColor: colors.accent.primary + '08',
+  },
   logoText: {
-    fontSize: 28, fontWeight: '900', color: colors.accent.primary,
+    fontSize: 32, fontWeight: '900', color: colors.accent.primary,
     letterSpacing: -1,
   },
-  title: { fontSize: fontSize.xl, fontWeight: '700', color: colors.text.primary, textAlign: 'center', marginTop: spacing.xs },
+  title: { fontSize: fontSize.title, fontWeight: '700', color: colors.text.primary, textAlign: 'center', marginBottom: spacing.xs },
   subtitle: { fontSize: fontSize.md, color: colors.text.secondary, textAlign: 'center' },
   input: {
     backgroundColor: colors.bg.card, color: colors.text.primary, padding: spacing.md,
@@ -151,5 +149,4 @@ const styles = StyleSheet.create({
   buttonText: { color: '#fff', fontSize: fontSize.lg, fontWeight: '600' },
   link: { color: colors.accent.secondary, textAlign: 'center', marginTop: spacing.lg, fontSize: fontSize.md },
   forgotLink: { color: colors.text.tertiary, textAlign: 'center', marginTop: spacing.md, fontSize: fontSize.sm },
-  keyboardSpacer: { height: 350 },
 });
