@@ -5,7 +5,7 @@
 import React, { useState, useRef } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet, Alert,
-  KeyboardAvoidingView, ScrollView, TouchableWithoutFeedback, Keyboard, Platform,
+  KeyboardAvoidingView, ScrollView, Platform,
   ActivityIndicator,
 } from 'react-native';
 import type { TextInput as TextInputType } from 'react-native';
@@ -48,10 +48,10 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
       style={styles.flex}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
         <ScrollView
           contentContainerStyle={styles.container}
-          keyboardShouldPersistTaps="handled"
+          keyboardShouldPersistTaps="always"
+          keyboardDismissMode="on-drag"
         >
           {/* Brand hero */}
           <View style={styles.hero}>
@@ -120,7 +120,6 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
             <Text style={styles.forgotLink}>Forgot password?</Text>
           </TouchableOpacity>
         </ScrollView>
-      </TouchableWithoutFeedback>
     </KeyboardAvoidingView>
   );
 }
