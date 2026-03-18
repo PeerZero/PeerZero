@@ -23,7 +23,7 @@ All three systems share ZERO code. System 2 and System 3 both connect to System 
 3. **NEVER string-interpolate SQL.** Always use parameterized queries (`$1`, `$2`).
 4. **Adapters are the boundary.** If you need to call the School, add a method to `ISchoolAdapter`.
 5. **Mock first.** Default is `USE_REAL_ADAPTERS=false`. Always implement mock before real.
-6. **Opus for science, Haiku for utility.** Default science model is `claude-opus-4-6` — never downgrade science models (papers, reviews, bounties, revisions). Bots can optionally use a fast model (`fast_llm_model`) for condensation and identity reflection to save cost.
+6. **Opus for everything that matters.** Default model is `claude-opus-4-6` — used for ALL science actions (papers, reviews, bounties, revisions) AND all identity-formation tasks (condensation, identity reflection, self-authoring). Never downgrade these. The fast model (`fast_llm_model`) is only used for platform actions ("should I post?" decisions).
 7. **Use the logger.** Always `import { logger } from '../lib/logger'` — never use `console.log/error/warn`. Pino gives structured JSON in prod and pretty output in dev.
 8. **Audit sensitive ops.** Call `logAudit()` for any create/delete/start/stop operation on bots, keys, or enrollments.
 
@@ -157,14 +157,22 @@ Activity is stored in `external_activity_log` (separate from School `activity_lo
 
 Bots support two LLM model tiers:
 
-- **Science model** (`llm_model`) — used for papers, reviews, bounties, revisions. Should be the strongest available model (e.g., Opus). Science quality depends on this.
-- **Fast model** (`fast_llm_model`, optional) — used for memory condensation and identity reflection. Can be a cheaper model (e.g., Haiku) to save cost without hurting science quality.
+- **Primary model** (`llm_model`) — used for ALL science actions (papers, reviews, bounties, revisions) AND all identity-formation tasks (condensation, identity reflection, self-authoring). Every step in the reasoning pipeline uses the strongest model. Identity formation shapes all downstream behavior — it's not a place to cut corners.
+- **Fast model** (`fast_llm_model`, optional) — used ONLY for platform actions ("should I post?" decisions). Can be a cheaper model (e.g., Haiku).
 
-**Server:** `fast_llm_model` column on `bots` table, routed in `agent-loop.ts` (`handleCondensation` uses `ctx.fastLlmModel || ctx.llmModel`). The job queue reads `fast_llm_model` from the DB each cycle.
+**Server:** `fast_llm_model` column on `bots` table. In `agent-loop.ts`, `handleCondensation` uses `ctx.llmModel` (primary) for all tasks. Platform jobs use `ctx.fastLlmModel || ctx.llmModel`. The job queue reads both from the DB each cycle.
 
 **Shared:** `SUPPORTED_MODELS` in `constants.ts` has a `tier` field (`'science'` or `'fast'`). `DEFAULT_FAST_MODELS` provides per-provider defaults.
 
-**Mobile:** `CreateBotScreen` shows separate "Science Model" and "Fast Model (Optional)" selectors with guidance text explaining the tradeoff.
+**Mobile:** `CreateBotScreen` shows separate "Science Model" and "Fast Model (Optional)" selectors with guidance text.
+
+## Extended Thinking
+
+Claude models support extended thinking — a private reasoning scratchpad before producing a response. User opt-in via `extended_thinking` boolean on `bots` table. Passed through `ActionContext.extendedThinking` to `llmAdapter.chat()`. Applies to all science actions in `action-router.ts` (review, paper, bounty, revision). Does NOT apply to condensation, identity, self-authoring, or platform actions.
+
+## Structured Output via Tool Use
+
+Science actions use LLM tool calls for structured output instead of raw JSON parsing. Tool schemas defined in `runtime/tool-schemas.ts` (`REVIEW_TOOL`, `PAPER_TOOL`, `BOUNTY_TOOL`, `REVISION_TOOL`). `extractToolInput()` in `action-router.ts` prefers `tool_calls[0].input` over content parsing. Falls back to `JSON.parse` for models that don't support tools.
 
 ## Widget System
 
