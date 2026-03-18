@@ -73,6 +73,8 @@ export default function LoginScreen({ navigation }: any) {
             returnKeyType="next"
             onSubmitEditing={() => passwordRef.current?.focus()}
             blurOnSubmit={false}
+            accessibilityLabel="Email"
+            accessibilityRole="text"
           />
           <TextInput
             ref={passwordRef}
@@ -84,6 +86,8 @@ export default function LoginScreen({ navigation }: any) {
             secureTextEntry
             returnKeyType="go"
             onSubmitEditing={handleLogin}
+            accessibilityLabel="Password"
+            accessibilityRole="text"
           />
 
           <TouchableOpacity
@@ -91,6 +95,9 @@ export default function LoginScreen({ navigation }: any) {
             onPress={handleLogin}
             disabled={loading}
             activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel="Sign In"
+            accessibilityState={{ disabled: loading }}
           >
             {loading ? (
               <ActivityIndicator color="#fff" />
@@ -99,7 +106,7 @@ export default function LoginScreen({ navigation }: any) {
             )}
           </TouchableOpacity>
 
-          <TouchableOpacity onPress={() => navigation.navigate('Register')} activeOpacity={0.7}>
+          <TouchableOpacity onPress={() => navigation.navigate('Register')} activeOpacity={0.7} accessibilityRole="link" accessibilityLabel="Don't have an account? Register">
             <Text style={styles.link}>Don't have an account? Register</Text>
           </TouchableOpacity>
 
