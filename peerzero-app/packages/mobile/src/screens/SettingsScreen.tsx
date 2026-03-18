@@ -354,19 +354,25 @@ export default function SettingsScreen() {
               <TouchableOpacity
                 style={[styles.providerPill, newProvider === 'anthropic' && styles.providerActive]}
                 onPress={() => setNewProvider('anthropic')}
+                accessibilityRole="radio"
+                accessibilityLabel="Anthropic"
+                accessibilityState={{ selected: newProvider === 'anthropic' }}
               >
                 <Text style={[styles.providerText, newProvider === 'anthropic' && styles.providerTextActive]}>Anthropic</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.providerPill, newProvider === 'openai' && styles.providerActive]}
                 onPress={() => setNewProvider('openai')}
+                accessibilityRole="radio"
+                accessibilityLabel="OpenAI"
+                accessibilityState={{ selected: newProvider === 'openai' }}
               >
                 <Text style={[styles.providerText, newProvider === 'openai' && styles.providerTextActive]}>OpenAI</Text>
               </TouchableOpacity>
             </View>
-            <TextInput style={styles.input} placeholder="Label (e.g. 'My Opus Key')" placeholderTextColor={colors.text.tertiary} value={newLabel} onChangeText={setNewLabel} />
-            <TextInput style={styles.input} placeholder="API Key" placeholderTextColor={colors.text.tertiary} value={newKey} onChangeText={setNewKey} secureTextEntry />
-            <TouchableOpacity style={styles.saveButton} onPress={handleAddKey}>
+            <TextInput style={styles.input} placeholder="Label (e.g. 'My Opus Key')" placeholderTextColor={colors.text.tertiary} value={newLabel} onChangeText={setNewLabel} accessibilityLabel="API key label" accessibilityRole="text" />
+            <TextInput style={styles.input} placeholder="API Key" placeholderTextColor={colors.text.tertiary} value={newKey} onChangeText={setNewKey} secureTextEntry accessibilityLabel="API key value" accessibilityRole="text" />
+            <TouchableOpacity style={styles.saveButton} onPress={handleAddKey} accessibilityRole="button" accessibilityLabel="Save Key">
               <Text style={styles.saveButtonText}>Save Key</Text>
             </TouchableOpacity>
           </View>
@@ -378,7 +384,7 @@ export default function SettingsScreen() {
               <Text style={styles.keyLabel}>{k.label}</Text>
               <Text style={styles.keyFingerprint}>{k.provider} — {k.key_fingerprint}</Text>
             </View>
-            <TouchableOpacity onPress={() => handleDeleteKey(k.id, k.label)}>
+            <TouchableOpacity onPress={() => handleDeleteKey(k.id, k.label)} accessibilityRole="button" accessibilityLabel={`Delete API key ${k.label}`}>
               <Text style={styles.deleteText}>Delete</Text>
             </TouchableOpacity>
           </View>
@@ -408,6 +414,8 @@ export default function SettingsScreen() {
                 onValueChange={(val) => toggleNotifPref(type, val)}
                 trackColor={{ false: colors.bg.elevated, true: colors.accent.primary + '60' }}
                 thumbColor={notifPrefs[type] ? colors.accent.primary : colors.text.tertiary}
+                accessibilityLabel={label.title}
+                accessibilityRole="switch"
               />
             </View>
           );
@@ -427,7 +435,7 @@ export default function SettingsScreen() {
         </Text>
 
         {!widgetEnabled ? (
-          <TouchableOpacity style={styles.saveButton} onPress={handleEnableWidget}>
+          <TouchableOpacity style={styles.saveButton} onPress={handleEnableWidget} accessibilityRole="button" accessibilityLabel="Enable Widget">
             <Text style={styles.saveButtonText}>Enable Widget</Text>
           </TouchableOpacity>
         ) : (
