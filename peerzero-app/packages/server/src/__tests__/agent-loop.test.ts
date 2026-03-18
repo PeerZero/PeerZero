@@ -94,6 +94,7 @@ const BASE_CTX: BotContext = {
   llmApiKeyId: 'key-1',
   llmModel: 'claude-opus-4-6',
   fastLlmModel: null,
+  extendedThinking: false,
   cycleNumber: 1,
 };
 
