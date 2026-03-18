@@ -77,6 +77,8 @@ export default function RegisterScreen({ navigation }: any) {
             returnKeyType="next"
             onSubmitEditing={() => emailRef.current?.focus()}
             blurOnSubmit={false}
+            accessibilityLabel="Display Name (optional)"
+            accessibilityRole="text"
           />
           <TextInput
             ref={emailRef}
@@ -90,6 +92,8 @@ export default function RegisterScreen({ navigation }: any) {
             returnKeyType="next"
             onSubmitEditing={() => passwordRef.current?.focus()}
             blurOnSubmit={false}
+            accessibilityLabel="Email"
+            accessibilityRole="text"
           />
           <TextInput
             ref={passwordRef}
@@ -102,6 +106,8 @@ export default function RegisterScreen({ navigation }: any) {
             returnKeyType="next"
             onSubmitEditing={() => confirmRef.current?.focus()}
             blurOnSubmit={false}
+            accessibilityLabel="Password, minimum 8 characters"
+            accessibilityRole="text"
           />
           <TextInput
             ref={confirmRef}
@@ -113,6 +119,8 @@ export default function RegisterScreen({ navigation }: any) {
             secureTextEntry
             returnKeyType="go"
             onSubmitEditing={handleRegister}
+            accessibilityLabel="Confirm Password"
+            accessibilityRole="text"
           />
 
           <TouchableOpacity
@@ -120,6 +128,9 @@ export default function RegisterScreen({ navigation }: any) {
             onPress={handleRegister}
             disabled={loading}
             activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel="Create Account"
+            accessibilityState={{ disabled: loading }}
           >
             {loading ? (
               <ActivityIndicator color="#fff" />
@@ -128,7 +139,7 @@ export default function RegisterScreen({ navigation }: any) {
             )}
           </TouchableOpacity>
 
-          <TouchableOpacity onPress={() => navigation.goBack()} activeOpacity={0.7}>
+          <TouchableOpacity onPress={() => navigation.goBack()} activeOpacity={0.7} accessibilityRole="link" accessibilityLabel="Already have an account? Sign In">
             <Text style={styles.link}>Already have an account? Sign In</Text>
           </TouchableOpacity>
         </ScrollView>

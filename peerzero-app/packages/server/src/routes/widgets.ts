@@ -100,10 +100,17 @@ router.post('/token', requireAuth, userRateLimit('write'), async (req: Request, 
 
   // Revoke any existing widget tokens for this user (one active token at a time)
   // Also prune expired tokens globally to prevent table bloat
-  await Promise.all([
+  // Use allSettled: pruning expired tokens is best-effort and should not
+  // block token generation if it fails independently.
+  const cleanupResults = await Promise.allSettled([
     query('DELETE FROM widget_tokens WHERE user_id = $1', [userId]),
     query('DELETE FROM widget_tokens WHERE expires_at < NOW()'),
   ]);
+  // The user's own token deletion must succeed for the new token to be valid
+  if (cleanupResults[0].status === 'rejected') {
+    res.status(500).json({ error: 'Failed to revoke existing widget token' });
+    return;
+  }
 
   // Store hashed token
   await query(

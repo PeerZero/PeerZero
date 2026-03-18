@@ -44,6 +44,15 @@ const LIMITS: Record<RateLimitCategory, { max: number; windowSeconds: number }> 
 
 // ── In-memory fallback when Redis is unavailable ─────────────────────────────
 const fallbackBuckets = new Map<string, { count: number; resetAt: number }>();
+const MAX_FALLBACK_BUCKETS = 10_000;
+
+// Clean up expired fallback buckets every 60 seconds
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, bucket] of fallbackBuckets) {
+    if (now > bucket.resetAt) fallbackBuckets.delete(key);
+  }
+}, 60_000);
 
 function checkInMemoryFallback(
   userId: string,
@@ -55,6 +64,11 @@ function checkInMemoryFallback(
   const bucket = fallbackBuckets.get(key);
 
   if (!bucket || now > bucket.resetAt) {
+    // Evict oldest entries if map is at capacity
+    if (fallbackBuckets.size >= MAX_FALLBACK_BUCKETS && !fallbackBuckets.has(key)) {
+      const firstKey = fallbackBuckets.keys().next().value;
+      if (firstKey !== undefined) fallbackBuckets.delete(firstKey);
+    }
     fallbackBuckets.set(key, { count: 1, resetAt: now + windowSeconds * 1000 });
     return { allowed: true, remaining: max - 1, limit: max };
   }

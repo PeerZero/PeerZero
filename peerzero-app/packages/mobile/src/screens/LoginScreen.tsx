@@ -113,6 +113,8 @@ export default function LoginScreen({ navigation }: any) {
           <TouchableOpacity
             onPress={() => Alert.alert('Reset Password', 'Enter your email above and contact support to reset your password.')}
             activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel="Forgot password?"
           >
             <Text style={styles.forgotLink}>Forgot password?</Text>
           </TouchableOpacity>
