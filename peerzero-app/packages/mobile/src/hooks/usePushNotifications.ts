@@ -36,6 +36,9 @@ export function usePushNotifications(isAuthenticated: boolean): void {
     if (!isAuthenticated) {
       // Clean up token on logout
       if (tokenRef.current) {
+        // Intentionally silenced: this runs during logout cleanup where the
+        // auth token may already be invalid. Failing to remove a push token
+        // is harmless — the server prunes stale tokens via DeviceNotRegistered.
         notifApi.removeToken(tokenRef.current).catch(() => {});
         tokenRef.current = null;
       }

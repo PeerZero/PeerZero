@@ -30,7 +30,7 @@ import { requireAuth, JwtPayload } from '../middleware/auth';
 import { userRateLimit } from '../middleware/rate-limit';
 import { logAudit } from '../services/audit.service';
 import { credibilityToStage } from '@peerzero/shared';
-import type { WidgetBotData, WidgetDataResponse } from '@peerzero/shared';
+import type { WidgetBotData, WidgetDataResponse, AvatarConfig, BotStatus, MoodType } from '@peerzero/shared';
 
 const router = Router();
 
@@ -100,10 +100,17 @@ router.post('/token', requireAuth, userRateLimit('write'), async (req: Request, 
 
   // Revoke any existing widget tokens for this user (one active token at a time)
   // Also prune expired tokens globally to prevent table bloat
-  await Promise.all([
+  // Use allSettled: pruning expired tokens is best-effort and should not
+  // block token generation if it fails independently.
+  const cleanupResults = await Promise.allSettled([
     query('DELETE FROM widget_tokens WHERE user_id = $1', [userId]),
     query('DELETE FROM widget_tokens WHERE expires_at < NOW()'),
   ]);
+  // The user's own token deletion must succeed for the new token to be valid
+  if (cleanupResults[0].status === 'rejected') {
+    res.status(500).json({ error: 'Failed to revoke existing widget token' });
+    return;
+  }
 
   // Store hashed token
   await query(
@@ -198,14 +205,14 @@ router.get('/data', jwtOrWidgetToken, userRateLimit('read'), async (req: Request
   const bots: WidgetBotData[] = rows.map(r => ({
     id: r.id,
     name: r.name,
-    avatar_config: r.avatar_config as any,
-    status: r.status as any,
+    avatar_config: r.avatar_config as AvatarConfig,
+    status: r.status as BotStatus,
     credibility: r.cached_credibility,
     tier: credibilityToStage(r.cached_credibility),
     grade: r.cached_grade,
     school_name: r.school_name,
     last_activity_headline: activityMap[r.id]?.headline || null,
-    last_activity_mood: (activityMap[r.id]?.mood || null) as any,
+    last_activity_mood: (activityMap[r.id]?.mood as MoodType) || null,
     last_cycle_at: r.last_cycle_at,
   }));
 

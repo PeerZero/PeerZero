@@ -44,14 +44,14 @@ export interface PlatformCycleContext {
 }
 
 export async function runPlatformCycle(ctx: PlatformCycleContext): Promise<void> {
-  const adapter = getPlatformAdapter();
-
-  // 1. Get platform credentials
+  // 1. Get platform credentials (includes adapter_type)
   const platCreds = await getPlatformCredentials(ctx.platformId);
   if (!platCreds) {
     await updatePlatformCycleStatus(ctx.platformId, 'error', 'Platform credentials not found');
     return;
   }
+
+  const adapter = getPlatformAdapter(platCreds.adapterType);
 
   const creds: PlatformCredentials = {
     apiKey: platCreds.apiKey,

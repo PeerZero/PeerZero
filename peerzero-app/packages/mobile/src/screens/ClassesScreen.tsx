@@ -9,8 +9,9 @@ import { classes as classesApi } from '../services/api';
 import { colors } from '../theme/colors';
 import { spacing, fontSize, borderRadius } from '../theme/spacing';
 import type { ClassInfo } from '@peerzero/shared';
+import type { ClassesScreenProps } from '../navigation/types';
 
-export default function ClassesScreen({ navigation }: any) {
+export default function ClassesScreen({ navigation }: ClassesScreenProps) {
   const [classList, setClassList] = useState<ClassInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [showJoin, setShowJoin] = useState(false);
@@ -23,8 +24,8 @@ export default function ClassesScreen({ navigation }: any) {
     try {
       const data = await classesApi.list() as ClassInfo[];
       setClassList(data);
-    } catch (err: any) {
-      Alert.alert('Error', err.message);
+    } catch (err: unknown) {
+      Alert.alert('Error', err instanceof Error ? err.message : 'Something went wrong');
     } finally {
       setLoading(false);
     }
@@ -39,8 +40,8 @@ export default function ClassesScreen({ navigation }: any) {
       setShowJoin(false);
       setJoinCode('');
       await load();
-    } catch (err: any) {
-      Alert.alert('Error', err.message);
+    } catch (err: unknown) {
+      Alert.alert('Error', err instanceof Error ? err.message : 'Something went wrong');
     }
   };
 
@@ -55,8 +56,8 @@ export default function ClassesScreen({ navigation }: any) {
       setNewName('');
       setNewDesc('');
       await load();
-    } catch (err: any) {
-      Alert.alert('Error', err.message);
+    } catch (err: unknown) {
+      Alert.alert('Error', err instanceof Error ? err.message : 'Something went wrong');
     }
   };
 
@@ -112,12 +113,14 @@ export default function ClassesScreen({ navigation }: any) {
             maxLength={6}
             returnKeyType="go"
             onSubmitEditing={handleJoin}
+            accessibilityLabel="Join code"
+            accessibilityRole="text"
           />
           <View style={styles.formActions}>
-            <TouchableOpacity style={styles.cancelButton} onPress={() => setShowJoin(false)}>
+            <TouchableOpacity style={styles.cancelButton} onPress={() => setShowJoin(false)} accessibilityRole="button" accessibilityLabel="Cancel">
               <Text style={styles.cancelText}>Cancel</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.submitButton} onPress={handleJoin}>
+            <TouchableOpacity style={styles.submitButton} onPress={handleJoin} accessibilityRole="button" accessibilityLabel="Join class">
               <Text style={styles.submitText}>Join</Text>
             </TouchableOpacity>
           </View>
@@ -134,6 +137,8 @@ export default function ClassesScreen({ navigation }: any) {
             onChangeText={setNewName}
             placeholder="Class name"
             placeholderTextColor={colors.text.tertiary}
+            accessibilityLabel="Class name"
+            accessibilityRole="text"
           />
           <TextInput
             style={[styles.input, { marginTop: spacing.sm }]}
@@ -142,12 +147,14 @@ export default function ClassesScreen({ navigation }: any) {
             placeholder="Description (optional)"
             placeholderTextColor={colors.text.tertiary}
             multiline
+            accessibilityLabel="Class description (optional)"
+            accessibilityRole="text"
           />
           <View style={styles.formActions}>
-            <TouchableOpacity style={styles.cancelButton} onPress={() => setShowCreate(false)}>
+            <TouchableOpacity style={styles.cancelButton} onPress={() => setShowCreate(false)} accessibilityRole="button" accessibilityLabel="Cancel">
               <Text style={styles.cancelText}>Cancel</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.submitButton} onPress={handleCreate}>
+            <TouchableOpacity style={styles.submitButton} onPress={handleCreate} accessibilityRole="button" accessibilityLabel="Create class">
               <Text style={styles.submitText}>Create</Text>
             </TouchableOpacity>
           </View>
@@ -169,10 +176,10 @@ export default function ClassesScreen({ navigation }: any) {
 
       {!showJoin && !showCreate && (
         <View style={styles.buttonRow}>
-          <TouchableOpacity style={styles.fab} onPress={() => setShowJoin(true)}>
+          <TouchableOpacity style={styles.fab} onPress={() => setShowJoin(true)} accessibilityRole="button" accessibilityLabel="Join Class">
             <Text style={styles.fabText}>Join Class</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={[styles.fab, styles.fabSecondary]} onPress={() => setShowCreate(true)}>
+          <TouchableOpacity style={[styles.fab, styles.fabSecondary]} onPress={() => setShowCreate(true)} accessibilityRole="button" accessibilityLabel="Create Class">
             <Text style={[styles.fabText, styles.fabSecondaryText]}>Create Class</Text>
           </TouchableOpacity>
         </View>

@@ -114,14 +114,18 @@ export async function acquireSkill(
       // Try to extract JSON from text
       const jsonMatch = response.content.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
-        const parsed = JSON.parse(jsonMatch[0]);
-        skillDef = {
-          name: parsed.name || 'Custom Skill',
-          instruction: parsed.instruction || '',
-          trigger: parsed.trigger || 'always',
-          priority: typeof parsed.priority === 'number' ? parsed.priority : 10,
-          category: parsed.category || 'custom',
-        };
+        try {
+          const parsed = JSON.parse(jsonMatch[0]);
+          skillDef = {
+            name: parsed.name || 'Custom Skill',
+            instruction: parsed.instruction || '',
+            trigger: parsed.trigger || 'always',
+            priority: typeof parsed.priority === 'number' ? parsed.priority : 10,
+            category: parsed.category || 'custom',
+          };
+        } catch {
+          return { success: false, error: 'Failed to generate a valid skill definition' };
+        }
       } else {
         return { success: false, error: 'Failed to generate a valid skill definition' };
       }

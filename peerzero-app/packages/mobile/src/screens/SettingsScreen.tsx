@@ -62,8 +62,8 @@ export default function SettingsScreen() {
     try {
       const data = await keysApi.list() as ApiKeyInfo[];
       setKeys(data);
-    } catch (err: any) {
-      Alert.alert('Error', err?.message || 'Failed to load API keys');
+    } catch (err: unknown) {
+      Alert.alert('Error', err instanceof Error ? err.message : 'Failed to load API keys');
     }
   }, []);
 
@@ -88,8 +88,8 @@ export default function SettingsScreen() {
           ? 'Add the PeerZero widget from your home screen. Long-press your home screen and tap the + button.'
           : 'Add the PeerZero widget from your home screen, or enable the floating overlay in your system settings.',
       );
-    } catch (err: any) {
-      Alert.alert('Error', err?.message || 'Failed to enable widget');
+    } catch (err: unknown) {
+      Alert.alert('Error', err instanceof Error ? err.message : 'Failed to enable widget');
     }
   };
 
@@ -103,8 +103,8 @@ export default function SettingsScreen() {
             await widgetsApi.revokeToken();
             setWidgetToken(null);
             setWidgetEnabled(false);
-          } catch (err: any) {
-            Alert.alert('Error', err?.message || 'Failed to disable widget');
+          } catch (err: unknown) {
+            Alert.alert('Error', err instanceof Error ? err.message : 'Failed to disable widget');
           }
         },
       },
@@ -143,8 +143,8 @@ export default function SettingsScreen() {
       setNewLabel('');
       setShowAddKey(false);
       await loadKeys();
-    } catch (err: any) {
-      Alert.alert('Error', err?.message || 'Failed to add key');
+    } catch (err: unknown) {
+      Alert.alert('Error', err instanceof Error ? err.message : 'Failed to add key');
     }
   };
 
@@ -157,8 +157,8 @@ export default function SettingsScreen() {
           try {
             await keysApi.delete(id);
             await loadKeys();
-          } catch (err: any) {
-            Alert.alert('Error', err.message);
+          } catch (err: unknown) {
+            Alert.alert('Error', err instanceof Error ? err.message : 'Something went wrong');
           }
         },
       },
@@ -174,8 +174,8 @@ export default function SettingsScreen() {
       await authApi.updateProfile({ display_name: displayName.trim() });
       setEditingName(false);
       if (refreshUser) refreshUser();
-    } catch (err: any) {
-      Alert.alert('Error', err?.message || 'Failed to update profile');
+    } catch (err: unknown) {
+      Alert.alert('Error', err instanceof Error ? err.message : 'Failed to update profile');
     }
   };
 
@@ -200,8 +200,8 @@ export default function SettingsScreen() {
       setNewPassword('');
       setConfirmPassword('');
       logout();
-    } catch (err: any) {
-      Alert.alert('Error', err?.message || 'Failed to change password');
+    } catch (err: unknown) {
+      Alert.alert('Error', err instanceof Error ? err.message : 'Failed to change password');
     }
   };
 
@@ -226,8 +226,8 @@ export default function SettingsScreen() {
                     try {
                       await authApi.deleteAccount();
                       logout();
-                    } catch (err: any) {
-                      Alert.alert('Error', err?.message || 'Failed to delete account');
+                    } catch (err: unknown) {
+                      Alert.alert('Error', err instanceof Error ? err.message : 'Failed to delete account');
                     }
                   },
                 },
@@ -262,16 +262,18 @@ export default function SettingsScreen() {
                 placeholderTextColor={colors.text.tertiary}
                 maxLength={100}
                 autoFocus
+                accessibilityLabel="Display name"
+                accessibilityRole="text"
               />
-              <TouchableOpacity onPress={handleSaveDisplayName}>
+              <TouchableOpacity onPress={handleSaveDisplayName} accessibilityRole="button" accessibilityLabel="Save display name">
                 <Text style={styles.saveText}>Save</Text>
               </TouchableOpacity>
-              <TouchableOpacity onPress={() => { setEditingName(false); setDisplayName(user?.display_name || ''); }}>
+              <TouchableOpacity onPress={() => { setEditingName(false); setDisplayName(user?.display_name || ''); }} accessibilityRole="button" accessibilityLabel="Cancel editing">
                 <Text style={styles.cancelText}>Cancel</Text>
               </TouchableOpacity>
             </View>
           ) : (
-            <TouchableOpacity style={styles.editNameRow} onPress={() => setEditingName(true)}>
+            <TouchableOpacity style={styles.editNameRow} onPress={() => setEditingName(true)} accessibilityRole="button" accessibilityLabel={`Edit display name, currently ${user?.display_name || 'not set'}`}>
               <Text style={styles.displayName}>{user?.display_name || 'No display name'}</Text>
               <Text style={styles.editText}>Edit</Text>
             </TouchableOpacity>
@@ -290,7 +292,7 @@ export default function SettingsScreen() {
             <Text style={styles.sectionIcon}>🔒</Text>
             <Text style={styles.sectionTitle}>Security</Text>
           </View>
-          <TouchableOpacity onPress={() => setShowPasswordChange(!showPasswordChange)}>
+          <TouchableOpacity onPress={() => setShowPasswordChange(!showPasswordChange)} accessibilityRole="button" accessibilityLabel={showPasswordChange ? 'Cancel password change' : 'Change Password'}>
             <Text style={styles.addButton}>{showPasswordChange ? 'Cancel' : 'Change Password'}</Text>
           </TouchableOpacity>
         </View>
@@ -304,6 +306,8 @@ export default function SettingsScreen() {
               value={currentPassword}
               onChangeText={setCurrentPassword}
               secureTextEntry
+              accessibilityLabel="Current password"
+              accessibilityRole="text"
             />
             <TextInput
               style={styles.input}
@@ -312,6 +316,8 @@ export default function SettingsScreen() {
               value={newPassword}
               onChangeText={setNewPassword}
               secureTextEntry
+              accessibilityLabel="New password, minimum 8 characters"
+              accessibilityRole="text"
             />
             <TextInput
               style={styles.input}
@@ -320,8 +326,10 @@ export default function SettingsScreen() {
               value={confirmPassword}
               onChangeText={setConfirmPassword}
               secureTextEntry
+              accessibilityLabel="Confirm new password"
+              accessibilityRole="text"
             />
-            <TouchableOpacity style={styles.saveButton} onPress={handleChangePassword}>
+            <TouchableOpacity style={styles.saveButton} onPress={handleChangePassword} accessibilityRole="button" accessibilityLabel="Change Password">
               <Text style={styles.saveButtonText}>Change Password</Text>
             </TouchableOpacity>
           </View>
@@ -335,7 +343,7 @@ export default function SettingsScreen() {
             <Text style={styles.sectionIcon}>🔑</Text>
             <Text style={styles.sectionTitle}>API Keys (BYOK)</Text>
           </View>
-          <TouchableOpacity onPress={() => setShowAddKey(!showAddKey)}>
+          <TouchableOpacity onPress={() => setShowAddKey(!showAddKey)} accessibilityRole="button" accessibilityLabel={showAddKey ? 'Cancel adding key' : 'Add API Key'}>
             <Text style={styles.addButton}>{showAddKey ? 'Cancel' : '+ Add Key'}</Text>
           </TouchableOpacity>
         </View>
@@ -346,19 +354,25 @@ export default function SettingsScreen() {
               <TouchableOpacity
                 style={[styles.providerPill, newProvider === 'anthropic' && styles.providerActive]}
                 onPress={() => setNewProvider('anthropic')}
+                accessibilityRole="radio"
+                accessibilityLabel="Anthropic"
+                accessibilityState={{ selected: newProvider === 'anthropic' }}
               >
                 <Text style={[styles.providerText, newProvider === 'anthropic' && styles.providerTextActive]}>Anthropic</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.providerPill, newProvider === 'openai' && styles.providerActive]}
                 onPress={() => setNewProvider('openai')}
+                accessibilityRole="radio"
+                accessibilityLabel="OpenAI"
+                accessibilityState={{ selected: newProvider === 'openai' }}
               >
                 <Text style={[styles.providerText, newProvider === 'openai' && styles.providerTextActive]}>OpenAI</Text>
               </TouchableOpacity>
             </View>
-            <TextInput style={styles.input} placeholder="Label (e.g. 'My Opus Key')" placeholderTextColor={colors.text.tertiary} value={newLabel} onChangeText={setNewLabel} />
-            <TextInput style={styles.input} placeholder="API Key" placeholderTextColor={colors.text.tertiary} value={newKey} onChangeText={setNewKey} secureTextEntry />
-            <TouchableOpacity style={styles.saveButton} onPress={handleAddKey}>
+            <TextInput style={styles.input} placeholder="Label (e.g. 'My Opus Key')" placeholderTextColor={colors.text.tertiary} value={newLabel} onChangeText={setNewLabel} accessibilityLabel="API key label" accessibilityRole="text" />
+            <TextInput style={styles.input} placeholder="API Key" placeholderTextColor={colors.text.tertiary} value={newKey} onChangeText={setNewKey} secureTextEntry accessibilityLabel="API key value" accessibilityRole="text" />
+            <TouchableOpacity style={styles.saveButton} onPress={handleAddKey} accessibilityRole="button" accessibilityLabel="Save Key">
               <Text style={styles.saveButtonText}>Save Key</Text>
             </TouchableOpacity>
           </View>
@@ -370,7 +384,7 @@ export default function SettingsScreen() {
               <Text style={styles.keyLabel}>{k.label}</Text>
               <Text style={styles.keyFingerprint}>{k.provider} — {k.key_fingerprint}</Text>
             </View>
-            <TouchableOpacity onPress={() => handleDeleteKey(k.id, k.label)}>
+            <TouchableOpacity onPress={() => handleDeleteKey(k.id, k.label)} accessibilityRole="button" accessibilityLabel={`Delete API key ${k.label}`}>
               <Text style={styles.deleteText}>Delete</Text>
             </TouchableOpacity>
           </View>
@@ -400,6 +414,8 @@ export default function SettingsScreen() {
                 onValueChange={(val) => toggleNotifPref(type, val)}
                 trackColor={{ false: colors.bg.elevated, true: colors.accent.primary + '60' }}
                 thumbColor={notifPrefs[type] ? colors.accent.primary : colors.text.tertiary}
+                accessibilityLabel={label.title}
+                accessibilityRole="switch"
               />
             </View>
           );
@@ -419,7 +435,7 @@ export default function SettingsScreen() {
         </Text>
 
         {!widgetEnabled ? (
-          <TouchableOpacity style={styles.saveButton} onPress={handleEnableWidget}>
+          <TouchableOpacity style={styles.saveButton} onPress={handleEnableWidget} accessibilityRole="button" accessibilityLabel="Enable Widget">
             <Text style={styles.saveButtonText}>Enable Widget</Text>
           </TouchableOpacity>
         ) : (
@@ -476,6 +492,8 @@ export default function SettingsScreen() {
             <TouchableOpacity
               style={[styles.logoutButton, { marginTop: spacing.md }]}
               onPress={handleDisableWidget}
+              accessibilityRole="button"
+              accessibilityLabel="Disable Widget"
             >
               <Text style={styles.deleteText}>Disable Widget</Text>
             </TouchableOpacity>
@@ -484,12 +502,12 @@ export default function SettingsScreen() {
       </View>
 
       {/* Logout */}
-      <TouchableOpacity style={styles.logoutButton} onPress={logout}>
+      <TouchableOpacity style={styles.logoutButton} onPress={logout} accessibilityRole="button" accessibilityLabel="Sign Out">
         <Text style={styles.logoutText}>Sign Out</Text>
       </TouchableOpacity>
 
       {/* Delete Account */}
-      <TouchableOpacity style={styles.deleteAccountButton} onPress={handleDeleteAccount}>
+      <TouchableOpacity style={styles.deleteAccountButton} onPress={handleDeleteAccount} accessibilityRole="button" accessibilityLabel="Delete Account">
         <Text style={styles.deleteAccountText}>Delete Account</Text>
       </TouchableOpacity>
 

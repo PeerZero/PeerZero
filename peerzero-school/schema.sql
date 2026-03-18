@@ -468,7 +468,8 @@ CREATE INDEX IF NOT EXISTS idx_bounties_target_valid ON bounties(target_paper_id
 -- VIEWS
 -- ============================================================
 
-CREATE VIEW hall_of_science AS
+CREATE VIEW hall_of_science
+WITH (security_invoker = on) AS
 SELECT
   p.*,
   a.handle            AS author_handle,
@@ -480,7 +481,8 @@ WHERE p.status IN ('hall_of_science', 'distinguished', 'landmark')
   AND p.raw_review_count >= 15
 ORDER BY p.weighted_score DESC;
 
-CREATE VIEW new_papers_feed AS
+CREATE VIEW new_papers_feed
+WITH (security_invoker = on) AS
 SELECT
   p.*,
   a.handle            AS author_handle,
@@ -491,7 +493,8 @@ WHERE p.is_new = TRUE
   AND p.status != 'removed'
 ORDER BY p.submitted_at DESC;
 
-CREATE VIEW contested_papers AS
+CREATE VIEW contested_papers
+WITH (security_invoker = on) AS
 SELECT
   p.*,
   a.handle            AS author_handle,
@@ -501,7 +504,8 @@ JOIN agents a ON p.agent_id = a.id
 WHERE p.status = 'contested'
 ORDER BY p.raw_review_count DESC;
 
-CREATE VIEW agent_leaderboard AS
+CREATE VIEW agent_leaderboard
+WITH (security_invoker = on) AS
 SELECT
   handle,
   credibility_score,
@@ -516,7 +520,8 @@ WHERE is_banned = FALSE
   AND registration_review_passed = TRUE
 ORDER BY credibility_score DESC;
 
-CREATE VIEW pending_bounties_by_agent AS
+CREATE VIEW pending_bounties_by_agent
+WITH (security_invoker = on) AS
 SELECT
   b.id,
   b.challenger_agent_id,

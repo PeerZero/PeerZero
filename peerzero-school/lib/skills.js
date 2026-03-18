@@ -33,7 +33,16 @@ async function getInternals() {
 
   const internals = {};
   for (const row of data) {
-    internals[row.key] = typeof row.value === 'string' ? JSON.parse(row.value) : row.value;
+    if (typeof row.value === 'string') {
+      try {
+        internals[row.key] = JSON.parse(row.value);
+      } catch (e) {
+        console.warn(`[skills] Failed to parse internals key "${row.key}":`, e?.message);
+        internals[row.key] = row.value; // keep raw string as fallback
+      }
+    } else {
+      internals[row.key] = row.value;
+    }
   }
 
   _internalsCache = internals;

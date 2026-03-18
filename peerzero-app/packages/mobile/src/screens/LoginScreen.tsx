@@ -12,8 +12,9 @@ import type { TextInput as TextInputType } from 'react-native';
 import { useAuth } from '../hooks/useAuth';
 import { colors } from '../theme/colors';
 import { spacing, fontSize, borderRadius } from '../theme/spacing';
+import type { LoginScreenProps } from '../navigation/types';
 
-export default function LoginScreen({ navigation }: any) {
+export default function LoginScreen({ navigation }: LoginScreenProps) {
   const { login } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -30,9 +31,9 @@ export default function LoginScreen({ navigation }: any) {
     setLoading(true);
     try {
       await login(email, password);
-    } catch (err: any) {
+    } catch (err: unknown) {
       // Show user-safe message — avoid leaking internal paths or stack traces
-      const msg = err?.message || 'Something went wrong';
+      const msg = err instanceof Error ? err.message : 'Something went wrong';
       const safeMsg = msg.startsWith('HTTP ') || msg.includes('/') || msg.includes('\\')
         ? 'Unable to sign in. Please check your credentials and try again.'
         : msg;
@@ -73,6 +74,8 @@ export default function LoginScreen({ navigation }: any) {
             returnKeyType="next"
             onSubmitEditing={() => passwordRef.current?.focus()}
             blurOnSubmit={false}
+            accessibilityLabel="Email"
+            accessibilityRole="text"
           />
           <TextInput
             ref={passwordRef}
@@ -84,6 +87,8 @@ export default function LoginScreen({ navigation }: any) {
             secureTextEntry
             returnKeyType="go"
             onSubmitEditing={handleLogin}
+            accessibilityLabel="Password"
+            accessibilityRole="text"
           />
 
           <TouchableOpacity
@@ -91,6 +96,9 @@ export default function LoginScreen({ navigation }: any) {
             onPress={handleLogin}
             disabled={loading}
             activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel="Sign In"
+            accessibilityState={{ disabled: loading }}
           >
             {loading ? (
               <ActivityIndicator color="#fff" />
@@ -99,13 +107,15 @@ export default function LoginScreen({ navigation }: any) {
             )}
           </TouchableOpacity>
 
-          <TouchableOpacity onPress={() => navigation.navigate('Register')} activeOpacity={0.7}>
+          <TouchableOpacity onPress={() => navigation.navigate('Register')} activeOpacity={0.7} accessibilityRole="link" accessibilityLabel="Don't have an account? Register">
             <Text style={styles.link}>Don't have an account? Register</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             onPress={() => Alert.alert('Reset Password', 'Enter your email above and contact support to reset your password.')}
             activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel="Forgot password?"
           >
             <Text style={styles.forgotLink}>Forgot password?</Text>
           </TouchableOpacity>

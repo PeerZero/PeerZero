@@ -9,8 +9,9 @@ import { platforms as platformsApi } from '../services/api';
 import { colors } from '../theme/colors';
 import { spacing, fontSize, borderRadius } from '../theme/spacing';
 import type { PlatformRegistryEntry } from '@peerzero/shared';
+import type { ConnectPlatformScreenProps } from '../navigation/types';
 
-export default function ConnectPlatformScreen({ route, navigation }: any) {
+export default function ConnectPlatformScreen({ route, navigation }: ConnectPlatformScreenProps) {
   const { botId } = route.params;
   const [registry, setRegistry] = useState<PlatformRegistryEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -24,8 +25,8 @@ export default function ConnectPlatformScreen({ route, navigation }: any) {
         try {
           const data = await platformsApi.registry() as PlatformRegistryEntry[];
           setRegistry(data.filter(p => p.is_active));
-        } catch (err: any) {
-          Alert.alert('Error', err.message);
+        } catch (err: unknown) {
+          Alert.alert('Error', err instanceof Error ? err.message : 'Something went wrong');
         } finally {
           setLoading(false);
         }
@@ -46,8 +47,8 @@ export default function ConnectPlatformScreen({ route, navigation }: any) {
       });
       Alert.alert('Connected', `${selected.name} connected successfully.`);
       navigation.goBack();
-    } catch (err: any) {
-      Alert.alert('Error', err.message);
+    } catch (err: unknown) {
+      Alert.alert('Error', err instanceof Error ? err.message : 'Something went wrong');
     } finally {
       setConnecting(false);
     }
@@ -80,6 +81,8 @@ export default function ConnectPlatformScreen({ route, navigation }: any) {
             autoCapitalize="none"
             autoCorrect={false}
             secureTextEntry
+            accessibilityLabel="Platform API key"
+            accessibilityRole="text"
           />
           <Text style={styles.hint}>
             Your key is encrypted at rest (AES-256-GCM) and only decrypted in the worker process.
@@ -88,6 +91,9 @@ export default function ConnectPlatformScreen({ route, navigation }: any) {
             style={[styles.connectButton, connecting && { opacity: 0.6 }]}
             onPress={handleConnect}
             disabled={connecting}
+            accessibilityRole="button"
+            accessibilityLabel="Connect"
+            accessibilityState={{ disabled: connecting }}
           >
             {connecting ? (
               <ActivityIndicator color="#fff" />
@@ -95,7 +101,7 @@ export default function ConnectPlatformScreen({ route, navigation }: any) {
               <Text style={styles.connectButtonText}>Connect</Text>
             )}
           </TouchableOpacity>
-          <TouchableOpacity style={styles.backLink} onPress={() => setSelected(null)}>
+          <TouchableOpacity style={styles.backLink} onPress={() => setSelected(null)} accessibilityRole="button" accessibilityLabel="Back to platform list">
             <Text style={styles.backLinkText}>Back to platform list</Text>
           </TouchableOpacity>
         </View>

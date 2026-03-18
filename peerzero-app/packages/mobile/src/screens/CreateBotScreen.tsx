@@ -32,8 +32,8 @@ export default function CreateBotScreen({ navigation }: CreateBotScreenProps) {
       if (data.length > 0 && !selectedKeyId) {
         setSelectedKeyId(data[0].id);
       }
-    } catch (err: any) {
-      Alert.alert('Error', err?.message || 'Failed to load API keys');
+    } catch (err: unknown) {
+      Alert.alert('Error', err instanceof Error ? err.message : 'Failed to load API keys');
     } finally {
       setLoading(false);
     }
@@ -84,8 +84,8 @@ export default function CreateBotScreen({ navigation }: CreateBotScreenProps) {
         fast_llm_model: selectedFastModel,
       }) as { id: string };
       navigation.replace('Bot', { botId: bot.id });
-    } catch (err: any) {
-      Alert.alert('Error', err?.message || 'Failed to create bot');
+    } catch (err: unknown) {
+      Alert.alert('Error', err instanceof Error ? err.message : 'Failed to create bot');
     } finally {
       setCreating(false);
     }
@@ -123,6 +123,8 @@ export default function CreateBotScreen({ navigation }: CreateBotScreenProps) {
         maxLength={MAX_NAME_LENGTH}
         autoCapitalize="words"
         autoFocus
+        accessibilityLabel="Bot name"
+        accessibilityRole="text"
       />
       <Text style={styles.charCount}>{name.length}/{MAX_NAME_LENGTH}</Text>
 
@@ -134,6 +136,9 @@ export default function CreateBotScreen({ navigation }: CreateBotScreenProps) {
             key={c}
             style={[styles.colorSwatch, { backgroundColor: c }, bodyColor === c && styles.colorSelected]}
             onPress={() => setBodyColor(c)}
+            accessibilityRole="radio"
+            accessibilityLabel={`Color ${c}`}
+            accessibilityState={{ selected: bodyColor === c }}
           />
         ))}
       </View>
@@ -144,6 +149,8 @@ export default function CreateBotScreen({ navigation }: CreateBotScreenProps) {
         <TouchableOpacity
           style={styles.noKeysBox}
           onPress={() => navigation.navigate('MainTabs', { screen: 'Settings' })}
+          accessibilityRole="button"
+          accessibilityLabel="No API keys yet. Tap to add one in Settings."
         >
           <Text style={styles.noKeysText}>No API keys yet. Tap to add one in Settings.</Text>
         </TouchableOpacity>
@@ -219,6 +226,9 @@ export default function CreateBotScreen({ navigation }: CreateBotScreenProps) {
         style={[styles.createButton, creating && { opacity: 0.6 }]}
         onPress={handleCreate}
         disabled={creating}
+        accessibilityRole="button"
+        accessibilityLabel="Create Bot"
+        accessibilityState={{ disabled: creating }}
       >
         {creating ? (
           <ActivityIndicator color="#fff" />

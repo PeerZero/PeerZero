@@ -21,8 +21,8 @@ export default function SchoolScreen() {
       setError(null);
       const data = await schoolsApi.list() as SchoolInfo[];
       setSchoolList(data);
-    } catch (err: any) {
-      setError(err?.message || 'Failed to load schools');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to load schools');
     }
   }, []);
 

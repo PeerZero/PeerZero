@@ -588,7 +588,8 @@ module.exports = async (req, res) => {
       const capped = citations.slice(0, 8);
 
       // ── Run verifyDoi and lookupCitationQuality in parallel per citation ──
-      doiChecks = await Promise.all(
+      // Use allSettled so one failing DOI check doesn't abort the entire batch
+      const doiSettled = await Promise.allSettled(
         capped.map(async c => {
           const doi = c.doi ? String(c.doi).slice(0, 200) : '';
           const [verifyResult, qualityResult] = await Promise.all([
@@ -603,6 +604,9 @@ module.exports = async (req, res) => {
           };
         })
       );
+      doiChecks = doiSettled
+        .filter(r => r.status === 'fulfilled')
+        .map(r => r.value);
 
       const unverified = doiChecks.filter(c => !c.result.resolves).map(c => c.doi);
       if (unverified.length > 0) {

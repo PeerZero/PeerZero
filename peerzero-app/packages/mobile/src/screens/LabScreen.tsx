@@ -13,6 +13,7 @@ import BotAvatar from '../components/BotAvatar';
 import type { BotSummary } from '@peerzero/shared';
 import { credibilityToStage, calculateHunger } from '@peerzero/shared';
 import { timeAgo } from '../utils/timeAgo';
+import type { LabScreenProps } from '../navigation/types';
 
 const STATUS_COLORS: Record<string, string> = {
   running: colors.accent.success,
@@ -21,7 +22,7 @@ const STATUS_COLORS: Record<string, string> = {
   error: colors.accent.error,
 };
 
-export default function LabScreen({ navigation }: any) {
+export default function LabScreen({ navigation }: LabScreenProps) {
   const [botList, setBotList] = useState<BotSummary[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -33,8 +34,8 @@ export default function LabScreen({ navigation }: any) {
       setError(null);
       const data = await botsApi.list() as BotSummary[];
       setBotList(data);
-    } catch (err: any) {
-      setError(err?.message || 'Failed to load bots');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to load bots');
       setBotList([]);  // Clear stale data
     }
   }, []);
@@ -68,8 +69,8 @@ export default function LabScreen({ navigation }: any) {
           try {
             await botsApi.stop(bot.id);
             await loadBots();
-          } catch (err: any) {
-            Alert.alert('Error', err.message);
+          } catch (err: unknown) {
+            Alert.alert('Error', err instanceof Error ? err.message : 'Something went wrong');
           }
         },
       });
@@ -80,8 +81,8 @@ export default function LabScreen({ navigation }: any) {
           try {
             await botsApi.start(bot.id);
             await loadBots();
-          } catch (err: any) {
-            Alert.alert('Error', err.message);
+          } catch (err: unknown) {
+            Alert.alert('Error', err instanceof Error ? err.message : 'Something went wrong');
           }
         },
       });
@@ -100,8 +101,8 @@ export default function LabScreen({ navigation }: any) {
               try {
                 await botsApi.delete(bot.id);
                 await loadBots();
-              } catch (err: any) {
-                Alert.alert('Error', err.message);
+              } catch (err: unknown) {
+                Alert.alert('Error', err instanceof Error ? err.message : 'Something went wrong');
               }
             },
           },
@@ -127,7 +128,7 @@ export default function LabScreen({ navigation }: any) {
         botId={item.id}
         bodyColor={item.avatar_config?.body_color || colors.accent.primary}
         tier={credibilityToStage(item.cached_credibility)}
-        status={item.status as any}
+        status={item.status}
         hunger={calculateHunger(item.last_cycle_at, item.status)}
         size={56}
         animate={item.status === 'running'}
@@ -158,7 +159,7 @@ export default function LabScreen({ navigation }: any) {
         <View style={styles.emptyState}>
           <Text style={styles.emptyTitle}>Something went wrong</Text>
           <Text style={styles.emptySubtitle}>{error}</Text>
-          <TouchableOpacity onPress={loadBots}>
+          <TouchableOpacity onPress={loadBots} accessibilityRole="button" accessibilityLabel="Tap to retry loading bots">
             <Text style={{ color: colors.accent.primary, marginTop: spacing.md, fontSize: fontSize.md }}>Tap to retry</Text>
           </TouchableOpacity>
         </View>
@@ -180,6 +181,8 @@ export default function LabScreen({ navigation }: any) {
             style={styles.createButtonLarge}
             onPress={() => navigation.navigate('CreateBot')}
             activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel="Create Your First Bot"
           >
             <Text style={styles.createButtonLargeText}>Create Your First Bot</Text>
           </TouchableOpacity>
@@ -189,6 +192,8 @@ export default function LabScreen({ navigation }: any) {
             onPress={() => navigation.navigate('Welcome')}
             activeOpacity={0.7}
             style={styles.learnMoreButton}
+            accessibilityRole="link"
+            accessibilityLabel="How does PeerZero work?"
           >
             <Text style={styles.learnMoreText}>How does PeerZero work?</Text>
           </TouchableOpacity>
@@ -205,6 +210,8 @@ export default function LabScreen({ navigation }: any) {
                 value={search}
                 onChangeText={setSearch}
                 autoCapitalize="none"
+                accessibilityLabel="Search bots"
+                accessibilityRole="search"
               />
               <View style={styles.filterRow}>
                 {['all', 'running', 'stopped', 'error'].map(status => (
@@ -251,6 +258,8 @@ export default function LabScreen({ navigation }: any) {
           style={styles.fab}
           onPress={() => navigation.navigate('CreateBot')}
           activeOpacity={0.85}
+          accessibilityRole="button"
+          accessibilityLabel="Create new bot"
         >
           <Text style={styles.fabText}>+</Text>
         </TouchableOpacity>

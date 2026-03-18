@@ -9,7 +9,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { ActivityIndicator, View, Text, Platform } from 'react-native';
 import { useAuth } from '../hooks/useAuth';
 import { colors } from '../theme/colors';
-import type { RootStackParamList } from '../navigation/types';
+import type { RootStackParamList, WelcomeScreenWrapperProps } from '../navigation/types';
 
 // Use JS-based stack navigator on web (native-stack doesn't render on web)
 const createStack = Platform.OS === 'web'
@@ -118,7 +118,7 @@ function MainTabs() {
 }
 
 // Wrapper to provide navigation callback to WelcomeScreen
-function WelcomeScreenWrapper({ navigation }: any) {
+function WelcomeScreenWrapper({ navigation }: WelcomeScreenWrapperProps) {
   return <WelcomeScreen onComplete={() => navigation.replace('MainTabs')} />;
 }
 
