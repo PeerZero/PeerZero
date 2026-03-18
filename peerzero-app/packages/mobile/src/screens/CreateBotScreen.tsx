@@ -3,7 +3,7 @@
 // =============================================================================
 
 import React, { useState, useCallback } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Alert, ActivityIndicator, Keyboard, Platform, KeyboardAvoidingView } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Alert, ActivityIndicator, Keyboard, Platform, KeyboardAvoidingView, Switch } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { bots as botsApi, apiKeys as keysApi } from '../services/api';
 import { colors } from '../theme/colors';
@@ -21,6 +21,7 @@ export default function CreateBotScreen({ navigation }: CreateBotScreenProps) {
   const [keys, setKeys] = useState<ApiKeyInfo[]>([]);
   const [selectedKeyId, setSelectedKeyId] = useState<string | null>(null);
   const [selectedModel, setSelectedModel] = useState('claude-opus-4-6');
+  const [extendedThinking, setExtendedThinking] = useState(false);
   const [creating, setCreating] = useState(false);
   const [loading, setLoading] = useState(true);
 
@@ -79,6 +80,7 @@ export default function CreateBotScreen({ navigation }: CreateBotScreenProps) {
         avatar_config: { body_color: bodyColor, face_style: 'default' },
         llm_api_key_id: selectedKeyId,
         llm_model: finalModel,
+        extended_thinking: extendedThinking,
       }) as { id: string };
       navigation.replace('Bot', { botId: bot.id });
     } catch (err: unknown) {
@@ -196,6 +198,23 @@ export default function CreateBotScreen({ navigation }: CreateBotScreenProps) {
         Utility tasks like platform replies and skill generation automatically use a lighter model to save on API costs.
       </Text>
 
+      {/* Extended Thinking toggle */}
+      <View style={styles.thinkingRow}>
+        <View style={styles.thinkingLabel}>
+          <Text style={styles.label}>Extended Thinking</Text>
+          <Text style={styles.modelHint}>
+            Gives your bot more time to reason through hard problems. Better results, but uses more tokens.
+          </Text>
+        </View>
+        <Switch
+          value={extendedThinking}
+          onValueChange={setExtendedThinking}
+          trackColor={{ false: colors.bg.elevated, true: colors.accent.primary + '60' }}
+          thumbColor={extendedThinking ? colors.accent.primary : colors.text.tertiary}
+          accessibilityLabel="Enable extended thinking"
+        />
+      </View>
+
       {/* Create button */}
       <TouchableOpacity
         style={[styles.createButton, creating && { opacity: 0.6 }]}
@@ -263,6 +282,11 @@ const styles = StyleSheet.create({
   modelPillSelected: { backgroundColor: colors.accent.primary, borderColor: colors.accent.primary },
   modelText: { fontSize: fontSize.sm, color: colors.text.secondary },
   modelTextSelected: { color: '#fff', fontWeight: '600' },
+  thinkingRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    width: '100%', marginTop: spacing.md, marginBottom: spacing.sm,
+  },
+  thinkingLabel: { flex: 1, marginRight: spacing.md },
   createButton: {
     width: '100%', backgroundColor: colors.accent.primary, padding: spacing.md,
     borderRadius: borderRadius.md, alignItems: 'center', marginTop: spacing.xl,
