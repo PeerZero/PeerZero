@@ -38,6 +38,7 @@ export interface AvatarProps {
   hunger?: 'satisfied' | 'curious' | 'yearning' | 'starving';
   size?: number;       // render size in px (default 120)
   animate?: boolean;   // enable idle animations (default true)
+  speciesSeed?: string; // override botId for trait generation (species_seed from avatar_config)
 }
 
 // ── Seed-based deterministic RNG from bot ID ──
@@ -725,8 +726,9 @@ export default function BotAvatar({
   hunger = 'satisfied',
   size = 120,
   animate = true,
+  speciesSeed,
 }: AvatarProps) {
-  const traits = generateTraits(botId);
+  const traits = generateTraits(speciesSeed || botId);
   const color = bodyColor || '#6C5CE7';
   const clampedTier = Math.max(0, Math.min(5, tier));
 

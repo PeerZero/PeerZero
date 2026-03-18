@@ -189,6 +189,7 @@ export default function BotScreen({ route, navigation }: BotScreenProps) {
         status={bot.status}
         hunger={calculateHunger(bot.last_cycle_at, bot.status)}
         size={140}
+        speciesSeed={bot.avatar_config?.species_seed}
       />
 
       <Text style={styles.botName}>{bot.name}</Text>

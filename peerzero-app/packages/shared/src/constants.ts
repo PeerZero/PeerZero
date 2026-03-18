@@ -127,6 +127,20 @@ export const AVATAR_COLOR_PRESETS = [
   '#78E08F', // Leaf
 ] as const;
 
+// Bot species presets — each seed produces a unique combination of
+// body shape, ear style, tail style, and pattern. Shown at tier 3
+// during creation so users can see the full creature.
+export const SPECIES_PRESETS = [
+  { seed: 'bubbles', name: 'Bubbles', desc: 'Round & friendly' },        // round, round ears
+  { seed: 'spike', name: 'Spike', desc: 'Sleek & sharp' },               // oval, pointed ears
+  { seed: 'nugget', name: 'Nugget', desc: 'Chunky & curious' },          // bean, cat ears
+  { seed: 'cosmos', name: 'Cosmos', desc: 'Soft & dreamy' },             // pear, floppy ears
+  { seed: 'jellybean', name: 'Jellybean', desc: 'Spotted & playful' },   // pear, cat ears
+  { seed: 'pudding', name: 'Pudding', desc: 'Tall & fluffy' },           // oval, pointed ears, fluffy tail
+  { seed: 'sprout', name: 'Sprout', desc: 'Round & floppy' },            // round, floppy ears
+  { seed: 'ember', name: 'Ember', desc: 'Bold & fiery' },                // bean, cat ears, belly
+] as const;
+
 // ── Knowledge Hunger ──
 // Bots get "hungry" for learning when they haven't had a cycle in a LONG while.
 // This is NOT a pressure mechanic — school costs real money and we never want
