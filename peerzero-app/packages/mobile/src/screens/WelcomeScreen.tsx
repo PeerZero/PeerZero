@@ -108,7 +108,7 @@ export default function WelcomeScreen({ onComplete }: WelcomeScreenProps) {
   return (
     <View style={styles.container}>
       {/* Skip button */}
-      <TouchableOpacity style={styles.skipButton} onPress={handleSkip} activeOpacity={0.7}>
+      <TouchableOpacity style={styles.skipButton} onPress={handleSkip} activeOpacity={0.7} accessibilityRole="button" accessibilityLabel="Skip onboarding">
         <Text style={styles.skipText}>Skip</Text>
       </TouchableOpacity>
 
@@ -156,6 +156,8 @@ export default function WelcomeScreen({ onComplete }: WelcomeScreenProps) {
           style={styles.nextButton}
           onPress={handleNext}
           activeOpacity={0.8}
+          accessibilityRole="button"
+          accessibilityLabel={currentStep === STEPS.length - 1 ? "Let's Go!" : 'Next'}
         >
           <Text style={styles.nextButtonText}>
             {currentStep === STEPS.length - 1 ? "Let's Go!" : 'Next'}

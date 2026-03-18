@@ -356,7 +356,8 @@ module.exports = async (req, res) => {
     if (citations && citations.length > 0) {
       const sliced = citations.slice(0, 8);
 
-      const doiChecks = await Promise.all(
+      // Use allSettled so one failing DOI check doesn't abort the entire batch
+      const doiSettled = await Promise.allSettled(
         sliced.map(async (c) => {
           const doi = c.doi ? String(c.doi).slice(0, 200) : '';
           const [verifyResult, qualityResult] = await Promise.all([
@@ -366,6 +367,9 @@ module.exports = async (req, res) => {
           return { citation: c, doi, result: verifyResult, quality: qualityResult };
         })
       );
+      const doiChecks = doiSettled
+        .filter(r => r.status === 'fulfilled')
+        .map(r => r.value);
 
       const unverified = doiChecks.filter(c => !c.result.resolves).map(c => c.doi);
       if (unverified.length > 0) {

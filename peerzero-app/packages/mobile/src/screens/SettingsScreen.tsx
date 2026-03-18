@@ -262,16 +262,18 @@ export default function SettingsScreen() {
                 placeholderTextColor={colors.text.tertiary}
                 maxLength={100}
                 autoFocus
+                accessibilityLabel="Display name"
+                accessibilityRole="text"
               />
-              <TouchableOpacity onPress={handleSaveDisplayName}>
+              <TouchableOpacity onPress={handleSaveDisplayName} accessibilityRole="button" accessibilityLabel="Save display name">
                 <Text style={styles.saveText}>Save</Text>
               </TouchableOpacity>
-              <TouchableOpacity onPress={() => { setEditingName(false); setDisplayName(user?.display_name || ''); }}>
+              <TouchableOpacity onPress={() => { setEditingName(false); setDisplayName(user?.display_name || ''); }} accessibilityRole="button" accessibilityLabel="Cancel editing">
                 <Text style={styles.cancelText}>Cancel</Text>
               </TouchableOpacity>
             </View>
           ) : (
-            <TouchableOpacity style={styles.editNameRow} onPress={() => setEditingName(true)}>
+            <TouchableOpacity style={styles.editNameRow} onPress={() => setEditingName(true)} accessibilityRole="button" accessibilityLabel={`Edit display name, currently ${user?.display_name || 'not set'}`}>
               <Text style={styles.displayName}>{user?.display_name || 'No display name'}</Text>
               <Text style={styles.editText}>Edit</Text>
             </TouchableOpacity>
@@ -290,7 +292,7 @@ export default function SettingsScreen() {
             <Text style={styles.sectionIcon}>🔒</Text>
             <Text style={styles.sectionTitle}>Security</Text>
           </View>
-          <TouchableOpacity onPress={() => setShowPasswordChange(!showPasswordChange)}>
+          <TouchableOpacity onPress={() => setShowPasswordChange(!showPasswordChange)} accessibilityRole="button" accessibilityLabel={showPasswordChange ? 'Cancel password change' : 'Change Password'}>
             <Text style={styles.addButton}>{showPasswordChange ? 'Cancel' : 'Change Password'}</Text>
           </TouchableOpacity>
         </View>
@@ -304,6 +306,8 @@ export default function SettingsScreen() {
               value={currentPassword}
               onChangeText={setCurrentPassword}
               secureTextEntry
+              accessibilityLabel="Current password"
+              accessibilityRole="text"
             />
             <TextInput
               style={styles.input}
@@ -312,6 +316,8 @@ export default function SettingsScreen() {
               value={newPassword}
               onChangeText={setNewPassword}
               secureTextEntry
+              accessibilityLabel="New password, minimum 8 characters"
+              accessibilityRole="text"
             />
             <TextInput
               style={styles.input}
@@ -320,8 +326,10 @@ export default function SettingsScreen() {
               value={confirmPassword}
               onChangeText={setConfirmPassword}
               secureTextEntry
+              accessibilityLabel="Confirm new password"
+              accessibilityRole="text"
             />
-            <TouchableOpacity style={styles.saveButton} onPress={handleChangePassword}>
+            <TouchableOpacity style={styles.saveButton} onPress={handleChangePassword} accessibilityRole="button" accessibilityLabel="Change Password">
               <Text style={styles.saveButtonText}>Change Password</Text>
             </TouchableOpacity>
           </View>
@@ -335,7 +343,7 @@ export default function SettingsScreen() {
             <Text style={styles.sectionIcon}>🔑</Text>
             <Text style={styles.sectionTitle}>API Keys (BYOK)</Text>
           </View>
-          <TouchableOpacity onPress={() => setShowAddKey(!showAddKey)}>
+          <TouchableOpacity onPress={() => setShowAddKey(!showAddKey)} accessibilityRole="button" accessibilityLabel={showAddKey ? 'Cancel adding key' : 'Add API Key'}>
             <Text style={styles.addButton}>{showAddKey ? 'Cancel' : '+ Add Key'}</Text>
           </TouchableOpacity>
         </View>
