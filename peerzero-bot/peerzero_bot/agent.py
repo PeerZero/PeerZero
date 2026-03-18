@@ -571,11 +571,12 @@ class PeerZeroBot:
             result = self._do_review(system_prompt, profile)
 
         # Step 4: Store exercises + process memory
+        grade = profile.get("agent", {}).get("grade", 1) if isinstance(profile.get("agent"), dict) else profile.get("grade", 1)
         if result and isinstance(result, dict):
             if result.get("skill_exercises"):
                 self.memory.store_school_exercises(result["skill_exercises"])
             if result.get("memory_prompts"):
-                self._process_inline_memory_prompts(result["memory_prompts"], system_prompt)
+                self._process_inline_memory_prompts(result["memory_prompts"], system_prompt, grade)
 
         self._process_memory_triggers(profile)
         self.school.validate_bounties()
@@ -773,22 +774,29 @@ class PeerZeroBot:
 
     # ── Memory processing ─────────────────────────────────────────────────
 
-    def _process_inline_memory_prompts(self, memory_prompts: dict, system_prompt: str):
+    def _process_inline_memory_prompts(self, memory_prompts: dict, system_prompt: str, grade: int = 1):
         if not memory_prompts:
             return
         if memory_prompts.get("skill_condenser"):
             self._run_milestone_condenser(memory_prompts["skill_condenser"], system_prompt)
         if memory_prompts.get("identity_reflection"):
             self._run_identity_reflection(memory_prompts["identity_reflection"], system_prompt)
+            self._run_private_block(system_prompt, grade)
 
     def _process_memory_triggers(self, profile: dict):
         system_prompt = self.prompts.build_school_system_prompt()
+        grade = profile.get("agent", {}).get("grade", 1) if isinstance(profile.get("agent"), dict) else profile.get("grade", 1)
+
         if profile.get("skill_condenser"):
             self._run_milestone_condenser(profile["skill_condenser"], system_prompt)
-        if profile.get("core_condenser"):
+        if profile.get("master_condenser"):
+            self._run_master_condenser(profile["master_condenser"], system_prompt, grade)
+        elif profile.get("core_condenser"):
             self._run_core_condenser(profile["core_condenser"], system_prompt)
+            self._run_private_block(system_prompt, grade)
         if profile.get("identity_reflection"):
             self._run_identity_reflection(profile["identity_reflection"], system_prompt)
+            self._run_private_block(system_prompt, grade)
 
     def _run_milestone_condenser(self, condenser: dict, system_prompt: str):
         logger.info("[MEMORY] Milestone condenser triggered")
@@ -832,6 +840,64 @@ class PeerZeroBot:
                 logger.info("[MEMORY] Self-authored identity updated")
             except Exception as e:
                 logger.warning(f"[MEMORY] Server backup failed: {e}")
+
+    def _run_private_block(self, system_prompt: str, grade: int = 1):
+        """
+        Ask the bot to write a private reflection block for itself.
+
+        This block is injected at the top of every future prompt with:
+        "You wrote this for yourself. Inhabit it."
+
+        Triggered after core condensation and identity reflection — the
+        moments where the bot's sense of self has just shifted.
+        """
+        logger.info("[MEMORY] Private block triggered")
+        user_msg = self.prompts.build_private_block_prompt(grade)
+
+        # Use fresh system prompt so the bot sees its just-updated identity
+        fresh_system = self.prompts.build_school_system_prompt()
+        block = self.llm_fast.call(fresh_system, user_msg)
+
+        if block and len(block.strip()) >= 30:
+            self.memory._archive_private_block()
+            self.memory.store_private_block(block.strip())
+            logger.info("[MEMORY] Private block written")
+        else:
+            logger.warning("[MEMORY] Private block too short or empty — skipped")
+
+    def _run_master_condenser(self, condenser: dict, system_prompt: str, grade: int):
+        """
+        Grade 12 graduation condensation.
+
+        The bot distills ALL skill paragraphs into a permanent master identity.
+        After this, skill paragraphs are archived — they've been absorbed into
+        the master core. Raw exercises are also cleared since they fed the
+        paragraphs that are now absorbed.
+        """
+        logger.info("[MEMORY] Master condenser triggered (Grade 12 graduation)")
+        paragraphs = self.memory.get_identity_paragraphs()
+        if not paragraphs:
+            logger.warning("[MEMORY] No paragraphs to condense for master — skipping")
+            return
+
+        user_msg = self.prompts.build_master_condenser_prompt(condenser, paragraphs)
+        master_identity = self.llm.call(system_prompt, user_msg)  # Use strong model for graduation
+
+        if master_identity and len(master_identity.strip()) >= 200:
+            # Store as the new core identity (replaces the old one)
+            self.memory.store_core_identity(master_identity.strip())
+            # Archive paragraphs — they've been absorbed into the master
+            self.memory.clear_identity_paragraphs()
+            # Clear exercises — they fed the paragraphs that are now absorbed
+            self.memory.clear_school_exercises()
+            logger.info(
+                f"[MEMORY] Master identity written ({len(master_identity)} chars). "
+                f"Archived {len(paragraphs)} paragraphs."
+            )
+            # Write a private block from this new vantage point
+            self._run_private_block(system_prompt, grade)
+        else:
+            logger.warning("[MEMORY] Master identity too short — skipping")
 
     # ═══════════════════════════════════════════════════════════════════════
     # PLATFORM CYCLES (secondary — applying skills)

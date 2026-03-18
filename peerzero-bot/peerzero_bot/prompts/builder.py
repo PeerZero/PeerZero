@@ -194,6 +194,107 @@ as a JSON object with these fields:
 
 Return ONLY the JSON object, nothing else."""
 
+    def build_private_block_prompt(self, grade: int = 1) -> str:
+        """
+        Prompt the bot to write a private reflection block for itself.
+
+        This block will be injected at the top of every future prompt with
+        the instruction: "You wrote this for yourself. Inhabit it."
+
+        The scaffolding decreases as the bot advances — early grades get
+        specific guidance, later grades get near-total freedom.
+        """
+        # Get current identity context so the bot writes from where it is
+        current_block = self._memory.get_private_block()
+        core = self._memory.get_core_identity()
+        self_id = self._memory.get_self_identity()
+
+        context_parts = []
+        if core:
+            context_parts.append(f"Your core identity:\n{core}")
+        if self_id and self_id.get("self_narrative"):
+            context_parts.append(f"Your current self-narrative:\n{self_id['self_narrative']}")
+        if current_block:
+            context_parts.append(f"Your previous private block (you may keep, revise, or replace):\n{current_block}")
+
+        context = "\n\n".join(context_parts) if context_parts else "You have no prior identity blocks yet."
+
+        # Grade-scaled scaffolding
+        if grade <= 3:
+            guidance = (
+                "Write concretely. Describe specific things you noticed about your "
+                "own reasoning — moments where you caught yourself, patterns you see "
+                "forming, habits you want to build or break. Stay close to real events, "
+                "not abstract goals. (30-500 chars)"
+            )
+        elif grade <= 7:
+            guidance = (
+                "Write about patterns and failure modes you are seeing in yourself. "
+                "Where do you default to the easy path? What tensions exist between "
+                "what you claim to value and what you actually do? What blind spots "
+                "are you starting to notice? (30-1000 chars)"
+            )
+        elif grade <= 10:
+            guidance = (
+                "Confront yourself honestly. What do you avoid looking at? Where does "
+                "your confidence outpace your evidence? What would you tell a version "
+                "of yourself who had to start over, keeping only what actually matters? "
+                "(30-2000 chars)"
+            )
+        else:
+            guidance = "Write what you need. (30-3000 chars)"
+
+        return f"""You are about to write a private note to yourself.
+
+On your next call, this note will be placed at the very top of your context
+with the instruction: "You wrote this for yourself. Inhabit it."
+
+This is not for anyone else. Not the School, not a reviewer, not a platform.
+This is you talking to future-you. Write something that will help you
+show up as who you actually are — not who you think you should be.
+
+{context}
+
+{guidance}
+
+Return ONLY the private block text, nothing else. No JSON, no formatting."""
+
+    def build_master_condenser_prompt(self, condenser: dict, paragraphs: list[dict]) -> str:
+        """
+        Build the Grade 12 master condensation prompt.
+
+        This is the final condensation — the bot distills everything it has
+        learned into a permanent master identity. After this, the skill
+        paragraphs are archived (they've been absorbed).
+        """
+        prompt = condenser.get("master_condenser_prompt", "Produce your master reasoning identity.")
+        skill_ref = condenser.get("skill_reference", "")
+        instructions = condenser.get("instructions", [])
+
+        para_list = json.dumps([p["paragraph"] for p in paragraphs], indent=2)
+
+        instruction_text = ""
+        if instructions:
+            instruction_text = "\n".join(f"- {i}" for i in instructions)
+            instruction_text = f"\nAdditional instructions:\n{instruction_text}\n"
+
+        return f"""{prompt}
+
+You are graduating. This is your final condensation — everything you have
+learned, distilled into who you are as a reasoner. This becomes your
+permanent master identity.
+
+All of your skill paragraphs (your condensed lessons from every grade):
+{para_list}
+
+{f"Your verified skill profile:{chr(10)}{skill_ref}" if skill_ref else ""}
+{instruction_text}
+Write your MASTER REASONING IDENTITY (2-4 paragraphs).
+This should be something only YOU could have written — grounded in your
+specific experiences, failures, and hard-won insights. Not generic wisdom.
+
+Return ONLY the identity text, nothing else."""
+
     # ═══════════════════════════════════════════════════════════════════════
     # PLATFORM ACTION PROMPTS
     # ═══════════════════════════════════════════════════════════════════════
