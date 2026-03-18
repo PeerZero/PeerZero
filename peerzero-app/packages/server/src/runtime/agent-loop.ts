@@ -254,19 +254,17 @@ async function handleCondensation(
   const llmAdapter = getLLMAdapter();
   const schoolAdapter = getSchoolAdapter();
 
-  // Skill condensation is summarization — fast model is fine.
-  // Core condensation, identity reflection, and self-authoring are identity
-  // formation — they shape all downstream behavior, so use the strong model.
-  const fastModel = ctx.fastLlmModel || ctx.llmModel;
-  const identityModel = ctx.llmModel;
+  // All condensation, identity, and self-authoring tasks use the primary model —
+  // every step in the reasoning pipeline matters for downstream quality.
+  const utilityModel = ctx.llmModel;
 
   // Track which condensation occurred so we can trigger self-authoring after
   let condensationOccurred: string | null = null;
 
   if (profile.skill_condenser) {
-    // Ask LLM to condense exercises into a Tier 2 paragraph (summarization — fast model OK)
+    // Ask LLM to condense exercises into a Tier 2 paragraph
     const condensationPrompt = buildPrompt('condense', { profile, type: 'skill' });
-    const response = await llmAdapter.chat(llmKey, fastModel, condensationPrompt);
+    const response = await llmAdapter.chat(llmKey, utilityModel, condensationPrompt);
 
     const parsed = tryParseJson(response.content);
     if (parsed?.paragraph) {
@@ -278,10 +276,10 @@ async function handleCondensation(
     }
   }
 
-  // Core condensation (Tier 3) happens less frequently — identity formation, use strong model
+  // Core condensation (Tier 3) happens less frequently
   if (profile.core_condenser) {
     const corePrompt = buildPrompt('condense', { profile, type: 'core' });
-    const response = await llmAdapter.chat(llmKey, identityModel, corePrompt);
+    const response = await llmAdapter.chat(llmKey, utilityModel, corePrompt);
 
     const parsed = tryParseJson(response.content);
     if (parsed?.core_identity) {
@@ -293,10 +291,10 @@ async function handleCondensation(
     }
   }
 
-  // Identity reflection — deep self-understanding, use strong model
+  // Identity reflection
   if (profile.identity_reflection) {
     const identityPrompt = buildPrompt('identity', { profile });
-    const response = await llmAdapter.chat(llmKey, identityModel, identityPrompt);
+    const response = await llmAdapter.chat(llmKey, utilityModel, identityPrompt);
 
     const parsed = tryParseJson(response.content);
     if (parsed?.self_narrative) {
@@ -316,7 +314,6 @@ async function handleCondensation(
   }
 
   // Self-authoring — after any condensation, the LLM writes an identity block for itself
-  // This shapes all future prompts, so use the strong model
   if (condensationOccurred) {
     try {
       // Load existing self-authored block so the LLM can see what it wrote last time
@@ -326,7 +323,7 @@ async function handleCondensation(
         selfAuthoredBlock: existingBlock,
         condensationType: condensationOccurred,
       });
-      const response = await llmAdapter.chat(llmKey, identityModel, selfAuthorPrompt);
+      const response = await llmAdapter.chat(llmKey, utilityModel, selfAuthorPrompt);
       const parsed = tryParseJson(response.content);
 
       if (parsed?.self_authored_block) {
