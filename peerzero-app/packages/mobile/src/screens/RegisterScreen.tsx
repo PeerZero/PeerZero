@@ -5,7 +5,7 @@
 import React, { useState, useRef } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet, Alert,
-  KeyboardAvoidingView, ScrollView, TouchableWithoutFeedback, Keyboard, Platform,
+  KeyboardAvoidingView, ScrollView, Platform,
   ActivityIndicator,
 } from 'react-native';
 import type { TextInput as TextInputType } from 'react-native';
@@ -55,10 +55,10 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
       style={styles.flex}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
         <ScrollView
           contentContainerStyle={styles.container}
-          keyboardShouldPersistTaps="handled"
+          keyboardShouldPersistTaps="always"
+          keyboardDismissMode="on-drag"
         >
           <View style={styles.hero}>
             <View style={styles.logoContainer}>
@@ -143,8 +143,9 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
           <TouchableOpacity onPress={() => navigation.goBack()} activeOpacity={0.7} accessibilityRole="link" accessibilityLabel="Already have an account? Sign In">
             <Text style={styles.link}>Already have an account? Sign In</Text>
           </TouchableOpacity>
+
+          <View style={styles.keyboardSpacer} />
         </ScrollView>
-      </TouchableWithoutFeedback>
     </KeyboardAvoidingView>
   );
 }
@@ -183,4 +184,5 @@ const styles = StyleSheet.create({
   buttonDisabled: { opacity: 0.7 },
   buttonText: { color: '#fff', fontSize: fontSize.lg, fontWeight: '600' },
   link: { color: colors.accent.secondary, textAlign: 'center', marginTop: spacing.lg, fontSize: fontSize.md },
+  keyboardSpacer: { height: 120 },
 });
