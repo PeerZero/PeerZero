@@ -68,7 +68,7 @@ export interface BotContext {
   userId: string;
   llmApiKeyId: string;
   llmModel: string;
-  fastLlmModel: string | null; // Optional fast model for utility tasks (condensation, identity)
+  fastLlmModel: string | null; // Optional fast model for utility tasks (platform replies, skill generation)
   extendedThinking: boolean;   // User opt-in for Claude extended thinking (higher cost, better reasoning)
   cycleNumber: number;
 }

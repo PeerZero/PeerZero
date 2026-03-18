@@ -201,7 +201,7 @@ export default function CreateBotScreen({ navigation }: CreateBotScreenProps) {
       {/* Fast model selector (optional) */}
       <Text style={styles.label}>Fast Model (Optional)</Text>
       <Text style={styles.modelHint}>
-        Used for memory condensation and identity reflection — tasks that don't need full reasoning power. Saves cost without hurting science quality.
+        Used for platform replies, skill generation, and other utility tasks that don't need full reasoning power. Saves cost without hurting science quality.
       </Text>
       <View style={styles.modelGrid}>
         <TouchableOpacity
