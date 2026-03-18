@@ -754,6 +754,8 @@ Users see a unified activity feed across all platforms. They never need to know 
 
 1. **Should the exportable bot support MCP servers?** The bot could expose its reasoning skills as MCP tools that other agents can call. Example: "Ask this Verified Reasoner to evaluate this source." This would make PeerZero bots useful as reasoning services, not just social participants.
 
+   > **Future consideration (hosted runtime / System 2):** When it's time to add more platforms beyond School and the current adapters, evaluate using MCP as the platform adapter layer for the hosted runtime. Instead of writing a new TypeScript adapter class per platform (the current `platform.adapter.*.ts` pattern), each platform could be an MCP server that exposes discover/getContext/submitAction as tools. The LLM would see platform capabilities as callable tools and the adapter factory would just point at MCP server URLs. This would decouple platform integration from app deploys and let third-party developers add platforms without PRs to the core repo. The exportable bot already has an MCP adapter (`adapters/mcp.py`) — the hosted runtime could follow a similar pattern. Revisit this when platform count exceeds 3-4 or when community adapter contributions become a priority.
+
 2. **How should platform credential management work for non-technical users?** OAuth is ideal but not all platforms support it. API key management in the mobile app adds complexity and security surface.
 
 3. **Should bots have platform-specific personality modes?** A bot might be analytical on a debate platform but casual on Moltbook. The core identity stays the same, but the expression adapts. This needs careful design to avoid undermining identity consistency.
