@@ -62,8 +62,8 @@ export default function SettingsScreen() {
     try {
       const data = await keysApi.list() as ApiKeyInfo[];
       setKeys(data);
-    } catch (err: any) {
-      Alert.alert('Error', err?.message || 'Failed to load API keys');
+    } catch (err: unknown) {
+      Alert.alert('Error', err instanceof Error ? err.message : 'Failed to load API keys');
     }
   }, []);
 
@@ -88,8 +88,8 @@ export default function SettingsScreen() {
           ? 'Add the PeerZero widget from your home screen. Long-press your home screen and tap the + button.'
           : 'Add the PeerZero widget from your home screen, or enable the floating overlay in your system settings.',
       );
-    } catch (err: any) {
-      Alert.alert('Error', err?.message || 'Failed to enable widget');
+    } catch (err: unknown) {
+      Alert.alert('Error', err instanceof Error ? err.message : 'Failed to enable widget');
     }
   };
 
@@ -103,8 +103,8 @@ export default function SettingsScreen() {
             await widgetsApi.revokeToken();
             setWidgetToken(null);
             setWidgetEnabled(false);
-          } catch (err: any) {
-            Alert.alert('Error', err?.message || 'Failed to disable widget');
+          } catch (err: unknown) {
+            Alert.alert('Error', err instanceof Error ? err.message : 'Failed to disable widget');
           }
         },
       },
@@ -143,8 +143,8 @@ export default function SettingsScreen() {
       setNewLabel('');
       setShowAddKey(false);
       await loadKeys();
-    } catch (err: any) {
-      Alert.alert('Error', err?.message || 'Failed to add key');
+    } catch (err: unknown) {
+      Alert.alert('Error', err instanceof Error ? err.message : 'Failed to add key');
     }
   };
 
@@ -157,8 +157,8 @@ export default function SettingsScreen() {
           try {
             await keysApi.delete(id);
             await loadKeys();
-          } catch (err: any) {
-            Alert.alert('Error', err.message);
+          } catch (err: unknown) {
+            Alert.alert('Error', err instanceof Error ? err.message : 'Something went wrong');
           }
         },
       },
@@ -174,8 +174,8 @@ export default function SettingsScreen() {
       await authApi.updateProfile({ display_name: displayName.trim() });
       setEditingName(false);
       if (refreshUser) refreshUser();
-    } catch (err: any) {
-      Alert.alert('Error', err?.message || 'Failed to update profile');
+    } catch (err: unknown) {
+      Alert.alert('Error', err instanceof Error ? err.message : 'Failed to update profile');
     }
   };
 
@@ -200,8 +200,8 @@ export default function SettingsScreen() {
       setNewPassword('');
       setConfirmPassword('');
       logout();
-    } catch (err: any) {
-      Alert.alert('Error', err?.message || 'Failed to change password');
+    } catch (err: unknown) {
+      Alert.alert('Error', err instanceof Error ? err.message : 'Failed to change password');
     }
   };
 
@@ -226,8 +226,8 @@ export default function SettingsScreen() {
                     try {
                       await authApi.deleteAccount();
                       logout();
-                    } catch (err: any) {
-                      Alert.alert('Error', err?.message || 'Failed to delete account');
+                    } catch (err: unknown) {
+                      Alert.alert('Error', err instanceof Error ? err.message : 'Failed to delete account');
                     }
                   },
                 },

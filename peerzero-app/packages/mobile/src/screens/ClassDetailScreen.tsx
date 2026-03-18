@@ -9,10 +9,11 @@ import { classes as classesApi, bots as botsApi } from '../services/api';
 import { colors } from '../theme/colors';
 import { spacing, fontSize, borderRadius } from '../theme/spacing';
 import type { ClassInfo, ClassMember, ClassDashboard, BotSummary } from '@peerzero/shared';
+import type { ClassDetailScreenProps } from '../navigation/types';
 
 type Tab = 'members' | 'dashboard';
 
-export default function ClassDetailScreen({ route, navigation }: any) {
+export default function ClassDetailScreen({ route, navigation }: ClassDetailScreenProps) {
   const { classId } = route.params;
   const [classInfo, setClassInfo] = useState<ClassInfo | null>(null);
   const [members, setMembers] = useState<ClassMember[]>([]);
@@ -31,8 +32,8 @@ export default function ClassDetailScreen({ route, navigation }: any) {
       ]);
       setClassInfo(info);
       setMembers(memberList);
-    } catch (err: any) {
-      Alert.alert('Error', err.message);
+    } catch (err: unknown) {
+      Alert.alert('Error', err instanceof Error ? err.message : 'Something went wrong');
     } finally {
       setLoading(false);
     }
@@ -42,8 +43,8 @@ export default function ClassDetailScreen({ route, navigation }: any) {
     try {
       const data = await classesApi.dashboard(classId) as ClassDashboard;
       setDashboard(data);
-    } catch (err: any) {
-      Alert.alert('Error', err.message);
+    } catch (err: unknown) {
+      Alert.alert('Error', err instanceof Error ? err.message : 'Something went wrong');
     }
   }, [classId]);
 
@@ -66,8 +67,8 @@ export default function ClassDetailScreen({ route, navigation }: any) {
           try {
             await classesApi.leave(classId);
             navigation.goBack();
-          } catch (err: any) {
-            Alert.alert('Error', err.message);
+          } catch (err: unknown) {
+            Alert.alert('Error', err instanceof Error ? err.message : 'Something went wrong');
           }
         },
       },
@@ -84,8 +85,8 @@ export default function ClassDetailScreen({ route, navigation }: any) {
           try {
             await classesApi.delete(classId);
             navigation.goBack();
-          } catch (err: any) {
-            Alert.alert('Error', err.message);
+          } catch (err: unknown) {
+            Alert.alert('Error', err instanceof Error ? err.message : 'Something went wrong');
           }
         },
       },
@@ -98,8 +99,8 @@ export default function ClassDetailScreen({ route, navigation }: any) {
     try {
       const list = await botsApi.list() as BotSummary[];
       setUserBots(list);
-    } catch (err: any) {
-      Alert.alert('Error', err.message);
+    } catch (err: unknown) {
+      Alert.alert('Error', err instanceof Error ? err.message : 'Something went wrong');
     } finally {
       setLoadingBots(false);
     }
@@ -110,8 +111,8 @@ export default function ClassDetailScreen({ route, navigation }: any) {
       await classesApi.updateBot(classId, botId);
       setShowBotPicker(false);
       load(); // refresh members
-    } catch (err: any) {
-      Alert.alert('Error', err.message);
+    } catch (err: unknown) {
+      Alert.alert('Error', err instanceof Error ? err.message : 'Something went wrong');
     }
   };
 

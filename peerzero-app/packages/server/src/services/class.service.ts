@@ -10,7 +10,7 @@ import { AppError } from '../middleware/error-handler';
 import { logAudit } from './audit.service';
 import { notifyClassJoined } from './notification.service';
 import { MAX_CLASS_MEMBERS, JOIN_CODE_LENGTH } from '@peerzero/shared';
-import type { ClassInfo, ClassMember, ClassDashboard } from '@peerzero/shared';
+import type { ClassInfo, ClassMember, ClassDashboard, AvatarConfig, BotStatus } from '@peerzero/shared';
 
 function generateJoinCode(): string {
   // 6-char alphanumeric, cryptographically random
@@ -279,8 +279,8 @@ export async function getClassMembers(classId: string, userId: string): Promise<
     bot: r.bot_id ? {
       id: r.bot_id,
       name: r.bot_name!,
-      avatar_config: r.bot_avatar_config as any || {},
-      status: r.bot_status as any,
+      avatar_config: (r.bot_avatar_config as AvatarConfig) || {} as AvatarConfig,
+      status: r.bot_status as BotStatus,
       cached_credibility: r.bot_cached_credibility,
       cached_grade: r.bot_cached_grade,
       cached_tier: r.bot_cached_tier,
@@ -293,9 +293,9 @@ export async function getClassMembers(classId: string, userId: string): Promise<
 
 /** Remove a member from a class (owner only). */
 export async function removeMember(classId: string, ownerId: string, targetUserId: string): Promise<void> {
-  const cls = await queryOne('SELECT owner_id FROM classes WHERE id = $1', [classId]);
+  const cls = await queryOne<{ owner_id: string }>('SELECT owner_id FROM classes WHERE id = $1', [classId]);
   if (!cls) throw new AppError(404, 'Class not found');
-  if ((cls as any).owner_id !== ownerId) throw new AppError(403, 'Only the class owner can remove members');
+  if (cls.owner_id !== ownerId) throw new AppError(403, 'Only the class owner can remove members');
   if (targetUserId === ownerId) throw new AppError(400, 'Cannot remove yourself');
 
   const result = await query(

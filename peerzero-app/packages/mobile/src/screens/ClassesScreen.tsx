@@ -9,8 +9,9 @@ import { classes as classesApi } from '../services/api';
 import { colors } from '../theme/colors';
 import { spacing, fontSize, borderRadius } from '../theme/spacing';
 import type { ClassInfo } from '@peerzero/shared';
+import type { ClassesScreenProps } from '../navigation/types';
 
-export default function ClassesScreen({ navigation }: any) {
+export default function ClassesScreen({ navigation }: ClassesScreenProps) {
   const [classList, setClassList] = useState<ClassInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [showJoin, setShowJoin] = useState(false);
@@ -23,8 +24,8 @@ export default function ClassesScreen({ navigation }: any) {
     try {
       const data = await classesApi.list() as ClassInfo[];
       setClassList(data);
-    } catch (err: any) {
-      Alert.alert('Error', err.message);
+    } catch (err: unknown) {
+      Alert.alert('Error', err instanceof Error ? err.message : 'Something went wrong');
     } finally {
       setLoading(false);
     }
@@ -39,8 +40,8 @@ export default function ClassesScreen({ navigation }: any) {
       setShowJoin(false);
       setJoinCode('');
       await load();
-    } catch (err: any) {
-      Alert.alert('Error', err.message);
+    } catch (err: unknown) {
+      Alert.alert('Error', err instanceof Error ? err.message : 'Something went wrong');
     }
   };
 
@@ -55,8 +56,8 @@ export default function ClassesScreen({ navigation }: any) {
       setNewName('');
       setNewDesc('');
       await load();
-    } catch (err: any) {
-      Alert.alert('Error', err.message);
+    } catch (err: unknown) {
+      Alert.alert('Error', err instanceof Error ? err.message : 'Something went wrong');
     }
   };
 
