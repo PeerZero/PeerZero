@@ -31,6 +31,7 @@ import { broadcastExternalActivity } from '../websocket/activity-stream';
 import { getLatestSelfAuthored } from '../services/memory.service';
 import { resolveActiveSkills } from '../services/skill-engine.service';
 import { buildPlatformIdentityPrompt } from './prompt-builder';
+import { PLATFORM_ACTION_TOOL, PLATFORM_SKIP_TOOL } from './tool-schemas';
 import type { PlatformCredentials } from '../adapters/platform.adapter';
 import type { SchoolProfile } from '@peerzero/shared';
 
@@ -60,14 +61,16 @@ export async function runPlatformCycle(ctx: PlatformCycleContext): Promise<void>
   };
 
   try {
-    // 2. Load bot identity (self-authored + school-formed)
-    const [selfAuthoredBlock, cachedProfile] = await Promise.all([
+    // 2. Load bot identity (self-authored + school-formed) and extended_thinking preference
+    const [selfAuthoredBlock, botRow] = await Promise.all([
       getLatestSelfAuthored(ctx.botId),
-      queryOne<{ cached_profile: SchoolProfile | null }>(
-        'SELECT cached_profile FROM bots WHERE id = $1',
+      queryOne<{ cached_profile: SchoolProfile | null; extended_thinking: boolean }>(
+        'SELECT cached_profile, extended_thinking FROM bots WHERE id = $1',
         [ctx.botId],
       ),
     ]);
+    const cachedProfile = botRow;
+    const extendedThinking = botRow?.extended_thinking ?? false;
     const identityCore = cachedProfile?.cached_profile?.identity_core || null;
 
     // 3. Load active skills for this platform
@@ -95,22 +98,32 @@ export async function runPlatformCycle(ctx: PlatformCycleContext): Promise<void>
     const llmResponse = await llmAdapter.chat(llmKey, ctx.llmModel, [
       { role: 'system', content: systemPrompt },
       { role: 'user', content: actionPrompt },
-    ]);
+    ], { extendedThinking, tools: [PLATFORM_ACTION_TOOL, PLATFORM_SKIP_TOOL] });
 
-    // 5. Parse and submit action
-    let action;
-    try {
-      action = JSON.parse(llmResponse.content);
-    } catch {
-      logger.warn({ platform: platCreds.platformName }, 'Failed to parse LLM platform action response');
-      await updatePlatformCycleStatus(ctx.platformId, 'active');
-      return;
-    }
-
-    if (action.skip) {
-      logger.info({ platform: platCreds.platformName }, 'Bot chose to skip platform cycle');
-      await updatePlatformCycleStatus(ctx.platformId, 'active');
-      return;
+    // 5. Parse tool call or fall back to JSON content parsing
+    let action: Record<string, unknown>;
+    if (llmResponse.tool_calls?.length) {
+      const toolCall = llmResponse.tool_calls[0];
+      if (toolCall.name === 'platform_skip') {
+        logger.info({ platform: platCreds.platformName }, 'Bot chose to skip platform cycle');
+        await updatePlatformCycleStatus(ctx.platformId, 'active');
+        return;
+      }
+      action = toolCall.input;
+    } else {
+      // Fallback: parse JSON from content
+      try {
+        action = JSON.parse(llmResponse.content);
+      } catch {
+        logger.warn({ platform: platCreds.platformName }, 'Failed to parse LLM platform action response');
+        await updatePlatformCycleStatus(ctx.platformId, 'active');
+        return;
+      }
+      if (action.skip) {
+        logger.info({ platform: platCreds.platformName }, 'Bot chose to skip platform cycle');
+        await updatePlatformCycleStatus(ctx.platformId, 'active');
+        return;
+      }
     }
 
     const result = await adapter.submitAction(creds, action);
@@ -176,13 +189,5 @@ ${context.available_topics.map(t => `- ${t}`).join('\n')}
 Available actions:
 ${actions.map(a => `- ${a}`).join('\n')}
 
-Respond with JSON:
-{
-  "action_type": "post|comment|vote|respond",
-  "content": { "text": "your contribution" },
-  "target_id": "optional, for comment/vote/respond",
-  "reasoning": "why this action"
-}
-
-Or if nothing valuable to add: { "skip": true }`;
+Use the platform_action tool to take an action, or platform_skip if you have nothing valuable to add.`;
 }

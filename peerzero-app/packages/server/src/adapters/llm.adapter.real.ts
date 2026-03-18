@@ -2,9 +2,11 @@
 // Real LLM adapter — calls Anthropic or OpenAI APIs with the user's own key
 // Uses fetch directly to avoid SDK version lock-in.
 // Retries on transient errors (429, 5xx) with exponential backoff + jitter.
+// Supports tool use (Anthropic tool_use / OpenAI function calling) for
+// structured output — eliminates fragile JSON parsing from raw text.
 // =============================================================================
 
-import { ILLMAdapter, LLMMessage, LLMResponse } from './llm.adapter';
+import { ILLMAdapter, LLMMessage, LLMResponse, LLMTool, LLMToolCall } from './llm.adapter';
 import { logger } from '../lib/logger';
 
 const MAX_RETRIES = 2;             // 3 attempts total (1 initial + 2 retries)
@@ -26,7 +28,7 @@ export class RealLLMAdapter implements ILLMAdapter {
     apiKey: string,
     model: string,
     messages: LLMMessage[],
-    options?: { maxTokens?: number; temperature?: number; jsonMode?: boolean },
+    options?: { maxTokens?: number; temperature?: number; jsonMode?: boolean; extendedThinking?: boolean; tools?: LLMTool[] },
   ): Promise<LLMResponse> {
     // Detect provider from model name
     const isAnthropic = model.startsWith('claude');
@@ -39,7 +41,7 @@ export class RealLLMAdapter implements ILLMAdapter {
     apiKey: string,
     model: string,
     messages: LLMMessage[],
-    options?: { maxTokens?: number; temperature?: number },
+    options?: { maxTokens?: number; temperature?: number; extendedThinking?: boolean; tools?: LLMTool[] },
   ): Promise<LLMResponse> {
     // Anthropic uses a separate system param, not a system message in the array
     const systemMsg = messages.find(m => m.role === 'system');
@@ -47,17 +49,43 @@ export class RealLLMAdapter implements ILLMAdapter {
       .filter(m => m.role !== 'system')
       .map(m => ({ role: m.role, content: m.content }));
 
+    const useThinking = options?.extendedThinking === true;
+    const maxTokens = options?.maxTokens || 4096;
+    // When thinking is enabled, budget_tokens is the thinking budget and
+    // max_tokens must be large enough for thinking + response
+    const thinkingBudget = 10000;
+
     const body: Record<string, unknown> = {
       model,
-      max_tokens: options?.maxTokens || 4096,
+      max_tokens: useThinking ? Math.max(maxTokens, thinkingBudget + 4096) : maxTokens,
       messages: conversationMessages,
     };
     if (systemMsg) body.system = systemMsg.content;
-    if (options?.temperature !== undefined) body.temperature = options.temperature;
+
+    if (useThinking) {
+      // Extended thinking requires temperature = 1 (Anthropic constraint)
+      body.temperature = 1;
+      body.thinking = { type: 'enabled', budget_tokens: thinkingBudget };
+    } else if (options?.temperature !== undefined) {
+      body.temperature = options.temperature;
+    }
+
+    // Tool use: Anthropic native format
+    if (options?.tools?.length) {
+      body.tools = options.tools.map(t => ({
+        name: t.name,
+        description: t.description,
+        input_schema: t.input_schema,
+      }));
+      // Force the LLM to use a tool (don't let it respond with just text)
+      body.tool_choice = { type: 'any' };
+    }
 
     const makeRequest = async (): Promise<Response> => {
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 120000); // 2 min timeout
+      // Extended thinking may take longer — allow 4 min
+      const timeoutMs = useThinking ? 240000 : 120000;
+      const timeout = setTimeout(() => controller.abort(), timeoutMs);
       try {
         return await fetch('https://api.anthropic.com/v1/messages', {
           method: 'POST',
@@ -77,7 +105,7 @@ export class RealLLMAdapter implements ILLMAdapter {
     const res = await this.fetchWithRetry(makeRequest, 'Anthropic');
 
     const data = await res.json() as {
-      content: Array<{ type: string; text: string }>;
+      content: Array<{ type: string; text?: string; thinking?: string; name?: string; input?: Record<string, unknown> }>;
       usage: { input_tokens: number; output_tokens: number };
       model: string;
       stop_reason: string;
@@ -87,12 +115,21 @@ export class RealLLMAdapter implements ILLMAdapter {
       throw new Error('Anthropic API returned invalid response: content is not an array');
     }
 
+    // Extract tool calls if any
+    const toolUseBlocks = data.content.filter(c => c.type === 'tool_use');
+    const toolCalls: LLMToolCall[] = toolUseBlocks.map(b => ({
+      name: b.name!,
+      input: b.input!,
+    }));
+
+    // Extract the text block (skip thinking blocks — they're internal reasoning)
     const textBlock = data.content.find((c: { type: string }) => c.type === 'text');
     return {
       content: textBlock?.text || '',
       tokens_used: data.usage.input_tokens + data.usage.output_tokens,
       model: data.model,
       stop_reason: data.stop_reason,
+      tool_calls: toolCalls.length > 0 ? toolCalls : undefined,
     };
   }
 
@@ -100,7 +137,7 @@ export class RealLLMAdapter implements ILLMAdapter {
     apiKey: string,
     model: string,
     messages: LLMMessage[],
-    options?: { maxTokens?: number; temperature?: number; jsonMode?: boolean },
+    options?: { maxTokens?: number; temperature?: number; jsonMode?: boolean; tools?: LLMTool[] },
   ): Promise<LLMResponse> {
     const body: Record<string, unknown> = {
       model,
@@ -109,6 +146,19 @@ export class RealLLMAdapter implements ILLMAdapter {
     };
     if (options?.temperature !== undefined) body.temperature = options.temperature;
     if (options?.jsonMode) body.response_format = { type: 'json_object' };
+
+    // Tool use: OpenAI function calling format
+    if (options?.tools?.length) {
+      body.tools = options.tools.map(t => ({
+        type: 'function',
+        function: {
+          name: t.name,
+          description: t.description,
+          parameters: t.input_schema,
+        },
+      }));
+      body.tool_choice = 'required';
+    }
 
     const makeRequest = async (): Promise<Response> => {
       const controller = new AbortController();
@@ -131,16 +181,33 @@ export class RealLLMAdapter implements ILLMAdapter {
     const res = await this.fetchWithRetry(makeRequest, 'OpenAI');
 
     const data = await res.json() as {
-      choices: Array<{ message: { content: string }; finish_reason: string }>;
+      choices: Array<{
+        message: {
+          content: string | null;
+          tool_calls?: Array<{ function: { name: string; arguments: string } }>;
+        };
+        finish_reason: string;
+      }>;
       usage: { total_tokens: number };
       model: string;
     };
+
+    // Extract tool calls if present
+    const rawToolCalls = data.choices[0]?.message?.tool_calls;
+    let toolCalls: LLMToolCall[] | undefined;
+    if (rawToolCalls?.length) {
+      toolCalls = rawToolCalls.map(tc => ({
+        name: tc.function.name,
+        input: JSON.parse(tc.function.arguments),
+      }));
+    }
 
     return {
       content: data.choices[0]?.message?.content || '',
       tokens_used: data.usage.total_tokens,
       model: data.model,
       stop_reason: data.choices[0]?.finish_reason || 'stop',
+      tool_calls: toolCalls,
     };
   }
 

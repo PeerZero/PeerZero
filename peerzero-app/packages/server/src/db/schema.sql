@@ -92,6 +92,7 @@ CREATE TABLE bots (
   llm_api_key_id  UUID REFERENCES llm_api_keys(id) ON DELETE SET NULL,
   llm_model       TEXT DEFAULT 'claude-opus-4-6',
   fast_llm_model  TEXT DEFAULT NULL,
+  extended_thinking BOOLEAN DEFAULT FALSE,
 
   -- Runtime state
   status          TEXT DEFAULT 'stopped' CHECK (status IN ('stopped', 'running', 'paused', 'error')),

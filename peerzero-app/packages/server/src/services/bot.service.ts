@@ -22,6 +22,7 @@ export async function createBot(
   llmApiKeyId: string,
   llmModel?: string,
   fastLlmModel?: string,
+  extendedThinking?: boolean,
 ) {
   // Check entitlements: user must have available bot slots
   const entitlements = await queryRows<{ quantity: number }>(
@@ -58,10 +59,10 @@ export async function createBot(
   }
 
   const bot = await queryOne<{ id: string }>(
-    `INSERT INTO bots (user_id, name, avatar_config, llm_api_key_id, llm_model, fast_llm_model)
-     VALUES ($1, $2, $3, $4, $5, $6)
+    `INSERT INTO bots (user_id, name, avatar_config, llm_api_key_id, llm_model, fast_llm_model, extended_thinking)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
      RETURNING id`,
-    [userId, name, JSON.stringify(safeAvatar), llmApiKeyId, model, fastLlmModel || null],
+    [userId, name, JSON.stringify(safeAvatar), llmApiKeyId, model, fastLlmModel || null, extendedThinking ?? false],
   );
 
   return bot!.id;
@@ -85,7 +86,7 @@ export async function getBotDetail(userId: string, botId: string): Promise<BotDe
     `SELECT b.id, b.name, b.avatar_config, b.status,
             b.cached_credibility, b.cached_grade, b.cached_tier,
             s.name as school_name, b.cycle_count, b.last_cycle_at,
-            b.school_id, b.school_agent_handle, b.llm_api_key_id, b.llm_model, b.fast_llm_model,
+            b.school_id, b.school_agent_handle, b.llm_api_key_id, b.llm_model, b.fast_llm_model, b.extended_thinking,
             b.cycle_delay_seconds, b.cached_next_action, b.cached_profile,
             b.error_message, b.created_at, b.cache_updated_at
      FROM bots b
@@ -126,6 +127,7 @@ export async function updateBot(userId: string, botId: string, updates: Partial<
   llm_api_key_id: string;
   llm_model: string;
   fast_llm_model: string | null;
+  extended_thinking: boolean;
   cycle_delay_seconds: number;
 }>) {
   // Build SET clause dynamically
@@ -146,6 +148,7 @@ export async function updateBot(userId: string, botId: string, updates: Partial<
   }
   if (updates.llm_model !== undefined) { sets.push(`llm_model = $${idx++}`); params.push(updates.llm_model); }
   if (updates.fast_llm_model !== undefined) { sets.push(`fast_llm_model = $${idx++}`); params.push(updates.fast_llm_model); }
+  if (updates.extended_thinking !== undefined) { sets.push(`extended_thinking = $${idx++}`); params.push(updates.extended_thinking); }
   if (updates.cycle_delay_seconds !== undefined) { sets.push(`cycle_delay_seconds = $${idx++}`); params.push(updates.cycle_delay_seconds); }
 
   if (sets.length === 0) return;

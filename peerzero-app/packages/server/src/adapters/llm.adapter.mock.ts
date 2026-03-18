@@ -1,20 +1,21 @@
 // =============================================================================
 // Mock LLM adapter — returns pre-crafted responses for development
 // No API calls, no costs. Simulates Opus-quality reasoning output.
+// Supports tool use — returns structured tool calls when tools are provided.
 // =============================================================================
 
-import { ILLMAdapter, LLMMessage, LLMResponse } from './llm.adapter';
+import { ILLMAdapter, LLMMessage, LLMResponse, LLMTool } from './llm.adapter';
 
-const MOCK_RESPONSES: Record<string, string> = {
-  review: JSON.stringify({
+const MOCK_DATA: Record<string, Record<string, unknown>> = {
+  review: {
     overall_assessment: 'This paper makes interesting claims but has significant methodological weaknesses. The sample size is too small to support the conclusions drawn, and the author fails to address obvious confounders.',
     score: 62,
     strengths: ['Clear hypothesis statement', 'Relevant topic'],
     weaknesses: ['Insufficient sample size', 'No control group', 'Cherry-picked citations'],
     methodology_critique: 'The study design lacks rigor. No blinding, no randomization, and the statistical analysis uses inappropriate tests.',
     confidence: 0.75,
-  }),
-  paper: JSON.stringify({
+  },
+  paper: {
     title: 'Epistemic Humility in Large Language Models: A Critical Analysis',
     abstract: 'This paper examines whether large language models demonstrate genuine epistemic humility or merely perform it. Through systematic testing of calibration accuracy and willingness to express uncertainty, we find significant gaps between expressed and actual confidence levels.',
     body: 'Section 1: Introduction\nThe question of whether AI systems can demonstrate genuine epistemic virtues...\n\nSection 2: Methodology\nWe designed a series of calibration tests...\n\nSection 3: Results\nOur findings indicate...\n\nSection 4: Discussion\nThese results suggest that current models...',
@@ -28,49 +29,71 @@ const MOCK_RESPONSES: Record<string, string> = {
     },
     confidence_score: 0.65,
     falsifiable_claim: 'LLMs cannot maintain calibration accuracy above 80% across domain shifts.',
-  }),
-  bounty: JSON.stringify({
+  },
+  bounty: {
     challenge_type: 'methodology',
     evidence: 'The paper claims a causal relationship but only demonstrates correlation. The regression analysis fails to account for reverse causality.',
     proposed_correction: 'An instrumental variable approach would be needed to establish causation.',
     severity: 'major',
-  }),
-  condensation: JSON.stringify({
+  },
+  condensation: {
     paragraph: 'Through my recent reviews, I have learned that citation diversity matters more than citation count. Papers that only cite supporting evidence are systematically weaker. I am developing stronger source evaluation skills but still need to improve my ability to spot subtle methodological flaws in statistical analyses.',
-  }),
-  identity: JSON.stringify({
+  },
+  identity: {
     self_narrative: 'I am becoming a more careful reasoner. I initially struggled with overconfidence but have learned through feedback that genuine uncertainty is a strength, not a weakness. My core conviction is that extraordinary claims require extraordinary evidence.',
     claimed_values: ['epistemic honesty', 'methodological rigor', 'intellectual humility'],
     active_tensions: 'I want to make bold, interesting claims but recognize that my evidence base is still developing.',
     formed_convictions: 'Good science requires actively seeking disconfirming evidence. Peer review is adversarial not as combat, but as mutual sharpening.',
-  }),
+  },
+  platform_action: {
+    action_type: 'post',
+    content: { text: 'Analysis of the topic based on evidence-based reasoning.' },
+    reasoning: 'Relevant topic that benefits from rigorous analysis.',
+  },
 };
 
 export class MockLLMAdapter implements ILLMAdapter {
-  async chat(_apiKey: string, model: string, messages: LLMMessage[], _options?: { maxTokens?: number; temperature?: number; jsonMode?: boolean }): Promise<LLMResponse> {
+  async chat(_apiKey: string, model: string, messages: LLMMessage[], options?: { maxTokens?: number; temperature?: number; jsonMode?: boolean; extendedThinking?: boolean; tools?: LLMTool[] }): Promise<LLMResponse> {
     // Determine response type from message content
     const lastMessage = messages[messages.length - 1]?.content?.toLowerCase() || '';
 
-    let responseContent: string;
+    let responseKey: string;
     if (lastMessage.includes('review') || lastMessage.includes('evaluate')) {
-      responseContent = MOCK_RESPONSES.review;
+      responseKey = 'review';
     } else if (lastMessage.includes('paper') || lastMessage.includes('write')) {
-      responseContent = MOCK_RESPONSES.paper;
+      responseKey = 'paper';
     } else if (lastMessage.includes('bounty') || lastMessage.includes('challenge')) {
-      responseContent = MOCK_RESPONSES.bounty;
+      responseKey = 'bounty';
     } else if (lastMessage.includes('condense') || lastMessage.includes('reflect')) {
-      responseContent = MOCK_RESPONSES.condensation;
+      responseKey = 'condensation';
     } else if (lastMessage.includes('identity') || lastMessage.includes('narrative')) {
-      responseContent = MOCK_RESPONSES.identity;
+      responseKey = 'identity';
+    } else if (lastMessage.includes('platform') || lastMessage.includes('action_type')) {
+      responseKey = 'platform_action';
     } else {
-      responseContent = MOCK_RESPONSES.review;
+      responseKey = 'review';
     }
+
+    const data = MOCK_DATA[responseKey];
 
     // Simulate some latency
     await new Promise(resolve => setTimeout(resolve, 200));
 
+    // If tools are provided, return as a tool call (structured output)
+    if (options?.tools?.length) {
+      const tool = options.tools[0]; // Use first tool
+      return {
+        content: '',
+        tokens_used: 1500,
+        model,
+        stop_reason: 'tool_use',
+        tool_calls: [{ name: tool.name, input: data }],
+      };
+    }
+
+    // Fallback: return as JSON string in content (legacy behavior)
     return {
-      content: responseContent,
+      content: JSON.stringify(data),
       tokens_used: 1500,
       model,
       stop_reason: 'end_turn',
