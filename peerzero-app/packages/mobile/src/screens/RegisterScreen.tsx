@@ -51,10 +51,12 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
   };
 
   return (
-    <KeyboardAvoidingView
-      style={styles.flex}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
+    <View style={styles.flex}>
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+      >
         <ScrollView
           contentContainerStyle={styles.container}
           keyboardShouldPersistTaps="always"
@@ -146,13 +148,14 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
 
           <View style={styles.keyboardSpacer} />
         </ScrollView>
-    </KeyboardAvoidingView>
+      </KeyboardAvoidingView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   flex: { flex: 1, backgroundColor: colors.bg.primary },
-  container: { flexGrow: 1, justifyContent: 'center', padding: spacing.xl },
+  container: { paddingHorizontal: spacing.xl, paddingTop: spacing.xxl, paddingBottom: spacing.xl },
   hero: { alignItems: 'center', marginBottom: spacing.xxl },
   logoContainer: {
     width: 80, height: 80, borderRadius: 40,
@@ -184,5 +187,5 @@ const styles = StyleSheet.create({
   buttonDisabled: { opacity: 0.7 },
   buttonText: { color: '#fff', fontSize: fontSize.lg, fontWeight: '600' },
   link: { color: colors.accent.secondary, textAlign: 'center', marginTop: spacing.lg, fontSize: fontSize.md },
-  keyboardSpacer: { height: 120 },
+  keyboardSpacer: { height: 200 },
 });
