@@ -8,7 +8,8 @@
     "migrate": "node-pg-migrate --database-url-var DATABASE_URL --migrations-dir src/db/migrations --migration-file-language sql up",
     "migrate:down": "node-pg-migrate --database-url-var DATABASE_URL --migrations-dir src/db/migrations --migration-file-language sql down",
     "migrate:create": "node-pg-migrate --migrations-dir src/db/migrations --migration-file-language sql create",
-    "test": "vitest"
+    "test": "vitest",
+    "test:e2e": "vitest run --config vitest.e2e.config.ts"
   },
   "dependencies": {
     "@peerzero/shared": "workspace:*",
