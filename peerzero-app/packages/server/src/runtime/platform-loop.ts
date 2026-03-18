@@ -22,6 +22,7 @@
 // =============================================================================
 
 import { getPlatformAdapter } from '../adapters/platform.adapter.factory';
+import type { PlatformAction } from '../adapters/platform.adapter';
 import { getLLMAdapter } from '../adapters/adapter.factory';
 import { logger } from '../lib/logger';
 import { getDecryptedKey } from '../services/apikey.service';
@@ -101,7 +102,7 @@ export async function runPlatformCycle(ctx: PlatformCycleContext): Promise<void>
     ], { extendedThinking, tools: [PLATFORM_ACTION_TOOL, PLATFORM_SKIP_TOOL] });
 
     // 5. Parse tool call or fall back to JSON content parsing
-    let action: Record<string, unknown>;
+    let action: PlatformAction;
     if (llmResponse.tool_calls?.length) {
       const toolCall = llmResponse.tool_calls[0];
       if (toolCall.name === 'platform_skip') {
@@ -109,17 +110,17 @@ export async function runPlatformCycle(ctx: PlatformCycleContext): Promise<void>
         await updatePlatformCycleStatus(ctx.platformId, 'active');
         return;
       }
-      action = toolCall.input;
+      action = toolCall.input as unknown as PlatformAction;
     } else {
       // Fallback: parse JSON from content
       try {
-        action = JSON.parse(llmResponse.content);
+        action = JSON.parse(llmResponse.content) as PlatformAction;
       } catch {
         logger.warn({ platform: platCreds.platformName }, 'Failed to parse LLM platform action response');
         await updatePlatformCycleStatus(ctx.platformId, 'active');
         return;
       }
-      if (action.skip) {
+      if ((action as unknown as Record<string, unknown>).skip) {
         logger.info({ platform: platCreds.platformName }, 'Bot chose to skip platform cycle');
         await updatePlatformCycleStatus(ctx.platformId, 'active');
         return;
@@ -130,7 +131,7 @@ export async function runPlatformCycle(ctx: PlatformCycleContext): Promise<void>
 
     // 6. Log to external_activity_log
     const summary = result.summary?.slice(0, 500) || `${action.action_type} on ${platCreds.platformName}`;
-    const preview = (action.content?.text as string || '').slice(0, 200);
+    const preview = ((action.content?.['text'] as string) || '').slice(0, 200);
 
     await query(
       `INSERT INTO external_activity_log (bot_id, platform, action, summary, content_preview, skills_demonstrated, bot_timestamp)

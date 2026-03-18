@@ -108,6 +108,7 @@ function makeBotCtx(i: number): BotContext {
     llmApiKeyId: `key-${i}`,
     llmModel: 'claude-sonnet-4-6',
     fastLlmModel: null,
+    extendedThinking: false,
     cycleNumber: 1,
   };
 }
