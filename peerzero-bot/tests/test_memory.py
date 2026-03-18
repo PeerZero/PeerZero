@@ -181,9 +181,9 @@ class TestPrivateBlock:
 
 
 class TestWipeSecondaryIdentity:
-    """Tests for identity wipe — secondary layers only."""
+    """Tests for identity wipe — only self-authored identity (Layer 4)."""
 
-    def test_wipe_preserves_core(self, memory):
+    def test_wipe_only_clears_self_authored(self, memory):
         core = "D" * 120
         memory.store_core_identity(core)
         memory.store_self_identity({
@@ -196,9 +196,10 @@ class TestWipeSecondaryIdentity:
 
         # Core preserved
         assert memory.get_core_identity() == core
-        # Secondary wiped
+        # Private block preserved (NOT wipeable)
+        assert memory.get_private_block() is not None
+        # Self-authored wiped
         assert memory.get_self_identity() is None or not memory.get_self_identity().get("self_narrative")
-        assert memory.get_private_block() is None
 
     def test_wipe_preserves_exercises_and_paragraphs(self, memory):
         memory.store_school_exercises({"skill": "calibration"})
@@ -213,6 +214,46 @@ class TestWipeSecondaryIdentity:
         # Exercises and paragraphs preserved
         assert memory.get_uncondensed_count() == 1
         assert len(memory.get_identity_paragraphs()) == 1
+
+
+class TestCoreLocking:
+    """Tests for core identity locking — only condensers/master can write."""
+
+    def test_core_not_locked_initially(self, memory):
+        assert not memory.is_core_locked()
+
+    def test_core_condenser_can_write(self, memory):
+        core = "I" * 120
+        memory.store_core_identity(core)
+        assert memory.get_core_identity() == core
+        assert not memory.is_core_locked()
+
+    def test_master_condenser_locks_core(self, memory):
+        core = "J" * 120
+        memory.store_core_identity(core, is_master=True)
+        assert memory.get_core_identity() == core
+        assert memory.is_core_locked()
+
+    def test_locked_core_refuses_normal_writes(self, memory):
+        master_core = "K" * 120
+        memory.store_core_identity(master_core, is_master=True)
+        assert memory.is_core_locked()
+
+        # Attempt to overwrite — should be refused
+        memory.store_core_identity("L" * 120)
+        assert memory.get_core_identity() == master_core  # unchanged
+
+    def test_get_all_private_blocks(self, memory):
+        block1 = "First reflection on my patterns and habits. " * 2
+        block2 = "Second deeper reflection on reasoning bias." * 2
+        memory.store_private_block(block1)
+        memory._archive_private_block()
+        memory.store_private_block(block2)
+
+        all_blocks = memory.get_all_private_blocks()
+        assert len(all_blocks) == 2
+        assert all_blocks[0] == block1.strip()
+        assert all_blocks[1] == block2.strip()
 
 
 class TestContextOrdering:

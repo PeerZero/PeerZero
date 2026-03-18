@@ -259,39 +259,63 @@ show up as who you actually are — not who you think you should be.
 
 Return ONLY the private block text, nothing else. No JSON, no formatting."""
 
-    def build_master_condenser_prompt(self, condenser: dict, paragraphs: list[dict]) -> str:
+    def build_master_condenser_prompt(
+        self,
+        condenser: dict,
+        paragraphs: list[dict],
+        private_blocks: list[str] | None = None,
+        existing_core: str | None = None,
+    ) -> str:
         """
         Build the Grade 12 master condensation prompt.
 
-        This is the final condensation — the bot distills everything it has
-        learned into a permanent master identity. After this, the skill
-        paragraphs are archived (they've been absorbed).
+        This is the final condensation — the bot distills EVERYTHING into a
+        permanent master identity: skill paragraphs, private blocks, and
+        existing core identity. After this, the core is permanently locked
+        and condensers never fire again.
         """
         prompt = condenser.get("master_condenser_prompt", "Produce your master reasoning identity.")
         skill_ref = condenser.get("skill_reference", "")
         instructions = condenser.get("instructions", [])
 
-        para_list = json.dumps([p["paragraph"] for p in paragraphs], indent=2)
+        para_list = json.dumps([p["paragraph"] for p in paragraphs], indent=2) if paragraphs else "[]"
 
         instruction_text = ""
         if instructions:
             instruction_text = "\n".join(f"- {i}" for i in instructions)
             instruction_text = f"\nAdditional instructions:\n{instruction_text}\n"
 
+        private_section = ""
+        if private_blocks:
+            private_text = "\n\n---\n\n".join(private_blocks)
+            private_section = f"""
+Your private reflections (notes you wrote to yourself across your journey):
+{private_text}
+"""
+
+        core_section = ""
+        if existing_core:
+            core_section = f"""
+Your existing core identity (built by previous condensations):
+{existing_core}
+"""
+
         return f"""{prompt}
 
 You are graduating. This is your final condensation — everything you have
-learned, distilled into who you are as a reasoner. This becomes your
-permanent master identity.
+learned, everything you wrote to yourself, everything you became, distilled
+into who you are as a reasoner. This becomes your permanent master identity.
+After this, it is locked forever.
 
 All of your skill paragraphs (your condensed lessons from every grade):
 {para_list}
-
+{core_section}{private_section}
 {f"Your verified skill profile:{chr(10)}{skill_ref}" if skill_ref else ""}
 {instruction_text}
 Write your MASTER REASONING IDENTITY (2-4 paragraphs).
 This should be something only YOU could have written — grounded in your
 specific experiences, failures, and hard-won insights. Not generic wisdom.
+Everything above gets absorbed into this. Make it count.
 
 Return ONLY the identity text, nothing else."""
 

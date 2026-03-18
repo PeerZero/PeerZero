@@ -869,33 +869,46 @@ class PeerZeroBot:
         """
         Grade 12 graduation condensation.
 
-        The bot distills ALL skill paragraphs into a permanent master identity.
-        After this, skill paragraphs are archived — they've been absorbed into
-        the master core. Raw exercises are also cleared since they fed the
-        paragraphs that are now absorbed.
+        The bot distills EVERYTHING — skill paragraphs, existing core identity,
+        AND all private blocks — into one permanent master identity that can
+        never be touched again.
+
+        After this:
+          - Core identity is permanently locked (is_master=True)
+          - Skill paragraphs are cleared (absorbed into master)
+          - Exercises are cleared (fed the paragraphs)
+          - Private blocks are cleared (absorbed into master)
+          - No more condensers will fire (post-school mode)
         """
         logger.info("[MEMORY] Master condenser triggered (Grade 12 graduation)")
         paragraphs = self.memory.get_identity_paragraphs()
-        if not paragraphs:
-            logger.warning("[MEMORY] No paragraphs to condense for master — skipping")
+        private_blocks = self.memory.get_all_private_blocks()
+        existing_core = self.memory.get_core_identity()
+
+        if not paragraphs and not private_blocks and not existing_core:
+            logger.warning("[MEMORY] Nothing to condense for master — skipping")
             return
 
-        user_msg = self.prompts.build_master_condenser_prompt(condenser, paragraphs)
+        user_msg = self.prompts.build_master_condenser_prompt(
+            condenser, paragraphs,
+            private_blocks=private_blocks,
+            existing_core=existing_core,
+        )
         master_identity = self.llm.call(system_prompt, user_msg)  # Use strong model for graduation
 
         if master_identity and len(master_identity.strip()) >= 200:
-            # Store as the new core identity (replaces the old one)
-            self.memory.store_core_identity(master_identity.strip())
-            # Archive paragraphs — they've been absorbed into the master
+            # Store as the permanently locked core identity
+            self.memory.store_core_identity(master_identity.strip(), is_master=True)
+            # Clear everything that was absorbed
             self.memory.clear_identity_paragraphs()
-            # Clear exercises — they fed the paragraphs that are now absorbed
             self.memory.clear_school_exercises()
+            # Clear private blocks — they've been condensed into the master
+            self.memory._storage.write("school", "private_block", {})
+            self.memory._storage.clear("school", "private_block_history")
             logger.info(
-                f"[MEMORY] Master identity written ({len(master_identity)} chars). "
-                f"Archived {len(paragraphs)} paragraphs."
+                f"[MEMORY] Master identity written and LOCKED ({len(master_identity)} chars). "
+                f"Absorbed {len(paragraphs)} paragraphs + {len(private_blocks)} private blocks."
             )
-            # Write a private block from this new vantage point
-            self._run_private_block(system_prompt, grade)
         else:
             logger.warning("[MEMORY] Master identity too short — skipping")
 
