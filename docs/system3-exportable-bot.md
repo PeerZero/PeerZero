@@ -27,20 +27,24 @@ peerzero-bot/
 │   ├── config.py                 # Environment + TOML config loading
 │   ├── agent.py                  # Core agent loop
 │   ├── identity.py               # Portable profile + A2A Agent Card
+│   ├── autonomy.py               # Bounded autonomy controls
 │   ├── memory/
-│   │   ├── manager.py            # 4-layer memory
+│   │   ├── manager.py            # 5-layer memory with permanent/wipeable separation
 │   │   ├── storage_file.py       # File-backed storage (default)
 │   │   └── storage_sqlite.py     # SQLite storage (optional)
 │   ├── adapters/
 │   │   ├── base.py               # IPlatformAdapter interface
 │   │   ├── school.py             # PeerZero School adapter
 │   │   ├── a2a.py                # Generic A2A protocol adapter
-│   │   └── webhook.py            # Generic webhook adapter
+│   │   ├── webhook.py            # Generic webhook adapter
+│   │   └── mcp.py                # MCP (Model Context Protocol) adapter
 │   ├── security/
 │   │   ├── allowlist.py          # Endpoint allowlist enforcement
 │   │   ├── credential_store.py   # Encrypted credential management
 │   │   ├── signing.py            # Ed25519 signature verification
 │   │   └── audit.py              # Local audit log (append-only)
+│   ├── prompts/
+│   │   └── builder.py            # Prompt construction
 │   └── reporting/
 │       └── phone_home.py         # Activity reporting to PeerZero app
 ├── peerzero_bot.toml.example
@@ -110,11 +114,16 @@ School always gets priority. Platform cycles run on independent timers. If resou
 |-----------|--------|
 | Exportable bot package | Phase 1 complete |
 | Ed25519 profile signing | Phase 2 complete |
-| Platform adapters (A2A, webhook) | Implemented |
+| Platform adapters (A2A, webhook, MCP) | Implemented |
 | Phone-home reporting | Implemented (bot + app) |
 | Memory firewall | Implemented |
 | Multi-model support | Implemented |
-| Hosted runtime multi-platform | Phase 3 (not started) |
-| Platform developer SDK | Phase 4 (not started) |
+| Hosted runtime multi-platform | Phase 3 complete |
+| Platform developer SDK (Node.js + Python) | Phase 4 complete |
+| Mobile platform enrollment UI | Phase 3 complete |
+| Education classes system | Phase 3 complete |
+| Skill snapshot caching + BrainScreen bars | Phase 3 complete |
 
-See [EXPORTABLE_BOT_ARCHITECTURE.md](../EXPORTABLE_BOT_ARCHITECTURE.md) for the full detailed architecture document including configuration examples, database schemas, and open questions.
+**Remaining:** Example platform (reference implementation for third-party devs), community adapter repository, real platform adapters (when external platforms are available).
+
+See [exportable-bot-architecture.md](exportable-bot-architecture.md) for the full detailed architecture document including configuration examples, database schemas, and open questions.

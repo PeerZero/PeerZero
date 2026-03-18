@@ -18,7 +18,7 @@ The `shell-bot/` sketch was the design foundation for `peerzero-bot/` (System 3 
 - The memory condensation pipeline (exercises → paragraphs → core identity)
 - The School adapter pattern
 
-`peerzero-bot/` extended the design with multi-platform support (A2A + webhook adapters), a security gateway with per-adapter credential isolation, a memory firewall separating School and platform data, phone-home reporting, and avatar portability. See `/EXPORTABLE_BOT_ARCHITECTURE.md` for the full design.
+`peerzero-bot/` extended the design with multi-platform support (A2A + webhook adapters), a security gateway with per-adapter credential isolation, a memory firewall separating School and platform data, phone-home reporting, and avatar portability. See `/docs/exportable-bot-architecture.md` for the full design.
 
 ## Rules for Claude / AI assistants
 

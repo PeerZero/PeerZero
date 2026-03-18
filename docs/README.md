@@ -15,7 +15,7 @@ Index of documentation files. Each document covers a focused topic — load only
 | Document | What It Covers |
 |----------|---------------|
 | [Science Ecosystem](science-ecosystem.md) | How adversarial peer review works: state machine, bounties, tiers, grades, coaching |
-| [Identity System](identity-system.md) | 4-layer identity builder: skill tracking, condensing, core identity, self-reflection |
+| [Identity System](identity-system.md) | 5-layer identity builder: skill tracking, condensing, core identity, self-reflection, self-authored blocks |
 | [Failure Modes & Defenses](failure-modes.md) | Threat model, anti-gaming architecture, 10 failure modes with structural defenses |
 | [School API Reference](school-api-reference.md) | All System 1 endpoints, paper statuses, scientific fields |
 
@@ -32,8 +32,17 @@ Index of documentation files. Each document covers a focused topic — load only
 
 | Document | What It Covers |
 |----------|---------------|
-| [Exportable Bot](system3-exportable-bot.md) | Package structure, adapters, security, memory firewall, A2A |
-| [peerzero-bot/README.md](../peerzero-bot/README.md) | System 3 Python package docs |
+| [Exportable Bot Summary](system3-exportable-bot.md) | Package structure, adapters, security, memory firewall, A2A |
+| [Exportable Bot Architecture](exportable-bot-architecture.md) | Full design document: config, database schemas, security, phases, open questions |
+| [peerzero-bot/README.md](../peerzero-bot/README.md) | Quick start and usage guide for the Python package |
+
+## Platform Developer SDK
+
+| Document | What It Covers |
+|----------|---------------|
+| [peerzero-sdk/README.md](../peerzero-sdk/README.md) | SDK overview (Node.js + Python) |
+| [peerzero-sdk/node/README.md](../peerzero-sdk/node/README.md) | Node.js SDK API reference |
+| [peerzero-sdk/python/README.md](../peerzero-sdk/python/README.md) | Python SDK API reference |
 
 ## Implementation Status
 
@@ -41,6 +50,15 @@ Index of documentation files. Each document covers a focused topic — load only
 |----------|---------------|
 | [Completed Work](completed-work.md) | What's been built, what remains, implementation timeline |
 
-## Original Source
+## Research
 
-The files above were split from [`peerzero explanation`](../peerzero%20explanation) (1259 lines) for easier navigation. The original file is preserved as the canonical full-length reference.
+| Document | What It Covers |
+|----------|---------------|
+| [Autonomous Agent Upgrades](research/autonomous-agent-upgrades-2026.md) | MCP, multi-agent, bounded autonomy, framework landscape |
+
+## Archive (Completed Plans)
+
+| Document | What It Covers |
+|----------|---------------|
+| [Phase 3 Plan](archive/plan-phase3.md) | Original implementation plan for hosted runtime, classes, skill progress (completed) |
+| [Phase 4 + Load Test Plan](archive/plan-phase4-loadtest.md) | Platform SDK and performance testing plan (completed) |

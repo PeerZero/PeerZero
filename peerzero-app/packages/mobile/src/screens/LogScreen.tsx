@@ -12,7 +12,7 @@ import React, { useState, useCallback, useRef } from 'react';
 import { View, Text, FlatList, TouchableOpacity, StyleSheet, RefreshControl, Alert, Animated } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { bots as botsApi } from '../services/api';
-import { useBotStream } from '../hooks/useBotStream';
+import { useBotStream, type BotStreamEvent } from '../hooks/useBotStream';
 import { colors } from '../theme/colors';
 import { spacing, fontSize, borderRadius } from '../theme/spacing';
 import type { ActivityEntry, MoodType, ActivityCategory, ActionType, ExternalActivityEntry } from '@peerzero/shared';
@@ -59,7 +59,7 @@ export default function LogScreen({ route }: LogScreenProps) {
   // Real-time WebSocket stream
   const { isConnected } = useBotStream({
     botId,
-    onActivity: useCallback((event) => {
+    onActivity: useCallback((event: BotStreamEvent) => {
       if (event.translated) {
         const actionType = (event.action_type || 'register') as ActionType;
         const newEntry: ActivityEntry = {
@@ -77,7 +77,7 @@ export default function LogScreen({ route }: LogScreenProps) {
         setEntries(prev => [newEntry, ...prev]);
       }
     }, []),
-    onExternalActivity: useCallback((event) => {
+    onExternalActivity: useCallback((event: BotStreamEvent) => {
       const newExt: ExternalActivityEntry = {
         id: `ws-ext-${Date.now()}`,
         platform: event.platform || '',

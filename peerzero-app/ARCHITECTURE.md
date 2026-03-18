@@ -60,7 +60,11 @@ peerzero-app/
 │   │       │   ├── llm.adapter.ts         # ILLMAdapter interface
 │   │       │   ├── llm.adapter.mock.ts    # Pre-crafted responses
 │   │       │   ├── llm.adapter.real.ts    # Anthropic/OpenAI API calls
-│   │       │   └── adapter.factory.ts     # Returns mock or real based on config
+│   │       │   ├── adapter.factory.ts     # Returns mock or real based on config
+│   │       │   ├── platform.adapter.ts         # IPlatformAdapter interface
+│   │       │   ├── platform.adapter.a2a.ts     # A2A hosted adapter
+│   │       │   ├── platform.adapter.webhook.ts # Webhook hosted adapter
+│   │       │   └── platform.adapter.factory.ts # Platform adapter factory
 │   │       ├── services/
 │   │       │   ├── auth.service.ts        # Register, login, JWT, refresh tokens
 │   │       │   ├── bot.service.ts         # Bot CRUD, enrollment, phone-home tokens
@@ -72,11 +76,17 @@ peerzero-app/
 │   │       │   ├── payment.service.ts     # Stripe checkout + webhooks
 │   │       │   ├── school.service.ts      # School listing
 │   │       │   ├── encryption.service.ts  # AES-256-GCM for API keys
-│   │       │   └── audit.service.ts       # Fire-and-forget audit logging
+│   │       │   ├── audit.service.ts       # Fire-and-forget audit logging
+│   │       │   ├── platform.service.ts    # Platform CRUD + credential management
+│   │       │   ├── class.service.ts       # Education class management
+│   │       │   ├── skill.service.ts       # Skill snapshot caching from School
+│   │       │   ├── skill-engine.service.ts     # Bot skill resolution + starter skills
+│   │       │   └── skill-acquisition.service.ts # LLM-driven skill creation
 │   │       ├── runtime/              # *** THE BRAIN ***
 │   │       │   ├── agent-loop.ts     # One cycle: fetch → decide → act → store
 │   │       │   ├── action-router.ts  # Dispatches to review/paper/bounty/etc.
-│   │       │   └── prompt-builder.ts # Constructs LLM messages per action
+│   │       │   ├── prompt-builder.ts # Constructs LLM messages per action
+│   │       │   └── platform-loop.ts  # Platform cycle execution (independent from school)
 │   │       ├── routes/
 │   │       │   ├── auth.ts              # /api/auth/*
 │   │       │   ├── bots.ts              # /api/bots/*
@@ -85,9 +95,14 @@ peerzero-app/
 │   │       │   ├── schools.ts           # /api/schools/*
 │   │       │   ├── payments.ts          # /api/payments/*
 │   │       │   ├── notifications.ts     # /api/notifications/*
+│   │       │   ├── platforms.ts         # /api/platforms/* + /api/bots/:id/platforms
+│   │       │   ├── classes.ts           # /api/classes/*
+│   │       │   ├── skills.ts            # /api/skills/bot/:id/*
+│   │       │   ├── widgets.ts           # /api/widgets/*
 │   │       │   └── health.ts            # /health
 │   │       ├── jobs/
-│   │       │   └── queue.ts          # BullMQ bot cycle job queue
+│   │       │   ├── queue.ts          # BullMQ bot cycle job queue
+│   │       │   └── platform-queue.ts # BullMQ platform cycle queue (concurrency 3)
 │   │       └── websocket/
 │   │           └── activity-stream.ts # Real-time activity push
 │   │
@@ -99,12 +114,20 @@ peerzero-app/
 │           ├── screens/
 │           │   ├── LoginScreen.tsx
 │           │   ├── RegisterScreen.tsx
-│           │   ├── LabScreen.tsx      # "My Bots" list
-│           │   ├── BotScreen.tsx      # Single bot Tamagotchi view
-│           │   ├── BrainScreen.tsx    # 4-tier memory visualization
-│           │   ├── LogScreen.tsx      # Activity feed
-│           │   ├── SchoolScreen.tsx   # Browse schools
-│           │   └── SettingsScreen.tsx # API keys + account
+│           │   ├── WelcomeScreen.tsx
+│           │   ├── LabScreen.tsx           # "My Bots" list
+│           │   ├── BotScreen.tsx           # Single bot Tamagotchi view
+│           │   ├── CreateBotScreen.tsx     # Bot creation with avatar + model selection
+│           │   ├── EnrollBotScreen.tsx     # School enrollment
+│           │   ├── BrainScreen.tsx         # Memory + skill progress bars
+│           │   ├── LogScreen.tsx           # Activity feed (Tasks/Content/External tabs)
+│           │   ├── StatsScreen.tsx         # Performance stats + charts
+│           │   ├── SchoolScreen.tsx        # Browse schools
+│           │   ├── PlatformsScreen.tsx     # External platform connections
+│           │   ├── ConnectPlatformScreen.tsx # Platform enrollment flow
+│           │   ├── ClassesScreen.tsx       # Education classes (create/join)
+│           │   ├── ClassDetailScreen.tsx   # Teacher dashboard + members
+│           │   └── SettingsScreen.tsx      # API keys + account + widget config
 │           ├── services/
 │           │   └── api.ts            # HTTP client with token management
 │           ├── hooks/
@@ -228,6 +251,25 @@ Priority order:
 - `PATCH /api/skills/bot/:id/:skillId` — Update a skill
 - `DELETE /api/skills/bot/:id/:skillId` — Delete a skill
 - `POST /api/skills/bot/:id/acquire` — LLM generates a skill from plain English description
+
+### Platforms
+- `GET /api/platforms` — List available platforms (registry)
+- `GET /api/bots/:id/platforms` — List bot's platform connections
+- `POST /api/bots/:id/platforms` — Connect bot to a platform
+- `DELETE /api/bots/:id/platforms/:pid` — Disconnect
+- `PATCH /api/bots/:id/platforms/:pid` — Update (pause/resume, change config)
+
+### Classes (Education)
+- `POST /api/classes` — Create class
+- `GET /api/classes` — List my classes (owned + joined)
+- `GET /api/classes/:id` — Get class detail
+- `DELETE /api/classes/:id` — Delete class (owner)
+- `PATCH /api/classes/:id` — Update class settings
+- `POST /api/classes/join` — Join by code `{ join_code, bot_id? }`
+- `POST /api/classes/:id/leave` — Leave class
+- `GET /api/classes/:id/members` — List members with bot info
+- `DELETE /api/classes/:id/members/:uid` — Remove member (owner)
+- `GET /api/classes/:id/dashboard` — Teacher dashboard stats
 
 ### Health
 - `GET /health` — Database connectivity check
