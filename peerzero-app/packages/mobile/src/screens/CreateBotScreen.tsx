@@ -8,7 +8,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { bots as botsApi, apiKeys as keysApi } from '../services/api';
 import { colors } from '../theme/colors';
 import { spacing, fontSize, borderRadius } from '../theme/spacing';
-import { AVATAR_COLOR_PRESETS, SUPPORTED_MODELS, DEFAULT_FAST_MODELS } from '@peerzero/shared';
+import { AVATAR_COLOR_PRESETS, SUPPORTED_MODELS } from '@peerzero/shared';
 import type { ApiKeyInfo } from '@peerzero/shared';
 import BotAvatar from '../components/BotAvatar';
 import type { CreateBotScreenProps } from '../navigation/types';
@@ -21,7 +21,6 @@ export default function CreateBotScreen({ navigation }: CreateBotScreenProps) {
   const [keys, setKeys] = useState<ApiKeyInfo[]>([]);
   const [selectedKeyId, setSelectedKeyId] = useState<string | null>(null);
   const [selectedModel, setSelectedModel] = useState('claude-opus-4-6');
-  const [selectedFastModel, setSelectedFastModel] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [loading, setLoading] = useState(true);
 
@@ -48,7 +47,6 @@ export default function CreateBotScreen({ navigation }: CreateBotScreenProps) {
     : SUPPORTED_MODELS;
 
   const scienceModels = availableModels.filter(m => m.tier === 'science');
-  const fastModels = availableModels.filter(m => m.tier === 'fast');
 
   // If selected model doesn't match provider, reset to default
   const modelMatchesKey = availableModels.some(m => m.id === selectedModel);
@@ -81,7 +79,6 @@ export default function CreateBotScreen({ navigation }: CreateBotScreenProps) {
         avatar_config: { body_color: bodyColor, face_style: 'default' },
         llm_api_key_id: selectedKeyId,
         llm_model: finalModel,
-        fast_llm_model: selectedFastModel,
       }) as { id: string };
       navigation.replace('Bot', { botId: bot.id });
     } catch (err: unknown) {
@@ -168,10 +165,6 @@ export default function CreateBotScreen({ navigation }: CreateBotScreenProps) {
                   const scienceOpts = providerModels.filter(m => m.tier === 'science');
                   if (scienceOpts.length > 0) setSelectedModel(scienceOpts[0].id);
                 }
-                // Reset fast model if it doesn't match new provider
-                if (selectedFastModel && !providerModels.some(m => m.id === selectedFastModel)) {
-                  setSelectedFastModel(null);
-                }
               }}
             >
               <Text style={[styles.keyLabel, selectedKeyId === k.id && styles.keyLabelSelected]}>{k.label}</Text>
@@ -198,28 +191,10 @@ export default function CreateBotScreen({ navigation }: CreateBotScreenProps) {
         ))}
       </View>
 
-      {/* Fast model selector (optional) */}
-      <Text style={styles.label}>Fast Model (Optional)</Text>
+      {/* Cost-saving note */}
       <Text style={styles.modelHint}>
-        Used for platform replies, skill generation, and other utility tasks that don't need full reasoning power. Saves cost without hurting science quality.
+        Utility tasks like platform replies and skill generation automatically use a lighter model to save on API costs.
       </Text>
-      <View style={styles.modelGrid}>
-        <TouchableOpacity
-          style={[styles.modelPill, selectedFastModel === null && styles.modelPillSelected]}
-          onPress={() => setSelectedFastModel(null)}
-        >
-          <Text style={[styles.modelText, selectedFastModel === null && styles.modelTextSelected]}>None</Text>
-        </TouchableOpacity>
-        {fastModels.map(m => (
-          <TouchableOpacity
-            key={m.id}
-            style={[styles.modelPill, selectedFastModel === m.id && styles.modelPillSelected]}
-            onPress={() => setSelectedFastModel(m.id)}
-          >
-            <Text style={[styles.modelText, selectedFastModel === m.id && styles.modelTextSelected]}>{m.label}</Text>
-          </TouchableOpacity>
-        ))}
-      </View>
 
       {/* Create button */}
       <TouchableOpacity

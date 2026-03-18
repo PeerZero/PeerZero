@@ -62,7 +62,7 @@ export type LLMProvider = typeof LLM_PROVIDERS[number];
 
 // Supported LLM models (shared between server validation and mobile UI)
 // tier: 'science' = full-power models for papers, reviews, bounties, revisions
-//        'fast'    = lightweight models for condensation, identity reflection, platform actions
+//        'fast'    = lightweight models for platform replies, skill generation, and other utility tasks
 export const SUPPORTED_MODELS = [
   { id: 'claude-opus-4-6', provider: 'anthropic' as const, label: 'Claude Opus 4.6', tier: 'science' as const },
   { id: 'claude-sonnet-4-6', provider: 'anthropic' as const, label: 'Claude Sonnet 4.6', tier: 'science' as const },
