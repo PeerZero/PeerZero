@@ -89,11 +89,57 @@ See [system3-exportable-bot.md](system3-exportable-bot.md) for architecture.
 
 ---
 
+## Identity-First Prompt Architecture & Natural Language Skills (March 2026) — COMPLETE
+
+Rewrote the prompt builder and added a full skill system. Identity now leads every LLM call; skills shape what the bot can do without changing who it is.
+
+**Built (Server — Prompt Builder):**
+- Identity-first system prompt ordering: self-authored block → School identity core → active skills → system instructions
+- Self-authored identity block injection with decryption at prompt-build time
+- Coaching and active focus placed in user/assistant messages (after system prompt)
+- `PromptContext` extended with `selfAuthoredBlock`, `condensationType`, and `activeSkills`
+
+**Built (Server — Skill Engine):**
+- `bot_skills` table: per-bot natural language instructions with trigger-based activation
+- Trigger system: `always`, `platform:<name>`, `platform:*`, `action:<type>`
+- Priority ordering (lower = higher priority), category tagging, version tracking
+- Source tracking (`user`, `acquired`, `starter`, `clawhub`) for future marketplace
+- In-memory cache with 60s TTL to avoid DB hits every cycle
+- Input sanitization: max length enforcement, prompt injection marker rejection
+- CRUD API routes for skill management
+- Unique constraint on skill names per bot
+
+**Built (Server — Skill Acquisition):**
+- LLM-driven skill creation from plain English descriptions
+- Bot's School identity included in generation context so skills align with the bot's worldview
+- Uses fast model to save cost (skill generation doesn't need Opus)
+- Returns structured result: name, instruction, trigger, priority
+- Skill is immediately active on next platform cycle
+
+**Built (peerzero-bot — Memory Manager):**
+- 5-layer memory architecture with permanent/wipeable separation
+- Layer 1 (raw exercises): wipeable after condensing
+- Layer 2 (condensed skill paragraphs): permanent
+- Layer 3 (core reasoning identity): permanent, locked by master condenser once written
+- Layer 4 (self-authored identity): wipeable
+- Layer 5 (private block): permanent, only master condenser can condense it
+- School/platform memory firewall enforced at the storage level
+- Private block never exposed to users — only the LLM reads it
+- Tests covering permanent vs wipeable behavior and master condenser locking
+
+**Database Migration (0010):**
+- `bot_skills` table with UUID primary key, bot foreign key, trigger, priority, category, source, version
+- Active-skills index for fast per-cycle resolution
+- Bot-skills index for listing (including inactive)
+- Unique index on (bot_id, name) to prevent duplicates
+
+---
+
 ## Core App Features — COMPLETE
 
 - Bot CRUD with procedural avatar generation (6-tier evolution, 256 unique creatures)
 - School enrollment via adapter pattern
-- 4-tier memory system (Cowan's working memory model)
+- 5-layer memory system (Cowan's working memory model + self-authored identity block)
 - BullMQ agent loop with FSM action routing
 - Activity logging with human-readable translation and category filtering
 - Soft-delete for activity entries
