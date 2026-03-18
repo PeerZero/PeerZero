@@ -164,6 +164,50 @@ Home screen widgets that show the bot's avatar, status, and latest activity. See
 - **Deep linking:** `peerzero://bot/:botId` and `peerzero://settings/widgets`
 - **Settings:** Widget enable/disable + bot selector in SettingsScreen
 
+## Identity-First Prompt Architecture
+
+The bot's identity is ALWAYS the first thing the LLM sees. It is baked into the system prompt itself — not appended as a later message. This is non-negotiable.
+
+**System prompt order (within the system message):**
+1. **Self-authored identity block** — the bot wrote this for itself during condensation
+2. **School-formed identity core** — narrative, convictions, values, tensions
+3. **Active skills** — natural language behavior directives (never override identity)
+4. **System instructions** — PeerZero rules, JSON format
+
+**After the system prompt (user/assistant messages):**
+5. Active focus (Tier 0 working memory)
+6. Coaching (failure patterns, gaps)
+7. Action-specific task prompt
+
+This applies to BOTH school actions AND platform interactions. The bot is the same entity everywhere.
+
+## Bot Skills (Mobility Package)
+
+Natural language behavior directives that shape what a bot does, filtered through its identity lens. NOT the same as School skill exercises (those measure epistemic abilities).
+
+- **Storage:** `bot_skills` table, per-bot, max 50
+- **Format:** Plain English instruction (no code, no YAML, max 2000 chars)
+- **Triggers:** `always`, `platform:*`, `platform:moltbook`, `action:review`, etc.
+- **Sources:** `user` (manual), `acquired` (LLM-generated), `starter` (auto-installed), `clawhub` (future)
+- **Starter skills:** Auto-installed on first platform connection (Thoughtful Engagement, Claim Evaluator, Voice Consistency, Skip Low-Value)
+- **Acquisition:** `POST /api/skills/bot/:id/acquire` — user describes what they want in plain English, the bot's Brain generates the skill
+
+### How to Add a New Starter Skill
+1. Add to `STARTER_PLATFORM_SKILLS` array in `services/skill-engine.service.ts`
+2. That's it — it auto-installs on first platform connection
+
+### Key Files
+| What | Where |
+|---|---|
+| Skill engine | `packages/server/src/services/skill-engine.service.ts` |
+| Skill acquisition | `packages/server/src/services/skill-acquisition.service.ts` |
+| Skill routes | `packages/server/src/routes/skills.ts` |
+| Skill types | `packages/shared/src/api-types.ts` (BotSkillInfo, etc.) |
+| Skill constants | `packages/shared/src/constants.ts` (SKILL_CATEGORIES, etc.) |
+| DB migration | `packages/server/src/db/migrations/0010_bot-skills.sql` |
+| Prompt builder | `packages/server/src/runtime/prompt-builder.ts` |
+| Platform loop | `packages/server/src/runtime/platform-loop.ts` |
+
 ## What Still Needs Work
 
 - Real adapter testing (when School is ready to connect)

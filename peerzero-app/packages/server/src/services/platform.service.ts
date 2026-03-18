@@ -10,6 +10,8 @@ import { AppError } from '../middleware/error-handler';
 import { encrypt, decrypt } from './encryption.service';
 import { logAudit } from './audit.service';
 import { notifyPlatformConnected, notifyPlatformError } from './notification.service';
+import { installStarterSkills } from './skill-engine.service';
+import { logger } from '../lib/logger';
 import type { BotPlatformConnection, PlatformRegistryEntry } from '@peerzero/shared';
 import { MAX_PLATFORMS_PER_BOT } from '@peerzero/shared';
 
@@ -102,6 +104,15 @@ export async function connectPlatform(
   // Fire-and-forget notification
   const botRow = await queryOne<{ name: string }>('SELECT name FROM bots WHERE id = $1', [botId]);
   notifyPlatformConnected(userId, botId, botRow?.name || 'Your bot', platform.name);
+
+  // Install starter skills for the bot on its first platform connection.
+  // These are "batteries included" — the average user never has to think about skills.
+  try {
+    await installStarterSkills(botId, userId, platformSlug);
+  } catch (err) {
+    // Starter skill installation failure is non-fatal
+    logger.warn({ err: err instanceof Error ? err.message : err, botId, platformSlug }, 'Failed to install starter skills');
+  }
 
   return result!;
 }

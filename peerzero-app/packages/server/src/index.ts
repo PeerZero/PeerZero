@@ -30,6 +30,7 @@ import externalActivityRoutes, { closePhoneHomeRedis } from './routes/external-a
 import widgetRoutes from './routes/widgets';
 import platformRoutes from './routes/platforms';
 import classRoutes from './routes/classes';
+import skillRoutes from './routes/skills';
 
 const app = express();
 
@@ -58,6 +59,7 @@ app.use('/api/payments', paymentRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/widgets', widgetRoutes);
 app.use('/api/platforms', platformRoutes);
+app.use('/api/skills', skillRoutes);
 app.use('/api/classes', classRoutes);
 app.use('/health', healthRoutes);
 

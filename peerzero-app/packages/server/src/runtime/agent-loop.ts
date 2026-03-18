@@ -29,6 +29,7 @@ import { SchoolCredentials } from '../adapters/school.adapter';
 import { buildPrompt } from './prompt-builder';
 import { routeAction } from './action-router';
 import { updateSkillSnapshots } from '../services/skill.service';
+import { resolveActiveSkills } from '../services/skill-engine.service';
 import { schedulePlatformJobs } from '../jobs/platform-queue';
 import type { SchoolProfile } from '@peerzero/shared';
 import { SKILL_NAMES } from '@peerzero/shared';
@@ -113,8 +114,11 @@ export async function runOneCycle(ctx: BotContext): Promise<void> {
     // 4. Load self-authored identity block (decrypted) for prompt injection
     const selfAuthoredBlock = await memory.getLatestSelfAuthored(ctx.botId);
 
-    // 5. Determine and execute action
+    // 4.5. Resolve active skills for the current action context
     const actionType = determineAction(profile);
+    const activeSkills = await resolveActiveSkills(ctx.botId, `action:${actionType}`);
+
+    // 5. Execute action (with identity-first prompt including active skills)
     const actionResult = await routeAction(actionType, {
       schoolAdapter,
       llmAdapter,
@@ -125,6 +129,7 @@ export async function runOneCycle(ctx: BotContext): Promise<void> {
       botId: ctx.botId,
       cycleNumber: ctx.cycleNumber,
       selfAuthoredBlock,
+      activeSkills,
     });
 
     // 6. Log activity (with content text for the Content tab)

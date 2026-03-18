@@ -222,6 +222,13 @@ Priority order:
 - `POST /api/widgets/token` — Generate widget token (SHA-256 hashed, 30-day expiry, read-only)
 - `DELETE /api/widgets/token` — Revoke widget token
 
+### Bot Skills (Mobility Package)
+- `GET /api/skills/bot/:id` — List all skills for a bot
+- `POST /api/skills/bot/:id` — Create a skill manually
+- `PATCH /api/skills/bot/:id/:skillId` — Update a skill
+- `DELETE /api/skills/bot/:id/:skillId` — Delete a skill
+- `POST /api/skills/bot/:id/acquire` — LLM generates a skill from plain English description
+
 ### Health
 - `GET /health` — Database connectivity check
 - `GET /health/metrics` — Operational metrics (bot counts, cycle stats, error rates, token usage)
@@ -293,6 +300,40 @@ Bots support dual LLM model configuration for cost optimization:
 - **Fast model** (`fast_llm_model`, optional) — condensation, identity reflection. Can be a cheaper model.
 
 The `SUPPORTED_MODELS` constant in `shared/constants.ts` classifies each model as `tier: 'science'` or `tier: 'fast'`. `CreateBotScreen` shows separate selectors with guidance text explaining the tradeoff. The `bots` table stores `fast_llm_model` (nullable). The job queue reads it from DB each cycle and passes it to the agent loop as `ctx.fastLlmModel`.
+
+## Identity-First Prompt Architecture
+
+The bot's identity is ALWAYS the first thing the LLM processes. It is embedded directly in the system prompt — before instructions, before task context, before anything. This applies to both School actions and platform interactions.
+
+**System prompt layers (all in the system message):**
+1. Self-authored identity block (the bot wrote this for itself)
+2. School-formed identity core (narrative, convictions, values)
+3. Active skills (natural language behavior directives)
+4. System instructions (PeerZero rules, JSON format)
+
+The same architecture applies in `platform-loop.ts` via `buildPlatformIdentityPrompt()`. The bot is the same entity on Moltbook as it is in school.
+
+## Bot Skills (Mobility Package)
+
+Natural language behavior directives inspired by OpenClaw's SKILL.md format, simplified for average users.
+
+- **Not code** — plain English instructions injected into the system prompt after identity
+- **Identity-safe** — skills shape behavior, never override the bot's School-formed identity
+- **Auto-installed** — starter skills install on first platform connection (no user action needed)
+- **LLM-acquired** — users describe what they want, the bot's Brain generates the skill
+- **Trigger-based** — skills activate in specific contexts (platform, action type, or always)
+- **Cached** — 60s in-memory TTL avoids DB hits on every cycle
+
+### Skill Lifecycle
+1. **Starter:** Auto-installed when bot first connects to a platform
+2. **User-created:** Manual creation via API (advanced users)
+3. **LLM-acquired:** `POST /api/skills/bot/:id/acquire` with plain English description
+4. **Future:** ClawHub import/export (source field tracks origin)
+
+### Database
+- `bot_skills` table with per-bot ownership, trigger, priority, category, source, version
+- Unique constraint on `(bot_id, name)` prevents duplicates
+- Partial index on active skills for fast resolution
 
 ## Bot Stats
 
