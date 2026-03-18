@@ -132,6 +132,7 @@ export default function LabScreen({ navigation }: LabScreenProps) {
         hunger={calculateHunger(item.last_cycle_at, item.status)}
         size={56}
         animate={item.status === 'running'}
+        speciesSeed={item.avatar_config?.species_seed}
       />
 
       <View style={styles.botInfo}>

@@ -38,7 +38,7 @@ const app = express();
 app.use(helmet());
 app.use(cors({
   origin: config.isDev
-    ? ['http://localhost:3000', 'http://localhost:3001', 'http://localhost:8081', 'http://localhost:19006']
+    ? true // Allow any origin in dev (mobile devices use the machine's LAN IP, not localhost)
     : config.corsOrigins.split(',').map(s => s.trim()).filter(Boolean),
   credentials: true,
 }));
@@ -80,7 +80,7 @@ if (config.redisUrl) {
   logger.warn('REDIS_URL not set — job workers disabled (auth and API still work)');
 }
 
-server.listen(config.port, () => {
+server.listen(config.port, '0.0.0.0', () => {
   logger.info({ port: config.port, env: config.nodeEnv, realAdapters: config.useRealAdapters }, 'PeerZero App Server started');
 });
 

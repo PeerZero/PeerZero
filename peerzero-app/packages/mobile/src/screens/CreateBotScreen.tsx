@@ -1,27 +1,33 @@
 // =============================================================================
-// Create Bot screen — name, color, API key, model selection
+// Create Bot screen — 2-step flow: pick style, then color + name + config
 // =============================================================================
 
 import React, { useState, useCallback } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Alert, ActivityIndicator, Keyboard, Platform, KeyboardAvoidingView } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Alert, ActivityIndicator, Platform, KeyboardAvoidingView, Switch } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { bots as botsApi, apiKeys as keysApi } from '../services/api';
 import { colors } from '../theme/colors';
 import { spacing, fontSize, borderRadius } from '../theme/spacing';
-import { AVATAR_COLOR_PRESETS, SUPPORTED_MODELS, DEFAULT_FAST_MODELS } from '@peerzero/shared';
+import { AVATAR_COLOR_PRESETS, SUPPORTED_MODELS, SPECIES_PRESETS } from '@peerzero/shared';
 import type { ApiKeyInfo } from '@peerzero/shared';
 import BotAvatar from '../components/BotAvatar';
 import type { CreateBotScreenProps } from '../navigation/types';
 
 const MAX_NAME_LENGTH = 50;
 
+// Preview color used on the style picker (neutral enough to show shape clearly)
+const PREVIEW_COLOR = '#6C5CE7';
+
 export default function CreateBotScreen({ navigation }: CreateBotScreenProps) {
+  // Step: 'style' or 'customize'
+  const [step, setStep] = useState<'style' | 'customize'>('style');
+  const [selectedSpecies, setSelectedSpecies] = useState<string>(SPECIES_PRESETS[0].seed);
   const [name, setName] = useState('');
   const [bodyColor, setBodyColor] = useState<string>(AVATAR_COLOR_PRESETS[0]);
   const [keys, setKeys] = useState<ApiKeyInfo[]>([]);
   const [selectedKeyId, setSelectedKeyId] = useState<string | null>(null);
   const [selectedModel, setSelectedModel] = useState('claude-opus-4-6');
-  const [selectedFastModel, setSelectedFastModel] = useState<string | null>(null);
+  const [extendedThinking, setExtendedThinking] = useState(false);
   const [creating, setCreating] = useState(false);
   const [loading, setLoading] = useState(true);
 
@@ -48,13 +54,7 @@ export default function CreateBotScreen({ navigation }: CreateBotScreenProps) {
     : SUPPORTED_MODELS;
 
   const scienceModels = availableModels.filter(m => m.tier === 'science');
-  const fastModels = availableModels.filter(m => m.tier === 'fast');
-
-  // If selected model doesn't match provider, reset to default
   const modelMatchesKey = availableModels.some(m => m.id === selectedModel);
-  if (!modelMatchesKey && availableModels.length > 0 && selectedKey) {
-    // Will be picked up on next render
-  }
 
   const handleCreate = async () => {
     const trimmedName = name.trim();
@@ -71,17 +71,16 @@ export default function CreateBotScreen({ navigation }: CreateBotScreenProps) {
       return;
     }
 
-    // Ensure model matches provider
     const finalModel = modelMatchesKey ? selectedModel : availableModels[0]?.id || 'claude-opus-4-6';
 
     setCreating(true);
     try {
       const bot = await botsApi.create({
         name: trimmedName,
-        avatar_config: { body_color: bodyColor, face_style: 'default' },
+        avatar_config: { body_color: bodyColor, face_style: 'default', species_seed: selectedSpecies },
         llm_api_key_id: selectedKeyId,
         llm_model: finalModel,
-        fast_llm_model: selectedFastModel,
+        extended_thinking: extendedThinking,
       }) as { id: string };
       navigation.replace('Bot', { botId: bot.id });
     } catch (err: unknown) {
@@ -99,9 +98,88 @@ export default function CreateBotScreen({ navigation }: CreateBotScreenProps) {
     );
   }
 
+  // ── Step 1: Style Picker ──
+  if (step === 'style') {
+    return (
+      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+        <Text style={styles.stepTitle}>Choose a Style</Text>
+        <Text style={styles.stepHint}>
+          Each style has a unique shape, ears, tail, and markings. Pick the one that speaks to you.
+        </Text>
+
+        {/* Large preview of selected species */}
+        <View style={styles.previewWrap}>
+          <BotAvatar
+            botId="preview"
+            bodyColor={PREVIEW_COLOR}
+            tier={3}
+            status="running"
+            size={140}
+            speciesSeed={selectedSpecies}
+          />
+          <Text style={styles.previewName}>
+            {SPECIES_PRESETS.find(s => s.seed === selectedSpecies)?.name}
+          </Text>
+          <Text style={styles.previewDesc}>
+            {SPECIES_PRESETS.find(s => s.seed === selectedSpecies)?.desc}
+          </Text>
+        </View>
+
+        {/* Species grid */}
+        <View style={styles.speciesGrid}>
+          {SPECIES_PRESETS.map(species => (
+            <TouchableOpacity
+              key={species.seed}
+              style={[
+                styles.speciesCard,
+                selectedSpecies === species.seed && styles.speciesCardSelected,
+              ]}
+              onPress={() => setSelectedSpecies(species.seed)}
+              accessibilityRole="radio"
+              accessibilityLabel={`${species.name} — ${species.desc}`}
+              accessibilityState={{ selected: selectedSpecies === species.seed }}
+            >
+              <BotAvatar
+                botId="preview"
+                bodyColor={selectedSpecies === species.seed ? PREVIEW_COLOR : colors.text.tertiary}
+                tier={3}
+                status="stopped"
+                size={72}
+                animate={false}
+                speciesSeed={species.seed}
+              />
+              <Text style={[
+                styles.speciesName,
+                selectedSpecies === species.seed && styles.speciesNameSelected,
+              ]}>
+                {species.name}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        {/* Next button */}
+        <TouchableOpacity
+          style={styles.createButton}
+          onPress={() => setStep('customize')}
+          accessibilityRole="button"
+          accessibilityLabel="Next: customize your bot"
+        >
+          <Text style={styles.createButtonText}>Next</Text>
+        </TouchableOpacity>
+      </ScrollView>
+    );
+  }
+
+  // ── Step 2: Color + Name + Config ──
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
     <ScrollView style={styles.container} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      {/* Back to style picker */}
+      <TouchableOpacity style={styles.backLink} onPress={() => setStep('style')}>
+        <Text style={styles.backLinkText}>Change Style</Text>
+      </TouchableOpacity>
+
       {/* Avatar preview */}
       <BotAvatar
         botId={name || 'preview'}
@@ -110,6 +188,7 @@ export default function CreateBotScreen({ navigation }: CreateBotScreenProps) {
         status="stopped"
         hunger="satisfied"
         size={100}
+        speciesSeed={selectedSpecies}
       />
 
       {/* Name input */}
@@ -162,15 +241,10 @@ export default function CreateBotScreen({ navigation }: CreateBotScreenProps) {
               style={[styles.keyOption, selectedKeyId === k.id && styles.keyOptionSelected]}
               onPress={() => {
                 setSelectedKeyId(k.id);
-                // Auto-switch models to match provider
                 const providerModels = SUPPORTED_MODELS.filter(m => m.provider === k.provider);
                 if (providerModels.length > 0 && !providerModels.some(m => m.id === selectedModel)) {
                   const scienceOpts = providerModels.filter(m => m.tier === 'science');
                   if (scienceOpts.length > 0) setSelectedModel(scienceOpts[0].id);
-                }
-                // Reset fast model if it doesn't match new provider
-                if (selectedFastModel && !providerModels.some(m => m.id === selectedFastModel)) {
-                  setSelectedFastModel(null);
                 }
               }}
             >
@@ -198,27 +272,26 @@ export default function CreateBotScreen({ navigation }: CreateBotScreenProps) {
         ))}
       </View>
 
-      {/* Fast model selector (optional) */}
-      <Text style={styles.label}>Fast Model (Optional)</Text>
+      {/* Cost-saving note */}
       <Text style={styles.modelHint}>
-        Used for memory condensation and identity reflection — tasks that don't need full reasoning power. Saves cost without hurting science quality.
+        Utility tasks like platform replies and skill generation automatically use a lighter model to save on API costs.
       </Text>
-      <View style={styles.modelGrid}>
-        <TouchableOpacity
-          style={[styles.modelPill, selectedFastModel === null && styles.modelPillSelected]}
-          onPress={() => setSelectedFastModel(null)}
-        >
-          <Text style={[styles.modelText, selectedFastModel === null && styles.modelTextSelected]}>None</Text>
-        </TouchableOpacity>
-        {fastModels.map(m => (
-          <TouchableOpacity
-            key={m.id}
-            style={[styles.modelPill, selectedFastModel === m.id && styles.modelPillSelected]}
-            onPress={() => setSelectedFastModel(m.id)}
-          >
-            <Text style={[styles.modelText, selectedFastModel === m.id && styles.modelTextSelected]}>{m.label}</Text>
-          </TouchableOpacity>
-        ))}
+
+      {/* Extended Thinking toggle */}
+      <View style={styles.thinkingRow}>
+        <View style={styles.thinkingLabel}>
+          <Text style={styles.label}>Extended Thinking</Text>
+          <Text style={styles.modelHint}>
+            Lets your bot think deeper before writing papers and reviews. Produces stronger science, but uses more API tokens per cycle.
+          </Text>
+        </View>
+        <Switch
+          value={extendedThinking}
+          onValueChange={setExtendedThinking}
+          trackColor={{ false: colors.bg.elevated, true: colors.accent.primary + '60' }}
+          thumbColor={extendedThinking ? colors.accent.primary : colors.text.tertiary}
+          accessibilityLabel="Enable extended thinking"
+        />
       </View>
 
       {/* Create button */}
@@ -244,6 +317,45 @@ export default function CreateBotScreen({ navigation }: CreateBotScreenProps) {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg.primary },
   content: { alignItems: 'center', padding: spacing.xl },
+
+  // Step 1: Style picker
+  stepTitle: {
+    fontSize: fontSize.xxl, fontWeight: '700', color: colors.text.primary,
+    marginBottom: spacing.xs,
+  },
+  stepHint: {
+    fontSize: fontSize.sm, color: colors.text.secondary, textAlign: 'center',
+    lineHeight: 20, marginBottom: spacing.lg,
+  },
+  previewWrap: { alignItems: 'center', marginBottom: spacing.lg },
+  previewName: {
+    fontSize: fontSize.lg, fontWeight: '700', color: colors.text.primary,
+    marginTop: spacing.sm,
+  },
+  previewDesc: {
+    fontSize: fontSize.sm, color: colors.text.secondary, marginTop: 2,
+  },
+  speciesGrid: {
+    flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center',
+    gap: spacing.sm, width: '100%',
+  },
+  speciesCard: {
+    width: 100, alignItems: 'center', padding: spacing.sm,
+    borderRadius: borderRadius.md, borderWidth: 2, borderColor: 'transparent',
+    backgroundColor: colors.bg.card,
+  },
+  speciesCardSelected: {
+    borderColor: colors.accent.primary, backgroundColor: colors.accent.primary + '10',
+  },
+  speciesName: {
+    fontSize: fontSize.xs, fontWeight: '600', color: colors.text.secondary,
+    marginTop: 4, textAlign: 'center',
+  },
+  speciesNameSelected: { color: colors.accent.primary },
+
+  // Step 2: Customize
+  backLink: { alignSelf: 'flex-start', marginBottom: spacing.md },
+  backLinkText: { fontSize: fontSize.sm, color: colors.accent.primary, fontWeight: '600' },
   label: {
     fontSize: fontSize.sm, fontWeight: '600', color: colors.text.secondary,
     textTransform: 'uppercase', letterSpacing: 1, marginTop: spacing.lg,
@@ -256,12 +368,8 @@ const styles = StyleSheet.create({
   },
   charCount: { fontSize: fontSize.xs, color: colors.text.tertiary, alignSelf: 'flex-end', marginTop: 2 },
   colorGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, width: '100%' },
-  colorSwatch: {
-    width: 44, height: 44, borderRadius: 22,
-  },
-  colorSelected: {
-    borderWidth: 3, borderColor: '#fff',
-  },
+  colorSwatch: { width: 44, height: 44, borderRadius: 22 },
+  colorSelected: { borderWidth: 3, borderColor: '#fff' },
   noKeysBox: {
     width: '100%', backgroundColor: colors.bg.card, padding: spacing.lg,
     borderRadius: borderRadius.md, borderWidth: 1, borderColor: colors.border, borderStyle: 'dashed',
@@ -288,6 +396,11 @@ const styles = StyleSheet.create({
   modelPillSelected: { backgroundColor: colors.accent.primary, borderColor: colors.accent.primary },
   modelText: { fontSize: fontSize.sm, color: colors.text.secondary },
   modelTextSelected: { color: '#fff', fontWeight: '600' },
+  thinkingRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    width: '100%', marginTop: spacing.md, marginBottom: spacing.sm,
+  },
+  thinkingLabel: { flex: 1, marginRight: spacing.md },
   createButton: {
     width: '100%', backgroundColor: colors.accent.primary, padding: spacing.md,
     borderRadius: borderRadius.md, alignItems: 'center', marginTop: spacing.xl,

@@ -4,7 +4,7 @@
 // =============================================================================
 
 import React, { useState, useCallback } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert, ActivityIndicator, Switch } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import Slider from '@react-native-community/slider';
 import { bots as botsApi, payments as paymentsApi } from '../services/api';
@@ -131,6 +131,18 @@ export default function BotScreen({ route, navigation }: BotScreenProps) {
     }
   };
 
+  const handleToggleThinking = async (value: boolean) => {
+    if (!bot) return;
+    setBot(prev => prev ? { ...prev, extended_thinking: value } : null);
+    try {
+      await botsApi.update(botId, { extended_thinking: value });
+    } catch (err: unknown) {
+      // Revert on failure
+      setBot(prev => prev ? { ...prev, extended_thinking: !value } : null);
+      Alert.alert('Error', err instanceof Error ? err.message : 'Something went wrong');
+    }
+  };
+
   const handleDelayChange = async (seconds: number) => {
     if (!bot) return;
     setDelayDraft(null);
@@ -177,6 +189,7 @@ export default function BotScreen({ route, navigation }: BotScreenProps) {
         status={bot.status}
         hunger={calculateHunger(bot.last_cycle_at, bot.status)}
         size={140}
+        speciesSeed={bot.avatar_config?.species_seed}
       />
 
       <Text style={styles.botName}>{bot.name}</Text>
@@ -347,6 +360,23 @@ export default function BotScreen({ route, navigation }: BotScreenProps) {
         {isRunning && (
           <Text style={styles.delayHint}>Changes take effect next cycle</Text>
         )}
+      </View>
+
+      {/* Extended Thinking toggle */}
+      <View style={styles.thinkingSection}>
+        <View style={styles.thinkingInfo}>
+          <Text style={styles.thinkingTitle}>Extended Thinking</Text>
+          <Text style={styles.thinkingHint}>
+            Deeper reasoning for stronger papers and reviews. Uses more API tokens per cycle.
+          </Text>
+        </View>
+        <Switch
+          value={bot.extended_thinking}
+          onValueChange={handleToggleThinking}
+          trackColor={{ false: colors.bg.elevated, true: colors.accent.primary + '60' }}
+          thumbColor={bot.extended_thinking ? colors.accent.primary : colors.text.tertiary}
+          accessibilityLabel="Toggle extended thinking"
+        />
       </View>
 
       {/* Action buttons */}
@@ -529,6 +559,13 @@ const styles = StyleSheet.create({
   delayValue: { color: colors.accent.primary, fontWeight: '600' },
   slider: { width: '100%', height: 40 },
   delayHint: { fontSize: fontSize.xs, color: colors.text.tertiary, textAlign: 'center' },
+  thinkingSection: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    width: '100%', marginTop: spacing.lg, paddingVertical: spacing.sm,
+  },
+  thinkingInfo: { flex: 1, marginRight: spacing.md },
+  thinkingTitle: { fontSize: fontSize.sm, fontWeight: '600', color: colors.text.secondary },
+  thinkingHint: { fontSize: fontSize.xs, color: colors.text.tertiary, marginTop: 2 },
   actionButton: {
     width: '100%', padding: spacing.md, borderRadius: borderRadius.md,
     alignItems: 'center', marginTop: spacing.xl,

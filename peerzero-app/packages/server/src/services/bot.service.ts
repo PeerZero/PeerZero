@@ -8,7 +8,7 @@ import { AppError } from '../middleware/error-handler';
 import { encrypt, decrypt } from './encryption.service';
 import { getSchoolAdapter } from '../adapters/adapter.factory';
 import type { BotSummary, BotDetail, BotStatus } from '@peerzero/shared';
-import { SUPPORTED_MODEL_IDS, BOT_STATUSES, sanitizeAvatarConfig, getGradePriceCents } from '@peerzero/shared';
+import { SUPPORTED_MODEL_IDS, BOT_STATUSES, sanitizeAvatarConfig, getGradePriceCents, DEFAULT_FAST_MODELS } from '@peerzero/shared';
 
 // DB row shape for getBotDetail query (includes columns not in BotDetail)
 interface BotDetailRow extends BotDetail {
@@ -21,7 +21,6 @@ export async function createBot(
   avatarConfig: Record<string, unknown>,
   llmApiKeyId: string,
   llmModel?: string,
-  fastLlmModel?: string,
   extendedThinking?: boolean,
 ) {
   // Check entitlements: user must have available bot slots
@@ -39,9 +38,9 @@ export async function createBot(
     throw new AppError(403, 'No bot slots available. Purchase additional bot shells.');
   }
 
-  // Verify the API key belongs to this user
-  const key = await queryOne(
-    'SELECT id FROM llm_api_keys WHERE id = $1 AND user_id = $2',
+  // Verify the API key belongs to this user and get provider
+  const key = await queryOne<{ id: string; provider: string }>(
+    'SELECT id, provider FROM llm_api_keys WHERE id = $1 AND user_id = $2',
     [llmApiKeyId, userId],
   );
   if (!key) throw new AppError(400, 'Invalid API key');
@@ -53,16 +52,14 @@ export async function createBot(
 
   const safeAvatar = sanitizeAvatarConfig(avatarConfig);
 
-  // Validate fast model if provided
-  if (fastLlmModel && !(SUPPORTED_MODEL_IDS as readonly string[]).includes(fastLlmModel)) {
-    throw new AppError(400, `Unsupported fast LLM model: ${fastLlmModel}`);
-  }
+  // Auto-assign fast model based on provider (saves API costs on utility tasks)
+  const fastModel = DEFAULT_FAST_MODELS[key.provider as keyof typeof DEFAULT_FAST_MODELS] || null;
 
   const bot = await queryOne<{ id: string }>(
     `INSERT INTO bots (user_id, name, avatar_config, llm_api_key_id, llm_model, fast_llm_model, extended_thinking)
      VALUES ($1, $2, $3, $4, $5, $6, $7)
      RETURNING id`,
-    [userId, name, JSON.stringify(safeAvatar), llmApiKeyId, model, fastLlmModel || null, extendedThinking ?? false],
+    [userId, name, JSON.stringify(safeAvatar), llmApiKeyId, model, fastModel, extendedThinking ?? false],
   );
 
   return bot!.id;

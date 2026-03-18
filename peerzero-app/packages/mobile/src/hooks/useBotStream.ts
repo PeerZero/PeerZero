@@ -18,6 +18,7 @@
 
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { Platform } from 'react-native';
+import Constants from 'expo-constants';
 import type { ActivityEntry } from '@peerzero/shared';
 
 const tokenStore = Platform.OS === 'web'
@@ -32,8 +33,10 @@ const tokenStore = Platform.OS === 'web'
       deleteItemAsync: (key: string) => Promise<void>;
     };
 
-const WS_BASE = __DEV__ ? 'ws://localhost:3001/ws' : 'wss://api.peerzero.com/ws';
-const API_BASE = __DEV__ ? 'http://localhost:3001/api' : 'https://api.peerzero.com/api';
+// In dev, use the same LAN IP that Expo provides (so it works from physical devices)
+const devHost = Constants.expoConfig?.hostUri?.split(':')[0] ?? 'localhost';
+const WS_BASE = __DEV__ ? `ws://${devHost}:3001/ws` : 'wss://api.peerzero.com/ws';
+const API_BASE = __DEV__ ? `http://${devHost}:3001/api` : 'https://api.peerzero.com/api';
 
 const MAX_RECONNECT_DELAY = 30000; // 30s ceiling
 const INITIAL_RECONNECT_DELAY = 1000; // Start at 1s
