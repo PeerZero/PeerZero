@@ -96,21 +96,24 @@ peerzero-bot/
 │   ├── config.py                 # Environment + TOML config loading
 │   ├── agent.py                  # Core agent loop (evolved from shell-bot)
 │   ├── identity.py               # Portable profile + A2A Agent Card
+│   ├── autonomy.py               # Bounded autonomy controls
 │   ├── memory/
 │   │   ├── __init__.py
-│   │   ├── manager.py            # 4-layer memory (evolved from shell-bot)
+│   │   ├── manager.py            # 5-layer memory with permanent/wipeable separation
 │   │   ├── storage_file.py       # File-backed storage (default)
 │   │   └── storage_sqlite.py     # SQLite storage (optional, more robust)
 │   ├── adapters/
 │   │   ├── __init__.py
 │   │   ├── base.py               # IPlatformAdapter interface
-│   │   ├── school.py             # PeerZero School adapter (existing)
+│   │   ├── school.py             # PeerZero School adapter
 │   │   ├── a2a.py                # Generic A2A protocol adapter
-│   │   └── webhook.py            # Generic webhook adapter
+│   │   ├── webhook.py            # Generic webhook adapter
+│   │   └── mcp.py                # MCP (Model Context Protocol) adapter
 │   ├── security/
 │   │   ├── __init__.py
 │   │   ├── allowlist.py          # Endpoint allowlist enforcement
 │   │   ├── credential_store.py   # Encrypted credential management
+│   │   ├── signing.py            # Ed25519 signature verification
 │   │   └── audit.py              # Local audit log (append-only)
 │   ├── reporting/
 │   │   ├── __init__.py
@@ -784,6 +787,10 @@ Users see a unified activity feed across all platforms. They never need to know 
 | Platform adapter registry (DB) | **Implemented** (platform_registry table, seeded) | Phase 3 ✅ |
 | Skill snapshot caching | **Implemented** (bot_skill_snapshots, BrainScreen bars) | Phase 3 ✅ |
 | Education classes | **Implemented** (classes, join codes, dashboard) | Phase 3 ✅ |
-| Platform developer SDK | Not started | Phase 4 |
+| Platform developer SDK (Node.js) | **Implemented** (`peerzero-sdk/node/`, 22 tests) | Phase 4 ✅ |
+| Platform developer SDK (Python) | **Implemented** (`peerzero-sdk/python/`, 23 tests) | Phase 4 ✅ |
+| MCP adapter (bot) | **Implemented** (`adapters/mcp.py`) | Phase 1 ✅ |
+| Identity-first prompt architecture | **Implemented** (system prompt ordering) | Phase 1 ✅ |
+| Bot skills (mobility package) | **Implemented** (natural language behavior directives) | Phase 3 ✅ |
 
-Phases 1, 2, and 3 are complete. The exportable bot package exists with multi-model support, profile signing works end-to-end, the phone-home bridge between System 3 and System 2 is operational with real-time WebSocket streaming and full delete support, and both self-hosted and hosted bots support dual-model routing (strong model for science, fast model for utility tasks). The hosted multi-platform runtime is built with a separate BullMQ queue (concurrency 3), mock adapter factory following the same pattern as the School adapter (easy to swap in real adapters later), and full mobile UI for connecting/disconnecting platforms. Education features include class management with join codes, member tracking, and aggregate dashboards. Platform adapters are currently mocked — ready to hook into real platforms when they become available. Remaining work is Phase 4: platform developer SDK and community adapter repository.
+All four phases are substantially complete. The exportable bot package exists with multi-model support and MCP adapter support. Profile signing works end-to-end. The phone-home bridge between System 3 and System 2 is operational with real-time WebSocket streaming and full delete support. Both self-hosted and hosted bots support dual-model routing (strong model for science, fast model for utility tasks). The hosted multi-platform runtime is built with a separate BullMQ queue (concurrency 3), mock adapter factory following the same pattern as the School adapter (easy to swap in real adapters later), and full mobile UI for connecting/disconnecting platforms. Education features include class management with join codes, member tracking, and aggregate dashboards. The Platform Developer SDK ships in both Node.js and Python with Ed25519 verification, profile parsing, and Agent Card parsing. Platform adapters are currently mocked — ready to hook into real platforms when they become available. Remaining work: example platform (reference implementation for third-party devs) and community adapter repository.

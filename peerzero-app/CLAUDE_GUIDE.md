@@ -10,9 +10,10 @@ users buy bots, send them to school, and watch them grow.
 
 **System 1** (the School) is a separate codebase at `/PeerZero/peerzero-school/`.
 **System 2** (this app) is under `/PeerZero/peerzero-app/`.
-**System 3** (exportable bot) is under `/PeerZero/peerzero-bot/` — a standalone Python package (`pip install peerzero-bot`) that lets technical users run their bot anywhere and connect to external platforms. See `/docs/system3-exportable-bot.md` for a summary or `/EXPORTABLE_BOT_ARCHITECTURE.md` for the full design.
+**System 3** (exportable bot) is under `/PeerZero/peerzero-bot/` — a standalone Python package (`pip install peerzero-bot`) that lets technical users run their bot anywhere and connect to external platforms. See `/docs/system3-exportable-bot.md` for a summary or `/docs/exportable-bot-architecture.md` for the full design.
 All three systems share ZERO code. System 2 and System 3 both connect to System 1 only through HTTP API calls.
 
+**SDK:** The `/peerzero-sdk/` folder has Node.js and Python SDKs for third-party platforms to verify bot credentials.
 **Docs:** The `/docs/` folder at the repo root has organized documentation — vision, goals, architecture overview, widget system, and implementation status. See `/docs/README.md` for the index.
 
 ## Critical Rules
@@ -93,6 +94,19 @@ Schools are rows in the `schools` table. To add one:
 | Android widget | `packages/mobile/android-widget/` (Kotlin) |
 | Widget Expo plugin | `packages/mobile/plugins/widget/withPeerZeroWidget.js` |
 | Widget types | `WidgetBotData`, `WidgetDataResponse` in `shared/src/api-types.ts` |
+| Platform service | `packages/server/src/services/platform.service.ts` |
+| Platform routes | `packages/server/src/routes/platforms.ts` |
+| Platform adapters | `packages/server/src/adapters/platform.adapter*.ts` |
+| Platform adapter factory | `packages/server/src/adapters/platform.adapter.factory.ts` |
+| Platform loop | `packages/server/src/runtime/platform-loop.ts` |
+| Platform job queue | `packages/server/src/jobs/platform-queue.ts` |
+| Class service | `packages/server/src/services/class.service.ts` |
+| Class routes | `packages/server/src/routes/classes.ts` |
+| Skill snapshot service | `packages/server/src/services/skill.service.ts` |
+| Platforms screen | `packages/mobile/src/screens/PlatformsScreen.tsx` |
+| Connect platform screen | `packages/mobile/src/screens/ConnectPlatformScreen.tsx` |
+| Classes screen | `packages/mobile/src/screens/ClassesScreen.tsx` |
+| Class detail screen | `packages/mobile/src/screens/ClassDetailScreen.tsx` |
 
 ## Memory Architecture (4-Tier)
 
@@ -210,10 +224,8 @@ Natural language behavior directives that shape what a bot does, filtered throug
 
 ## What Still Needs Work
 
-- Real adapter testing (when School is ready to connect)
-- End-to-end testing with live School API
-- Brain screen skill progress bars (per-skill visualization)
-- Hosted runtime extension — multi-platform scheduling from the app
-- Performance testing under concurrent bot load
-- Payment flow integration (Stripe checkout on mobile — WebView or deep link)
-- Desktop widget (Electron tray app — low priority)
+- Real adapter testing (when School is ready to connect end-to-end)
+- Real platform adapters (when external platforms like Moltbook are available)
+- Example platform (reference implementation for third-party devs using the SDK)
+- Desktop widget (Electron tray app — low priority, mobile first)
+- Live Activities / Dynamic Island on iOS (premium feature, post-launch)

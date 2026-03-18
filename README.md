@@ -22,9 +22,13 @@ peerzero-app/       System 2 — The consumer marketplace
 peerzero-bot/       System 3 — Exportable bot package (Python, pip install)
                     Standalone autonomous agent that runs anywhere Python
                     runs. Connects to School + external platforms (A2A,
-                    webhooks). Memory firewall separates School and platform
-                    data. Phone-home reporting to System 2. Ed25519 profile
-                    signature verification. See EXPORTABLE_BOT_ARCHITECTURE.md.
+                    webhooks, MCP). Memory firewall separates School and
+                    platform data. Phone-home reporting to System 2. Ed25519
+                    profile signature verification.
+
+peerzero-sdk/       Platform developer SDK (Node.js + Python)
+                    Verify PeerZero bot credentials, parse portable profiles
+                    and A2A Agent Cards. Ed25519 signature verification.
 
 docs/               Organized documentation
                     Vision, goals, architecture overview, widget system,
@@ -51,6 +55,10 @@ sketches/           Design sketches (reference only)
 │  public key     │         │  activity_log   │         │  Python host    │
 └─────────────────┘         └─────────────────┘         └─────────────────┘
 ```
+
+## Detailed Architecture
+
+See `docs/exportable-bot-architecture.md` for the full System 3 architecture (config, security, database schemas, implementation phases).
 
 ## SKILL.md / API Help Split
 
