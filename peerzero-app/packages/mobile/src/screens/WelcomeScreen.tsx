@@ -100,7 +100,7 @@ export default function WelcomeScreen({ onComplete }: WelcomeScreenProps) {
     { useNativeDriver: false },
   );
 
-  const onMomentumScrollEnd = (e: any) => {
+  const onMomentumScrollEnd = (e: { nativeEvent: { contentOffset: { x: number } } }) => {
     const index = Math.round(e.nativeEvent.contentOffset.x / SCREEN_WIDTH);
     setCurrentStep(index);
   };

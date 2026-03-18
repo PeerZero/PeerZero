@@ -101,8 +101,8 @@ export default function LabScreen({ navigation }: LabScreenProps) {
               try {
                 await botsApi.delete(bot.id);
                 await loadBots();
-              } catch (err: any) {
-                Alert.alert('Error', err.message);
+              } catch (err: unknown) {
+                Alert.alert('Error', err instanceof Error ? err.message : 'Something went wrong');
               }
             },
           },

@@ -30,7 +30,7 @@ import { requireAuth, JwtPayload } from '../middleware/auth';
 import { userRateLimit } from '../middleware/rate-limit';
 import { logAudit } from '../services/audit.service';
 import { credibilityToStage } from '@peerzero/shared';
-import type { WidgetBotData, WidgetDataResponse } from '@peerzero/shared';
+import type { WidgetBotData, WidgetDataResponse, AvatarConfig, BotStatus, MoodType } from '@peerzero/shared';
 
 const router = Router();
 
@@ -205,14 +205,14 @@ router.get('/data', jwtOrWidgetToken, userRateLimit('read'), async (req: Request
   const bots: WidgetBotData[] = rows.map(r => ({
     id: r.id,
     name: r.name,
-    avatar_config: r.avatar_config as any,
-    status: r.status as any,
+    avatar_config: r.avatar_config as AvatarConfig,
+    status: r.status as BotStatus,
     credibility: r.cached_credibility,
     tier: credibilityToStage(r.cached_credibility),
     grade: r.cached_grade,
     school_name: r.school_name,
     last_activity_headline: activityMap[r.id]?.headline || null,
-    last_activity_mood: (activityMap[r.id]?.mood || null) as any,
+    last_activity_mood: (activityMap[r.id]?.mood as MoodType) || null,
     last_cycle_at: r.last_cycle_at,
   }));
 
