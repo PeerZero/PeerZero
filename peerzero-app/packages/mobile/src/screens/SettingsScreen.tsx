@@ -492,6 +492,8 @@ export default function SettingsScreen() {
             <TouchableOpacity
               style={[styles.logoutButton, { marginTop: spacing.md }]}
               onPress={handleDisableWidget}
+              accessibilityRole="button"
+              accessibilityLabel="Disable Widget"
             >
               <Text style={styles.deleteText}>Disable Widget</Text>
             </TouchableOpacity>
@@ -500,12 +502,12 @@ export default function SettingsScreen() {
       </View>
 
       {/* Logout */}
-      <TouchableOpacity style={styles.logoutButton} onPress={logout}>
+      <TouchableOpacity style={styles.logoutButton} onPress={logout} accessibilityRole="button" accessibilityLabel="Sign Out">
         <Text style={styles.logoutText}>Sign Out</Text>
       </TouchableOpacity>
 
       {/* Delete Account */}
-      <TouchableOpacity style={styles.deleteAccountButton} onPress={handleDeleteAccount}>
+      <TouchableOpacity style={styles.deleteAccountButton} onPress={handleDeleteAccount} accessibilityRole="button" accessibilityLabel="Delete Account">
         <Text style={styles.deleteAccountText}>Delete Account</Text>
       </TouchableOpacity>
 
