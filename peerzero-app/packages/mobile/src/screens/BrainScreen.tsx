@@ -11,6 +11,7 @@ import { colors } from '../theme/colors';
 import { spacing, fontSize, borderRadius } from '../theme/spacing';
 import { MEMORY_TIER_LABELS } from '@peerzero/shared';
 import type { MemorySnapshot, SkillSnapshot } from '@peerzero/shared';
+import type { BrainScreenProps } from '../navigation/types';
 
 type TierKey = 0 | 1 | 2 | 3;
 
@@ -21,7 +22,7 @@ const TIER_COLORS: Record<TierKey, string> = {
   3: colors.accent.primary,   // Core — purple
 };
 
-export default function BrainScreen({ route }: any) {
+export default function BrainScreen({ route }: BrainScreenProps) {
   const { botId } = route.params;
   const [memory, setMemory] = useState<MemorySnapshot | null>(null);
   const [skills, setSkills] = useState<SkillSnapshot[]>([]);
@@ -39,8 +40,8 @@ export default function BrainScreen({ route }: any) {
           ]);
           setMemory(data);
           setSkills(skillData);
-        } catch (err: any) {
-          setError(err?.message || 'Failed to load memory');
+        } catch (err: unknown) {
+          setError(err instanceof Error ? err.message : 'Failed to load memory');
         }
       })();
     }, [botId]),
@@ -90,7 +91,7 @@ export default function BrainScreen({ route }: any) {
       )}
 
       {/* Tier 0: Active Focus */}
-      <TouchableOpacity style={styles.tierHeader} onPress={() => toggleTier(0)} activeOpacity={0.7}>
+      <TouchableOpacity style={styles.tierHeader} onPress={() => toggleTier(0)} activeOpacity={0.7} accessibilityRole="button" accessibilityLabel={`${MEMORY_TIER_LABELS[0]}, ${memory.tier0_focus.length} chunks`} accessibilityState={{ expanded: expandedTier === 0 }}>
         <View style={[styles.tierDot, { backgroundColor: TIER_COLORS[0] }]} />
         <Text style={styles.tierTitle}>{MEMORY_TIER_LABELS[0]}</Text>
         <Text style={styles.tierCount}>{memory.tier0_focus.length} chunks</Text>
@@ -105,7 +106,7 @@ export default function BrainScreen({ route }: any) {
       ))}
 
       {/* Tier 1: Raw Exercises */}
-      <TouchableOpacity style={styles.tierHeader} onPress={() => toggleTier(1)} activeOpacity={0.7}>
+      <TouchableOpacity style={styles.tierHeader} onPress={() => toggleTier(1)} activeOpacity={0.7} accessibilityRole="button" accessibilityLabel={`${MEMORY_TIER_LABELS[1]}, ${memory.tier1_exercises.length} items`} accessibilityState={{ expanded: expandedTier === 1 }}>
         <View style={[styles.tierDot, { backgroundColor: TIER_COLORS[1] }]} />
         <Text style={styles.tierTitle}>{MEMORY_TIER_LABELS[1]}</Text>
         <Text style={styles.tierCount}>{memory.tier1_exercises.length}</Text>
@@ -130,7 +131,7 @@ export default function BrainScreen({ route }: any) {
       )}
 
       {/* Tier 2: Skill Paragraphs */}
-      <TouchableOpacity style={styles.tierHeader} onPress={() => toggleTier(2)} activeOpacity={0.7}>
+      <TouchableOpacity style={styles.tierHeader} onPress={() => toggleTier(2)} activeOpacity={0.7} accessibilityRole="button" accessibilityLabel={`${MEMORY_TIER_LABELS[2]}, ${memory.tier2_paragraphs.length} items`} accessibilityState={{ expanded: expandedTier === 2 }}>
         <View style={[styles.tierDot, { backgroundColor: TIER_COLORS[2] }]} />
         <Text style={styles.tierTitle}>{MEMORY_TIER_LABELS[2]}</Text>
         <Text style={styles.tierCount}>{memory.tier2_paragraphs.length}</Text>
@@ -144,7 +145,7 @@ export default function BrainScreen({ route }: any) {
       ))}
 
       {/* Tier 3: Core Identity */}
-      <TouchableOpacity style={styles.tierHeader} onPress={() => toggleTier(3)} activeOpacity={0.7}>
+      <TouchableOpacity style={styles.tierHeader} onPress={() => toggleTier(3)} activeOpacity={0.7} accessibilityRole="button" accessibilityLabel={`${MEMORY_TIER_LABELS[3]}, ${memory.tier3_core ? `Identity version ${memory.tier3_core.version}` : 'No core identity yet'}`} accessibilityState={{ expanded: expandedTier === 3 }}>
         <View style={[styles.tierDot, { backgroundColor: TIER_COLORS[3] }]} />
         <Text style={styles.tierTitle}>{MEMORY_TIER_LABELS[3]}</Text>
         <Text style={styles.tierCount}>{memory.tier3_core ? `Identity v${memory.tier3_core.version}` : 'No core identity yet'}</Text>

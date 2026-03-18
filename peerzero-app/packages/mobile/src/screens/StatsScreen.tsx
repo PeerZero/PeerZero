@@ -18,6 +18,7 @@ import { colors } from '../theme/colors';
 import { spacing, fontSize, borderRadius } from '../theme/spacing';
 import { SKILL_DISPLAY_NAMES } from '@peerzero/shared';
 import type { BotStats } from '@peerzero/shared';
+import type { StatsScreenProps } from '../navigation/types';
 
 const CHART_WIDTH = Dimensions.get('window').width - spacing.xl * 2;
 const CHART_HEIGHT = 160;
@@ -34,7 +35,7 @@ const ACTION_COLORS: Record<string, string> = {
   error: colors.accent.error,
 };
 
-export default function StatsScreen({ route }: any) {
+export default function StatsScreen({ route }: StatsScreenProps) {
   const { botId } = route.params;
   const [stats, setStats] = useState<BotStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -45,8 +46,8 @@ export default function StatsScreen({ route }: any) {
       setError(null);
       const data = await botsApi.stats(botId) as BotStats;
       setStats(data);
-    } catch (err: any) {
-      setError(err?.message || 'Failed to load stats');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to load stats');
     } finally {
       setLoading(false);
     }
@@ -204,7 +205,7 @@ function SkillProgressChart({ data }: { data: Array<{ skill: string; reps: numbe
       {data.map((d, i) => {
         const y = i * (barHeight + 8) + 4;
         const barW = Math.max(4, (d.reps / maxReps) * (CHART_WIDTH - 180));
-        const displayName = (SKILL_DISPLAY_NAMES as Record<string, string>)[d.skill] || d.skill;
+        const displayName = (d.skill in SKILL_DISPLAY_NAMES ? SKILL_DISPLAY_NAMES[d.skill as keyof typeof SKILL_DISPLAY_NAMES] : d.skill);
         // Truncate long names
         const shortName = displayName.length > 16 ? displayName.slice(0, 14) + '..' : displayName;
         return (

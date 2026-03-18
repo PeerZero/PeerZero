@@ -9,6 +9,7 @@ import { platforms as platformsApi } from '../services/api';
 import { colors } from '../theme/colors';
 import { spacing, fontSize, borderRadius } from '../theme/spacing';
 import type { BotPlatformConnection } from '@peerzero/shared';
+import type { PlatformsScreenProps } from '../navigation/types';
 
 const STATUS_COLORS: Record<string, string> = {
   active: colors.accent.success,
@@ -17,7 +18,7 @@ const STATUS_COLORS: Record<string, string> = {
   disconnected: colors.text.tertiary,
 };
 
-export default function PlatformsScreen({ route, navigation }: any) {
+export default function PlatformsScreen({ route, navigation }: PlatformsScreenProps) {
   const { botId } = route.params;
   const [connections, setConnections] = useState<BotPlatformConnection[]>([]);
   const [loading, setLoading] = useState(true);
@@ -26,8 +27,8 @@ export default function PlatformsScreen({ route, navigation }: any) {
     try {
       const data = await platformsApi.list(botId) as BotPlatformConnection[];
       setConnections(data);
-    } catch (err: any) {
-      Alert.alert('Error', err.message);
+    } catch (err: unknown) {
+      Alert.alert('Error', err instanceof Error ? err.message : 'Something went wrong');
     } finally {
       setLoading(false);
     }
@@ -70,6 +71,8 @@ export default function PlatformsScreen({ route, navigation }: any) {
       <TouchableOpacity
         style={styles.disconnectButton}
         onPress={() => handleDisconnect(item.id, item.platform_name)}
+        accessibilityRole="button"
+        accessibilityLabel={`Disconnect ${item.platform_name}`}
       >
         <Text style={styles.disconnectText}>Disconnect</Text>
       </TouchableOpacity>
@@ -101,6 +104,8 @@ export default function PlatformsScreen({ route, navigation }: any) {
       <TouchableOpacity
         style={styles.fab}
         onPress={() => navigation.navigate('ConnectPlatform', { botId })}
+        accessibilityRole="button"
+        accessibilityLabel="Connect Platform"
       >
         <Text style={styles.fabText}>+ Connect Platform</Text>
       </TouchableOpacity>

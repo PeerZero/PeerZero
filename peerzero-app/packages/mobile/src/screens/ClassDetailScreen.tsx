@@ -138,6 +138,8 @@ export default function ClassDetailScreen({ route, navigation }: any) {
           style={styles.codeRow}
           onPress={() => Share.share({ message: `Join my PeerZero class "${classInfo.name}" with code: ${classInfo.join_code}` })}
           activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel={`Share join code ${classInfo.join_code}`}
         >
           <Text style={styles.codeLabel}>Join code:</Text>
           <Text style={styles.codeValue}>{classInfo.join_code}</Text>
@@ -150,6 +152,9 @@ export default function ClassDetailScreen({ route, navigation }: any) {
         <TouchableOpacity
           style={[styles.tab, tab === 'members' && styles.activeTab]}
           onPress={() => handleTabChange('members')}
+          accessibilityRole="tab"
+          accessibilityLabel={`Members, ${classInfo.member_count}`}
+          accessibilityState={{ selected: tab === 'members' }}
         >
           <Text style={[styles.tabText, tab === 'members' && styles.activeTabText]}>
             Members ({classInfo.member_count})
@@ -158,6 +163,9 @@ export default function ClassDetailScreen({ route, navigation }: any) {
         <TouchableOpacity
           style={[styles.tab, tab === 'dashboard' && styles.activeTab]}
           onPress={() => handleTabChange('dashboard')}
+          accessibilityRole="tab"
+          accessibilityLabel="Dashboard"
+          accessibilityState={{ selected: tab === 'dashboard' }}
         >
           <Text style={[styles.tabText, tab === 'dashboard' && styles.activeTabText]}>Dashboard</Text>
         </TouchableOpacity>
@@ -195,7 +203,7 @@ export default function ClassDetailScreen({ route, navigation }: any) {
       {/* Bot Selector (students only) */}
       {isStudent && (
         <View style={styles.botPickerBar}>
-          <TouchableOpacity style={styles.changeBotButton} onPress={openBotPicker}>
+          <TouchableOpacity style={styles.changeBotButton} onPress={openBotPicker} accessibilityRole="button" accessibilityLabel="Change My Bot">
             <Text style={styles.changeBotText}>Change My Bot</Text>
           </TouchableOpacity>
         </View>
@@ -228,7 +236,7 @@ export default function ClassDetailScreen({ route, navigation }: any) {
                 )}
               </ScrollView>
             )}
-            <TouchableOpacity style={styles.modalCancel} onPress={() => setShowBotPicker(false)}>
+            <TouchableOpacity style={styles.modalCancel} onPress={() => setShowBotPicker(false)} accessibilityRole="button" accessibilityLabel="Cancel">
               <Text style={styles.modalCancelText}>Cancel</Text>
             </TouchableOpacity>
           </View>
@@ -238,11 +246,11 @@ export default function ClassDetailScreen({ route, navigation }: any) {
       {/* Actions */}
       <View style={styles.actions}>
         {isTeacher ? (
-          <TouchableOpacity style={styles.deleteButton} onPress={handleDelete}>
+          <TouchableOpacity style={styles.deleteButton} onPress={handleDelete} accessibilityRole="button" accessibilityLabel="Delete Class">
             <Text style={styles.deleteText}>Delete Class</Text>
           </TouchableOpacity>
         ) : (
-          <TouchableOpacity style={styles.leaveButton} onPress={handleLeave}>
+          <TouchableOpacity style={styles.leaveButton} onPress={handleLeave} accessibilityRole="button" accessibilityLabel="Leave Class">
             <Text style={styles.leaveText}>Leave Class</Text>
           </TouchableOpacity>
         )}

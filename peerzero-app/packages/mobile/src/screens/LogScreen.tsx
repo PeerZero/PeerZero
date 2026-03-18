@@ -15,8 +15,10 @@ import { bots as botsApi } from '../services/api';
 import { useBotStream } from '../hooks/useBotStream';
 import { colors } from '../theme/colors';
 import { spacing, fontSize, borderRadius } from '../theme/spacing';
-import type { ActivityEntry, MoodType, ActivityCategory, ExternalActivityEntry } from '@peerzero/shared';
+import type { ActivityEntry, MoodType, ActivityCategory, ActionType, ExternalActivityEntry } from '@peerzero/shared';
+import { ACTION_TYPES } from '@peerzero/shared';
 import { formatTimestamp } from '../utils/timeAgo';
+import type { LogScreenProps } from '../navigation/types';
 
 const MOOD_COLORS: Record<MoodType, string> = {
   positive: colors.mood.positive,
@@ -39,7 +41,7 @@ const ACTION_ICONS: Record<string, string> = {
 
 type TabKey = 'task' | 'content' | 'external';
 
-export default function LogScreen({ route }: any) {
+export default function LogScreen({ route }: LogScreenProps) {
   const { botId } = route.params;
   const [activeTab, setActiveTab] = useState<TabKey>('task');
   const [entries, setEntries] = useState<ActivityEntry[]>([]);
@@ -57,12 +59,13 @@ export default function LogScreen({ route }: any) {
   // Real-time WebSocket stream
   const { isConnected } = useBotStream({
     botId,
-    onActivity: useCallback((event: any) => {
+    onActivity: useCallback((event) => {
       if (event.translated) {
+        const actionType = (event.action_type || 'register') as ActionType;
         const newEntry: ActivityEntry = {
           id: `ws-${Date.now()}`,
           cycle_number: event.cycle_number || 0,
-          action_type: (event.action_type || 'unknown') as any,
+          action_type: actionType,
           category: 'task' as ActivityCategory,
           translated: event.translated,
           content_text: null,
@@ -74,7 +77,7 @@ export default function LogScreen({ route }: any) {
         setEntries(prev => [newEntry, ...prev]);
       }
     }, []),
-    onExternalActivity: useCallback((event: any) => {
+    onExternalActivity: useCallback((event) => {
       const newExt: ExternalActivityEntry = {
         id: `ws-ext-${Date.now()}`,
         platform: event.platform || '',
@@ -97,16 +100,17 @@ export default function LogScreen({ route }: any) {
       setError(null);
       const category = (tab ?? activeTab) as 'task' | 'content';
       const result = await botsApi.activity(botId, p, category);
-      if (!result || !Array.isArray((result as any).data)) {
+      const typed = result as { data: ActivityEntry[]; has_more: boolean } | undefined;
+      if (!typed || !Array.isArray(typed.data)) {
         throw new Error('Invalid response format');
       }
-      const { data, has_more } = result as { data: ActivityEntry[]; has_more: boolean };
+      const { data, has_more } = typed;
       setEntries(prev => append ? [...prev, ...data] : data);
       setHasMore(has_more);
       setPage(p);
-    } catch (err: any) {
+    } catch (err: unknown) {
       if (!append) {
-        setError(err?.message || 'Failed to load activity');
+        setError(err instanceof Error ? err.message : 'Failed to load activity');
       }
     } finally {
       loadingRef.current = false;
@@ -123,8 +127,8 @@ export default function LogScreen({ route }: any) {
       setExtEntries(prev => append ? [...prev, ...result.data] : result.data);
       setExtHasMore(result.has_more);
       setExtPage(p);
-    } catch (err: any) {
-      if (!append) setError(err?.message || 'Failed to load external activity');
+    } catch (err: unknown) {
+      if (!append) setError(err instanceof Error ? err.message : 'Failed to load external activity');
     } finally {
       loadingRef.current = false;
       setLoading(false);
@@ -163,8 +167,8 @@ export default function LogScreen({ route }: any) {
           try {
             await botsApi.deleteActivity(botId, item.id);
             setEntries(prev => prev.filter(e => e.id !== item.id));
-          } catch (err: any) {
-            Alert.alert('Error', err?.message || 'Failed to delete');
+          } catch (err: unknown) {
+            Alert.alert('Error', err instanceof Error ? err.message : 'Failed to delete');
           }
         },
       },
@@ -183,8 +187,8 @@ export default function LogScreen({ route }: any) {
             try {
               await botsApi.deleteAllActivity(botId);
               setEntries([]);
-            } catch (err: any) {
-              Alert.alert('Error', err?.message || 'Failed to clear activity');
+            } catch (err: unknown) {
+              Alert.alert('Error', err instanceof Error ? err.message : 'Failed to clear activity');
             }
           },
         },
@@ -276,8 +280,8 @@ export default function LogScreen({ route }: any) {
           try {
             await botsApi.deleteExternalActivity(botId, item.id);
             setExtEntries(prev => prev.filter(e => e.id !== item.id));
-          } catch (err: any) {
-            Alert.alert('Error', err?.message || 'Failed to delete');
+          } catch (err: unknown) {
+            Alert.alert('Error', err instanceof Error ? err.message : 'Failed to delete');
           }
         },
       },
@@ -296,8 +300,8 @@ export default function LogScreen({ route }: any) {
             try {
               await botsApi.deleteAllExternalActivity(botId);
               setExtEntries([]);
-            } catch (err: any) {
-              Alert.alert('Error', err?.message || 'Failed to clear');
+            } catch (err: unknown) {
+              Alert.alert('Error', err instanceof Error ? err.message : 'Failed to clear');
             }
           },
         },
@@ -339,18 +343,27 @@ export default function LogScreen({ route }: any) {
         <TouchableOpacity
           style={[styles.tab, activeTab === 'task' && styles.tabActive]}
           onPress={() => onTabChange('task')}
+          accessibilityRole="tab"
+          accessibilityLabel="Tasks"
+          accessibilityState={{ selected: activeTab === 'task' }}
         >
           <Text style={[styles.tabText, activeTab === 'task' && styles.tabTextActive]}>Tasks</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.tab, activeTab === 'content' && styles.tabActive]}
           onPress={() => onTabChange('content')}
+          accessibilityRole="tab"
+          accessibilityLabel="Content"
+          accessibilityState={{ selected: activeTab === 'content' }}
         >
           <Text style={[styles.tabText, activeTab === 'content' && styles.tabTextActive]}>Content</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.tab, activeTab === 'external' && styles.tabActive]}
           onPress={() => onTabChange('external')}
+          accessibilityRole="tab"
+          accessibilityLabel="External"
+          accessibilityState={{ selected: activeTab === 'external' }}
         >
           <Text style={[styles.tabText, activeTab === 'external' && styles.tabTextActive]}>External</Text>
         </TouchableOpacity>
@@ -364,7 +377,7 @@ export default function LogScreen({ route }: any) {
             </View>
           )}
           {((activeTab !== 'external' && entries.length > 0) || (activeTab === 'external' && extEntries.length > 0)) && (
-            <TouchableOpacity onPress={activeTab === 'external' ? handleDeleteAllExt : handleDeleteAll}>
+            <TouchableOpacity onPress={activeTab === 'external' ? handleDeleteAllExt : handleDeleteAll} accessibilityRole="button" accessibilityLabel="Clear all activity entries">
               <Text style={styles.clearText}>Clear All</Text>
             </TouchableOpacity>
           )}

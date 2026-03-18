@@ -12,8 +12,9 @@ import type { TextInput as TextInputType } from 'react-native';
 import { useAuth } from '../hooks/useAuth';
 import { colors } from '../theme/colors';
 import { spacing, fontSize, borderRadius } from '../theme/spacing';
+import type { RegisterScreenProps } from '../navigation/types';
 
-export default function RegisterScreen({ navigation }: any) {
+export default function RegisterScreen({ navigation }: RegisterScreenProps) {
   const { register } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -42,8 +43,8 @@ export default function RegisterScreen({ navigation }: any) {
     setLoading(true);
     try {
       await register(email, password, displayName || undefined);
-    } catch (err: any) {
-      Alert.alert('Registration Failed', err.message);
+    } catch (err: unknown) {
+      Alert.alert('Registration Failed', err instanceof Error ? err.message : 'Something went wrong');
     } finally {
       setLoading(false);
     }

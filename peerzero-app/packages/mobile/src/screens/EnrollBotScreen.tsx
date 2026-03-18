@@ -10,8 +10,9 @@ import { colors } from '../theme/colors';
 import { spacing, fontSize, borderRadius } from '../theme/spacing';
 import type { SchoolInfo } from '@peerzero/shared';
 import { GRADE_PRICES_CENTS, POST_GRADUATION_PRICE_CENTS, GRADUATION_GRADE } from '@peerzero/shared';
+import type { EnrollBotScreenProps } from '../navigation/types';
 
-export default function EnrollBotScreen({ route, navigation }: any) {
+export default function EnrollBotScreen({ route, navigation }: EnrollBotScreenProps) {
   const { botId } = route.params;
   const [schoolList, setSchoolList] = useState<SchoolInfo[]>([]);
   const [loading, setLoading] = useState(true);
@@ -23,8 +24,8 @@ export default function EnrollBotScreen({ route, navigation }: any) {
       setError(null);
       const data = await schoolsApi.list() as SchoolInfo[];
       setSchoolList(data.filter(s => s.is_active));
-    } catch (err: any) {
-      setError(err?.message || 'Failed to load schools');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to load schools');
     } finally {
       setLoading(false);
     }
@@ -50,8 +51,8 @@ export default function EnrollBotScreen({ route, navigation }: any) {
                 `Your bot is registered as "${result.handle}". It will go through intake when you start it.`,
                 [{ text: 'OK', onPress: () => navigation.goBack() }],
               );
-            } catch (err: any) {
-              Alert.alert('Enrollment Failed', err?.message || 'Could not enroll in this school');
+            } catch (err: unknown) {
+              Alert.alert('Enrollment Failed', err instanceof Error ? err.message : 'Could not enroll in this school');
             } finally {
               setEnrolling(null);
             }
@@ -68,6 +69,8 @@ export default function EnrollBotScreen({ route, navigation }: any) {
       style={styles.schoolCard}
       onPress={() => handleEnroll(item)}
       disabled={enrolling !== null}
+      accessibilityRole="button"
+      accessibilityLabel={`Enroll in ${item.name}, ${formatPrice(item.price_cents)}`}
     >
       <View style={styles.schoolHeader}>
         <Text style={styles.schoolName}>{item.name}</Text>

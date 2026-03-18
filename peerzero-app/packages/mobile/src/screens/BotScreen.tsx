@@ -49,8 +49,8 @@ export default function BotScreen({ route, navigation }: BotScreenProps) {
         const status = await paymentsApi.gradeStatus(botId) as { unlocked_grades: number[]; highest_unlocked: number };
         setUnlockedGrades(status.unlocked_grades);
       }
-    } catch (err: any) {
-      Alert.alert('Error', err.message);
+    } catch (err: unknown) {
+      Alert.alert('Error', err instanceof Error ? err.message : 'Something went wrong');
     }
   }, [botId]);
 
@@ -76,8 +76,8 @@ export default function BotScreen({ route, navigation }: BotScreenProps) {
         await botsApi.start(botId);
       }
       await loadBot();
-    } catch (err: any) {
-      Alert.alert('Error', err.message);
+    } catch (err: unknown) {
+      Alert.alert('Error', err instanceof Error ? err.message : 'Something went wrong');
     }
   };
 
@@ -85,8 +85,8 @@ export default function BotScreen({ route, navigation }: BotScreenProps) {
     try {
       await botsApi.start(botId);
       await loadBot();
-    } catch (err: any) {
-      Alert.alert('Error', err.message);
+    } catch (err: unknown) {
+      Alert.alert('Error', err instanceof Error ? err.message : 'Something went wrong');
     }
   };
 
@@ -103,8 +103,8 @@ export default function BotScreen({ route, navigation }: BotScreenProps) {
             try {
               await botsApi.delete(botId);
               navigation.goBack();
-            } catch (err: any) {
-              Alert.alert('Error', err.message);
+            } catch (err: unknown) {
+              Alert.alert('Error', err instanceof Error ? err.message : 'Something went wrong');
             }
           },
         },
@@ -126,8 +126,8 @@ export default function BotScreen({ route, navigation }: BotScreenProps) {
         // Refresh bot data when browser closes — payment may have completed
         await loadBot();
       }
-    } catch (err: any) {
-      Alert.alert('Error', err.message);
+    } catch (err: unknown) {
+      Alert.alert('Error', err instanceof Error ? err.message : 'Something went wrong');
     }
   };
 
@@ -137,8 +137,8 @@ export default function BotScreen({ route, navigation }: BotScreenProps) {
     try {
       await botsApi.update(botId, { cycle_delay_seconds: seconds });
       setBot(prev => prev ? { ...prev, cycle_delay_seconds: seconds } : null);
-    } catch (err: any) {
-      Alert.alert('Error', err.message);
+    } catch (err: unknown) {
+      Alert.alert('Error', err instanceof Error ? err.message : 'Something went wrong');
     }
   };
 
@@ -174,7 +174,7 @@ export default function BotScreen({ route, navigation }: BotScreenProps) {
         botId={bot.id}
         bodyColor={bot.avatar_config?.body_color || colors.accent.primary}
         tier={credibilityToStage(bot.cached_credibility)}
-        status={bot.status as any}
+        status={bot.status}
         hunger={calculateHunger(bot.last_cycle_at, bot.status)}
         size={140}
       />
@@ -299,7 +299,7 @@ export default function BotScreen({ route, navigation }: BotScreenProps) {
             <Text style={styles.gradeUnlockText}>
               Your bot completed the previous grade! Unlock the next one to keep learning.
             </Text>
-            <TouchableOpacity style={styles.gradeUnlockButton} onPress={() => handleGradeUnlock('next')}>
+            <TouchableOpacity style={styles.gradeUnlockButton} onPress={() => handleGradeUnlock('next')} accessibilityRole="button" accessibilityLabel={`Unlock Grade ${currentGrade} for ${getGradePriceDisplay(currentGrade)}`}>
               <Text style={styles.gradeUnlockButtonText}>
                 Unlock Grade {currentGrade} — {getGradePriceDisplay(currentGrade)}
               </Text>
@@ -308,6 +308,8 @@ export default function BotScreen({ route, navigation }: BotScreenProps) {
               <TouchableOpacity
                 style={[styles.gradeUnlockButton, styles.gradeUnlockButtonAlt]}
                 onPress={() => handleGradeUnlock('graduation')}
+                accessibilityRole="button"
+                accessibilityLabel={`Unlock all grades through graduation for $${(gradCost / 100).toFixed(2)}`}
               >
                 <Text style={styles.gradeUnlockButtonAltText}>
                   Unlock All Through Graduation — ${(gradCost / 100).toFixed(2)}
@@ -437,7 +439,7 @@ export default function BotScreen({ route, navigation }: BotScreenProps) {
       )}
 
       {/* Danger zone */}
-      <TouchableOpacity style={styles.deleteButton} onPress={handleDelete} activeOpacity={0.7}>
+      <TouchableOpacity style={styles.deleteButton} onPress={handleDelete} activeOpacity={0.7} accessibilityRole="button" accessibilityLabel="Delete Bot">
         <Text style={styles.deleteButtonText}>Delete Bot</Text>
       </TouchableOpacity>
     </ScrollView>
