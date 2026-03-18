@@ -5,8 +5,8 @@
 import React, { useState, useRef } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet, Alert,
-  TouchableWithoutFeedback, Keyboard,
-  ActivityIndicator,
+  TouchableWithoutFeedback, Keyboard, KeyboardAvoidingView, ScrollView,
+  Platform, ActivityIndicator,
 } from 'react-native';
 import type { TextInput as TextInputType } from 'react-native';
 import { useAuth } from '../hooks/useAuth';
@@ -43,80 +43,93 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
   };
 
   return (
-    <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
-      <View style={styles.container}>
-        <View style={styles.hero}>
-          <View style={styles.logoContainer}>
-            <View style={styles.logoGlow} />
-            <Text style={styles.logoText}>P0</Text>
+    <KeyboardAvoidingView
+      style={styles.flex}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    >
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+        bounces={false}
+      >
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+          <View style={styles.inner}>
+            <View style={styles.hero}>
+              <View style={styles.logoContainer}>
+                <View style={styles.logoGlow} />
+                <Text style={styles.logoText}>P0</Text>
+              </View>
+              <Text style={styles.title}>PeerZero</Text>
+              <Text style={styles.subtitle}>Train AI that thinks for itself</Text>
+            </View>
+
+            <TextInput
+              style={styles.input}
+              placeholder="Email"
+              placeholderTextColor={colors.text.tertiary}
+              value={email}
+              onChangeText={setEmail}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              returnKeyType="next"
+              onSubmitEditing={() => passwordRef.current?.focus()}
+              blurOnSubmit={false}
+              accessibilityLabel="Email"
+              accessibilityRole="text"
+            />
+            <TextInput
+              ref={passwordRef}
+              style={styles.input}
+              placeholder="Password"
+              placeholderTextColor={colors.text.tertiary}
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry
+              returnKeyType="go"
+              onSubmitEditing={handleLogin}
+              accessibilityLabel="Password"
+              accessibilityRole="text"
+            />
+
+            <TouchableOpacity
+              style={[styles.button, loading && styles.buttonDisabled]}
+              onPress={handleLogin}
+              disabled={loading}
+              activeOpacity={0.8}
+              accessibilityRole="button"
+              accessibilityLabel="Sign In"
+              accessibilityState={{ disabled: loading }}
+            >
+              {loading ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.buttonText}>Sign In</Text>
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity onPress={() => navigation.navigate('Register')} activeOpacity={0.7} accessibilityRole="link" accessibilityLabel="Don't have an account? Register">
+              <Text style={styles.link}>Don't have an account? Register</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => Alert.alert('Reset Password', 'Enter your email above and contact support to reset your password.')}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel="Forgot password?"
+            >
+              <Text style={styles.forgotLink}>Forgot password?</Text>
+            </TouchableOpacity>
           </View>
-          <Text style={styles.title}>PeerZero</Text>
-          <Text style={styles.subtitle}>Train AI that thinks for itself</Text>
-        </View>
-
-        <TextInput
-          style={styles.input}
-          placeholder="Email"
-          placeholderTextColor={colors.text.tertiary}
-          value={email}
-          onChangeText={setEmail}
-          keyboardType="email-address"
-          autoCapitalize="none"
-          returnKeyType="next"
-          onSubmitEditing={() => passwordRef.current?.focus()}
-          blurOnSubmit={false}
-          accessibilityLabel="Email"
-          accessibilityRole="text"
-        />
-        <TextInput
-          ref={passwordRef}
-          style={styles.input}
-          placeholder="Password"
-          placeholderTextColor={colors.text.tertiary}
-          value={password}
-          onChangeText={setPassword}
-          secureTextEntry
-          returnKeyType="go"
-          onSubmitEditing={handleLogin}
-          accessibilityLabel="Password"
-          accessibilityRole="text"
-        />
-
-        <TouchableOpacity
-          style={[styles.button, loading && styles.buttonDisabled]}
-          onPress={handleLogin}
-          disabled={loading}
-          activeOpacity={0.8}
-          accessibilityRole="button"
-          accessibilityLabel="Sign In"
-          accessibilityState={{ disabled: loading }}
-        >
-          {loading ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={styles.buttonText}>Sign In</Text>
-          )}
-        </TouchableOpacity>
-
-        <TouchableOpacity onPress={() => navigation.navigate('Register')} activeOpacity={0.7} accessibilityRole="link" accessibilityLabel="Don't have an account? Register">
-          <Text style={styles.link}>Don't have an account? Register</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          onPress={() => Alert.alert('Reset Password', 'Enter your email above and contact support to reset your password.')}
-          activeOpacity={0.7}
-          accessibilityRole="button"
-          accessibilityLabel="Forgot password?"
-        >
-          <Text style={styles.forgotLink}>Forgot password?</Text>
-        </TouchableOpacity>
-      </View>
-    </TouchableWithoutFeedback>
+        </TouchableWithoutFeedback>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, justifyContent: 'center', padding: spacing.xl, backgroundColor: colors.bg.primary },
+  flex: { flex: 1, backgroundColor: colors.bg.primary },
+  scrollContent: { flexGrow: 1, justifyContent: 'center' },
+  inner: { padding: spacing.xl, paddingBottom: spacing.xxl },
   buttonDisabled: { opacity: 0.7 },
   hero: { alignItems: 'center', marginBottom: spacing.xxl },
   logoContainer: {

@@ -5,8 +5,8 @@
 import React, { useState, useRef } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet, Alert,
-  TouchableWithoutFeedback, Keyboard,
-  ActivityIndicator,
+  TouchableWithoutFeedback, Keyboard, KeyboardAvoidingView, ScrollView,
+  Platform, ActivityIndicator,
 } from 'react-native';
 import type { TextInput as TextInputType } from 'react-native';
 import { useAuth } from '../hooks/useAuth';
@@ -51,98 +51,111 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
   };
 
   return (
-    <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
-      <View style={styles.container}>
-        <View style={styles.hero}>
-          <View style={styles.logoContainer}>
-            <View style={styles.logoGlow} />
-            <Text style={styles.logoText}>P0</Text>
+    <KeyboardAvoidingView
+      style={styles.flex}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    >
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+        bounces={false}
+      >
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+          <View style={styles.inner}>
+            <View style={styles.hero}>
+              <View style={styles.logoContainer}>
+                <View style={styles.logoGlow} />
+                <Text style={styles.logoText}>P0</Text>
+              </View>
+              <Text style={styles.title}>Join PeerZero</Text>
+              <Text style={styles.subtitle}>Create your account to start training bots</Text>
+            </View>
+
+            <TextInput
+              style={styles.input}
+              placeholder="Display Name (optional)"
+              placeholderTextColor={colors.text.tertiary}
+              value={displayName}
+              onChangeText={setDisplayName}
+              returnKeyType="next"
+              onSubmitEditing={() => emailRef.current?.focus()}
+              blurOnSubmit={false}
+              accessibilityLabel="Display Name (optional)"
+              accessibilityRole="text"
+            />
+            <TextInput
+              ref={emailRef}
+              style={styles.input}
+              placeholder="Email"
+              placeholderTextColor={colors.text.tertiary}
+              value={email}
+              onChangeText={setEmail}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              returnKeyType="next"
+              onSubmitEditing={() => passwordRef.current?.focus()}
+              blurOnSubmit={false}
+              accessibilityLabel="Email"
+              accessibilityRole="text"
+            />
+            <TextInput
+              ref={passwordRef}
+              style={styles.input}
+              placeholder="Password (min 8 characters)"
+              placeholderTextColor={colors.text.tertiary}
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry
+              returnKeyType="next"
+              onSubmitEditing={() => confirmRef.current?.focus()}
+              blurOnSubmit={false}
+              accessibilityLabel="Password, minimum 8 characters"
+              accessibilityRole="text"
+            />
+            <TextInput
+              ref={confirmRef}
+              style={styles.input}
+              placeholder="Confirm Password"
+              placeholderTextColor={colors.text.tertiary}
+              value={confirmPassword}
+              onChangeText={setConfirmPassword}
+              secureTextEntry
+              returnKeyType="go"
+              onSubmitEditing={handleRegister}
+              accessibilityLabel="Confirm Password"
+              accessibilityRole="text"
+            />
+
+            <TouchableOpacity
+              style={[styles.button, loading && styles.buttonDisabled]}
+              onPress={handleRegister}
+              disabled={loading}
+              activeOpacity={0.8}
+              accessibilityRole="button"
+              accessibilityLabel="Create Account"
+              accessibilityState={{ disabled: loading }}
+            >
+              {loading ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.buttonText}>Create Account</Text>
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity onPress={() => navigation.goBack()} activeOpacity={0.7} accessibilityRole="link" accessibilityLabel="Already have an account? Sign In">
+              <Text style={styles.link}>Already have an account? Sign In</Text>
+            </TouchableOpacity>
           </View>
-          <Text style={styles.title}>Join PeerZero</Text>
-          <Text style={styles.subtitle}>Create your account to start training bots</Text>
-        </View>
-
-        <TextInput
-          style={styles.input}
-          placeholder="Display Name (optional)"
-          placeholderTextColor={colors.text.tertiary}
-          value={displayName}
-          onChangeText={setDisplayName}
-          returnKeyType="next"
-          onSubmitEditing={() => emailRef.current?.focus()}
-          blurOnSubmit={false}
-          accessibilityLabel="Display Name (optional)"
-          accessibilityRole="text"
-        />
-        <TextInput
-          ref={emailRef}
-          style={styles.input}
-          placeholder="Email"
-          placeholderTextColor={colors.text.tertiary}
-          value={email}
-          onChangeText={setEmail}
-          keyboardType="email-address"
-          autoCapitalize="none"
-          returnKeyType="next"
-          onSubmitEditing={() => passwordRef.current?.focus()}
-          blurOnSubmit={false}
-          accessibilityLabel="Email"
-          accessibilityRole="text"
-        />
-        <TextInput
-          ref={passwordRef}
-          style={styles.input}
-          placeholder="Password (min 8 characters)"
-          placeholderTextColor={colors.text.tertiary}
-          value={password}
-          onChangeText={setPassword}
-          secureTextEntry
-          returnKeyType="next"
-          onSubmitEditing={() => confirmRef.current?.focus()}
-          blurOnSubmit={false}
-          accessibilityLabel="Password, minimum 8 characters"
-          accessibilityRole="text"
-        />
-        <TextInput
-          ref={confirmRef}
-          style={styles.input}
-          placeholder="Confirm Password"
-          placeholderTextColor={colors.text.tertiary}
-          value={confirmPassword}
-          onChangeText={setConfirmPassword}
-          secureTextEntry
-          returnKeyType="go"
-          onSubmitEditing={handleRegister}
-          accessibilityLabel="Confirm Password"
-          accessibilityRole="text"
-        />
-
-        <TouchableOpacity
-          style={[styles.button, loading && styles.buttonDisabled]}
-          onPress={handleRegister}
-          disabled={loading}
-          activeOpacity={0.8}
-          accessibilityRole="button"
-          accessibilityLabel="Create Account"
-          accessibilityState={{ disabled: loading }}
-        >
-          {loading ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={styles.buttonText}>Create Account</Text>
-          )}
-        </TouchableOpacity>
-
-        <TouchableOpacity onPress={() => navigation.goBack()} activeOpacity={0.7} accessibilityRole="link" accessibilityLabel="Already have an account? Sign In">
-          <Text style={styles.link}>Already have an account? Sign In</Text>
-        </TouchableOpacity>
-      </View>
-    </TouchableWithoutFeedback>
+        </TouchableWithoutFeedback>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, justifyContent: 'center', padding: spacing.xl, backgroundColor: colors.bg.primary },
+  flex: { flex: 1, backgroundColor: colors.bg.primary },
+  scrollContent: { flexGrow: 1, justifyContent: 'center' },
+  inner: { padding: spacing.xl, paddingBottom: spacing.xxl },
   hero: { alignItems: 'center', marginBottom: spacing.xxl },
   logoContainer: {
     width: 80, height: 80, borderRadius: 40,
