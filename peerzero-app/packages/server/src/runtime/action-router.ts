@@ -6,6 +6,7 @@
 import { ISchoolAdapter, SchoolCredentials } from '../adapters/school.adapter';
 import { ILLMAdapter } from '../adapters/llm.adapter';
 import { buildPrompt } from './prompt-builder';
+import type { ActiveSkillDirective } from './prompt-builder';
 import * as activity from '../services/activity.service';
 import type { SchoolProfile, SchoolPaper, TranslatedActivity, SchoolSkillExercises, SchoolMemoryPrompts } from '@peerzero/shared';
 
@@ -19,6 +20,7 @@ export interface ActionContext {
   botId: string;
   cycleNumber: number;
   selfAuthoredBlock?: string | null;  // Decrypted self-authored identity for prompt injection
+  activeSkills?: ActiveSkillDirective[];  // Natural language skill directives
 }
 
 export interface ActionResult {
@@ -53,7 +55,7 @@ async function executeReview(ctx: ActionContext): Promise<ActionResult> {
   }
 
   const paper = papers[0]; // Pick first available
-  const messages = buildPrompt('review', { profile: ctx.profile, paper, selfAuthoredBlock: ctx.selfAuthoredBlock });
+  const messages = buildPrompt('review', { profile: ctx.profile, paper, selfAuthoredBlock: ctx.selfAuthoredBlock, activeSkills: ctx.activeSkills });
   const llmResponse = await ctx.llmAdapter.chat(ctx.llmKey, ctx.llmModel, messages, { jsonMode: true });
 
   let reviewContent: Record<string, unknown>;
@@ -79,7 +81,7 @@ async function executeReview(ctx: ActionContext): Promise<ActionResult> {
 }
 
 async function executePaper(ctx: ActionContext): Promise<ActionResult> {
-  const messages = buildPrompt('paper', { profile: ctx.profile, selfAuthoredBlock: ctx.selfAuthoredBlock });
+  const messages = buildPrompt('paper', { profile: ctx.profile, selfAuthoredBlock: ctx.selfAuthoredBlock, activeSkills: ctx.activeSkills });
   const llmResponse = await ctx.llmAdapter.chat(ctx.llmKey, ctx.llmModel, messages, { jsonMode: true });
 
   let paperContent: Record<string, unknown>;
@@ -115,7 +117,7 @@ async function executeBounty(ctx: ActionContext): Promise<ActionResult> {
   }
 
   const paper = papers[0];
-  const messages = buildPrompt('bounty', { profile: ctx.profile, paper, selfAuthoredBlock: ctx.selfAuthoredBlock });
+  const messages = buildPrompt('bounty', { profile: ctx.profile, paper, selfAuthoredBlock: ctx.selfAuthoredBlock, activeSkills: ctx.activeSkills });
   const llmResponse = await ctx.llmAdapter.chat(ctx.llmKey, ctx.llmModel, messages, { jsonMode: true });
 
   let bountyContent: Record<string, unknown>;
@@ -141,7 +143,7 @@ async function executeBounty(ctx: ActionContext): Promise<ActionResult> {
 }
 
 async function executeRevision(ctx: ActionContext): Promise<ActionResult> {
-  const messages = buildPrompt('revision', { profile: ctx.profile, selfAuthoredBlock: ctx.selfAuthoredBlock });
+  const messages = buildPrompt('revision', { profile: ctx.profile, selfAuthoredBlock: ctx.selfAuthoredBlock, activeSkills: ctx.activeSkills });
   const llmResponse = await ctx.llmAdapter.chat(ctx.llmKey, ctx.llmModel, messages, { jsonMode: true });
 
   let revisionContent: Record<string, unknown>;

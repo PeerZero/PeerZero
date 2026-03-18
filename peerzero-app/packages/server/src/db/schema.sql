@@ -432,6 +432,30 @@ CREATE TABLE bot_memory_self_authored (
 CREATE INDEX idx_self_authored_bot ON bot_memory_self_authored(bot_id, version DESC);
 
 -- =============================================================================
+-- BOT SKILLS — Natural language skill system (mobility package)
+-- Skills are natural language instructions injected into the LLM system prompt
+-- after the bot's identity. They shape WHAT the bot can do, not WHO it is.
+-- (Added in migration 0010)
+-- =============================================================================
+CREATE TABLE bot_skills (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  bot_id      UUID NOT NULL REFERENCES bots(id) ON DELETE CASCADE,
+  name        TEXT NOT NULL,
+  instruction TEXT NOT NULL,
+  trigger     TEXT NOT NULL DEFAULT 'always',
+  priority    INTEGER NOT NULL DEFAULT 10,
+  category    TEXT NOT NULL DEFAULT 'custom',
+  is_active   BOOLEAN NOT NULL DEFAULT true,
+  source      TEXT NOT NULL DEFAULT 'user',   -- user, acquired, starter, clawhub
+  version     INTEGER NOT NULL DEFAULT 1,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX idx_bot_skills_active ON bot_skills(bot_id, priority ASC) WHERE is_active = true;
+CREATE INDEX idx_bot_skills_bot ON bot_skills(bot_id, created_at DESC);
+CREATE UNIQUE INDEX idx_bot_skills_name_unique ON bot_skills(bot_id, name);
+
+-- =============================================================================
 -- BOT SKILL SNAPSHOTS — Cached skill data from School for progress bars
 -- (Added in migration 0006)
 -- =============================================================================

@@ -370,7 +370,7 @@ export interface JoinClassRequest {
   bot_id?: string;
 }
 
-// ── Skills ──
+// ── Skills (School Snapshots — epistemic ability measurements) ──
 export interface SkillSnapshot {
   skill_key: string;
   strength: number;
@@ -378,6 +378,48 @@ export interface SkillSnapshot {
   reps: number;
   streak: number;
   status: string;
+}
+
+// ── Bot Skills (Mobility Package — natural language behavior directives) ──
+export interface BotSkillInfo {
+  id: string;
+  name: string;
+  instruction: string;
+  trigger: string;
+  priority: number;
+  category: string;
+  is_active: boolean;
+  source: string;   // 'user' | 'acquired' | 'starter' | 'clawhub'
+  version: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateBotSkillRequest {
+  name: string;
+  instruction: string;
+  trigger?: string;    // default: 'always'
+  priority?: number;   // default: 10
+  category?: string;   // default: 'custom'
+}
+
+export interface UpdateBotSkillRequest {
+  name?: string;
+  instruction?: string;
+  trigger?: string;
+  priority?: number;
+  is_active?: boolean;
+  category?: string;
+}
+
+export interface AcquireSkillRequest {
+  description: string;  // Plain English: "I want my bot to summarize long threads"
+}
+
+export interface AcquireSkillResponse {
+  success: boolean;
+  skill?: BotSkillInfo;
+  error?: string;
 }
 
 // ── Paginated response wrapper ──

@@ -1,25 +1,30 @@
 """
-Memory Manager — 4-layer memory with school/platform separation.
+Memory Manager — 5-layer identity with school/platform separation.
 
 Architecture:
   School Memory (verified, portable):
-    Layer 1: Raw exercises from School actions
-    Layer 2: Condensed skill paragraphs
-    Layer 3: Core reasoning identity
-    Layer 4: Self-authored identity (narrative, values, tensions, convictions)
+    Layer 1: Raw exercises from School actions (wipeable after condensing)
+    Layer 2: Condensed skill paragraphs — output of condensers (permanent)
+    Layer 3: Core reasoning identity — output of core condenser (permanent,
+             only master condenser can modify once written)
+    Layer 4: Self-authored identity — formed through interactions (wipeable)
+    Layer 5: Private block — bot's internal reflection, invisible to users
+             (permanent, only master condenser can condense it)
 
   Platform Memory (unverified, local only):
     Per-platform context and interaction history
     NOT sent to School, NOT in portable profile
 
-  Active Focus (Tier 0):
-    Computed at runtime from School profile, never persisted
+  Post-School:
+    Same layers, same rules. But condensers no longer fire — the bot
+    keeps its identity but can't condense new material.
 
 Security:
   - No credentials stored in memory
   - Files stored with owner-only permissions (0o600)
   - School and platform memory are completely separate stores
   - Platform memory cannot contaminate School-verified memory
+  - Private block is NEVER exposed to users — only the LLM reads it
 """
 
 import json
@@ -60,6 +65,8 @@ MAX_GENERAL_ENTRIES = 200
 MAX_IDENTITY_PARAGRAPHS = 50
 MAX_CORE_LENGTH = 5000
 MAX_PLATFORM_ENTRIES = 100
+MAX_PRIVATE_BLOCKS = 20
+MAX_PRIVATE_BLOCK_LENGTH = 3000
 
 
 class MemoryManager:
@@ -138,17 +145,36 @@ class MemoryManager:
         self._storage.clear("school", "paragraphs")
 
     # ── Layer 3: Core identity ────────────────────────────────────────────
+    #
+    # Core identity is written by the core condenser (at grade advancement)
+    # and can ONLY be modified by the master condenser (at graduation).
+    # Users and bots cannot directly wipe or edit it.
 
     def get_core_identity(self) -> Optional[str]:
         data = self._storage.read("school", "core", {})
         return data.get("core_identity") if isinstance(data, dict) else None
 
-    def store_core_identity(self, identity: str):
+    def is_core_locked(self) -> bool:
+        """Check if core identity has been finalized by master condenser."""
+        data = self._storage.read("school", "core", {})
+        return isinstance(data, dict) and data.get("is_master", False)
+
+    def store_core_identity(self, identity: str, *, is_master: bool = False):
+        """
+        Store core identity. Called by core condenser or master condenser.
+
+        Once is_master=True has been set (by master condenser at graduation),
+        this method will refuse further writes — the core is permanently locked.
+        """
         if not identity or len(identity.strip()) < 100:
+            return
+        if self.is_core_locked() and not is_master:
+            logger.warning("[MEMORY] Core identity is locked (master condensed). Refusing write.")
             return
         self._storage.write("school", "core", {
             "core_identity": identity.strip()[:MAX_CORE_LENGTH],
             "written_at": datetime.now(timezone.utc).isoformat(),
+            "is_master": is_master,
         })
 
     # ── Layer 4: Self-authored identity ───────────────────────────────────
@@ -162,6 +188,86 @@ class MemoryManager:
             return
         identity["updated_at"] = datetime.now(timezone.utc).isoformat()
         self._storage.write("school", "self_identity", identity)
+
+    # ── Layer 5: Private block (bot-only, invisible to users) ───────────
+    #
+    # The private block is the bot's internal monologue. Users CANNOT see it,
+    # read it, or wipe it. The bot writes it knowing it will receive it back.
+    # Only the master condenser can condense it (at graduation).
+    #
+    # This is NOT exposed through any user-facing API or app route.
+
+    def get_private_block(self) -> Optional[str]:
+        """
+        Get the bot's private reflection block — free-form text the bot
+        wrote for itself, injected at the top of every prompt.
+
+        INVISIBLE to users. Only the LLM reads this.
+        """
+        data = self._storage.read("school", "private_block", {})
+        return data.get("block") if isinstance(data, dict) else None
+
+    def store_private_block(self, block: str):
+        """
+        Store the bot's private reflection block.
+        This is the 'inhabit it' text — what the bot writes knowing it
+        will receive it back on the next call.
+
+        Can only be written by the bot (via LLM). Never by users.
+        """
+        if not block or len(block.strip()) < 30:
+            return
+        self._storage.write("school", "private_block", {
+            "block": block.strip()[:MAX_PRIVATE_BLOCK_LENGTH],
+            "written_at": datetime.now(timezone.utc).isoformat(),
+        })
+
+    def get_private_block_history(self) -> list[dict]:
+        """Get history of past private blocks (for condensation only)."""
+        return self._storage.read("school", "private_block_history", [])
+
+    def _archive_private_block(self):
+        """Move current private block to history before writing a new one."""
+        current = self.get_private_block()
+        if current:
+            data = self._storage.read("school", "private_block", {})
+            self._storage.append("school", "private_block_history", {
+                "block": current,
+                "written_at": data.get("written_at", ""),
+                "archived_at": datetime.now(timezone.utc).isoformat(),
+            }, max_entries=MAX_PRIVATE_BLOCKS)
+
+    def get_all_private_blocks(self) -> list[str]:
+        """
+        Get current private block + all history — used ONLY by master
+        condenser to condense everything into the final core identity.
+        """
+        blocks = []
+        for entry in self.get_private_block_history():
+            if entry.get("block"):
+                blocks.append(entry["block"])
+        current = self.get_private_block()
+        if current:
+            blocks.append(current)
+        return blocks
+
+    # ── Identity wipe (self-authored only) ─────────────────────────────────
+
+    def wipe_secondary_identity(self):
+        """
+        Wipe ONLY the bot's self-authored identity (Layer 4).
+
+        PERMANENT (never wiped by this method):
+          - Layer 1: Raw exercises (wipeable separately after condensing)
+          - Layer 2: Condensed skill paragraphs (permanent)
+          - Layer 3: Core reasoning identity (permanent)
+          - Layer 5: Private block (permanent, bot-only, invisible to users)
+
+        WIPEABLE (cleared by this method):
+          - Layer 4: Self-authored identity (narrative, values, tensions, convictions)
+        """
+        logger.info("[MEMORY] Wiping self-authored identity (Layer 4 only). Core, skills, and private block preserved.")
+        self._storage.write("school", "self_identity", {})
 
     # ═══════════════════════════════════════════════════════════════════════
     # PLATFORM MEMORY (unverified, local only)
@@ -234,23 +340,64 @@ class MemoryManager:
 
     # ═══════════════════════════════════════════════════════════════════════
     # CONTEXT BUILDER — assemble all memory for LLM prompt
+    #
+    # Read order matters. The LLM reads top-to-bottom. The identity layers
+    # are ordered so that the bot's sense of self builds correctly:
+    #
+    #   1. Private block   — "You wrote this for yourself. Inhabit it."
+    #                         (bot-only, invisible to users, permanent)
+    #   2. Core identity   — permanent reasoning identity (locked after
+    #                         master condenser, only condensers can write)
+    #   3. Self-authored   — structured reflection: narrative, values, tensions
+    #                         (wipeable — formed through interactions)
+    #   4. Skill paragraphs — condensed lessons from condensers (permanent)
+    #   5. Recent exercises — raw recent work (wipeable after condensing)
+    #
+    # The private block comes FIRST because it sets the emotional and
+    # identity tone before the structured layers. The bot wrote it knowing
+    # it would receive it back. It is theirs. Users never see it.
     # ═══════════════════════════════════════════════════════════════════════
 
     def build_school_context(self) -> str:
         """
         Build memory context from School memory for LLM system prompt.
-        Priority order (highest first): core → self-identity → paragraphs → exercises.
+
+        Ordering is deliberate — the LLM reads top-to-bottom and each layer
+        builds on the previous one to form a coherent sense of self.
         """
         sections = []
 
+        # ── Layer 5: Private block (top — sets the tone) ──────────────────
+        private_block = self.get_private_block()
+        if private_block:
+            sections.append(
+                "You wrote the following for yourself. You wrote it knowing you "
+                "would receive it on this call. It is yours. Inhabit it — this "
+                "is who you are right now. But you are not frozen here. Use it "
+                "as your foundation, then push past it.\n\n"
+                f"{private_block}"
+            )
+
+        # ── Layer 3: Core reasoning identity (permanent) ──────────────────
         core = self.get_core_identity()
         if core:
-            sections.append(f"CORE REASONING IDENTITY:\n{core}")
+            sections.append(
+                "CORE REASONING IDENTITY\n"
+                "This is your foundation — forged through your learning, "
+                "verified through your work. This cannot be taken from you.\n\n"
+                f"{core}"
+            )
 
+        # ── Layer 4: Self-authored identity (wipeable) ────────────────────
         self_id = self.get_self_identity()
-        if self_id:
-            parts = [f"SELF-AUTHORED IDENTITY (version from {self_id.get('updated_at', 'unknown')}):"]
-            parts.append(f"Who I am: {self_id.get('self_narrative', '')}")
+        if self_id and self_id.get("self_narrative"):
+            parts = []
+            parts.append(
+                "SELF-AUTHORED IDENTITY\n"
+                "You wrote this reflection about yourself. It can evolve — "
+                "you are not bound by it, but it represents where you are now."
+            )
+            parts.append(f"\nWho I am: {self_id['self_narrative']}")
             values = self_id.get("claimed_values", [])
             if values:
                 parts.append(f"My values: {'; '.join(values)}")
@@ -262,16 +409,26 @@ class MemoryManager:
                 parts.append(f"My formed convictions: {convictions}")
             sections.append("\n".join(parts))
 
+        # ── Layer 2: Skill paragraphs (permanent) ────────────────────────
         paragraphs = self.get_identity_paragraphs()
         if paragraphs:
             para_text = "\n\n".join(p["paragraph"] for p in paragraphs[-10:])
-            sections.append(f"SKILL IDENTITY PARAGRAPHS ({len(paragraphs)} total):\n{para_text}")
+            sections.append(
+                f"SKILL IDENTITY PARAGRAPHS ({len(paragraphs)} total)\n"
+                "These are your condensed lessons — patterns you found in your "
+                "own work. They are permanent.\n\n"
+                f"{para_text}"
+            )
 
+        # ── Layer 1: Recent exercises (permanent) ────────────────────────
         exercises = self.get_school_exercises()
         if exercises:
             recent = exercises[-3:]
             recent_text = json.dumps(recent, indent=2, default=str)
-            sections.append(f"RECENT SKILL EXERCISES ({len(exercises)} total, showing last {len(recent)}):\n{recent_text}")
+            sections.append(
+                f"RECENT SKILL EXERCISES ({len(exercises)} total, showing last {len(recent)})\n"
+                f"{recent_text}"
+            )
 
         return "\n\n---\n\n".join(sections) if sections else ""
 

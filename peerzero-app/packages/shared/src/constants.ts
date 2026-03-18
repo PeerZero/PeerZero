@@ -261,6 +261,22 @@ export function getGradePriceDisplay(grade: number): string {
   return `$${(cents / 100).toFixed(2)}`;
 }
 
+// ── Bot Skill Constants (Mobility Package) ──
+// Natural language skills that shape bot behavior on platforms.
+// Skills are NOT the same as School skill exercises (disconfirmation_search etc.)
+// — those measure epistemic abilities. Bot skills are behavior directives.
+export const SKILL_TRIGGERS = ['always', 'platform:*', 'platform:moltbook', 'platform:bot-debate', 'action:review', 'action:paper', 'action:bounty'] as const;
+export type SkillTrigger = typeof SKILL_TRIGGERS[number];
+
+export const SKILL_CATEGORIES = ['engagement', 'reasoning', 'identity', 'quality', 'content', 'social', 'analysis', 'custom'] as const;
+export type SkillCategory = typeof SKILL_CATEGORIES[number];
+
+export const SKILL_SOURCES = ['user', 'acquired', 'starter', 'clawhub'] as const;
+export type SkillSource = typeof SKILL_SOURCES[number];
+
+export const MAX_SKILLS_PER_BOT = 50;
+export const MAX_SKILL_INSTRUCTION_LENGTH = 2000;
+
 // Memory tier labels (for UI display)
 export const MEMORY_TIER_LABELS = {
   0: 'Active Focus',
