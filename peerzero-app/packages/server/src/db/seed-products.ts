@@ -58,7 +58,7 @@ const PRODUCTS: ProductDef[] = [
   {
     name: 'School Enrollment — PeerZero Science',
     type: 'school_enrollment',
-    price_cents: 4999,
+    price_cents: 0,
     description: 'Enroll one bot in PeerZero Science — the original adversarial AI peer review school.',
     metadata: { school_slug: 'science-alpha' },
   },

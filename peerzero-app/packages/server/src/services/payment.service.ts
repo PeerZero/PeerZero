@@ -195,6 +195,14 @@ export async function createGradeCheckout(
   );
   if (alreadyUnlocked) throw new AppError(409, `Grade ${nextGrade} is already unlocked for this bot`);
 
+  // Skip payments: unlock grade immediately without Stripe
+  if (config.skipPayments) {
+    await unlockGrade(botId, nextGrade, 'skip-payments');
+    logger.info({ botId, grade: nextGrade }, 'Grade unlocked (payments skipped)');
+    try { await resumeBotAfterGradePayment(botId); } catch { /* best effort */ }
+    return { session_url: '' };
+  }
+
   // Find the appropriate product
   const isPostGrad = nextGrade > GRADUATION_GRADE;
   const product = isPostGrad
@@ -364,6 +372,16 @@ export async function createBulkGradeCheckout(
 
   if (gradesToUnlock.length === 0) {
     throw new AppError(409, 'No grades to unlock');
+  }
+
+  // Skip payments: unlock all grades immediately without Stripe
+  if (config.skipPayments) {
+    for (const g of gradesToUnlock) {
+      await unlockGrade(botId, g, 'skip-payments');
+    }
+    logger.info({ botId, grades: gradesToUnlock }, 'Grades unlocked (payments skipped)');
+    try { await resumeBotAfterGradePayment(botId); } catch { /* best effort */ }
+    return { session_url: '' };
   }
 
   // Calculate total

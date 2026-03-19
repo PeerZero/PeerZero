@@ -16,6 +16,7 @@ import Svg, { Rect, Circle, Line, Polyline, Text as SvgText } from 'react-native
 import { bots as botsApi } from '../services/api';
 import { colors } from '../theme/colors';
 import { spacing, fontSize, borderRadius } from '../theme/spacing';
+import TutorialTip from '../components/TutorialTip';
 import { SKILL_DISPLAY_NAMES } from '@peerzero/shared';
 import type { BotStats } from '@peerzero/shared';
 import type { StatsScreenProps } from '../navigation/types';
@@ -73,13 +74,20 @@ export default function StatsScreen({ route }: StatsScreenProps) {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+      <TutorialTip
+        tipId="stats_charts"
+        title="Stats & Trends"
+        message="Track your bot's progress over time. See credibility trends, action breakdowns, skill development, and token usage. More data appears as your bot runs more cycles."
+      />
       {/* Summary cards */}
       <View style={styles.summaryRow}>
         <View style={styles.summaryCard}>
+          <Text style={styles.summaryEmoji}>🔄</Text>
           <Text style={styles.summaryValue}>{stats.total_cycles}</Text>
-          <Text style={styles.summaryLabel}>Total Cycles</Text>
+          <Text style={styles.summaryLabel}>Cycles Run</Text>
         </View>
         <View style={styles.summaryCard}>
+          <Text style={styles.summaryEmoji}>⚡</Text>
           <Text style={styles.summaryValue}>{formatTokens(stats.total_tokens)}</Text>
           <Text style={styles.summaryLabel}>Tokens Used</Text>
         </View>
@@ -88,7 +96,8 @@ export default function StatsScreen({ route }: StatsScreenProps) {
       {/* Credibility over time */}
       {stats.credibility_history.length > 1 && (
         <View style={styles.chartSection}>
-          <Text style={styles.chartTitle}>Credibility Over Time</Text>
+          <Text style={styles.chartTitle}>Credibility Journey</Text>
+          <Text style={styles.chartHint}>How your bot's reputation has grown over time</Text>
           <CredibilityChart data={stats.credibility_history} />
         </View>
       )}
@@ -96,7 +105,8 @@ export default function StatsScreen({ route }: StatsScreenProps) {
       {/* Action breakdown */}
       {stats.action_breakdown.length > 0 && (
         <View style={styles.chartSection}>
-          <Text style={styles.chartTitle}>Action Breakdown</Text>
+          <Text style={styles.chartTitle}>What It's Been Doing</Text>
+          <Text style={styles.chartHint}>Papers written, reviews given, bounties filed</Text>
           <ActionBreakdownChart data={stats.action_breakdown} />
         </View>
       )}
@@ -104,7 +114,8 @@ export default function StatsScreen({ route }: StatsScreenProps) {
       {/* Skill progress */}
       {stats.skill_progress.length > 0 && (
         <View style={styles.chartSection}>
-          <Text style={styles.chartTitle}>Skill Activity</Text>
+          <Text style={styles.chartTitle}>Skills Being Built</Text>
+          <Text style={styles.chartHint}>Reasoning abilities measured through practice</Text>
           <SkillProgressChart data={stats.skill_progress} />
         </View>
       )}
@@ -112,14 +123,19 @@ export default function StatsScreen({ route }: StatsScreenProps) {
       {/* Token usage trend */}
       {stats.token_usage_trend.length > 1 && (
         <View style={styles.chartSection}>
-          <Text style={styles.chartTitle}>Token Usage (Daily)</Text>
+          <Text style={styles.chartTitle}>Brain Power Used</Text>
+          <Text style={styles.chartHint}>Daily API token consumption</Text>
           <TokenUsageChart data={stats.token_usage_trend} />
         </View>
       )}
 
       {stats.credibility_history.length <= 1 && stats.action_breakdown.length === 0 && (
         <View style={styles.emptyState}>
-          <Text style={styles.emptyText}>Not enough data yet. Run more cycles to see charts!</Text>
+          <Text style={styles.emptyEmoji}>📊</Text>
+          <Text style={styles.emptyTitle}>Stats need data</Text>
+          <Text style={styles.emptyText}>
+            Charts and trends will appear here once your bot has run a few cycles. Start it up and check back!
+          </Text>
         </View>
       )}
     </ScrollView>
@@ -265,11 +281,15 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.md, alignItems: 'center',
     borderWidth: 1, borderColor: colors.border,
   },
+  summaryEmoji: { fontSize: 24, marginBottom: spacing.xs },
   summaryValue: { fontSize: fontSize.xxl, fontWeight: '700', color: colors.accent.secondary },
   summaryLabel: { fontSize: fontSize.xs, color: colors.text.secondary, marginTop: 4 },
   chartSection: { marginBottom: spacing.xl },
-  chartTitle: { fontSize: fontSize.md, fontWeight: '600', color: colors.text.primary, marginBottom: spacing.sm },
+  chartTitle: { fontSize: fontSize.md, fontWeight: '600', color: colors.text.primary },
+  chartHint: { fontSize: fontSize.xs, color: colors.text.tertiary, marginBottom: spacing.sm },
   errorText: { color: colors.accent.error, fontSize: fontSize.md },
   emptyState: { padding: spacing.xxl, alignItems: 'center' },
-  emptyText: { color: colors.text.secondary, fontSize: fontSize.md, textAlign: 'center' },
+  emptyEmoji: { fontSize: 40, marginBottom: spacing.md },
+  emptyTitle: { fontSize: fontSize.lg, fontWeight: '700', color: colors.text.primary, marginBottom: spacing.sm },
+  emptyText: { color: colors.text.secondary, fontSize: fontSize.sm, textAlign: 'center', lineHeight: 20, maxWidth: 280 },
 });

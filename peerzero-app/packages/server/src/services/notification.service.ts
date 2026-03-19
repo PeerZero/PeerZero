@@ -15,6 +15,8 @@
 
 import { queryRows, queryOne, query } from '../db/client';
 import { logger } from '../lib/logger';
+import { storeMilestoneMessage } from './message.service';
+import { broadcastMessage } from '../websocket/activity-stream';
 import type { NotificationType } from '@peerzero/shared';
 
 const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
@@ -266,6 +268,16 @@ export async function checkAndNotifyMilestones(
     } catch (err) {
       logger.warn({ err: err instanceof Error ? err.message : err }, 'Bot voice generation failed, using default');
     }
+  }
+
+  // Store milestone message in chat feed (so the user sees it in the conversation)
+  const milestoneText = botVoicedBody || enabledHits.map(h => h.line).join(' ');
+  const milestoneType = enabledHits[0].type;
+  try {
+    const msg = await storeMilestoneMessage(botId, milestoneText, milestoneType);
+    broadcastMessage(botId, userId, msg);
+  } catch (err) {
+    logger.warn({ err: err instanceof Error ? err.message : err }, 'Failed to store milestone message (non-fatal)');
   }
 
   if (enabledHits.length === 1) {

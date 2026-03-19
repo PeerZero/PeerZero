@@ -152,6 +152,12 @@ export const auth = {
 
   deleteAccount: () =>
     apiFetch('/auth/account', { method: 'DELETE' }),
+
+  forgotPassword: (email: string) =>
+    apiFetch<{ message: string }>('/auth/forgot-password', { method: 'POST', body: JSON.stringify({ email }) }),
+
+  resetPassword: (email: string, code: string, newPassword: string) =>
+    apiFetch<{ message: string }>('/auth/reset-password', { method: 'POST', body: JSON.stringify({ email, code, new_password: newPassword }) }),
 };
 
 // ── Bots API ──
@@ -161,7 +167,7 @@ export const bots = {
 
   get: (id: string) => apiFetch(`/bots/${id}`),
 
-  create: (data: { name: string; avatar_config: Record<string, unknown>; llm_api_key_id: string; llm_model?: string }) =>
+  create: (data: { name: string; avatar_config: Record<string, unknown>; llm_api_key_id: string; llm_model?: string; extended_thinking?: boolean }) =>
     apiFetch('/bots', { method: 'POST', body: JSON.stringify(data) }),
 
   update: (id: string, data: Record<string, unknown>) =>
@@ -209,6 +215,12 @@ export const bots = {
 
   speak: (id: string, context: string) =>
     apiFetch(`/bots/${id}/speak`, { method: 'POST', body: JSON.stringify({ context }) }),
+
+  messages: (id: string, page = 1) =>
+    apiFetch(`/bots/${id}/messages?page=${page}`),
+
+  sendMessage: (id: string, content: string) =>
+    apiFetch(`/bots/${id}/messages`, { method: 'POST', body: JSON.stringify({ content }) }),
 };
 
 // ── API Keys ──

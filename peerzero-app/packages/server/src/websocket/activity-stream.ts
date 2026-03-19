@@ -197,6 +197,20 @@ export function broadcastStatusChange(botId: string, userId: string, status: str
   broadcastActivity(botId, userId, { type: 'status_change', status });
 }
 
+/** Broadcast a new chat message (activity narration, milestone, or user chat). */
+export function broadcastMessage(botId: string, userId: string, message: Record<string, unknown>): void {
+  const botClients = clients.get(botId);
+  if (!botClients) return;
+
+  const payload = JSON.stringify({ type: 'message', message });
+
+  for (const client of botClients) {
+    if (client.userId === userId && client.ws.readyState === WebSocket.OPEN) {
+      client.ws.send(payload);
+    }
+  }
+}
+
 /** Broadcast external activity (phone-home from self-hosted bots). */
 export function broadcastExternalActivity(botId: string, userId: string, data: Record<string, unknown>): void {
   const botClients = clients.get(botId);

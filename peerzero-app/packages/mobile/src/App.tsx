@@ -7,9 +7,11 @@ import { registerRootComponent } from 'expo';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthContext, useAuthProvider } from './hooks/useAuth';
+import { TutorialProvider } from './hooks/useTutorial';
 import { usePushNotifications } from './hooks/usePushNotifications';
 import AppNavigator from './navigation/AppNavigator';
 import ErrorBoundary from './components/ErrorBoundary';
+import { ToastProvider } from './components/Toast';
 
 function App() {
   const auth = useAuthProvider();
@@ -21,8 +23,12 @@ function App() {
     <ErrorBoundary>
       <SafeAreaProvider>
         <AuthContext.Provider value={auth}>
-          <StatusBar style="light" />
-          <AppNavigator />
+          <ToastProvider>
+            <TutorialProvider>
+              <StatusBar style="light" />
+              <AppNavigator />
+            </TutorialProvider>
+          </ToastProvider>
         </AuthContext.Provider>
       </SafeAreaProvider>
     </ErrorBoundary>

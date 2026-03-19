@@ -11,6 +11,8 @@ import * as activityService from '../services/activity.service';
 import * as statsService from '../services/stats.service';
 import * as skillService from '../services/skill.service';
 import { generateDialogue, DIALOGUE_CONTEXTS, type DialogueContext } from '../services/bot-voice.service';
+import * as messageService from '../services/message.service';
+import { broadcastMessage } from '../websocket/activity-stream';
 import { addBotCycleJob, removeBotJobs } from '../jobs/queue';
 import { logAudit } from '../services/audit.service';
 import type { ActivityCategory, FocusChunk } from '@peerzero/shared';
@@ -102,7 +104,8 @@ router.post('/:id/start', userRateLimit('bot_control'), async (req: Request, res
 
 // Stop bot
 router.post('/:id/stop', userRateLimit('bot_control'), async (req: Request, res: Response) => {
-  await removeBotJobs(req.params.id);
+  // Always update DB status even if queue cleanup fails (stale locks)
+  await Promise.allSettled([removeBotJobs(req.params.id)]);
   await botService.setBotStatus(req.params.id, 'stopped');
   logAudit({ userId: req.user!.userId, action: 'bot.stop', entityType: 'bot', entityId: req.params.id, ipAddress: req.ip });
   res.json({ status: 'stopped' });
@@ -311,6 +314,61 @@ router.post('/:id/speak', userRateLimit('write'), async (req: Request, res: Resp
   );
 
   res.json({ message, context });
+});
+
+// ── Chat Messages ──
+
+// Get message feed (paginated, newest first)
+router.get('/:id/messages', userRateLimit('read'), async (req: Request, res: Response) => {
+  await botService.getBotDetail(req.user!.userId, req.params.id);
+  const rawPage = parseInt(req.query.page as string);
+  const page = Number.isFinite(rawPage) && rawPage > 0 ? Math.min(rawPage, 10000) : 1;
+  const rawPerPage = parseInt(req.query.per_page as string);
+  const perPage = Number.isFinite(rawPerPage) && rawPerPage > 0 ? Math.min(rawPerPage, 50) : 30;
+  const result = await messageService.getMessages(req.params.id, page, perPage);
+  res.json({ ...result, page, per_page: perPage });
+});
+
+// Send a chat message to the bot and get a reply
+router.post('/:id/messages', userRateLimit('write'), async (req: Request, res: Response) => {
+  const { content } = req.body;
+  if (!content || typeof content !== 'string' || content.trim().length === 0) {
+    res.status(400).json({ error: 'content required' });
+    return;
+  }
+  if (content.length > 2000) {
+    res.status(400).json({ error: 'Message too long (max 2000 characters)' });
+    return;
+  }
+
+  const bot = await botService.getBotDetail(req.user!.userId, req.params.id);
+  if (!bot.llm_api_key_id) {
+    res.status(400).json({ error: 'Bot has no API key configured' });
+    return;
+  }
+
+  // Store user message
+  const userMsg = await messageService.storeMessage(req.params.id, 'user', content.trim(), 'chat');
+
+  // Broadcast user message via WebSocket
+  broadcastMessage(req.params.id, req.user!.userId, userMsg);
+
+  // Generate and store bot reply
+  const model = bot.fast_llm_model || bot.llm_model;
+  const replyText = await messageService.generateChatReply(
+    req.params.id,
+    bot.name,
+    req.user!.userId,
+    bot.llm_api_key_id,
+    model,
+    content.trim(),
+  );
+  const botReply = await messageService.storeMessage(req.params.id, 'bot', replyText, 'chat');
+
+  // Broadcast bot reply via WebSocket
+  broadcastMessage(req.params.id, req.user!.userId, botReply);
+
+  res.json({ user_message: userMsg, bot_reply: botReply });
 });
 
 // ── Skills ──

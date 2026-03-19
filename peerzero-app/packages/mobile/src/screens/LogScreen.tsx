@@ -15,6 +15,7 @@ import { bots as botsApi } from '../services/api';
 import { useBotStream, type BotStreamEvent } from '../hooks/useBotStream';
 import { colors } from '../theme/colors';
 import { spacing, fontSize, borderRadius } from '../theme/spacing';
+import TutorialTip from '../components/TutorialTip';
 import type { ActivityEntry, MoodType, ActivityCategory, ActionType, ExternalActivityEntry } from '@peerzero/shared';
 import { ACTION_TYPES } from '@peerzero/shared';
 import { formatTimestamp } from '../utils/timeAgo';
@@ -239,9 +240,10 @@ export default function LogScreen({ route }: LogScreenProps) {
   const renderContentEntry = ({ item }: { item: ActivityEntry }) => {
     const mood = item.translated?.mood || 'neutral';
     const isExpanded = expandedIds.has(item.id);
-    const contentPreview = item.content_text
-      ? item.content_text.slice(0, 120) + (item.content_text.length > 120 ? '...' : '')
-      : '';
+
+    // Extract structured info from the translated details
+    const score = item.translated?.credibility_change;
+    const details = item.translated?.details || [];
 
     return (
       <TouchableOpacity
@@ -251,19 +253,52 @@ export default function LogScreen({ route }: LogScreenProps) {
       >
         <View style={[styles.moodBar, { backgroundColor: MOOD_COLORS[mood] }]} />
         <View style={styles.entryContent}>
+          {/* Type badge + timestamp row */}
           <View style={styles.contentHeader}>
-            <Text style={styles.contentType}>{item.action_type.toUpperCase()}</Text>
-            <Text style={styles.metaText}>{formatTime(item.created_at)}</Text>
+            <View style={[styles.typeBadge, { backgroundColor: MOOD_COLORS[mood] + '20' }]}>
+              <Text style={[styles.typeBadgeText, { color: MOOD_COLORS[mood] }]}>
+                {ACTION_ICONS[item.action_type] || '?'} {item.action_type.toUpperCase()}
+              </Text>
+            </View>
+            <Text style={styles.metaText}>Cycle {item.cycle_number} · {formatTime(item.created_at)}</Text>
           </View>
+
+          {/* Title */}
           <Text style={styles.headline}>{item.translated?.headline || item.action_type}</Text>
+
+          {/* Summary line */}
+          {item.translated?.summary ? (
+            <Text style={styles.contentSummary}>{item.translated.summary}</Text>
+          ) : null}
+
+          {/* Score change */}
+          {score != null && score !== 0 && (
+            <View style={[styles.scoreChip, { backgroundColor: score > 0 ? colors.accent.success + '15' : colors.accent.error + '15' }]}>
+              <Text style={[styles.scoreChipText, { color: score > 0 ? colors.accent.success : colors.accent.error }]}>
+                {score > 0 ? '+' : ''}{score} credibility
+              </Text>
+            </View>
+          )}
+
+          {/* Expandable body */}
           {item.content_text ? (
             <Text style={styles.contentText} numberOfLines={isExpanded ? undefined : 3}>
-              {isExpanded ? item.content_text : contentPreview}
+              {item.content_text}
             </Text>
           ) : (
             <Text style={styles.noContent}>No content text available</Text>
           )}
-          {item.content_text && item.content_text.length > 120 && (
+
+          {/* Detail bullets (when expanded) */}
+          {isExpanded && details.length > 0 && (
+            <View style={styles.detailsList}>
+              {details.map((d, i) => (
+                <Text key={i} style={styles.detailItem}>· {d}</Text>
+              ))}
+            </View>
+          )}
+
+          {item.content_text && item.content_text.length > 100 && (
             <Text style={styles.expandToggle}>{isExpanded ? 'Show less' : 'Show more'}</Text>
           )}
         </View>
@@ -338,6 +373,11 @@ export default function LogScreen({ route }: LogScreenProps) {
 
   return (
     <View style={styles.container}>
+      <TutorialTip
+        tipId="log_activity"
+        title="Activity Log"
+        message="See everything your bot does each cycle. The Tasks tab shows actions taken, while the Content tab shows the actual papers and reviews it wrote."
+      />
       {/* Tab bar */}
       <View style={styles.tabBar}>
         <TouchableOpacity
@@ -476,6 +516,22 @@ const styles = StyleSheet.create({
     fontSize: fontSize.sm, color: colors.text.secondary, marginTop: spacing.sm,
     lineHeight: 20,
   },
+  typeBadge: {
+    paddingHorizontal: spacing.sm, paddingVertical: 2, borderRadius: borderRadius.sm,
+  },
+  typeBadgeText: {
+    fontSize: fontSize.xs, fontWeight: '700', letterSpacing: 0.5,
+  },
+  contentSummary: {
+    fontSize: fontSize.sm, color: colors.text.secondary, marginTop: 2, lineHeight: 18,
+  },
+  scoreChip: {
+    alignSelf: 'flex-start', paddingHorizontal: spacing.sm, paddingVertical: 2,
+    borderRadius: borderRadius.sm, marginTop: spacing.xs,
+  },
+  scoreChipText: { fontSize: fontSize.xs, fontWeight: '700' },
+  detailsList: { marginTop: spacing.sm, paddingLeft: spacing.xs },
+  detailItem: { fontSize: fontSize.sm, color: colors.text.secondary, lineHeight: 20 },
   noContent: { fontSize: fontSize.sm, color: colors.text.tertiary, fontStyle: 'italic', marginTop: spacing.xs },
   expandToggle: {
     fontSize: fontSize.xs, color: colors.accent.primary, fontWeight: '600',

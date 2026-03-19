@@ -1,6 +1,8 @@
 // =============================================================================
 // BullMQ job queue — manages autonomous bot cycle execution
 // Each running bot has a repeating job that triggers its agent loop.
+// Uses self-scheduling: after each cycle, the worker schedules the next one
+// as a delayed job, avoiding BullMQ repeatable job stale-lock issues.
 // =============================================================================
 
 import { Queue, Worker, Job } from 'bullmq';
@@ -9,7 +11,7 @@ import { config } from '../config';
 import { logger } from '../lib/logger';
 import { runOneCycle, BotContext } from '../runtime/agent-loop';
 import { setBotStatus } from '../services/bot.service';
-import { queryOne, query } from '../db/client';
+import { queryOne, query, queryRows } from '../db/client';
 
 let connection: IORedis | null = null;
 let botQueue: Queue | null = null;
@@ -29,7 +31,28 @@ function getQueue(): Queue {
   return botQueue;
 }
 
-/** Add a repeating job for a bot. Runs every cycle_delay_seconds. */
+/** Schedule the next cycle for a bot after a delay. */
+async function scheduleNextCycle(
+  botId: string,
+  userId: string,
+  llmApiKeyId: string,
+  llmModel: string,
+  cycleDelaySeconds: number,
+): Promise<void> {
+  const queue = getQueue();
+  await queue.add(
+    `bot-${botId}`,
+    { botId, userId, llmApiKeyId, llmModel, cycleDelaySeconds },
+    {
+      jobId: `bot-${botId}-${Date.now()}`,
+      delay: cycleDelaySeconds * 1000,
+      removeOnComplete: 100,
+      removeOnFail: 50,
+    },
+  );
+}
+
+/** Add a cycle job for a bot. Runs immediately, then self-schedules. */
 export async function addBotCycleJob(
   botId: string,
   userId: string,
@@ -45,21 +68,9 @@ export async function addBotCycleJob(
   // Add the first immediate job
   await queue.add(
     `bot-${botId}`,
-    { botId, userId, llmApiKeyId, llmModel },
+    { botId, userId, llmApiKeyId, llmModel, cycleDelaySeconds },
     {
       jobId: `bot-${botId}-immediate`,
-      removeOnComplete: 100,
-      removeOnFail: 50,
-    },
-  );
-
-  // Add repeating job
-  await queue.add(
-    `bot-${botId}`,
-    { botId, userId, llmApiKeyId, llmModel },
-    {
-      repeat: { every: cycleDelaySeconds * 1000 },
-      jobId: `bot-${botId}-repeat`,
       removeOnComplete: 100,
       removeOnFail: 50,
     },
@@ -69,8 +80,8 @@ export async function addBotCycleJob(
 /** Remove all jobs for a bot. */
 export async function removeBotJobs(botId: string): Promise<void> {
   const queue = getQueue();
+  // Clean up any legacy repeatable jobs
   try {
-    // List all repeatable jobs and remove the one matching this bot
     const repeatables = await queue.getRepeatableJobs();
     for (const job of repeatables) {
       if (job.name === `bot-${botId}`) {
@@ -80,9 +91,30 @@ export async function removeBotJobs(botId: string): Promise<void> {
   } catch (err) {
     logger.debug({ botId, err: err instanceof Error ? err.message : err }, 'removeBotJobs: repeatable job removal skipped');
   }
-  // Also remove any pending one-shot jobs
-  const job = await queue.getJob(`bot-${botId}-immediate`);
-  if (job) await job.remove();
+  // Remove any pending jobs (immediate or scheduled) for this bot
+  const jobTypes = ['wait', 'delayed', 'active'] as const;
+  for (const type of jobTypes) {
+    try {
+      const jobs = await queue.getJobs([type]);
+      for (const job of jobs) {
+        if (job.name === `bot-${botId}`) {
+          try {
+            await job.remove();
+          } catch {
+            // Job may be locked by a dead worker — force-discard it
+            try {
+              await job.moveToFailed(new Error('Force-removed: stale lock'), '0', false);
+              await job.remove();
+            } catch {
+              logger.debug({ botId, jobId: job.id }, 'removeBotJobs: could not remove job, will expire naturally');
+            }
+          }
+        }
+      }
+    } catch (err) {
+      logger.debug({ botId, type, err: err instanceof Error ? err.message : err }, 'removeBotJobs: job cleanup skipped');
+    }
+  }
 }
 
 /** Start the worker that processes bot cycle jobs. */
@@ -92,11 +124,11 @@ export function startWorker(): void {
   botWorker = new Worker(
     'bot-cycles',
     async (job: Job) => {
-      const { botId, userId, llmApiKeyId, llmModel } = job.data;
+      const { botId, userId, llmApiKeyId, llmModel, cycleDelaySeconds } = job.data;
 
       // Check if bot is still running (also fetch fast model + extended thinking from DB — may change between cycles)
-      const bot = await queryOne<{ status: string; cycle_count: number; fast_llm_model: string | null; extended_thinking: boolean }>(
-        'SELECT status, cycle_count, fast_llm_model, extended_thinking FROM bots WHERE id = $1',
+      const bot = await queryOne<{ status: string; cycle_count: number; fast_llm_model: string | null; extended_thinking: boolean; cycle_delay_seconds: number }>(
+        'SELECT status, cycle_count, fast_llm_model, extended_thinking, cycle_delay_seconds FROM bots WHERE id = $1',
         [botId],
       );
       if (!bot || bot.status !== 'running') {
@@ -144,7 +176,16 @@ export function startWorker(): void {
           await setBotStatus(botId, 'error', `Stopped after ${failures} consecutive failures: ${sanitizedMsg.slice(0, 400)}`);
           await removeBotJobs(botId);
           await query('UPDATE bots SET consecutive_failures = 0 WHERE id = $1', [botId]);
+          return;
         }
+      }
+
+      // Self-schedule the next cycle (use DB value so changes take effect without restart)
+      const delay = bot.cycle_delay_seconds || cycleDelaySeconds || 60;
+      // Re-check bot is still running before scheduling next
+      const stillRunning = await queryOne<{ status: string }>('SELECT status FROM bots WHERE id = $1', [botId]);
+      if (stillRunning?.status === 'running') {
+        await scheduleNextCycle(botId, userId, llmApiKeyId, llmModel, delay);
       }
     },
     {
@@ -158,6 +199,23 @@ export function startWorker(): void {
   });
 
   logger.info('Bot cycle worker started');
+}
+
+/** Re-queue all bots that were running before the server restarted. */
+export async function recoverRunningBots(): Promise<void> {
+  const rows = await queryRows<{ id: string; user_id: string; llm_api_key_id: string; llm_model: string; cycle_delay_seconds: number }>(
+    "SELECT id, user_id, llm_api_key_id, llm_model, cycle_delay_seconds FROM bots WHERE status = 'running' AND deleted_at IS NULL",
+  );
+  if (rows.length === 0) return;
+  logger.info({ count: rows.length }, 'Recovering running bots after restart');
+  for (const bot of rows) {
+    try {
+      await addBotCycleJob(bot.id, bot.user_id, bot.llm_api_key_id, bot.llm_model, bot.cycle_delay_seconds);
+      logger.info({ botId: bot.id }, 'Recovered bot cycle job');
+    } catch (err) {
+      logger.error({ botId: bot.id, err: err instanceof Error ? err.message : err }, 'Failed to recover bot cycle job');
+    }
+  }
 }
 
 /** Graceful shutdown. */

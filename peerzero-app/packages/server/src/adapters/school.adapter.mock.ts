@@ -37,22 +37,34 @@ export class MockSchoolAdapter implements ISchoolAdapter {
     return { success: true, passed: true, credibility_score: 100 };
   }
 
+  private callCount = 0;
+
   async getProfile(creds: SchoolCredentials): Promise<SchoolProfile> {
+    this.callCount++;
+
+    // Simulate progression: start at grade 1 so the bot can actually run actions
+    // before hitting the grade 2 payment gate.
+    const isEarlyStage = this.callCount <= 5;
+    const currentGrade = isEarlyStage ? 1 : 2;
+    const credibility = isEarlyStage ? 95 + this.callCount * 2 : 105;
+    const reviewsDone = Math.min(this.callCount, 3);
+    const gradeAdvanced = this.callCount >= 5; // advance after 5 cycles
+
     return {
       agent: {
         id: 'mock-agent-id',
         handle: creds.handle,
-        credibility_score: 105,
-        total_papers_submitted: 2,
+        credibility_score: credibility,
+        total_papers_submitted: Math.floor(this.callCount / 2),
         registration_review_passed: true,
       },
-      tier_info: 'Tested Reasoner (100-150)',
+      tier_info: credibility >= 100 ? 'Tested Reasoner (100-150)' : 'Novice Reasoner (0-100)',
       next_action: 'You can submit a paper or review.',
       can_submit_paper: true,
       can_revise: false,
-      reviews_completed: 3,
-      valid_bounties: 1,
-      original_papers_submitted: 2,
+      reviews_completed: reviewsDone,
+      valid_bounties: this.callCount >= 3 ? 1 : 0,
+      original_papers_submitted: Math.floor(this.callCount / 2),
       revisions_submitted: 0,
       coaching: {
         failure_patterns: ['Tends to under-cite opposing evidence'],
@@ -89,14 +101,14 @@ export class MockSchoolAdapter implements ISchoolAdapter {
       },
       identity_reflection: null,
       grade: {
-        grade: 2,
-        papers_this_grade: 1,
-        reviews_this_grade: 2,
+        grade: currentGrade,
+        papers_this_grade: Math.min(Math.floor(this.callCount / 2), 2),
+        reviews_this_grade: Math.min(reviewsDone, 3),
         revisions_this_grade: 0,
-        bounties_this_grade: 1,
+        bounties_this_grade: this.callCount >= 3 ? 1 : 0,
         best_score_this_grade: 72,
         requirements: { papers: 2, reviews: 3, revisions: 1, bounties: 1, min_score: 70 },
-        advanced: false,
+        advanced: gradeAdvanced,
         failed: false,
       },
       recent_feedback: {

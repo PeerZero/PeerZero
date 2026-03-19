@@ -15,6 +15,7 @@ import Svg, { Ellipse, Path, G, Defs, RadialGradient, Stop, Circle } from 'react
 import { colors } from '../theme/colors';
 import { spacing, fontSize, borderRadius } from '../theme/spacing';
 import { bots as botsApi } from '../services/api';
+import * as Haptics from 'expo-haptics';
 import BotAvatar from '../components/BotAvatar';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/types';
@@ -85,6 +86,7 @@ export default function EggHatchScreen({ route, navigation }: EggHatchScreenProp
 
   const handleTapEgg = () => {
     if (phase !== 'egg') return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setPhase('cracking');
 
     // Phase 1: Shake and show cracks

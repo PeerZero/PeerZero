@@ -404,6 +404,30 @@ export interface BotPublicProfile {
   created_at: string;
 }
 
+// ── Bot Messages (Chat Feed) ──
+export type MessageRole = 'bot' | 'user';
+export type MessageType = 'chat' | 'activity' | 'milestone';
+
+export interface BotMessage {
+  id: string;
+  bot_id: string;
+  role: MessageRole;
+  content: string;
+  message_type: MessageType;
+  activity_id: string | null;
+  metadata: Record<string, unknown> | null;
+  created_at: string;
+}
+
+export interface SendMessageRequest {
+  content: string;
+}
+
+export interface SendMessageResponse {
+  user_message: BotMessage;
+  bot_reply: BotMessage;
+}
+
 // ── Paginated response wrapper ──
 export interface PaginatedResponse<T> {
   data: T[];

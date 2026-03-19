@@ -39,8 +39,11 @@ export const config = {
   encryptionMasterKey: required('ENCRYPTION_MASTER_KEY'),
 
   // Stripe
-  stripeSecretKey: required('STRIPE_SECRET_KEY'),
-  stripeWebhookSecret: required('STRIPE_WEBHOOK_SECRET'),
+  stripeSecretKey: process.env.SKIP_PAYMENTS === 'true' ? optional('STRIPE_SECRET_KEY', '') : required('STRIPE_SECRET_KEY'),
+  stripeWebhookSecret: process.env.SKIP_PAYMENTS === 'true' ? optional('STRIPE_WEBHOOK_SECRET', '') : required('STRIPE_WEBHOOK_SECRET'),
+
+  // Payment bypass (for testing — all grades auto-unlocked)
+  skipPayments: process.env.SKIP_PAYMENTS === 'true',
 
   // Adapter mode
   // false = mock adapters (no real API calls)

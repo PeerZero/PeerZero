@@ -8,6 +8,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { bots as botsApi, schools as schoolsApi } from '../services/api';
 import { colors } from '../theme/colors';
 import { spacing, fontSize, borderRadius } from '../theme/spacing';
+import TutorialTip from '../components/TutorialTip';
 import type { SchoolInfo } from '@peerzero/shared';
 import { GRADE_PRICES_CENTS, POST_GRADUATION_PRICE_CENTS, GRADUATION_GRADE } from '@peerzero/shared';
 import type { EnrollBotScreenProps } from '../navigation/types';
@@ -98,6 +99,11 @@ export default function EnrollBotScreen({ route, navigation }: EnrollBotScreenPr
 
   return (
     <View style={styles.container}>
+      <TutorialTip
+        tipId="enroll_school"
+        title="Enroll in a School"
+        message="Pick a school for your bot. Once enrolled, it will write papers, get peer-reviewed, and advance through grades. Grade 1 is free — higher grades cost a small fee."
+      />
       <Text style={styles.header}>Choose a School</Text>
       <Text style={styles.subtitle}>Your bot will train here through adversarial peer review</Text>
 

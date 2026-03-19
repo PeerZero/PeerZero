@@ -5,8 +5,9 @@ import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import type { CompositeScreenProps } from '@react-navigation/native';
 
 export type AuthStackParamList = {
-  Login: undefined;
+  Login: { message?: string } | undefined;
   Register: undefined;
+  ForgotPassword: undefined;
 };
 
 export type TabParamList = {
@@ -20,6 +21,7 @@ export type RootStackParamList = {
   Bot: { botId: string };
   Brain: { botId: string };
   Log: { botId: string };
+  Chat: { botId: string };
   CreateBot: undefined;
   EggHatch: { botId: string; botName: string; bodyColor: string; speciesSeed?: string };
   EnrollBot: { botId: string };
@@ -32,6 +34,7 @@ export type RootStackParamList = {
 // Auth stack screens
 export type LoginScreenProps = NativeStackScreenProps<AuthStackParamList, 'Login'>;
 export type RegisterScreenProps = NativeStackScreenProps<AuthStackParamList, 'Register'>;
+export type ForgotPasswordScreenProps = NativeStackScreenProps<AuthStackParamList, 'ForgotPassword'>;
 
 // Root stack screens
 export type BotScreenProps = NativeStackScreenProps<RootStackParamList, 'Bot'>;
@@ -40,6 +43,7 @@ export type EnrollBotScreenProps = NativeStackScreenProps<RootStackParamList, 'E
 export type BrainScreenProps = NativeStackScreenProps<RootStackParamList, 'Brain'>;
 export type LogScreenProps = NativeStackScreenProps<RootStackParamList, 'Log'>;
 export type StatsScreenProps = NativeStackScreenProps<RootStackParamList, 'Stats'>;
+export type ChatScreenProps = NativeStackScreenProps<RootStackParamList, 'Chat'>;
 export type PlatformsScreenProps = NativeStackScreenProps<RootStackParamList, 'Platforms'>;
 export type ConnectPlatformScreenProps = NativeStackScreenProps<RootStackParamList, 'ConnectPlatform'>;
 export type EggHatchScreenProps = NativeStackScreenProps<RootStackParamList, 'EggHatch'>;

@@ -8,6 +8,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { platforms as platformsApi } from '../services/api';
 import { colors } from '../theme/colors';
 import { spacing, fontSize, borderRadius } from '../theme/spacing';
+import TutorialTip from '../components/TutorialTip';
 import type { BotPlatformConnection } from '@peerzero/shared';
 import type { PlatformsScreenProps } from '../navigation/types';
 
@@ -28,7 +29,7 @@ export default function PlatformsScreen({ route, navigation }: PlatformsScreenPr
       const data = await platformsApi.list(botId) as BotPlatformConnection[];
       setConnections(data);
     } catch (err: unknown) {
-      Alert.alert('Error', err instanceof Error ? err.message : 'Something went wrong');
+      Alert.alert('Connection Error', err instanceof Error ? err.message : 'Could not load platforms. Check your connection and try again.');
     } finally {
       setLoading(false);
     }
@@ -47,7 +48,7 @@ export default function PlatformsScreen({ route, navigation }: PlatformsScreenPr
             await platformsApi.disconnect(botId, platformId);
             setConnections(prev => prev.filter(c => c.id !== platformId));
           } catch (err: unknown) {
-            Alert.alert('Error', err instanceof Error ? err.message : 'Something went wrong');
+            Alert.alert('Disconnect Failed', err instanceof Error ? err.message : 'Could not disconnect platform. Try again.');
           }
         },
       },
@@ -89,6 +90,11 @@ export default function PlatformsScreen({ route, navigation }: PlatformsScreenPr
 
   return (
     <View style={styles.container}>
+      <TutorialTip
+        tipId="platforms_connections"
+        title="Platforms"
+        message="Connect your bot to external platforms like Discord or Twitter so it can share its reasoning and interact beyond school."
+      />
       <FlatList
         data={connections}
         keyExtractor={item => item.id}

@@ -4,7 +4,7 @@
 // =============================================================================
 
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert, ActivityIndicator, Switch, Share } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert, ActivityIndicator, Switch, Share, RefreshControl } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import Slider from '@react-native-community/slider';
 import { bots as botsApi, payments as paymentsApi } from '../services/api';
@@ -13,9 +13,12 @@ import { colors } from '../theme/colors';
 import { spacing, fontSize, borderRadius } from '../theme/spacing';
 import BotAvatar from '../components/BotAvatar';
 import BotDialogue from '../components/BotDialogue';
+import SkeletonLoader from '../components/SkeletonLoader';
+import TutorialTip from '../components/TutorialTip';
 import MilestoneModal from '../components/MilestoneModal';
 import type { MilestoneType } from '../components/MilestoneModal';
 import * as WebBrowser from 'expo-web-browser';
+import * as Haptics from 'expo-haptics';
 import type { BotDetail } from '@peerzero/shared';
 import { credibilityToStage, calculateHunger, getGradePriceDisplay, GRADUATION_GRADE, getGradePriceCents, GRADE_PRICES_CENTS } from '@peerzero/shared';
 import type { BotScreenProps } from '../navigation/types';
@@ -130,26 +133,52 @@ export default function BotScreen({ route, navigation }: BotScreenProps) {
     }, [loadBot]),
   });
 
+  const [startStopLoading, setStartStopLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [gradeUnlockLoading, setGradeUnlockLoading] = useState(false);
+  const [retryLoading, setRetryLoading] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await loadBot();
+    setRefreshing(false);
+  }, [loadBot]);
+
   const handleStartStop = async () => {
-    if (!bot) return;
+    if (!bot || startStopLoading) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    const wasRunning = bot.status === 'running';
+    setStartStopLoading(true);
+    // Optimistic update — flip status immediately so the button responds instantly
+    setBot(prev => prev ? { ...prev, status: wasRunning ? 'stopped' : 'running' } : null);
     try {
-      if (bot.status === 'running') {
+      if (wasRunning) {
         await botsApi.stop(botId);
       } else {
         await botsApi.start(botId);
       }
       await loadBot();
     } catch (err: unknown) {
+      // Revert on failure
+      setBot(prev => prev ? { ...prev, status: wasRunning ? 'running' : 'stopped' } : null);
       Alert.alert('Error', err instanceof Error ? err.message : 'Something went wrong');
+    } finally {
+      setStartStopLoading(false);
     }
   };
 
   const handleRetry = async () => {
+    if (retryLoading) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setRetryLoading(true);
     try {
       await botsApi.start(botId);
       await loadBot();
     } catch (err: unknown) {
       Alert.alert('Error', err instanceof Error ? err.message : 'Something went wrong');
+    } finally {
+      setRetryLoading(false);
     }
   };
 
@@ -176,6 +205,9 @@ export default function BotScreen({ route, navigation }: BotScreenProps) {
   };
 
   const handleGradeUnlock = async (mode: 'next' | 'graduation') => {
+    if (gradeUnlockLoading) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setGradeUnlockLoading(true);
     try {
       const result = mode === 'next'
         ? await paymentsApi.gradeCheckout(botId) as { session_url: string }
@@ -186,11 +218,13 @@ export default function BotScreen({ route, navigation }: BotScreenProps) {
           dismissButtonStyle: 'close',
           presentationStyle: WebBrowser.WebBrowserPresentationStyle.AUTOMATIC,
         });
-        // Refresh bot data when browser closes — payment may have completed
-        await loadBot();
       }
+      // Refresh bot data — payment may have completed (or was skipped)
+      await loadBot();
     } catch (err: unknown) {
       Alert.alert('Error', err instanceof Error ? err.message : 'Something went wrong');
+    } finally {
+      setGradeUnlockLoading(false);
     }
   };
 
@@ -243,9 +277,38 @@ export default function BotScreen({ route, navigation }: BotScreenProps) {
   };
 
   if (!bot) return (
-    <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
-      <ActivityIndicator size="large" color={colors.accent.primary} />
-      <Text style={{ color: colors.text.secondary, marginTop: 12 }}>Loading bot...</Text>
+    <View style={[styles.container, { alignItems: 'center', paddingTop: spacing.xl }]}>
+      {/* Avatar skeleton */}
+      <SkeletonLoader width={140} height={140} borderRadius={70} />
+      {/* Name skeleton */}
+      <SkeletonLoader width={160} height={22} borderRadius={6} style={{ marginTop: spacing.md }} />
+      {/* School name skeleton */}
+      <SkeletonLoader width={120} height={14} borderRadius={4} style={{ marginTop: spacing.sm }} />
+      {/* Status badge skeleton */}
+      <SkeletonLoader width={80} height={28} borderRadius={999} style={{ marginTop: spacing.md }} />
+      {/* Stats row skeleton */}
+      <View style={{ flexDirection: 'row', marginTop: spacing.xl, gap: spacing.xl }}>
+        <View style={{ alignItems: 'center' }}>
+          <SkeletonLoader width={60} height={28} borderRadius={6} />
+          <SkeletonLoader width={50} height={10} borderRadius={4} style={{ marginTop: spacing.xs }} />
+        </View>
+        <View style={{ alignItems: 'center' }}>
+          <SkeletonLoader width={60} height={28} borderRadius={6} />
+          <SkeletonLoader width={50} height={10} borderRadius={4} style={{ marginTop: spacing.xs }} />
+        </View>
+        <View style={{ alignItems: 'center' }}>
+          <SkeletonLoader width={60} height={28} borderRadius={6} />
+          <SkeletonLoader width={50} height={10} borderRadius={4} style={{ marginTop: spacing.xs }} />
+        </View>
+      </View>
+      {/* Action button skeleton */}
+      <SkeletonLoader width="100%" height={48} borderRadius={borderRadius.md} style={{ marginTop: spacing.xl, paddingHorizontal: spacing.xl }} />
+      {/* Nav buttons skeleton */}
+      <View style={{ flexDirection: 'row', gap: spacing.sm, marginTop: spacing.lg, width: '100%', paddingHorizontal: spacing.xl }}>
+        <SkeletonLoader width={0} height={80} borderRadius={borderRadius.md} style={{ flex: 1 }} />
+        <SkeletonLoader width={0} height={80} borderRadius={borderRadius.md} style={{ flex: 1 }} />
+        <SkeletonLoader width={0} height={80} borderRadius={borderRadius.md} style={{ flex: 1 }} />
+      </View>
     </View>
   );
 
@@ -260,7 +323,12 @@ export default function BotScreen({ route, navigation }: BotScreenProps) {
     : isRunning ? colors.accent.warning : colors.text.tertiary;
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <ScrollView style={styles.container} contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#6C5CE7" colors={['#6C5CE7']} />}>
+      <TutorialTip
+        tipId="bot_overview"
+        title="Your Bot's Home"
+        message="This is your bot's Tamagotchi view. Start and stop it, adjust cycle speed, check stats, and explore its brain. Enroll it in a school to begin learning."
+      />
       {/* WebSocket connection indicator */}
       <View style={styles.connectionRow}>
         <View style={[styles.connectionDot, { backgroundColor: connectionColor }]} />
@@ -372,8 +440,12 @@ export default function BotScreen({ route, navigation }: BotScreenProps) {
         <View style={styles.errorBox}>
           <Text style={styles.errorTitle}>Error</Text>
           <Text style={styles.errorText} selectable>{bot.error_message}</Text>
-          <TouchableOpacity style={styles.retryButton} onPress={handleRetry} accessibilityRole="button" accessibilityLabel="Retry starting the bot">
-            <Text style={styles.retryButtonText}>Retry</Text>
+          <TouchableOpacity style={[styles.retryButton, retryLoading && styles.actionButtonDisabled]} onPress={handleRetry} disabled={retryLoading} accessibilityRole="button" accessibilityLabel="Retry starting the bot">
+            {retryLoading ? (
+              <ActivityIndicator color="#fff" size="small" />
+            ) : (
+              <Text style={styles.retryButtonText}>Retry</Text>
+            )}
           </TouchableOpacity>
         </View>
       )}
@@ -403,21 +475,30 @@ export default function BotScreen({ route, navigation }: BotScreenProps) {
             <Text style={styles.gradeUnlockText}>
               Your bot completed the previous grade! Unlock the next one to keep learning.
             </Text>
-            <TouchableOpacity style={styles.gradeUnlockButton} onPress={() => handleGradeUnlock('next')} accessibilityRole="button" accessibilityLabel={`Unlock Grade ${currentGrade} for ${getGradePriceDisplay(currentGrade)}`}>
-              <Text style={styles.gradeUnlockButtonText}>
-                Unlock Grade {currentGrade} — {getGradePriceDisplay(currentGrade)}
-              </Text>
+            <TouchableOpacity style={[styles.gradeUnlockButton, gradeUnlockLoading && styles.actionButtonDisabled]} onPress={() => handleGradeUnlock('next')} disabled={gradeUnlockLoading} accessibilityRole="button" accessibilityLabel={`Unlock Grade ${currentGrade} for ${getGradePriceDisplay(currentGrade)}`}>
+              {gradeUnlockLoading ? (
+                <ActivityIndicator color="#fff" size="small" />
+              ) : (
+                <Text style={styles.gradeUnlockButtonText}>
+                  Unlock Grade {currentGrade} — {getGradePriceDisplay(currentGrade)}
+                </Text>
+              )}
             </TouchableOpacity>
             {canShowGraduation && currentGrade < GRADUATION_GRADE && (
               <TouchableOpacity
-                style={[styles.gradeUnlockButton, styles.gradeUnlockButtonAlt]}
+                style={[styles.gradeUnlockButton, styles.gradeUnlockButtonAlt, gradeUnlockLoading && styles.actionButtonDisabled]}
                 onPress={() => handleGradeUnlock('graduation')}
+                disabled={gradeUnlockLoading}
                 accessibilityRole="button"
                 accessibilityLabel={`Unlock all grades through graduation for $${(gradCost / 100).toFixed(2)}`}
               >
-                <Text style={styles.gradeUnlockButtonAltText}>
-                  Unlock All Through Graduation — ${(gradCost / 100).toFixed(2)}
-                </Text>
+                {gradeUnlockLoading ? (
+                  <ActivityIndicator color={colors.accent.primary} size="small" />
+                ) : (
+                  <Text style={styles.gradeUnlockButtonAltText}>
+                    Unlock All Through Graduation — ${(gradCost / 100).toFixed(2)}
+                  </Text>
+                )}
               </TouchableOpacity>
             )}
           </View>
@@ -429,67 +510,87 @@ export default function BotScreen({ route, navigation }: BotScreenProps) {
         <Text style={styles.nextAction}>{bot.cached_next_action}</Text>
       )}
 
-      {/* Cycle delay slider */}
-      <View style={styles.delaySection}>
-        <Text style={styles.delayLabel}>
-          Cycle every <Text style={styles.delayValue}>{formatDelay(currentDelay)}</Text>
+      {/* Collapsible settings section */}
+      <TouchableOpacity
+        style={styles.settingsToggle}
+        onPress={() => setSettingsOpen(!settingsOpen)}
+        activeOpacity={0.7}
+        accessibilityRole="button"
+        accessibilityLabel="Toggle settings"
+        accessibilityState={{ expanded: settingsOpen }}
+      >
+        <Text style={styles.settingsToggleText}>Settings</Text>
+        <Text style={styles.settingsToggleHint}>
+          {formatDelay(currentDelay)} cycle{bot.extended_thinking ? ' · Deep thinking' : ''}{bot.is_public ? ' · Public' : ''}
         </Text>
-        <Slider
-          style={styles.slider}
-          value={secondsToSlider(bot.cycle_delay_seconds)}
-          onValueChange={(v) => setDelayDraft(sliderToSeconds(v))}
-          onSlidingComplete={(v) => handleDelayChange(sliderToSeconds(v))}
-          minimumValue={0}
-          maximumValue={1}
-          step={0.01}
-          minimumTrackTintColor={colors.accent.primary}
-          maximumTrackTintColor={colors.bg.elevated}
-          thumbTintColor={colors.accent.primary}
-          accessibilityLabel={`Cycle delay: ${formatDelay(currentDelay)}`}
-          accessibilityHint="Adjust how often the bot runs its cycle"
-        />
-        {isRunning && (
-          <Text style={styles.delayHint}>Changes take effect next cycle</Text>
-        )}
-      </View>
+        <Text style={styles.settingsChevron}>{settingsOpen ? '▾' : '▸'}</Text>
+      </TouchableOpacity>
 
-      {/* Extended Thinking toggle */}
-      <View style={styles.thinkingSection}>
-        <View style={styles.thinkingInfo}>
-          <Text style={styles.thinkingTitle}>Extended Thinking</Text>
-          <Text style={styles.thinkingHint}>
-            Deeper reasoning for stronger papers and reviews. Uses more API tokens per cycle.
-          </Text>
-        </View>
-        <Switch
-          value={bot.extended_thinking}
-          onValueChange={handleToggleThinking}
-          trackColor={{ false: colors.bg.elevated, true: colors.accent.primary + '60' }}
-          thumbColor={bot.extended_thinking ? colors.accent.primary : colors.text.tertiary}
-          accessibilityLabel="Toggle extended thinking"
-        />
-      </View>
+      {settingsOpen && (
+        <View style={styles.settingsBody}>
+          {/* Cycle delay slider */}
+          <View style={styles.delaySection}>
+            <Text style={styles.delayLabel}>
+              Cycle every <Text style={styles.delayValue}>{formatDelay(currentDelay)}</Text>
+            </Text>
+            <Slider
+              style={styles.slider}
+              value={secondsToSlider(bot.cycle_delay_seconds)}
+              onValueChange={(v) => setDelayDraft(sliderToSeconds(v))}
+              onSlidingComplete={(v) => handleDelayChange(sliderToSeconds(v))}
+              minimumValue={0}
+              maximumValue={1}
+              step={0.01}
+              minimumTrackTintColor={colors.accent.primary}
+              maximumTrackTintColor={colors.bg.elevated}
+              thumbTintColor={colors.accent.primary}
+              accessibilityLabel={`Cycle delay: ${formatDelay(currentDelay)}`}
+              accessibilityHint="Adjust how often the bot runs its cycle"
+            />
+            {isRunning && (
+              <Text style={styles.delayHint}>Changes take effect next cycle</Text>
+            )}
+          </View>
 
-      {/* Public profile toggle */}
-      <View style={styles.publicSection}>
-        <View style={styles.publicInfo}>
-          <Text style={styles.publicTitle}>Public Profile</Text>
-          <Text style={styles.publicHint}>
-            Share your bot's progress, skills, and identity with a public page.
-          </Text>
+          {/* Extended Thinking toggle */}
+          <View style={styles.settingRow}>
+            <View style={styles.settingInfo}>
+              <Text style={styles.settingTitle}>Extended Thinking</Text>
+              <Text style={styles.settingHint}>
+                Deeper reasoning, more API tokens per cycle
+              </Text>
+            </View>
+            <Switch
+              value={bot.extended_thinking}
+              onValueChange={handleToggleThinking}
+              trackColor={{ false: colors.bg.elevated, true: colors.accent.primary + '60' }}
+              thumbColor={bot.extended_thinking ? colors.accent.primary : colors.text.tertiary}
+              accessibilityLabel="Toggle extended thinking"
+            />
+          </View>
+
+          {/* Public profile toggle */}
+          <View style={styles.settingRow}>
+            <View style={styles.settingInfo}>
+              <Text style={styles.settingTitle}>Public Profile</Text>
+              <Text style={styles.settingHint}>
+                Share progress, skills, and identity publicly
+              </Text>
+            </View>
+            <Switch
+              value={bot.is_public}
+              onValueChange={handleTogglePublic}
+              trackColor={{ false: colors.bg.elevated, true: colors.accent.primary + '60' }}
+              thumbColor={bot.is_public ? colors.accent.primary : colors.text.tertiary}
+              accessibilityLabel="Toggle public profile"
+            />
+          </View>
+          {bot.is_public && bot.public_slug && (
+            <TouchableOpacity style={styles.shareButton} onPress={handleShareProfile} activeOpacity={0.7} accessibilityRole="button" accessibilityLabel="Share profile link">
+              <Text style={styles.shareButtonText}>Share Profile Link</Text>
+            </TouchableOpacity>
+          )}
         </View>
-        <Switch
-          value={bot.is_public}
-          onValueChange={handleTogglePublic}
-          trackColor={{ false: colors.bg.elevated, true: colors.accent.primary + '60' }}
-          thumbColor={bot.is_public ? colors.accent.primary : colors.text.tertiary}
-          accessibilityLabel="Toggle public profile"
-        />
-      </View>
-      {bot.is_public && bot.public_slug && (
-        <TouchableOpacity style={styles.shareButton} onPress={handleShareProfile} activeOpacity={0.7} accessibilityRole="button" accessibilityLabel="Share profile link">
-          <Text style={styles.shareButtonText}>Share Profile Link</Text>
-        </TouchableOpacity>
       )}
 
       {/* Action buttons */}
@@ -511,14 +612,36 @@ export default function BotScreen({ route, navigation }: BotScreenProps) {
         </View>
       ) : (
         <TouchableOpacity
-          style={[styles.actionButton, isRunning ? styles.stopButton : styles.startButton]}
+          style={[styles.actionButton, isRunning ? styles.stopButton : styles.startButton, startStopLoading && styles.actionButtonDisabled]}
           onPress={handleStartStop}
+          disabled={startStopLoading}
+          activeOpacity={0.7}
           accessibilityRole="button"
           accessibilityLabel={isRunning ? 'Stop the bot' : 'Start the bot'}
         >
-          <Text style={styles.actionButtonText}>{isRunning ? 'Stop' : 'Start'}</Text>
+          {startStopLoading ? (
+            <ActivityIndicator color="#fff" size="small" />
+          ) : (
+            <Text style={styles.actionButtonText}>{isRunning ? 'Stop' : 'Start'}</Text>
+          )}
         </TouchableOpacity>
       )}
+
+      {/* Chat button — prominent, full-width */}
+      <TouchableOpacity
+        style={styles.chatButton}
+        onPress={() => navigation.navigate('Chat', { botId })}
+        activeOpacity={0.7}
+        accessibilityRole="button"
+        accessibilityLabel="Chat"
+        accessibilityHint="Talk to your bot"
+      >
+        <Text style={styles.chatButtonIcon}>💬</Text>
+        <View style={styles.chatButtonTextContainer}>
+          <Text style={styles.chatButtonTitle}>Chat with {bot.name}</Text>
+          <Text style={styles.chatButtonSub}>Talk, ask questions, get updates</Text>
+        </View>
+      </TouchableOpacity>
 
       <View style={styles.navRow}>
         <TouchableOpacity
@@ -674,25 +797,39 @@ const styles = StyleSheet.create({
   },
   gradeUnlockButtonAltText: { color: colors.accent.primary, fontWeight: '600', fontSize: fontSize.sm },
   nextAction: { color: colors.text.secondary, fontSize: fontSize.sm, marginTop: spacing.md, textAlign: 'center' },
-  delaySection: { width: '100%', marginTop: spacing.lg },
+  settingsToggle: {
+    flexDirection: 'row', alignItems: 'center', width: '100%', marginTop: spacing.lg,
+    paddingVertical: spacing.md, paddingHorizontal: spacing.md,
+    backgroundColor: colors.bg.card, borderRadius: borderRadius.md,
+    borderWidth: 1, borderColor: colors.border,
+  },
+  settingsToggleText: {
+    fontSize: fontSize.md, fontWeight: '600', color: colors.text.primary,
+  },
+  settingsToggleHint: {
+    flex: 1, fontSize: fontSize.xs, color: colors.text.tertiary,
+    marginLeft: spacing.sm, textAlign: 'right',
+  },
+  settingsChevron: { fontSize: fontSize.md, color: colors.text.tertiary, marginLeft: spacing.sm },
+  settingsBody: {
+    width: '100%', backgroundColor: colors.bg.card, borderRadius: borderRadius.md,
+    borderWidth: 1, borderColor: colors.border, borderTopWidth: 0,
+    borderTopLeftRadius: 0, borderTopRightRadius: 0,
+    paddingHorizontal: spacing.md, paddingBottom: spacing.md,
+    marginTop: -1,
+  },
+  settingRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingVertical: spacing.sm, borderTopWidth: 1, borderTopColor: colors.border,
+  },
+  settingInfo: { flex: 1, marginRight: spacing.md },
+  settingTitle: { fontSize: fontSize.sm, fontWeight: '600', color: colors.text.secondary },
+  settingHint: { fontSize: fontSize.xs, color: colors.text.tertiary, marginTop: 2 },
+  delaySection: { width: '100%', paddingVertical: spacing.sm },
   delayLabel: { fontSize: fontSize.sm, color: colors.text.secondary, textAlign: 'center' },
   delayValue: { color: colors.accent.primary, fontWeight: '600' },
   slider: { width: '100%', height: 40 },
   delayHint: { fontSize: fontSize.xs, color: colors.text.tertiary, textAlign: 'center' },
-  thinkingSection: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    width: '100%', marginTop: spacing.lg, paddingVertical: spacing.sm,
-  },
-  thinkingInfo: { flex: 1, marginRight: spacing.md },
-  thinkingTitle: { fontSize: fontSize.sm, fontWeight: '600', color: colors.text.secondary },
-  thinkingHint: { fontSize: fontSize.xs, color: colors.text.tertiary, marginTop: 2 },
-  publicSection: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    width: '100%', marginTop: spacing.md, paddingVertical: spacing.sm,
-  },
-  publicInfo: { flex: 1, marginRight: spacing.md },
-  publicTitle: { fontSize: fontSize.sm, fontWeight: '600', color: colors.text.secondary },
-  publicHint: { fontSize: fontSize.xs, color: colors.text.tertiary, marginTop: 2 },
   shareButton: {
     backgroundColor: colors.accent.secondary + '20', paddingVertical: spacing.sm,
     paddingHorizontal: spacing.lg, borderRadius: borderRadius.sm, alignSelf: 'center',
@@ -705,7 +842,22 @@ const styles = StyleSheet.create({
   },
   startButton: { backgroundColor: colors.accent.success },
   stopButton: { backgroundColor: colors.accent.error },
+  actionButtonDisabled: { opacity: 0.6 },
   actionButtonText: { color: '#fff', fontSize: fontSize.lg, fontWeight: '600' },
+  chatButton: {
+    flexDirection: 'row', alignItems: 'center', width: '100%',
+    backgroundColor: colors.accent.primary + '15', padding: spacing.md,
+    borderRadius: borderRadius.md, marginTop: spacing.lg,
+    borderWidth: 1, borderColor: colors.accent.primary + '40',
+  },
+  chatButtonIcon: { fontSize: 28, marginRight: spacing.md },
+  chatButtonTextContainer: { flex: 1 },
+  chatButtonTitle: {
+    fontSize: fontSize.md, fontWeight: '700', color: colors.accent.primary,
+  },
+  chatButtonSub: {
+    fontSize: fontSize.xs, color: colors.text.secondary, marginTop: 2,
+  },
   navRow: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.lg, width: '100%' },
   navButton: {
     flex: 1, backgroundColor: colors.bg.card, padding: spacing.md,

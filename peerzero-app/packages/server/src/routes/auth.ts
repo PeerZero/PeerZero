@@ -4,7 +4,7 @@
 
 import { Router, Request, Response } from 'express';
 import rateLimit from 'express-rate-limit';
-import { registerUser, loginUser, refreshTokens, revokeRefreshTokens, getUserProfile, updateProfile, changePassword, deleteAccount } from '../services/auth.service';
+import { registerUser, loginUser, refreshTokens, revokeRefreshTokens, getUserProfile, updateProfile, changePassword, deleteAccount, forgotPassword, resetPassword } from '../services/auth.service';
 import { requireAuth } from '../middleware/auth';
 import { removeBotJobs } from '../jobs/queue';
 import { logAudit } from '../services/audit.service';
@@ -58,6 +58,26 @@ router.post('/login', async (req: Request, res: Response) => {
     logAudit({ userId: 'unknown', action: 'auth.login_failed', entityType: 'user', entityId: 'unknown', metadata: { email }, ipAddress: req.ip });
     throw err;
   }
+});
+
+router.post('/forgot-password', async (req: Request, res: Response) => {
+  const { email } = req.body;
+  if (!email || typeof email !== 'string') {
+    res.status(400).json({ error: 'Email is required' });
+    return;
+  }
+  await forgotPassword(email);
+  res.json({ message: 'If an account exists with that email, a reset code has been sent.' });
+});
+
+router.post('/reset-password', async (req: Request, res: Response) => {
+  const { email, code, new_password } = req.body;
+  if (!email || !code || !new_password) {
+    res.status(400).json({ error: 'email, code, and new_password are required' });
+    return;
+  }
+  await resetPassword(email, code, new_password);
+  res.json({ message: 'Password reset successfully' });
 });
 
 router.post('/refresh', refreshLimiter, async (req: Request, res: Response) => {

@@ -11,6 +11,8 @@ import { spacing, fontSize, borderRadius } from '../theme/spacing';
 import { AVATAR_COLOR_PRESETS, SUPPORTED_MODELS, SPECIES_PRESETS } from '@peerzero/shared';
 import type { ApiKeyInfo } from '@peerzero/shared';
 import BotAvatar from '../components/BotAvatar';
+import TutorialTip from '../components/TutorialTip';
+import * as Haptics from 'expo-haptics';
 import type { CreateBotScreenProps } from '../navigation/types';
 
 const MAX_NAME_LENGTH = 50;
@@ -57,6 +59,7 @@ export default function CreateBotScreen({ navigation }: CreateBotScreenProps) {
   const modelMatchesKey = availableModels.some(m => m.id === selectedModel);
 
   const handleCreate = async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     const trimmedName = name.trim();
     if (!trimmedName) {
       Alert.alert('Name Required', 'Give your bot a name to get started.');
@@ -107,6 +110,11 @@ export default function CreateBotScreen({ navigation }: CreateBotScreenProps) {
   if (step === 'style') {
     return (
       <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+        <TutorialTip
+          tipId="createbot_style"
+          title="Create Your Bot"
+          message="First pick a species style — each has unique ears, tails, and markings. Then you'll choose a color, name, and which AI model powers it."
+        />
         <Text style={styles.stepTitle}>Choose a Style</Text>
         <Text style={styles.stepHint}>
           Each style has a unique shape, ears, tail, and markings. Pick the one that speaks to you.
@@ -139,7 +147,7 @@ export default function CreateBotScreen({ navigation }: CreateBotScreenProps) {
                 styles.speciesCard,
                 selectedSpecies === species.seed && styles.speciesCardSelected,
               ]}
-              onPress={() => setSelectedSpecies(species.seed)}
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setSelectedSpecies(species.seed); }}
               accessibilityRole="radio"
               accessibilityLabel={`${species.name} — ${species.desc}`}
               accessibilityState={{ selected: selectedSpecies === species.seed }}
@@ -178,7 +186,7 @@ export default function CreateBotScreen({ navigation }: CreateBotScreenProps) {
 
   // ── Step 2: Color + Name + Config ──
   return (
-    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
     <ScrollView style={styles.container} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
       {/* Back to style picker */}
       <TouchableOpacity style={styles.backLink} onPress={() => setStep('style')}>
@@ -321,7 +329,7 @@ export default function CreateBotScreen({ navigation }: CreateBotScreenProps) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg.primary },
-  content: { alignItems: 'center', padding: spacing.xl },
+  content: { alignItems: 'center', padding: spacing.xl, paddingBottom: 120 },
 
   // Step 1: Style picker
   stepTitle: {

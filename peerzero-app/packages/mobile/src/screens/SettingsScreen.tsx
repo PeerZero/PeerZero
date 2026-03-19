@@ -9,11 +9,17 @@ import { useAuth } from '../hooks/useAuth';
 import { apiKeys as keysApi, notifications as notifApi, auth as authApi, widgets as widgetsApi, bots as botsApi } from '../services/api';
 import { colors } from '../theme/colors';
 import { spacing, fontSize, borderRadius } from '../theme/spacing';
+import TutorialTip from '../components/TutorialTip';
+import { useToast } from '../components/Toast';
+import * as Haptics from 'expo-haptics';
+import { useTutorial } from '../hooks/useTutorial';
 import { NOTIFICATION_TYPES, NOTIFICATION_LABELS, DEFAULT_NOTIFICATION_PREFS } from '@peerzero/shared';
 import type { ApiKeyInfo, BotSummary } from '@peerzero/shared';
 
 export default function SettingsScreen() {
   const { user, logout, refreshUser } = useAuth();
+  const { showToast } = useToast();
+  const { resetTips, skippedAll } = useTutorial();
   const [keys, setKeys] = useState<ApiKeyInfo[]>([]);
   const [showAddKey, setShowAddKey] = useState(false);
   const [newLabel, setNewLabel] = useState('');
@@ -142,6 +148,7 @@ export default function SettingsScreen() {
       setNewKey('');
       setNewLabel('');
       setShowAddKey(false);
+      showToast('API key added', 'success');
       await loadKeys();
     } catch (err: unknown) {
       Alert.alert('Error', err instanceof Error ? err.message : 'Failed to add key');
@@ -156,6 +163,7 @@ export default function SettingsScreen() {
         onPress: async () => {
           try {
             await keysApi.delete(id);
+            showToast('API key deleted', 'success');
             await loadKeys();
           } catch (err: unknown) {
             Alert.alert('Error', err instanceof Error ? err.message : 'Something went wrong');
@@ -173,6 +181,7 @@ export default function SettingsScreen() {
     try {
       await authApi.updateProfile({ display_name: displayName.trim() });
       setEditingName(false);
+      showToast('Display name updated', 'success');
       if (refreshUser) refreshUser();
     } catch (err: unknown) {
       Alert.alert('Error', err instanceof Error ? err.message : 'Failed to update profile');
@@ -194,7 +203,7 @@ export default function SettingsScreen() {
     }
     try {
       await authApi.changePassword({ current_password: currentPassword, new_password: newPassword });
-      Alert.alert('Success', 'Password changed. Please log in again.');
+      showToast('Password changed. Please log in again.', 'success');
       setShowPasswordChange(false);
       setCurrentPassword('');
       setNewPassword('');
@@ -206,6 +215,7 @@ export default function SettingsScreen() {
   };
 
   const handleDeleteAccount = () => {
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
     Alert.alert(
       'Delete Account',
       'This will permanently delete your account, all bots, all memory, and all activity. This cannot be undone.',
@@ -242,6 +252,11 @@ export default function SettingsScreen() {
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
     <ScrollView style={styles.container} keyboardShouldPersistTaps="handled">
+      <TutorialTip
+        tipId="settings_overview"
+        title="Settings"
+        message="Manage your API keys (BYOK), notification preferences, home screen widgets, and account details here."
+      />
       {/* Account section */}
       <View style={styles.section}>
         <View style={styles.sectionTitleRow}>
@@ -501,8 +516,23 @@ export default function SettingsScreen() {
         )}
       </View>
 
+      {/* Tutorial tips reset */}
+      {skippedAll && (
+        <TouchableOpacity
+          style={styles.resetTipsButton}
+          onPress={() => {
+            resetTips();
+            showToast('Tutorial tips will appear again on each screen.', 'info');
+          }}
+          accessibilityRole="button"
+          accessibilityLabel="Reset Tutorial Tips"
+        >
+          <Text style={styles.resetTipsText}>Reset Tutorial Tips</Text>
+        </TouchableOpacity>
+      )}
+
       {/* Logout */}
-      <TouchableOpacity style={styles.logoutButton} onPress={logout} accessibilityRole="button" accessibilityLabel="Sign Out">
+      <TouchableOpacity style={styles.logoutButton} onPress={() => { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning); logout(); }} accessibilityRole="button" accessibilityLabel="Sign Out">
         <Text style={styles.logoutText}>Sign Out</Text>
       </TouchableOpacity>
 
@@ -570,6 +600,12 @@ const styles = StyleSheet.create({
   notifInfo: { flex: 1, marginRight: spacing.md },
   notifTitle: { fontSize: fontSize.md, fontWeight: '500', color: colors.text.primary },
   notifDesc: { fontSize: fontSize.xs, color: colors.text.tertiary, marginTop: 2 },
+  resetTipsButton: {
+    backgroundColor: colors.bg.card, padding: spacing.md, borderRadius: borderRadius.md,
+    alignItems: 'center', borderWidth: 1, borderColor: colors.accent.secondary + '40',
+    marginBottom: spacing.md,
+  },
+  resetTipsText: { fontSize: fontSize.md, color: colors.accent.secondary, fontWeight: '600' },
   logoutButton: {
     backgroundColor: colors.bg.card, padding: spacing.md, borderRadius: borderRadius.md,
     alignItems: 'center', borderWidth: 1, borderColor: colors.accent.error + '40',
