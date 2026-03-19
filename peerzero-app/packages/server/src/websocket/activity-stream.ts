@@ -45,17 +45,23 @@ export function setupWebSocket(server: Server): void {
   const cleanupInterval = setInterval(() => {
     for (const [botId, botClients] of clients.entries()) {
       const alive = botClients.filter(c => c.ws.readyState === WebSocket.OPEN);
+      const removed = botClients.length - alive.length;
       if (alive.length === 0) {
         clients.delete(botId);
-      } else if (alive.length !== botClients.length) {
+      } else if (removed > 0) {
         clients.set(botId, alive);
       }
-    }
-    // Recount user connections after cleanup
-    userConnectionCounts.clear();
-    for (const botClients of clients.values()) {
-      for (const c of botClients) {
-        userConnectionCounts.set(c.userId, (userConnectionCounts.get(c.userId) || 0) + 1);
+      // Decrement user counts for each stale connection removed
+      if (removed > 0) {
+        const stale = botClients.filter(c => c.ws.readyState !== WebSocket.OPEN);
+        for (const c of stale) {
+          const count = userConnectionCounts.get(c.userId) || 0;
+          if (count <= 1) {
+            userConnectionCounts.delete(c.userId);
+          } else {
+            userConnectionCounts.set(c.userId, count - 1);
+          }
+        }
       }
     }
   }, 30_000);

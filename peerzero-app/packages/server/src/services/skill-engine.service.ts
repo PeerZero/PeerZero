@@ -39,6 +39,7 @@
 
 import { queryOne, queryRows, query } from '../db/client';
 import { logger } from '../lib/logger';
+import { AppError } from '../middleware/error-handler';
 import type { ActiveSkillDirective } from '../runtime/prompt-builder';
 
 // ── Types ──
@@ -185,7 +186,7 @@ export async function createSkill(
 ): Promise<BotSkill> {
   // Verify bot ownership
   const bot = await queryOne('SELECT id FROM bots WHERE id = $1 AND user_id = $2', [botId, userId]);
-  if (!bot) throw new Error('Bot not found');
+  if (!bot) throw new AppError(404, 'Bot not found');
 
   // Check skill limit
   const count = await queryOne<{ count: number }>(
@@ -193,14 +194,14 @@ export async function createSkill(
     [botId],
   );
   if ((count?.count || 0) >= MAX_SKILLS_PER_BOT) {
-    throw new Error(`Maximum ${MAX_SKILLS_PER_BOT} skills per bot`);
+    throw new AppError(400, `Maximum ${MAX_SKILLS_PER_BOT} skills per bot`);
   }
 
   // Validate
-  if (!name || name.length > 100) throw new Error('Skill name must be 1-100 characters');
-  if (!validateTrigger(trigger)) throw new Error('Invalid trigger format. Use: always, platform:<name>, action:<type>');
+  if (!name || name.length > 100) throw new AppError(400, 'Skill name must be 1-100 characters');
+  if (!validateTrigger(trigger)) throw new AppError(400, 'Invalid trigger format. Use: always, platform:<name>, action:<type>');
   const sanitized = sanitizeInstruction(instruction);
-  if (!sanitized) throw new Error('Skill instruction cannot be empty');
+  if (!sanitized) throw new AppError(400, 'Skill instruction cannot be empty');
 
   const result = await queryOne<BotSkill>(
     `INSERT INTO bot_skills (bot_id, name, instruction, trigger, priority, category, source)
@@ -229,24 +230,24 @@ export async function updateSkill(
 ): Promise<void> {
   // Verify ownership chain
   const bot = await queryOne('SELECT id FROM bots WHERE id = $1 AND user_id = $2', [botId, userId]);
-  if (!bot) throw new Error('Bot not found');
+  if (!bot) throw new AppError(404, 'Bot not found');
 
   const sets: string[] = [];
   const params: unknown[] = [];
   let idx = 1;
 
   if (updates.name !== undefined) {
-    if (!updates.name || updates.name.length > 100) throw new Error('Invalid name');
+    if (!updates.name || updates.name.length > 100) throw new AppError(400, 'Invalid name');
     sets.push(`name = $${idx++}`); params.push(updates.name);
   }
   if (updates.instruction !== undefined) {
     const sanitized = sanitizeInstruction(updates.instruction);
-    if (!sanitized) throw new Error('Instruction cannot be empty');
+    if (!sanitized) throw new AppError(400, 'Instruction cannot be empty');
     sets.push(`instruction = $${idx++}`); params.push(sanitized);
     sets.push(`version = version + 1`);
   }
   if (updates.trigger !== undefined) {
-    if (!validateTrigger(updates.trigger)) throw new Error('Invalid trigger');
+    if (!validateTrigger(updates.trigger)) throw new AppError(400, 'Invalid trigger');
     sets.push(`trigger = $${idx++}`); params.push(updates.trigger);
   }
   if (updates.priority !== undefined) {
@@ -268,27 +269,27 @@ export async function updateSkill(
     `UPDATE bot_skills SET ${sets.join(', ')} WHERE id = $${idx++} AND bot_id = $${idx}`,
     params,
   );
-  if (result.rowCount === 0) throw new Error('Skill not found');
+  if (result.rowCount === 0) throw new AppError(404, 'Skill not found');
 
   invalidateSkillCache(botId);
 }
 
 export async function deleteSkill(skillId: string, botId: string, userId: string): Promise<void> {
   const bot = await queryOne('SELECT id FROM bots WHERE id = $1 AND user_id = $2', [botId, userId]);
-  if (!bot) throw new Error('Bot not found');
+  if (!bot) throw new AppError(404, 'Bot not found');
 
   const result = await query(
     'DELETE FROM bot_skills WHERE id = $1 AND bot_id = $2',
     [skillId, botId],
   );
-  if (result.rowCount === 0) throw new Error('Skill not found');
+  if (result.rowCount === 0) throw new AppError(404, 'Skill not found');
 
   invalidateSkillCache(botId);
 }
 
 export async function listSkills(botId: string, userId: string): Promise<BotSkill[]> {
   const bot = await queryOne('SELECT id FROM bots WHERE id = $1 AND user_id = $2', [botId, userId]);
-  if (!bot) throw new Error('Bot not found');
+  if (!bot) throw new AppError(404, 'Bot not found');
 
   return queryRows<BotSkill>(
     `SELECT id, bot_id, name, instruction, trigger, priority, category, is_active, source, version, created_at, updated_at

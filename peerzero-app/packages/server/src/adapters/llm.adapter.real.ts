@@ -111,8 +111,11 @@ export class RealLLMAdapter implements ILLMAdapter {
       stop_reason: string;
     };
 
-    if (!Array.isArray(data.content)) {
-      throw new Error('Anthropic API returned invalid response: content is not an array');
+    if (!data || !Array.isArray(data.content)) {
+      throw new Error('Anthropic API returned invalid response: missing or malformed content');
+    }
+    if (!data.usage || typeof data.usage.input_tokens !== 'number') {
+      throw new Error('Anthropic API returned invalid response: missing usage data');
     }
 
     // Extract tool calls if any
@@ -192,6 +195,10 @@ export class RealLLMAdapter implements ILLMAdapter {
       model: string;
     };
 
+    if (!data?.choices?.length || !data.usage) {
+      throw new Error('OpenAI API returned invalid response: missing choices or usage data');
+    }
+
     // Extract tool calls if present
     const rawToolCalls = data.choices[0]?.message?.tool_calls;
     let toolCalls: LLMToolCall[] | undefined;
@@ -245,7 +252,7 @@ export class RealLLMAdapter implements ILLMAdapter {
         lastError = new Error(`${provider} API ${res.status}: ${text}`);
 
         if (attempt < MAX_RETRIES) {
-          const delay = BASE_DELAY_MS * Math.pow(4, attempt); // 2s, 8s
+          const delay = BASE_DELAY_MS * Math.pow(2, attempt); // 2s, 4s
           logger.warn({ provider, status: res.status, attempt: attempt + 1, maxRetries: MAX_RETRIES }, 'Retryable LLM error, backing off');
           await sleepWithJitter(delay);
         }
