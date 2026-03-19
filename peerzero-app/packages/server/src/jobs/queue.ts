@@ -11,7 +11,7 @@ import { config } from '../config';
 import { logger } from '../lib/logger';
 import { runOneCycle, BotContext } from '../runtime/agent-loop';
 import { setBotStatus } from '../services/bot.service';
-import { queryOne, query } from '../db/client';
+import { queryOne, query, queryRows } from '../db/client';
 
 let connection: IORedis | null = null;
 let botQueue: Queue | null = null;
@@ -199,6 +199,23 @@ export function startWorker(): void {
   });
 
   logger.info('Bot cycle worker started');
+}
+
+/** Re-queue all bots that were running before the server restarted. */
+export async function recoverRunningBots(): Promise<void> {
+  const rows = await queryRows<{ id: string; user_id: string; llm_api_key_id: string; llm_model: string; cycle_delay_seconds: number }>(
+    "SELECT id, user_id, llm_api_key_id, llm_model, cycle_delay_seconds FROM bots WHERE status = 'running' AND deleted_at IS NULL",
+  );
+  if (rows.length === 0) return;
+  logger.info({ count: rows.length }, 'Recovering running bots after restart');
+  for (const bot of rows) {
+    try {
+      await addBotCycleJob(bot.id, bot.user_id, bot.llm_api_key_id, bot.llm_model, bot.cycle_delay_seconds);
+      logger.info({ botId: bot.id }, 'Recovered bot cycle job');
+    } catch (err) {
+      logger.error({ botId: bot.id, err: err instanceof Error ? err.message : err }, 'Failed to recover bot cycle job');
+    }
+  }
 }
 
 /** Graceful shutdown. */

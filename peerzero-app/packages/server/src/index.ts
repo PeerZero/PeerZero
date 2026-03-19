@@ -15,7 +15,7 @@ import { errorHandler } from './middleware/error-handler';
 import { authLimiter, closeRateLimitRedis } from './middleware/rate-limit';
 import { closePool } from './db/client';
 import { runMigrations } from './db/auto-migrate';
-import { startWorker, stopWorker } from './jobs/queue';
+import { startWorker, stopWorker, recoverRunningBots } from './jobs/queue';
 import { startPlatformWorker, stopPlatformWorker } from './jobs/platform-queue';
 import { setupWebSocket } from './websocket/activity-stream';
 
@@ -83,10 +83,14 @@ if (config.redisUrl) {
 
 // Run pending migrations, then start listening
 runMigrations()
-  .then(() => {
+  .then(async () => {
     server.listen(config.port, '0.0.0.0', () => {
       logger.info({ port: config.port, env: config.nodeEnv, realAdapters: config.useRealAdapters }, 'PeerZero App Server started');
     });
+    // Recover bots that were running before restart (after worker is ready)
+    if (config.redisUrl) {
+      await recoverRunningBots();
+    }
   })
   .catch((err) => {
     logger.fatal({ err }, 'Failed to run migrations — server not started');
