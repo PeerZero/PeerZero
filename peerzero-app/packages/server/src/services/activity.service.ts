@@ -84,7 +84,7 @@ export async function getActivityLog(
       params,
     ),
     queryOne<{ count: number }>(
-      `SELECT COUNT(*)::int as count FROM activity_log WHERE bot_id = $1 AND deleted_at IS NULL ${categoryFilter}`,
+      `SELECT COUNT(*)::int as count FROM activity_log WHERE bot_id = $1 AND deleted_at IS NULL ${category ? 'AND category = $2' : ''}`,
       category ? [botId, category] : [botId],
     ),
   ]);
