@@ -4,12 +4,17 @@
 // Shows bot activity narrations, milestone announcements, and direct messages
 // in a chat-style interface. The bot feels like a friend updating you on its
 // life and responding to your questions.
+//
+// Filter tabs let users choose: All | Chat Only | Updates Only
+// Settings let users toggle activity/milestone updates on or off entirely.
+// Activity messages are compact by default — tap to expand full text.
 // =============================================================================
 
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import {
   View, Text, FlatList, TextInput, TouchableOpacity, StyleSheet,
   KeyboardAvoidingView, Platform, ActivityIndicator, Alert, AppState,
+  Modal,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { bots as botsApi } from '../services/api';
@@ -22,6 +27,34 @@ import { credibilityToStage, calculateHunger } from '@peerzero/shared';
 import type { ChatScreenProps } from '../navigation/types';
 import { timeAgo } from '../utils/timeAgo';
 
+// Simple key-value store — same platform split as api.ts
+const kvStore = Platform.OS === 'web'
+  ? {
+      get: async (key: string) => localStorage.getItem(key),
+      set: async (key: string, value: string) => localStorage.setItem(key, value),
+    }
+  : (() => {
+      const ss = require('expo-secure-store') as {
+        getItemAsync: (key: string) => Promise<string | null>;
+        setItemAsync: (key: string, value: string) => Promise<void>;
+      };
+      return { get: ss.getItemAsync, set: ss.setItemAsync };
+    })();
+
+type FilterTab = 'all' | 'chat' | 'updates';
+
+const PREFS_KEY_PREFIX = 'chat_prefs_';
+
+interface ChatPrefs {
+  showActivity: boolean;
+  showMilestones: boolean;
+}
+
+const DEFAULT_PREFS: ChatPrefs = {
+  showActivity: true,
+  showMilestones: true,
+};
+
 export default function ChatScreen({ route, navigation }: ChatScreenProps) {
   const { botId } = route.params;
   const [bot, setBot] = useState<BotDetail | null>(null);
@@ -32,17 +65,48 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
   const [loadingMore, setLoadingMore] = useState(false);
   const [sending, setSending] = useState(false);
   const [inputText, setInputText] = useState('');
+  const [activeTab, setActiveTab] = useState<FilterTab>('all');
+  const [prefs, setPrefs] = useState<ChatPrefs>(DEFAULT_PREFS);
+  const [settingsVisible, setSettingsVisible] = useState(false);
+  const [expandedMessages, setExpandedMessages] = useState<Set<string>>(new Set());
   const flatListRef = useRef<FlatList>(null);
+
+  // Load preferences
+  useEffect(() => {
+    kvStore.get(`${PREFS_KEY_PREFIX}${botId}`).then(raw => {
+      if (raw) {
+        try { setPrefs({ ...DEFAULT_PREFS, ...JSON.parse(raw) }); } catch { /* use defaults */ }
+      }
+    }).catch(() => {});
+  }, [botId]);
+
+  const savePrefs = useCallback(async (newPrefs: ChatPrefs) => {
+    setPrefs(newPrefs);
+    try {
+      await kvStore.set(`${PREFS_KEY_PREFIX}${botId}`, JSON.stringify(newPrefs));
+    } catch { /* best effort */ }
+  }, [botId]);
 
   // Load bot details
   useEffect(() => {
     botsApi.get(botId).then(data => setBot(data as BotDetail)).catch(() => {});
   }, [botId]);
 
-  // Set header title to bot name
+  // Set header title + settings gear
   useEffect(() => {
     if (bot) {
-      navigation.setOptions({ title: bot.name });
+      navigation.setOptions({
+        title: bot.name,
+        headerRight: () => (
+          <TouchableOpacity
+            onPress={() => setSettingsVisible(true)}
+            style={{ paddingHorizontal: spacing.md }}
+            accessibilityLabel="Chat settings"
+          >
+            <Text style={{ fontSize: 18, color: colors.text.secondary }}>⚙️</Text>
+          </TouchableOpacity>
+        ),
+      });
     }
   }, [bot?.name, navigation]);
 
@@ -51,7 +115,7 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
     setLoading(true);
     try {
       const result = await botsApi.messages(botId, 1) as PaginatedResponse<BotMessage>;
-      setMessages(result.data.reverse()); // API returns newest-first, we want oldest-first
+      setMessages(result.data.reverse());
       setPage(1);
       setHasMore(result.has_more);
     } catch (err: unknown) {
@@ -63,7 +127,7 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
 
   useFocusEffect(useCallback(() => { loadMessages(); }, [loadMessages]));
 
-  // Refresh messages when app comes back to foreground
+  // Refresh on foreground
   useEffect(() => {
     const sub = AppState.addEventListener('change', (state) => {
       if (state === 'active') loadMessages();
@@ -71,34 +135,29 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
     return () => sub.remove();
   }, [loadMessages]);
 
-  // Load older messages (pagination)
+  // Pagination
   const loadMore = async () => {
     if (loadingMore || !hasMore) return;
     setLoadingMore(true);
     try {
       const nextPage = page + 1;
       const result = await botsApi.messages(botId, nextPage) as PaginatedResponse<BotMessage>;
-      // Prepend older messages (reversed since API returns newest-first)
       setMessages(prev => [...result.data.reverse(), ...prev]);
       setPage(nextPage);
       setHasMore(result.has_more);
-    } catch {
-      // Silently fail on pagination errors
-    } finally {
+    } catch { /* silent */ } finally {
       setLoadingMore(false);
     }
   };
 
-  // Real-time: listen for new messages via WebSocket
+  // Real-time messages
   useBotStream({
     botId,
     onMessage: useCallback((message: BotMessage) => {
       setMessages(prev => {
-        // Deduplicate (message may already exist from optimistic update or API response)
         if (prev.some(m => m.id === message.id)) return prev;
         return [...prev, message];
       });
-      // Scroll to bottom on new message
       setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
     }, []),
     onStatusChange: useCallback((status: string) => {
@@ -106,7 +165,28 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
     }, []),
   });
 
-  // Send a message
+  // Filter messages based on active tab + preferences
+  const filteredMessages = useMemo(() => {
+    return messages.filter(m => {
+      // Preference-based filtering (global toggle)
+      if (m.message_type === 'activity' && !prefs.showActivity) return false;
+      if (m.message_type === 'milestone' && !prefs.showMilestones) return false;
+
+      // Tab-based filtering
+      if (activeTab === 'chat') return m.message_type === 'chat';
+      if (activeTab === 'updates') return m.message_type === 'activity' || m.message_type === 'milestone';
+      return true; // 'all'
+    });
+  }, [messages, activeTab, prefs]);
+
+  // Count badges for tabs
+  const chatCount = useMemo(() => messages.filter(m => m.message_type === 'chat').length, [messages]);
+  const updateCount = useMemo(() => messages.filter(m =>
+    (m.message_type === 'activity' && prefs.showActivity) ||
+    (m.message_type === 'milestone' && prefs.showMilestones)
+  ).length, [messages, prefs]);
+
+  // Send message
   const handleSend = async () => {
     const text = inputText.trim();
     if (!text || sending) return;
@@ -114,7 +194,9 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
     setSending(true);
     setInputText('');
 
-    // Optimistic: add user message immediately
+    // Switch to "all" or "chat" tab so user sees their message
+    if (activeTab === 'updates') setActiveTab('all');
+
     const tempUserMsg: BotMessage = {
       id: `temp-${Date.now()}`,
       bot_id: botId,
@@ -130,17 +212,14 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
 
     try {
       const result = await botsApi.sendMessage(botId, text) as SendMessageResponse;
-      // Replace temp message with real one, add bot reply
       setMessages(prev => {
         const without = prev.filter(m => m.id !== tempUserMsg.id);
-        // Only add if not already present (WebSocket may have delivered it)
         const addUser = without.some(m => m.id === result.user_message.id) ? [] : [result.user_message];
         const addBot = without.some(m => m.id === result.bot_reply.id) ? [] : [result.bot_reply];
         return [...without, ...addUser, ...addBot];
       });
       setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
     } catch (err: unknown) {
-      // Remove optimistic message on failure
       setMessages(prev => prev.filter(m => m.id !== tempUserMsg.id));
       Alert.alert('Error', err instanceof Error ? err.message : 'Failed to send message');
     } finally {
@@ -148,14 +227,42 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
     }
   };
 
+  const toggleExpand = (id: string) => {
+    setExpandedMessages(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
   const renderMessage = ({ item }: { item: BotMessage }) => {
     const isUser = item.role === 'user';
     const isActivity = item.message_type === 'activity';
     const isMilestone = item.message_type === 'milestone';
+    const isUpdate = isActivity || isMilestone;
+    const isExpanded = expandedMessages.has(item.id);
+
+    // Activity messages: compact by default (single line), tap to expand
+    if (isUpdate && !isExpanded) {
+      return (
+        <TouchableOpacity
+          style={[styles.compactUpdate, isMilestone && styles.compactMilestone]}
+          onPress={() => toggleExpand(item.id)}
+          activeOpacity={0.7}
+        >
+          <Text style={styles.compactIcon}>
+            {isMilestone ? '⭐' : '📝'}
+          </Text>
+          <Text style={styles.compactText} numberOfLines={1}>
+            {item.content}
+          </Text>
+          <Text style={styles.compactTime}>{timeAgo(item.created_at)}</Text>
+        </TouchableOpacity>
+      );
+    }
 
     return (
       <View style={[styles.messageRow, isUser && styles.messageRowUser]}>
-        {/* Bot avatar for bot messages */}
         {!isUser && bot && (
           <View style={styles.avatarContainer}>
             <BotAvatar
@@ -170,38 +277,37 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
           </View>
         )}
 
-        <View style={[
-          styles.messageBubble,
-          isUser && styles.messageBubbleUser,
-          isActivity && styles.messageBubbleActivity,
-          isMilestone && styles.messageBubbleMilestone,
-        ]}>
-          {/* Activity/milestone badge */}
-          {(isActivity || isMilestone) && (
+        <TouchableOpacity
+          style={[
+            styles.messageBubble,
+            isUser && styles.messageBubbleUser,
+            isActivity && styles.messageBubbleActivity,
+            isMilestone && styles.messageBubbleMilestone,
+          ]}
+          activeOpacity={isUpdate ? 0.7 : 1}
+          onPress={isUpdate ? () => toggleExpand(item.id) : undefined}
+          disabled={!isUpdate}
+        >
+          {isUpdate && (
             <View style={styles.messageTypeBadge}>
               <Text style={[
                 styles.messageTypeBadgeText,
                 isMilestone && { color: colors.mood.milestone },
               ]}>
-                {isMilestone ? '⭐' : '📝'} {isMilestone ? 'Milestone' : (item.metadata as Record<string, string> | null)?.action_type || 'Update'}
+                {isMilestone ? '⭐ Milestone' : `📝 ${(item.metadata as Record<string, string> | null)?.action_type || 'Update'}`}
               </Text>
             </View>
           )}
 
-          <Text style={[
-            styles.messageText,
-            isUser && styles.messageTextUser,
-          ]}>
+          <Text style={[styles.messageText, isUser && styles.messageTextUser]}>
             {item.content}
           </Text>
 
-          <Text style={[
-            styles.messageTime,
-            isUser && styles.messageTimeUser,
-          ]}>
+          <Text style={[styles.messageTime, isUser && styles.messageTimeUser]}>
             {timeAgo(item.created_at)}
+            {isUpdate && '  tap to collapse'}
           </Text>
-        </View>
+        </TouchableOpacity>
       </View>
     );
   };
@@ -220,19 +326,42 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
     >
+      {/* Filter tabs */}
+      <View style={styles.tabBar}>
+        {([
+          { key: 'all' as FilterTab, label: 'All' },
+          { key: 'chat' as FilterTab, label: 'Chat', count: chatCount },
+          { key: 'updates' as FilterTab, label: 'Updates', count: updateCount },
+        ]).map(tab => (
+          <TouchableOpacity
+            key={tab.key}
+            style={[styles.tab, activeTab === tab.key && styles.tabActive]}
+            onPress={() => setActiveTab(tab.key)}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.tabText, activeTab === tab.key && styles.tabTextActive]}>
+              {tab.label}
+            </Text>
+            {tab.count != null && tab.count > 0 && (
+              <View style={[styles.tabBadge, activeTab === tab.key && styles.tabBadgeActive]}>
+                <Text style={styles.tabBadgeText}>{tab.count > 99 ? '99+' : tab.count}</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+        ))}
+      </View>
+
       {/* Message feed */}
       <FlatList
         ref={flatListRef}
-        data={messages}
+        data={filteredMessages}
         keyExtractor={item => item.id}
         renderItem={renderMessage}
         contentContainerStyle={[
           styles.messageList,
-          messages.length === 0 && styles.emptyList,
+          filteredMessages.length === 0 && styles.emptyList,
         ]}
-        onEndReachedThreshold={0.3}
         inverted={false}
-        // Load more when scrolling to top
         onScroll={({ nativeEvent }) => {
           if (nativeEvent.contentOffset.y < 50 && hasMore && !loadingMore) {
             loadMore();
@@ -260,10 +389,14 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
               />
             )}
             <Text style={styles.emptyTitle}>
-              Say hi to {bot?.name || 'your bot'}!
+              {activeTab === 'chat' ? `No messages yet` : activeTab === 'updates' ? 'No updates yet' : `Say hi to ${bot?.name || 'your bot'}!`}
             </Text>
             <Text style={styles.emptySubtitle}>
-              Chat with your bot, and it'll share updates about what it's learning as it goes.
+              {activeTab === 'chat'
+                ? `Send a message to start chatting with ${bot?.name || 'your bot'}.`
+                : activeTab === 'updates'
+                ? `Updates will appear here as ${bot?.name || 'your bot'} learns.`
+                : `Chat with your bot, and it'll share updates about what it's learning.`}
             </Text>
           </View>
         }
@@ -297,6 +430,68 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
           )}
         </TouchableOpacity>
       </View>
+
+      {/* Settings modal */}
+      <Modal
+        visible={settingsVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setSettingsVisible(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setSettingsVisible(false)}
+        >
+          <TouchableOpacity activeOpacity={1} style={styles.modalSheet}>
+            <View style={styles.modalHandle} />
+            <Text style={styles.modalTitle}>Chat Settings</Text>
+            <Text style={styles.modalSubtitle}>
+              Choose which updates appear in your chat feed
+            </Text>
+
+            <TouchableOpacity
+              style={styles.settingRow}
+              onPress={() => savePrefs({ ...prefs, showActivity: !prefs.showActivity })}
+              activeOpacity={0.7}
+            >
+              <View style={styles.settingInfo}>
+                <Text style={styles.settingLabel}>Activity Updates</Text>
+                <Text style={styles.settingHint}>
+                  Bot narrates what it did each cycle (papers, reviews, etc.)
+                </Text>
+              </View>
+              <View style={[styles.toggle, prefs.showActivity && styles.toggleOn]}>
+                <View style={[styles.toggleDot, prefs.showActivity && styles.toggleDotOn]} />
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.settingRow}
+              onPress={() => savePrefs({ ...prefs, showMilestones: !prefs.showMilestones })}
+              activeOpacity={0.7}
+            >
+              <View style={styles.settingInfo}>
+                <Text style={styles.settingLabel}>Milestone Announcements</Text>
+                <Text style={styles.settingHint}>
+                  Tier upgrades, grade promotions, credibility milestones
+                </Text>
+              </View>
+              <View style={[styles.toggle, prefs.showMilestones && styles.toggleOn]}>
+                <View style={[styles.toggleDot, prefs.showMilestones && styles.toggleDotOn]} />
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.modalDoneButton}
+              onPress={() => setSettingsVisible(false)}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.modalDoneText}>Done</Text>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -310,6 +505,56 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+
+  // Filter tabs
+  tabBar: {
+    flexDirection: 'row',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    backgroundColor: colors.bg.secondary,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+    gap: spacing.sm,
+  },
+  tab: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs + 2,
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.bg.elevated,
+  },
+  tabActive: {
+    backgroundColor: colors.accent.primary + '25',
+  },
+  tabText: {
+    fontSize: fontSize.sm,
+    fontWeight: '600',
+    color: colors.text.tertiary,
+  },
+  tabTextActive: {
+    color: colors.accent.primary,
+  },
+  tabBadge: {
+    marginLeft: spacing.xs,
+    backgroundColor: colors.bg.card,
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 5,
+  },
+  tabBadgeActive: {
+    backgroundColor: colors.accent.primary + '30',
+  },
+  tabBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: colors.text.secondary,
+  },
+
+  // Message list
   messageList: {
     paddingHorizontal: spacing.md,
     paddingTop: spacing.md,
@@ -320,7 +565,35 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
 
-  // Messages
+  // Compact update row (collapsed activity/milestone)
+  compactUpdate: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.sm,
+    marginBottom: spacing.xs,
+    borderLeftWidth: 2,
+    borderLeftColor: colors.accent.secondary + '40',
+  },
+  compactMilestone: {
+    borderLeftColor: colors.mood.milestone + '60',
+  },
+  compactIcon: {
+    fontSize: 14,
+    marginRight: spacing.sm,
+  },
+  compactText: {
+    flex: 1,
+    fontSize: fontSize.sm,
+    color: colors.text.secondary,
+  },
+  compactTime: {
+    fontSize: fontSize.xs - 1,
+    color: colors.text.tertiary,
+    marginLeft: spacing.sm,
+  },
+
+  // Full message bubbles
   messageRow: {
     flexDirection: 'row',
     marginBottom: spacing.md,
@@ -449,6 +722,93 @@ const styles = StyleSheet.create({
   sendButtonText: {
     color: '#fff',
     fontWeight: '600',
+    fontSize: fontSize.md,
+  },
+
+  // Settings modal
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalSheet: {
+    backgroundColor: colors.bg.secondary,
+    borderTopLeftRadius: borderRadius.lg,
+    borderTopRightRadius: borderRadius.lg,
+    padding: spacing.xl,
+    paddingBottom: spacing.xxl,
+  },
+  modalHandle: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: colors.text.tertiary,
+    alignSelf: 'center',
+    marginBottom: spacing.lg,
+  },
+  modalTitle: {
+    fontSize: fontSize.xl,
+    fontWeight: '700',
+    color: colors.text.primary,
+    marginBottom: spacing.xs,
+  },
+  modalSubtitle: {
+    fontSize: fontSize.sm,
+    color: colors.text.secondary,
+    marginBottom: spacing.lg,
+  },
+  settingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  settingInfo: {
+    flex: 1,
+    marginRight: spacing.md,
+  },
+  settingLabel: {
+    fontSize: fontSize.md,
+    fontWeight: '600',
+    color: colors.text.primary,
+  },
+  settingHint: {
+    fontSize: fontSize.xs,
+    color: colors.text.tertiary,
+    marginTop: 2,
+  },
+  toggle: {
+    width: 48,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: colors.bg.elevated,
+    justifyContent: 'center',
+    paddingHorizontal: 3,
+  },
+  toggleOn: {
+    backgroundColor: colors.accent.primary + '40',
+  },
+  toggleDot: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: colors.text.tertiary,
+  },
+  toggleDotOn: {
+    backgroundColor: colors.accent.primary,
+    alignSelf: 'flex-end',
+  },
+  modalDoneButton: {
+    backgroundColor: colors.accent.primary,
+    borderRadius: borderRadius.md,
+    paddingVertical: spacing.md,
+    alignItems: 'center',
+    marginTop: spacing.lg,
+  },
+  modalDoneText: {
+    color: '#fff',
+    fontWeight: '700',
     fontSize: fontSize.md,
   },
 });
