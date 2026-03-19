@@ -4,6 +4,7 @@
 
 import crypto from 'crypto';
 import { queryOne, queryRows, query } from '../db/client';
+import { config } from '../config';
 import { AppError } from '../middleware/error-handler';
 import { encrypt, decrypt } from './encryption.service';
 import { getSchoolAdapter } from '../adapters/adapter.factory';
@@ -282,6 +283,7 @@ export async function generatePhoneHomeToken(userId: string, botId: string): Pro
  * Used by the agent loop to gate grade advancement on payment.
  */
 export async function isBotGradeUnlocked(botId: string, grade: number): Promise<boolean> {
+  if (config.skipPayments) return true;
   const result = await queryOne(
     'SELECT id FROM grade_unlocks WHERE bot_id = $1 AND grade = $2',
     [botId, grade],
