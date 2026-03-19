@@ -16,6 +16,7 @@ import Svg, { Rect, Circle, Line, Polyline, Text as SvgText } from 'react-native
 import { bots as botsApi } from '../services/api';
 import { colors } from '../theme/colors';
 import { spacing, fontSize, borderRadius } from '../theme/spacing';
+import TutorialTip from '../components/TutorialTip';
 import { SKILL_DISPLAY_NAMES } from '@peerzero/shared';
 import type { BotStats } from '@peerzero/shared';
 import type { StatsScreenProps } from '../navigation/types';
@@ -73,6 +74,11 @@ export default function StatsScreen({ route }: StatsScreenProps) {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+      <TutorialTip
+        tipId="stats_charts"
+        title="Stats & Trends"
+        message="Track your bot's progress over time. See credibility trends, action breakdowns, skill development, and token usage. More data appears as your bot runs more cycles."
+      />
       {/* Summary cards */}
       <View style={styles.summaryRow}>
         <View style={styles.summaryCard}>

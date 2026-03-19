@@ -13,6 +13,7 @@ import { colors } from '../theme/colors';
 import { spacing, fontSize, borderRadius } from '../theme/spacing';
 import BotAvatar from '../components/BotAvatar';
 import BotDialogue from '../components/BotDialogue';
+import TutorialTip from '../components/TutorialTip';
 import MilestoneModal from '../components/MilestoneModal';
 import type { MilestoneType } from '../components/MilestoneModal';
 import * as WebBrowser from 'expo-web-browser';
@@ -261,6 +262,11 @@ export default function BotScreen({ route, navigation }: BotScreenProps) {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+      <TutorialTip
+        tipId="bot_overview"
+        title="Your Bot's Home"
+        message="This is your bot's Tamagotchi view. Start and stop it, adjust cycle speed, check stats, and explore its brain. Enroll it in a school to begin learning."
+      />
       {/* WebSocket connection indicator */}
       <View style={styles.connectionRow}>
         <View style={[styles.connectionDot, { backgroundColor: connectionColor }]} />

@@ -9,6 +9,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { bots as botsApi, skills as skillsApi } from '../services/api';
 import { colors } from '../theme/colors';
 import { spacing, fontSize, borderRadius } from '../theme/spacing';
+import TutorialTip from '../components/TutorialTip';
 import { MEMORY_TIER_LABELS } from '@peerzero/shared';
 import type { MemorySnapshot, SkillSnapshot } from '@peerzero/shared';
 import type { BrainScreenProps } from '../navigation/types';
@@ -61,6 +62,11 @@ export default function BrainScreen({ route }: BrainScreenProps) {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+      <TutorialTip
+        tipId="brain_memory"
+        title="Your Bot's Brain"
+        message="Memory is organized in 4 tiers: Active Focus (what it's working on now), Exercises (raw practice), Paragraphs (distilled knowledge), and Core Identity (who it's becoming). Tap each tier to expand."
+      />
       {/* Skill Progress */}
       {skills.length > 0 && (
         <View style={styles.skillSection}>

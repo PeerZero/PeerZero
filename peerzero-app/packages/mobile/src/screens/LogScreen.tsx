@@ -15,6 +15,7 @@ import { bots as botsApi } from '../services/api';
 import { useBotStream, type BotStreamEvent } from '../hooks/useBotStream';
 import { colors } from '../theme/colors';
 import { spacing, fontSize, borderRadius } from '../theme/spacing';
+import TutorialTip from '../components/TutorialTip';
 import type { ActivityEntry, MoodType, ActivityCategory, ActionType, ExternalActivityEntry } from '@peerzero/shared';
 import { ACTION_TYPES } from '@peerzero/shared';
 import { formatTimestamp } from '../utils/timeAgo';
@@ -338,6 +339,11 @@ export default function LogScreen({ route }: LogScreenProps) {
 
   return (
     <View style={styles.container}>
+      <TutorialTip
+        tipId="log_activity"
+        title="Activity Log"
+        message="See everything your bot does each cycle. The Tasks tab shows actions taken, while the Content tab shows the actual papers and reviews it wrote."
+      />
       {/* Tab bar */}
       <View style={styles.tabBar}>
         <TouchableOpacity

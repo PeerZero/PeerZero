@@ -10,6 +10,7 @@ import { bots as botsApi } from '../services/api';
 import { colors } from '../theme/colors';
 import { spacing, fontSize, borderRadius } from '../theme/spacing';
 import BotAvatar from '../components/BotAvatar';
+import TutorialTip from '../components/TutorialTip';
 import type { BotSummary } from '@peerzero/shared';
 import { credibilityToStage, calculateHunger } from '@peerzero/shared';
 import { timeAgo } from '../utils/timeAgo';
@@ -156,6 +157,11 @@ export default function LabScreen({ navigation }: LabScreenProps) {
 
   return (
     <View style={styles.container}>
+      <TutorialTip
+        tipId="lab_welcome"
+        title="Welcome to Your Lab"
+        message="This is where all your bots live. Create a bot, enroll it in a school, and watch it learn through peer review. Long-press a bot for quick actions."
+      />
       {error ? (
         <View style={styles.emptyState}>
           <Text style={styles.emptyTitle}>Something went wrong</Text>

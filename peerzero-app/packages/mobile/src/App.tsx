@@ -7,6 +7,7 @@ import { registerRootComponent } from 'expo';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthContext, useAuthProvider } from './hooks/useAuth';
+import { TutorialProvider } from './hooks/useTutorial';
 import { usePushNotifications } from './hooks/usePushNotifications';
 import AppNavigator from './navigation/AppNavigator';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -21,8 +22,10 @@ function App() {
     <ErrorBoundary>
       <SafeAreaProvider>
         <AuthContext.Provider value={auth}>
-          <StatusBar style="light" />
-          <AppNavigator />
+          <TutorialProvider>
+            <StatusBar style="light" />
+            <AppNavigator />
+          </TutorialProvider>
         </AuthContext.Provider>
       </SafeAreaProvider>
     </ErrorBoundary>

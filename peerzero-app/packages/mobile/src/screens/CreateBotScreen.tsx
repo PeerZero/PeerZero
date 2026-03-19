@@ -11,6 +11,7 @@ import { spacing, fontSize, borderRadius } from '../theme/spacing';
 import { AVATAR_COLOR_PRESETS, SUPPORTED_MODELS, SPECIES_PRESETS } from '@peerzero/shared';
 import type { ApiKeyInfo } from '@peerzero/shared';
 import BotAvatar from '../components/BotAvatar';
+import TutorialTip from '../components/TutorialTip';
 import type { CreateBotScreenProps } from '../navigation/types';
 
 const MAX_NAME_LENGTH = 50;
@@ -107,6 +108,11 @@ export default function CreateBotScreen({ navigation }: CreateBotScreenProps) {
   if (step === 'style') {
     return (
       <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+        <TutorialTip
+          tipId="createbot_style"
+          title="Create Your Bot"
+          message="First pick a species style — each has unique ears, tails, and markings. Then you'll choose a color, name, and which AI model powers it."
+        />
         <Text style={styles.stepTitle}>Choose a Style</Text>
         <Text style={styles.stepHint}>
           Each style has a unique shape, ears, tail, and markings. Pick the one that speaks to you.

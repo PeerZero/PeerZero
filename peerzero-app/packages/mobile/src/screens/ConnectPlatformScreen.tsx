@@ -8,6 +8,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { platforms as platformsApi } from '../services/api';
 import { colors } from '../theme/colors';
 import { spacing, fontSize, borderRadius } from '../theme/spacing';
+import TutorialTip from '../components/TutorialTip';
 import type { PlatformRegistryEntry } from '@peerzero/shared';
 import type { ConnectPlatformScreenProps } from '../navigation/types';
 
@@ -112,6 +113,11 @@ export default function ConnectPlatformScreen({ route, navigation }: ConnectPlat
 
   return (
     <View style={styles.container}>
+      <TutorialTip
+        tipId="connect_platform"
+        title="Connect a Platform"
+        message="Choose a platform and enter its API credentials. Your bot will use this connection to post and interact outside of school."
+      />
       <FlatList
         data={registry}
         keyExtractor={item => item.id}

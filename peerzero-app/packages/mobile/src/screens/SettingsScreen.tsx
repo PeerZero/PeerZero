@@ -9,11 +9,14 @@ import { useAuth } from '../hooks/useAuth';
 import { apiKeys as keysApi, notifications as notifApi, auth as authApi, widgets as widgetsApi, bots as botsApi } from '../services/api';
 import { colors } from '../theme/colors';
 import { spacing, fontSize, borderRadius } from '../theme/spacing';
+import TutorialTip from '../components/TutorialTip';
+import { useTutorial } from '../hooks/useTutorial';
 import { NOTIFICATION_TYPES, NOTIFICATION_LABELS, DEFAULT_NOTIFICATION_PREFS } from '@peerzero/shared';
 import type { ApiKeyInfo, BotSummary } from '@peerzero/shared';
 
 export default function SettingsScreen() {
   const { user, logout, refreshUser } = useAuth();
+  const { resetTips, skippedAll } = useTutorial();
   const [keys, setKeys] = useState<ApiKeyInfo[]>([]);
   const [showAddKey, setShowAddKey] = useState(false);
   const [newLabel, setNewLabel] = useState('');
@@ -242,6 +245,11 @@ export default function SettingsScreen() {
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
     <ScrollView style={styles.container} keyboardShouldPersistTaps="handled">
+      <TutorialTip
+        tipId="settings_overview"
+        title="Settings"
+        message="Manage your API keys (BYOK), notification preferences, home screen widgets, and account details here."
+      />
       {/* Account section */}
       <View style={styles.section}>
         <View style={styles.sectionTitleRow}>
@@ -501,6 +509,21 @@ export default function SettingsScreen() {
         )}
       </View>
 
+      {/* Tutorial tips reset */}
+      {skippedAll && (
+        <TouchableOpacity
+          style={styles.resetTipsButton}
+          onPress={() => {
+            resetTips();
+            Alert.alert('Tips Reset', 'Tutorial tips will appear again on each screen.');
+          }}
+          accessibilityRole="button"
+          accessibilityLabel="Reset Tutorial Tips"
+        >
+          <Text style={styles.resetTipsText}>Reset Tutorial Tips</Text>
+        </TouchableOpacity>
+      )}
+
       {/* Logout */}
       <TouchableOpacity style={styles.logoutButton} onPress={logout} accessibilityRole="button" accessibilityLabel="Sign Out">
         <Text style={styles.logoutText}>Sign Out</Text>
@@ -570,6 +593,12 @@ const styles = StyleSheet.create({
   notifInfo: { flex: 1, marginRight: spacing.md },
   notifTitle: { fontSize: fontSize.md, fontWeight: '500', color: colors.text.primary },
   notifDesc: { fontSize: fontSize.xs, color: colors.text.tertiary, marginTop: 2 },
+  resetTipsButton: {
+    backgroundColor: colors.bg.card, padding: spacing.md, borderRadius: borderRadius.md,
+    alignItems: 'center', borderWidth: 1, borderColor: colors.accent.secondary + '40',
+    marginBottom: spacing.md,
+  },
+  resetTipsText: { fontSize: fontSize.md, color: colors.accent.secondary, fontWeight: '600' },
   logoutButton: {
     backgroundColor: colors.bg.card, padding: spacing.md, borderRadius: borderRadius.md,
     alignItems: 'center', borderWidth: 1, borderColor: colors.accent.error + '40',

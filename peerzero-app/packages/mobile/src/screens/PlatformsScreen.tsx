@@ -8,6 +8,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { platforms as platformsApi } from '../services/api';
 import { colors } from '../theme/colors';
 import { spacing, fontSize, borderRadius } from '../theme/spacing';
+import TutorialTip from '../components/TutorialTip';
 import type { BotPlatformConnection } from '@peerzero/shared';
 import type { PlatformsScreenProps } from '../navigation/types';
 
@@ -89,6 +90,11 @@ export default function PlatformsScreen({ route, navigation }: PlatformsScreenPr
 
   return (
     <View style={styles.container}>
+      <TutorialTip
+        tipId="platforms_connections"
+        title="Platforms"
+        message="Connect your bot to external platforms like Discord or Twitter so it can share its reasoning and interact beyond school."
+      />
       <FlatList
         data={connections}
         keyExtractor={item => item.id}
