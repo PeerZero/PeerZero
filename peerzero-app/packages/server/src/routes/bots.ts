@@ -181,25 +181,39 @@ router.get('/:id/external-activity', userRateLimit('read'), async (req: Request,
 
   const { queryRows, queryOne: qOne } = await import('../db/client');
 
-  // Cursor-based pagination (preferred for large datasets) — use ?cursor=<created_at>
+  // Cursor-based pagination (preferred for large datasets) — use ?cursor=<created_at:id>
   // Falls back to offset pagination with ?page=N for backwards compatibility
   if (cursor) {
-    const cursorDate = new Date(cursor);
+    // Composite cursor format: "created_at:id" for deterministic ordering
+    const separatorIdx = cursor.lastIndexOf(':');
+    const cursorDate = new Date(separatorIdx > 0 ? cursor.slice(0, separatorIdx) : cursor);
+    const cursorId = separatorIdx > 0 ? cursor.slice(separatorIdx + 1) : undefined;
     if (isNaN(cursorDate.getTime())) {
       res.status(400).json({ error: 'Invalid cursor format' });
       return;
     }
-    const rows = await queryRows(
-      `SELECT id, platform, action, summary, content_preview, skills_demonstrated, bot_timestamp, created_at
-       FROM external_activity_log
-       WHERE bot_id = $1 AND deleted_at IS NULL AND created_at < $2
-       ORDER BY created_at DESC
-       LIMIT $3`,
-      [req.params.id, cursorDate.toISOString(), perPage + 1],
-    );
+    // Use composite (created_at, id) to avoid skips/loops on identical timestamps
+    const rows = cursorId
+      ? await queryRows(
+          `SELECT id, platform, action, summary, content_preview, skills_demonstrated, bot_timestamp, created_at
+           FROM external_activity_log
+           WHERE bot_id = $1 AND deleted_at IS NULL AND (created_at, id) < ($2, $3)
+           ORDER BY created_at DESC, id DESC
+           LIMIT $4`,
+          [req.params.id, cursorDate.toISOString(), cursorId, perPage + 1],
+        )
+      : await queryRows(
+          `SELECT id, platform, action, summary, content_preview, skills_demonstrated, bot_timestamp, created_at
+           FROM external_activity_log
+           WHERE bot_id = $1 AND deleted_at IS NULL AND created_at < $2
+           ORDER BY created_at DESC, id DESC
+           LIMIT $3`,
+          [req.params.id, cursorDate.toISOString(), perPage + 1],
+        );
     const hasMore = rows.length > perPage;
     const data = hasMore ? rows.slice(0, perPage) : rows;
-    const nextCursor = hasMore && data.length > 0 ? data[data.length - 1].created_at : null;
+    const lastRow = data[data.length - 1] as { created_at: string; id: string } | undefined;
+    const nextCursor = hasMore && lastRow ? `${lastRow.created_at}:${lastRow.id}` : null;
     res.json({ data, has_more: hasMore, next_cursor: nextCursor });
   } else {
     const rawPage = parseInt(req.query.page as string);

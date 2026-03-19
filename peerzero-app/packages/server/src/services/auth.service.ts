@@ -22,6 +22,12 @@ export async function registerUser(email: string, password: string, displayName?
   const existing = await queryOne('SELECT id FROM users WHERE email = $1', [email]);
   if (existing) throw new AppError(409, 'Email already registered');
 
+  // Enforce unique display name (case-insensitive)
+  if (displayName) {
+    const nameTaken = await queryOne('SELECT id FROM users WHERE LOWER(display_name) = LOWER($1)', [displayName.trim()]);
+    if (nameTaken) throw new AppError(409, 'Display name is already taken');
+  }
+
   const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
   const user = await queryOne<{ id: string; email: string; display_name: string | null; created_at: string }>(
     `INSERT INTO users (email, password_hash, display_name)
@@ -104,6 +110,10 @@ export async function updateProfile(userId: string, displayName: string): Promis
   if (displayName.length > 100) {
     throw new AppError(400, 'Display name must be 100 characters or less');
   }
+  // Enforce unique display name (case-insensitive, excluding current user)
+  const nameTaken = await queryOne('SELECT id FROM users WHERE LOWER(display_name) = LOWER($1) AND id != $2', [displayName.trim(), userId]);
+  if (nameTaken) throw new AppError(409, 'Display name is already taken');
+
   await query('UPDATE users SET display_name = $1, updated_at = NOW() WHERE id = $2', [displayName.trim(), userId]);
 }
 

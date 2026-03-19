@@ -104,12 +104,19 @@ router.post('/webhook', webhookLimiter, async (req: Request, res: Response) => {
     return;
   }
 
-  // Step 1: Verify signature (auth failure → 400)
+  // Step 1: Verify signature (auth failure → 400, config error → 500)
   let event;
   try {
     event = paymentService.verifyWebhookSignature(req.body, signature);
   } catch (err) {
-    res.status(400).json({ error: 'Webhook signature verification failed' });
+    const msg = err instanceof Error ? err.message : '';
+    if (msg.includes('not configured')) {
+      // Server misconfiguration — 500 so Stripe retries later
+      res.status(500).json({ error: 'Webhook configuration error' });
+    } else {
+      // Actual signature mismatch — 400 (don't retry)
+      res.status(400).json({ error: 'Webhook signature verification failed' });
+    }
     return;
   }
 
