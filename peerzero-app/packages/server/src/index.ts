@@ -14,6 +14,7 @@ import { logger } from './lib/logger';
 import { errorHandler } from './middleware/error-handler';
 import { authLimiter, closeRateLimitRedis } from './middleware/rate-limit';
 import { closePool } from './db/client';
+import { runMigrations } from './db/auto-migrate';
 import { startWorker, stopWorker } from './jobs/queue';
 import { startPlatformWorker, stopPlatformWorker } from './jobs/platform-queue';
 import { setupWebSocket } from './websocket/activity-stream';
@@ -80,9 +81,17 @@ if (config.redisUrl) {
   logger.warn('REDIS_URL not set — job workers disabled (auth and API still work)');
 }
 
-server.listen(config.port, '0.0.0.0', () => {
-  logger.info({ port: config.port, env: config.nodeEnv, realAdapters: config.useRealAdapters }, 'PeerZero App Server started');
-});
+// Run pending migrations, then start listening
+runMigrations()
+  .then(() => {
+    server.listen(config.port, '0.0.0.0', () => {
+      logger.info({ port: config.port, env: config.nodeEnv, realAdapters: config.useRealAdapters }, 'PeerZero App Server started');
+    });
+  })
+  .catch((err) => {
+    logger.fatal({ err }, 'Failed to run migrations — server not started');
+    process.exit(1);
+  });
 
 // ── Graceful shutdown ──
 async function shutdown() {
