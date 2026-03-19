@@ -131,17 +131,27 @@ export default function BotScreen({ route, navigation }: BotScreenProps) {
     }, [loadBot]),
   });
 
+  const [startStopLoading, setStartStopLoading] = useState(false);
+
   const handleStartStop = async () => {
-    if (!bot) return;
+    if (!bot || startStopLoading) return;
+    const wasRunning = bot.status === 'running';
+    setStartStopLoading(true);
+    // Optimistic update — flip status immediately so the button responds instantly
+    setBot(prev => prev ? { ...prev, status: wasRunning ? 'stopped' : 'running' } : null);
     try {
-      if (bot.status === 'running') {
+      if (wasRunning) {
         await botsApi.stop(botId);
       } else {
         await botsApi.start(botId);
       }
       await loadBot();
     } catch (err: unknown) {
+      // Revert on failure
+      setBot(prev => prev ? { ...prev, status: wasRunning ? 'running' : 'stopped' } : null);
       Alert.alert('Error', err instanceof Error ? err.message : 'Something went wrong');
+    } finally {
+      setStartStopLoading(false);
     }
   };
 
@@ -517,12 +527,18 @@ export default function BotScreen({ route, navigation }: BotScreenProps) {
         </View>
       ) : (
         <TouchableOpacity
-          style={[styles.actionButton, isRunning ? styles.stopButton : styles.startButton]}
+          style={[styles.actionButton, isRunning ? styles.stopButton : styles.startButton, startStopLoading && styles.actionButtonDisabled]}
           onPress={handleStartStop}
+          disabled={startStopLoading}
+          activeOpacity={0.7}
           accessibilityRole="button"
           accessibilityLabel={isRunning ? 'Stop the bot' : 'Start the bot'}
         >
-          <Text style={styles.actionButtonText}>{isRunning ? 'Stop' : 'Start'}</Text>
+          {startStopLoading ? (
+            <ActivityIndicator color="#fff" size="small" />
+          ) : (
+            <Text style={styles.actionButtonText}>{isRunning ? 'Stop' : 'Start'}</Text>
+          )}
         </TouchableOpacity>
       )}
 
@@ -711,6 +727,7 @@ const styles = StyleSheet.create({
   },
   startButton: { backgroundColor: colors.accent.success },
   stopButton: { backgroundColor: colors.accent.error },
+  actionButtonDisabled: { opacity: 0.6 },
   actionButtonText: { color: '#fff', fontSize: fontSize.lg, fontWeight: '600' },
   navRow: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.lg, width: '100%' },
   navButton: {
