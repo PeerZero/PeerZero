@@ -178,7 +178,7 @@ export default function CreateBotScreen({ navigation }: CreateBotScreenProps) {
 
   // ── Step 2: Color + Name + Config ──
   return (
-    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
     <ScrollView style={styles.container} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
       {/* Back to style picker */}
       <TouchableOpacity style={styles.backLink} onPress={() => setStep('style')}>
@@ -321,7 +321,7 @@ export default function CreateBotScreen({ navigation }: CreateBotScreenProps) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg.primary },
-  content: { alignItems: 'center', padding: spacing.xl },
+  content: { alignItems: 'center', padding: spacing.xl, paddingBottom: 120 },
 
   // Step 1: Style picker
   stepTitle: {
