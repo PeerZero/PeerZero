@@ -81,7 +81,7 @@ async function applyTierCap(newCred, agentId) {
   const bounties  = bountyResult.count || 0;
   const papers    = paperResult.count  || 0;
   const revisions = revisionResult.count || 0;
-  const scores    = (scoresResult.data || []).filter(p => p.weighted_score).map(p =>
+  const scores    = (scoresResult.data || []).filter(p => p.weighted_score != null).map(p =>
     applyTimeDecay(parseFloat(p.weighted_score), p.last_reviewed_at || p.submitted_at)
   );
   const bestScore = scores.length > 0 ? Math.max(...scores) : null;

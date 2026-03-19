@@ -145,6 +145,10 @@ router.post('/', async (req: Request, res: Response) => {
   // Sanitize and truncate
   const safePlatform = String(platform).slice(0, 100).replace(/[^a-zA-Z0-9_-]/g, '');
   const safeAction = String(action).slice(0, 50).replace(/[^a-zA-Z0-9_-]/g, '');
+  if (!safePlatform || !safeAction) {
+    res.status(400).json({ error: 'platform and action must contain valid characters (a-z, 0-9, _ -)' });
+    return;
+  }
   const safeSummary = String(summary).slice(0, 500);
   const safePreview = content_preview ? String(content_preview).slice(0, 200) : null;
   const safeSkills = Array.isArray(skills_demonstrated)
@@ -160,7 +164,7 @@ router.post('/', async (req: Request, res: Response) => {
     if (!isNaN(parsed.getTime())) {
       botTimestamp = parsed.toISOString();
     } else {
-      logger.warn({ botId: bot?.id, timestamp }, 'Invalid timestamp in phone-home report');
+      logger.warn({ botId: bot.id, timestamp }, 'Invalid timestamp in phone-home report');
     }
   }
 

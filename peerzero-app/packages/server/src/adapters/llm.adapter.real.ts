@@ -196,10 +196,15 @@ export class RealLLMAdapter implements ILLMAdapter {
     const rawToolCalls = data.choices[0]?.message?.tool_calls;
     let toolCalls: LLMToolCall[] | undefined;
     if (rawToolCalls?.length) {
-      toolCalls = rawToolCalls.map(tc => ({
-        name: tc.function.name,
-        input: JSON.parse(tc.function.arguments),
-      }));
+      toolCalls = rawToolCalls.map(tc => {
+        let input: Record<string, unknown>;
+        try {
+          input = JSON.parse(tc.function.arguments);
+        } catch {
+          input = { _raw: tc.function.arguments };
+        }
+        return { name: tc.function.name, input };
+      });
     }
 
     return {
