@@ -470,14 +470,14 @@ function extractSkillSnapshots(profile: SchoolProfile): Array<{
 }> {
   const skillProfile = profile.skill_profile;
   if (!skillProfile) {
-    return SKILL_NAMES.map(sk => ({ skill_key: sk, strength: 0, reliability: 0, reps: 0, streak: 0, status: 'untested' }));
+    return SKILL_NAMES.map((sk: string) => ({ skill_key: sk, strength: 0, reliability: 0, reps: 0, streak: 0, status: 'untested' }));
   }
 
   // Build a lookup from both verified and developing arrays
   const allSkills = [...(skillProfile.verified || []), ...(skillProfile.developing || [])];
   const skillMap = new Map(allSkills.map(s => [s.skill_key, s]));
 
-  return SKILL_NAMES.map(skillKey => {
+  return SKILL_NAMES.map((skillKey: string) => {
     const skill = skillMap.get(skillKey);
     if (skill) {
       const reps = skill.reps || 0;

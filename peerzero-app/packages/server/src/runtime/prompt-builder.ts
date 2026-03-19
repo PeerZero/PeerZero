@@ -126,7 +126,7 @@ export function buildPrompt(actionType: string, ctx: PromptContext): LLMMessage[
   // Add active focus (Tier 0)
   if (ctx.profile.active_focus) {
     const focusText = ctx.profile.active_focus.focus_chunks
-      .map((c, i) => `${i + 1}. [${c.label}] ${c.content}`)
+      .map((c: { label: string; content: string }, i: number) => `${i + 1}. [${c.label}] ${c.content}`)
       .join('\n');
     messages.push({
       role: 'user',
@@ -302,7 +302,7 @@ function buildCondensePrompt(ctx: PromptContext): LLMMessage {
 ${ctx.profile.core_condenser.core_condenser_prompt}
 
 Skill reference: ${ctx.profile.core_condenser.skill_reference}
-${ctx.profile.core_condenser.instructions.map(i => `- ${i}`).join('\n')}
+${ctx.profile.core_condenser.instructions.map((i: string) => `- ${i}`).join('\n')}
 
 Respond with JSON:
 {
@@ -339,7 +339,7 @@ function buildIdentityPrompt(ctx: PromptContext): LLMMessage {
 Current narrative: ${reflection?.current_narrative || 'None yet.'}
 
 Self-interrogation questions:
-${reflection?.self_interrogation_questions?.map((q, i) => `${i + 1}. ${q}`).join('\n') || 'None provided.'}
+${reflection?.self_interrogation_questions?.map((q: string, i: number) => `${i + 1}. ${q}`).join('\n') || 'None provided.'}
 
 ${reflection?.update_instructions || ''}
 
