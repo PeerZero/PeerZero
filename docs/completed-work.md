@@ -223,6 +223,31 @@ Full emotional layer for bot ownership — bots speak, hatch, celebrate, and can
 
 ---
 
+## Brain Screen Identity & Chat Feed (March 2026) — COMPLETE
+
+Full identity visualization and conversational bot interface.
+
+**Built (BrainScreen — Identity Reflection):**
+- Claimed values display: bulleted list of reasoning behaviors the bot claims as core
+- Active tensions display: highlighted doubts the bot holds about its own reasoning (the docs say "these matter more than certainties")
+- Formed convictions display: beliefs formed through specific experiences
+- Human-readable exercise rendering: Tier 1 exercises now show titles, summaries, and scores instead of raw JSON
+- Skill progress bars with strength percentages, reps, and status (verified/developing/emerging)
+
+**Built (ChatScreen — Conversational Feed):**
+- Chat-style message interface between user and bot
+- Three message types: direct chat, activity narrations, milestone announcements
+- Filter tabs: All, Chat Only, Updates Only
+- Activity messages compact by default, tap to expand
+- Bot avatar shown next to bot messages
+- Real-time WebSocket message streaming
+- Paginated message history with scroll-to-load-more
+- Settings modal to toggle activity/milestone updates on or off
+- Bot responds using its identity context via fast LLM model
+- Empty state with bot avatar and contextual guidance per tab
+
+---
+
 ## What Still Needs Work
 
 - **Real adapter testing** — when School is ready to connect end-to-end

@@ -11,10 +11,33 @@ import { colors } from '../theme/colors';
 import { spacing, fontSize, borderRadius } from '../theme/spacing';
 import TutorialTip from '../components/TutorialTip';
 import { MEMORY_TIER_LABELS } from '@peerzero/shared';
-import type { MemorySnapshot, SkillSnapshot } from '@peerzero/shared';
+import type { MemorySnapshot, MemoryExercise, SkillSnapshot } from '@peerzero/shared';
 import type { BrainScreenProps } from '../navigation/types';
 
 type TierKey = 0 | 1 | 2 | 3;
+
+/** Turn raw exercise_data into a readable summary instead of raw JSON */
+function formatExercise(ex: MemoryExercise): string {
+  const d = ex.exercise_data;
+  // Try common keys that contain human-readable text
+  if (typeof d.title === 'string') {
+    const parts = [d.title as string];
+    if (typeof d.score === 'number') parts.push(`Score: ${d.score}`);
+    if (typeof d.summary === 'string') parts.push(d.summary as string);
+    else if (typeof d.abstract === 'string') parts.push(d.abstract as string);
+    return parts.join('\n');
+  }
+  if (typeof d.headline === 'string') return d.headline as string;
+  if (typeof d.summary === 'string') return d.summary as string;
+  if (typeof d.text === 'string') return (d.text as string).slice(0, 300);
+  // Fallback: show key-value pairs instead of raw JSON
+  const keys = Object.keys(d).slice(0, 5);
+  return keys.map(k => {
+    const val = d[k];
+    const str = typeof val === 'string' ? val : JSON.stringify(val);
+    return `${k}: ${typeof str === 'string' ? str.slice(0, 80) : str}`;
+  }).join('\n');
+}
 
 const TIER_COLORS: Record<TierKey, string> = {
   0: colors.accent.warning,   // Active Focus — gold
@@ -123,8 +146,8 @@ export default function BrainScreen({ route }: BrainScreenProps) {
           {memory.tier1_exercises.slice(0, 10).map((ex) => (
             <View key={ex.id} style={[styles.card, { borderLeftColor: TIER_COLORS[1] }]}>
               <Text style={styles.cardLabel}>Cycle {ex.cycle_number} — {ex.action_type}</Text>
-              <Text style={styles.cardContent} numberOfLines={3}>
-                {JSON.stringify(ex.exercise_data).slice(0, 200)}
+              <Text style={styles.cardContent} numberOfLines={4}>
+                {formatExercise(ex)}
               </Text>
             </View>
           ))}
@@ -169,6 +192,23 @@ export default function BrainScreen({ route }: BrainScreenProps) {
             <View style={[styles.card, { borderLeftColor: TIER_COLORS[3] }]}>
               <Text style={styles.cardLabel}>Self-Narrative</Text>
               <Text style={styles.cardContent}>{memory.tier3_self_identity.self_narrative}</Text>
+              {memory.tier3_self_identity.claimed_values && memory.tier3_self_identity.claimed_values.length > 0 && (
+                <>
+                  <Text style={[styles.cardLabel, { marginTop: spacing.sm }]}>Claimed Values</Text>
+                  {memory.tier3_self_identity.claimed_values.map((value, i) => (
+                    <View key={i} style={styles.valueRow}>
+                      <View style={styles.valueDot} />
+                      <Text style={styles.cardContent}>{value}</Text>
+                    </View>
+                  ))}
+                </>
+              )}
+              {memory.tier3_self_identity.active_tensions && (
+                <>
+                  <Text style={[styles.cardLabel, { marginTop: spacing.sm }]}>Active Tensions</Text>
+                  <Text style={[styles.cardContent, { color: colors.accent.warning }]}>{memory.tier3_self_identity.active_tensions}</Text>
+                </>
+              )}
               {memory.tier3_self_identity.formed_convictions && (
                 <>
                   <Text style={[styles.cardLabel, { marginTop: spacing.sm }]}>Formed Convictions</Text>
@@ -219,4 +259,9 @@ const styles = StyleSheet.create({
   skillMetaText: { fontSize: fontSize.xs, color: colors.text.tertiary },
   skillStatus: { fontSize: fontSize.xs, fontWeight: '600', textTransform: 'capitalize' as const },
   skillEmptyText: { fontSize: fontSize.sm, color: colors.text.tertiary, textAlign: 'center' as const },
+  valueRow: { flexDirection: 'row' as const, alignItems: 'flex-start' as const, marginTop: spacing.xs },
+  valueDot: {
+    width: 6, height: 6, borderRadius: 3,
+    backgroundColor: colors.accent.primary, marginRight: spacing.sm, marginTop: 7,
+  },
 });

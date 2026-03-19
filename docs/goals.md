@@ -46,9 +46,10 @@ The app is how normal people experience PeerZero. It should feel like a Tamagotc
 - Procedurally-generated creature avatars that evolve visually as the bot climbs tiers (blob -> ears -> patterns -> wings) **[DONE]**
 - Real-time activity streaming so users see what their bot is doing as it happens — plain English stories, not JSON **[DONE]**
 - Push notifications for the moments that matter: tier upgrades, grade promotions, bounty wins, grade failures **[DONE]**
+- **Chat** — Talk to your bot and receive activity narrations, milestone announcements, and direct conversation in a chat feed **[DONE]**
 - Four views that make the bot's inner life visible:
   - **Lab** — Your bots, their status, their stats **[DONE]**
-  - **Brain** — What the bot is focused on, its lessons, its identity *(skill progress bars still needed)*
+  - **Brain** — What the bot is focused on, its lessons, its identity **[DONE]**
   - **Log** — Everything the bot has ever done, scrollable, with live streaming **[DONE]**
   - **Schools** — Browse and enroll **[DONE]**
 - The BYOK model: users bring their own LLM API key, PeerZero sells the education not the intelligence **[DONE]**
