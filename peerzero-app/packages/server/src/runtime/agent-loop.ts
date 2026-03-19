@@ -25,6 +25,8 @@ import * as activity from '../services/activity.service';
 import { query, queryOne } from '../db/client';
 import { notifyGradePaymentNeeded, checkAndNotifyMilestones } from '../services/notification.service';
 import { generateBotVoicedMessage } from '../services/bot-voice.service';
+import { narrateCycleActivity, storeMilestoneMessage, cleanupOldMessages } from '../services/message.service';
+import { broadcastMessage } from '../websocket/activity-stream';
 import { getGradePriceCents, credibilityToStage } from '@peerzero/shared';
 import { SchoolCredentials } from '../adapters/school.adapter';
 import { buildPrompt } from './prompt-builder';
@@ -138,7 +140,7 @@ export async function runOneCycle(ctx: BotContext): Promise<void> {
     // 6. Log activity (with content text for the Content tab)
     const durationMs = Date.now() - startTime;
     const contentText = extractContentText(actionType, actionResult.rawRequest);
-    await activity.logActivity(
+    const activityId = await activity.logActivity(
       ctx.botId,
       ctx.cycleNumber,
       actionType,
@@ -150,6 +152,27 @@ export async function runOneCycle(ctx: BotContext): Promise<void> {
       undefined, // no error
       contentText,
     );
+
+    // 6.5. Narrate the cycle in the bot's voice for the chat feed (non-blocking)
+    const voiceModel = ctx.fastLlmModel || ctx.llmModel;
+    const botRow = await queryOne<{ name: string; user_id: string }>('SELECT name, user_id FROM bots WHERE id = $1', [ctx.botId]);
+    if (botRow) {
+      narrateCycleActivity(
+        ctx.botId,
+        botRow.name,
+        ctx.userId,
+        ctx.llmApiKeyId,
+        voiceModel,
+        actionResult.translated.headline,
+        actionResult.translated.summary,
+        actionType,
+        actionResult.translated.mood,
+        activityId,
+        contentText,
+      ).then(msg => {
+        if (msg) broadcastMessage(ctx.botId, ctx.userId, msg);
+      }).catch(() => { /* non-fatal */ });
+    }
 
     // 7. Store memory if exercises returned
     if (actionResult.exercises) {
@@ -229,6 +252,20 @@ export async function runOneCycle(ctx: BotContext): Promise<void> {
       await schedulePlatformJobs(ctx.botId, ctx.userId, ctx.llmApiKeyId, utilityModel);
     } catch (err) {
       logger.warn({ err: err instanceof Error ? err.message : err }, 'Failed to schedule platform cycles');
+    }
+
+    // 15. Periodic data retention — clean up old messages and soft-deleted activity (every 50 cycles)
+    if (ctx.cycleNumber % 50 === 0) {
+      try {
+        await cleanupOldMessages(ctx.botId, 500);
+        // Permanently delete soft-deleted activity older than 30 days
+        await query(
+          "DELETE FROM activity_log WHERE bot_id = $1 AND deleted_at IS NOT NULL AND deleted_at < NOW() - INTERVAL '30 days'",
+          [ctx.botId],
+        );
+      } catch (err) {
+        logger.warn({ err: err instanceof Error ? err.message : err }, 'Data retention cleanup failed (non-fatal)');
+      }
     }
 
   } catch (err) {

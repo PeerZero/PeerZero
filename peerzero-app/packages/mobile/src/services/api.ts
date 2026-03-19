@@ -215,6 +215,12 @@ export const bots = {
 
   speak: (id: string, context: string) =>
     apiFetch(`/bots/${id}/speak`, { method: 'POST', body: JSON.stringify({ context }) }),
+
+  messages: (id: string, page = 1) =>
+    apiFetch(`/bots/${id}/messages?page=${page}`),
+
+  sendMessage: (id: string, content: string) =>
+    apiFetch(`/bots/${id}/messages`, { method: 'POST', body: JSON.stringify({ content }) }),
 };
 
 // ── API Keys ──

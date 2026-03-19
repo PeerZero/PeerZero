@@ -28,6 +28,7 @@ import StatsScreen from '../screens/StatsScreen';
 import PlatformsScreen from '../screens/PlatformsScreen';
 import ConnectPlatformScreen from '../screens/ConnectPlatformScreen';
 import EggHatchScreen from '../screens/EggHatchScreen';
+import ChatScreen from '../screens/ChatScreen';
 import ForgotPasswordScreen from '../screens/ForgotPasswordScreen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -126,6 +127,7 @@ function BotStack() {
       <Stack.Screen name="Bot" component={BotScreen} options={{ title: 'Bot' }} />
       <Stack.Screen name="Brain" component={BrainScreen} options={{ title: 'Brain' }} />
       <Stack.Screen name="Log" component={LogScreen} options={{ title: 'Activity Log' }} />
+      <Stack.Screen name="Chat" component={ChatScreen} options={{ title: 'Chat' }} />
       <Stack.Screen name="CreateBot" component={CreateBotScreen} options={{ title: 'Create Bot', animation: 'slide_from_bottom' }} />
       <Stack.Screen name="EggHatch" component={EggHatchScreen} options={{ headerShown: false, gestureEnabled: false, animation: 'slide_from_bottom' }} />
       <Stack.Screen name="EnrollBot" component={EnrollBotScreen} options={{ title: 'Enroll in School', animation: 'slide_from_bottom' }} />

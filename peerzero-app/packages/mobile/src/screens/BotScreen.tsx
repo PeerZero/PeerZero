@@ -606,6 +606,22 @@ export default function BotScreen({ route, navigation }: BotScreenProps) {
         </TouchableOpacity>
       )}
 
+      {/* Chat button — prominent, full-width */}
+      <TouchableOpacity
+        style={styles.chatButton}
+        onPress={() => navigation.navigate('Chat', { botId })}
+        activeOpacity={0.7}
+        accessibilityRole="button"
+        accessibilityLabel="Chat"
+        accessibilityHint="Talk to your bot"
+      >
+        <Text style={styles.chatButtonIcon}>💬</Text>
+        <View style={styles.chatButtonTextContainer}>
+          <Text style={styles.chatButtonTitle}>Chat with {bot.name}</Text>
+          <Text style={styles.chatButtonSub}>Talk, ask questions, get updates</Text>
+        </View>
+      </TouchableOpacity>
+
       <View style={styles.navRow}>
         <TouchableOpacity
           style={styles.navButton}
@@ -793,6 +809,20 @@ const styles = StyleSheet.create({
   stopButton: { backgroundColor: colors.accent.error },
   actionButtonDisabled: { opacity: 0.6 },
   actionButtonText: { color: '#fff', fontSize: fontSize.lg, fontWeight: '600' },
+  chatButton: {
+    flexDirection: 'row', alignItems: 'center', width: '100%',
+    backgroundColor: colors.accent.primary + '15', padding: spacing.md,
+    borderRadius: borderRadius.md, marginTop: spacing.lg,
+    borderWidth: 1, borderColor: colors.accent.primary + '40',
+  },
+  chatButtonIcon: { fontSize: 28, marginRight: spacing.md },
+  chatButtonTextContainer: { flex: 1 },
+  chatButtonTitle: {
+    fontSize: fontSize.md, fontWeight: '700', color: colors.accent.primary,
+  },
+  chatButtonSub: {
+    fontSize: fontSize.xs, color: colors.text.secondary, marginTop: 2,
+  },
   navRow: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.lg, width: '100%' },
   navButton: {
     flex: 1, backgroundColor: colors.bg.card, padding: spacing.md,

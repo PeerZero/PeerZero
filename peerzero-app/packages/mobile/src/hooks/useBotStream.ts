@@ -19,7 +19,7 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
-import type { ActivityEntry } from '@peerzero/shared';
+import type { ActivityEntry, BotMessage } from '@peerzero/shared';
 
 const tokenStore = Platform.OS === 'web'
   ? {
@@ -43,7 +43,7 @@ const INITIAL_RECONNECT_DELAY = 1000; // Start at 1s
 const MAX_AUTH_RETRIES = 2; // Don't infinite-loop on bad credentials
 
 export interface BotStreamEvent {
-  type: 'activity' | 'status_change' | 'connected' | 'external_activity';
+  type: 'activity' | 'status_change' | 'connected' | 'external_activity' | 'message';
   status?: string;
   // Activity fields (when type === 'activity')
   cycle_number?: number;
@@ -68,6 +68,7 @@ interface UseBotStreamOptions {
   onActivity?: (event: BotStreamEvent) => void;
   onStatusChange?: (status: string) => void;
   onExternalActivity?: (event: BotStreamEvent) => void;
+  onMessage?: (message: BotMessage) => void;
 }
 
 interface UseBotStreamResult {
@@ -107,6 +108,7 @@ export function useBotStream({
   onActivity,
   onStatusChange,
   onExternalActivity,
+  onMessage,
 }: UseBotStreamOptions): UseBotStreamResult {
   const [isConnected, setIsConnected] = useState(false);
   const [lastEvent, setLastEvent] = useState<BotStreamEvent | null>(null);
@@ -123,6 +125,8 @@ export function useBotStream({
   onStatusChangeRef.current = onStatusChange;
   const onExternalActivityRef = useRef(onExternalActivity);
   onExternalActivityRef.current = onExternalActivity;
+  const onMessageRef = useRef(onMessage);
+  onMessageRef.current = onMessage;
 
   const connect = useCallback(async () => {
     if (!botId || !enabled || !mountedRef.current) return;
@@ -164,6 +168,8 @@ export function useBotStream({
             onStatusChangeRef.current?.(data.status || '');
           } else if (data.type === 'external_activity') {
             onExternalActivityRef.current?.(data);
+          } else if (data.type === 'message' && (data as unknown as { message: BotMessage }).message) {
+            onMessageRef.current?.((data as unknown as { message: BotMessage }).message);
           }
         } catch {
           // Ignore malformed messages
