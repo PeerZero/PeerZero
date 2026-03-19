@@ -558,7 +558,7 @@ describe('E2E: Platform connections', () => {
 
     // Verify external_activity_log insertion
     const insertCall = mockQuery.mock.calls.find(
-      ([sql]: [string]) => sql.includes('external_activity_log'),
+      (args: any[]) => typeof args[0] === 'string' && args[0].includes('external_activity_log'),
     );
     expect(insertCall).toBeDefined();
     expect(insertCall![1]).toContain('bot-1'); // botId
@@ -655,8 +655,8 @@ describe('E2E: Stripe webhooks', () => {
     // Verify the webhook signature
     const event = paymentService.verifyWebhookSignature(mockBody, signature);
     expect(event.type).toBe('checkout.session.completed');
-    expect(event.data.object.metadata.bot_id).toBe('bot-1');
-    expect(event.data.object.metadata.grade).toBe('2');
+    expect((event.data.object as any).metadata.bot_id).toBe('bot-1');
+    expect((event.data.object as any).metadata.grade).toBe('2');
 
     // Handle the webhook
     await paymentService.handleStripeWebhook(event);

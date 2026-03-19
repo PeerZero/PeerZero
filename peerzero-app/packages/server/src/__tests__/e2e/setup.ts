@@ -47,7 +47,7 @@ export class ApiClient {
 
   async get(path: string, extra: Record<string, string> = {}) {
     const res = await fetch(`${this.baseUrl}${path}`, { headers: this.headers(extra) });
-    const body = await res.json().catch(() => null);
+    const body: any = await res.json().catch(() => null);
     return { status: res.status, body };
   }
 
@@ -57,7 +57,7 @@ export class ApiClient {
       headers: this.headers(extra),
       body: data !== undefined ? JSON.stringify(data) : undefined,
     });
-    const body = await res.json().catch(() => null);
+    const body: any = await res.json().catch(() => null);
     return { status: res.status, body };
   }
 
@@ -67,7 +67,7 @@ export class ApiClient {
       headers: this.headers(extra),
       body: JSON.stringify(data),
     });
-    const body = await res.json().catch(() => null);
+    const body: any = await res.json().catch(() => null);
     return { status: res.status, body };
   }
 
@@ -76,7 +76,7 @@ export class ApiClient {
       method: 'DELETE',
       headers: this.headers(extra),
     });
-    const body = await res.json().catch(() => null);
+    const body: any = await res.json().catch(() => null);
     return { status: res.status, body };
   }
 }
@@ -116,6 +116,7 @@ export async function setupE2E(): Promise<E2EContext> {
   await resetDatabase(pool);
 
   // Import app modules AFTER env vars are set
+  // @ts-expect-error no type declarations for express-async-errors
   await import('express-async-errors'); // Must be imported before routes — patches Express to handle async errors
   const { errorHandler } = await import('../../middleware/error-handler');
   const authRoutes = (await import('../../routes/auth')).default;
