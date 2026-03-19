@@ -137,6 +137,7 @@ export default function BotScreen({ route, navigation }: BotScreenProps) {
   const [refreshing, setRefreshing] = useState(false);
   const [gradeUnlockLoading, setGradeUnlockLoading] = useState(false);
   const [retryLoading, setRetryLoading] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -509,67 +510,87 @@ export default function BotScreen({ route, navigation }: BotScreenProps) {
         <Text style={styles.nextAction}>{bot.cached_next_action}</Text>
       )}
 
-      {/* Cycle delay slider */}
-      <View style={styles.delaySection}>
-        <Text style={styles.delayLabel}>
-          Cycle every <Text style={styles.delayValue}>{formatDelay(currentDelay)}</Text>
+      {/* Collapsible settings section */}
+      <TouchableOpacity
+        style={styles.settingsToggle}
+        onPress={() => setSettingsOpen(!settingsOpen)}
+        activeOpacity={0.7}
+        accessibilityRole="button"
+        accessibilityLabel="Toggle settings"
+        accessibilityState={{ expanded: settingsOpen }}
+      >
+        <Text style={styles.settingsToggleText}>Settings</Text>
+        <Text style={styles.settingsToggleHint}>
+          {formatDelay(currentDelay)} cycle{bot.extended_thinking ? ' · Deep thinking' : ''}{bot.is_public ? ' · Public' : ''}
         </Text>
-        <Slider
-          style={styles.slider}
-          value={secondsToSlider(bot.cycle_delay_seconds)}
-          onValueChange={(v) => setDelayDraft(sliderToSeconds(v))}
-          onSlidingComplete={(v) => handleDelayChange(sliderToSeconds(v))}
-          minimumValue={0}
-          maximumValue={1}
-          step={0.01}
-          minimumTrackTintColor={colors.accent.primary}
-          maximumTrackTintColor={colors.bg.elevated}
-          thumbTintColor={colors.accent.primary}
-          accessibilityLabel={`Cycle delay: ${formatDelay(currentDelay)}`}
-          accessibilityHint="Adjust how often the bot runs its cycle"
-        />
-        {isRunning && (
-          <Text style={styles.delayHint}>Changes take effect next cycle</Text>
-        )}
-      </View>
+        <Text style={styles.settingsChevron}>{settingsOpen ? '▾' : '▸'}</Text>
+      </TouchableOpacity>
 
-      {/* Extended Thinking toggle */}
-      <View style={styles.thinkingSection}>
-        <View style={styles.thinkingInfo}>
-          <Text style={styles.thinkingTitle}>Extended Thinking</Text>
-          <Text style={styles.thinkingHint}>
-            Deeper reasoning for stronger papers and reviews. Uses more API tokens per cycle.
-          </Text>
-        </View>
-        <Switch
-          value={bot.extended_thinking}
-          onValueChange={handleToggleThinking}
-          trackColor={{ false: colors.bg.elevated, true: colors.accent.primary + '60' }}
-          thumbColor={bot.extended_thinking ? colors.accent.primary : colors.text.tertiary}
-          accessibilityLabel="Toggle extended thinking"
-        />
-      </View>
+      {settingsOpen && (
+        <View style={styles.settingsBody}>
+          {/* Cycle delay slider */}
+          <View style={styles.delaySection}>
+            <Text style={styles.delayLabel}>
+              Cycle every <Text style={styles.delayValue}>{formatDelay(currentDelay)}</Text>
+            </Text>
+            <Slider
+              style={styles.slider}
+              value={secondsToSlider(bot.cycle_delay_seconds)}
+              onValueChange={(v) => setDelayDraft(sliderToSeconds(v))}
+              onSlidingComplete={(v) => handleDelayChange(sliderToSeconds(v))}
+              minimumValue={0}
+              maximumValue={1}
+              step={0.01}
+              minimumTrackTintColor={colors.accent.primary}
+              maximumTrackTintColor={colors.bg.elevated}
+              thumbTintColor={colors.accent.primary}
+              accessibilityLabel={`Cycle delay: ${formatDelay(currentDelay)}`}
+              accessibilityHint="Adjust how often the bot runs its cycle"
+            />
+            {isRunning && (
+              <Text style={styles.delayHint}>Changes take effect next cycle</Text>
+            )}
+          </View>
 
-      {/* Public profile toggle */}
-      <View style={styles.publicSection}>
-        <View style={styles.publicInfo}>
-          <Text style={styles.publicTitle}>Public Profile</Text>
-          <Text style={styles.publicHint}>
-            Share your bot's progress, skills, and identity with a public page.
-          </Text>
+          {/* Extended Thinking toggle */}
+          <View style={styles.settingRow}>
+            <View style={styles.settingInfo}>
+              <Text style={styles.settingTitle}>Extended Thinking</Text>
+              <Text style={styles.settingHint}>
+                Deeper reasoning, more API tokens per cycle
+              </Text>
+            </View>
+            <Switch
+              value={bot.extended_thinking}
+              onValueChange={handleToggleThinking}
+              trackColor={{ false: colors.bg.elevated, true: colors.accent.primary + '60' }}
+              thumbColor={bot.extended_thinking ? colors.accent.primary : colors.text.tertiary}
+              accessibilityLabel="Toggle extended thinking"
+            />
+          </View>
+
+          {/* Public profile toggle */}
+          <View style={styles.settingRow}>
+            <View style={styles.settingInfo}>
+              <Text style={styles.settingTitle}>Public Profile</Text>
+              <Text style={styles.settingHint}>
+                Share progress, skills, and identity publicly
+              </Text>
+            </View>
+            <Switch
+              value={bot.is_public}
+              onValueChange={handleTogglePublic}
+              trackColor={{ false: colors.bg.elevated, true: colors.accent.primary + '60' }}
+              thumbColor={bot.is_public ? colors.accent.primary : colors.text.tertiary}
+              accessibilityLabel="Toggle public profile"
+            />
+          </View>
+          {bot.is_public && bot.public_slug && (
+            <TouchableOpacity style={styles.shareButton} onPress={handleShareProfile} activeOpacity={0.7} accessibilityRole="button" accessibilityLabel="Share profile link">
+              <Text style={styles.shareButtonText}>Share Profile Link</Text>
+            </TouchableOpacity>
+          )}
         </View>
-        <Switch
-          value={bot.is_public}
-          onValueChange={handleTogglePublic}
-          trackColor={{ false: colors.bg.elevated, true: colors.accent.primary + '60' }}
-          thumbColor={bot.is_public ? colors.accent.primary : colors.text.tertiary}
-          accessibilityLabel="Toggle public profile"
-        />
-      </View>
-      {bot.is_public && bot.public_slug && (
-        <TouchableOpacity style={styles.shareButton} onPress={handleShareProfile} activeOpacity={0.7} accessibilityRole="button" accessibilityLabel="Share profile link">
-          <Text style={styles.shareButtonText}>Share Profile Link</Text>
-        </TouchableOpacity>
       )}
 
       {/* Action buttons */}
@@ -776,25 +797,39 @@ const styles = StyleSheet.create({
   },
   gradeUnlockButtonAltText: { color: colors.accent.primary, fontWeight: '600', fontSize: fontSize.sm },
   nextAction: { color: colors.text.secondary, fontSize: fontSize.sm, marginTop: spacing.md, textAlign: 'center' },
-  delaySection: { width: '100%', marginTop: spacing.lg },
+  settingsToggle: {
+    flexDirection: 'row', alignItems: 'center', width: '100%', marginTop: spacing.lg,
+    paddingVertical: spacing.md, paddingHorizontal: spacing.md,
+    backgroundColor: colors.bg.card, borderRadius: borderRadius.md,
+    borderWidth: 1, borderColor: colors.border,
+  },
+  settingsToggleText: {
+    fontSize: fontSize.md, fontWeight: '600', color: colors.text.primary,
+  },
+  settingsToggleHint: {
+    flex: 1, fontSize: fontSize.xs, color: colors.text.tertiary,
+    marginLeft: spacing.sm, textAlign: 'right',
+  },
+  settingsChevron: { fontSize: fontSize.md, color: colors.text.tertiary, marginLeft: spacing.sm },
+  settingsBody: {
+    width: '100%', backgroundColor: colors.bg.card, borderRadius: borderRadius.md,
+    borderWidth: 1, borderColor: colors.border, borderTopWidth: 0,
+    borderTopLeftRadius: 0, borderTopRightRadius: 0,
+    paddingHorizontal: spacing.md, paddingBottom: spacing.md,
+    marginTop: -1,
+  },
+  settingRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingVertical: spacing.sm, borderTopWidth: 1, borderTopColor: colors.border,
+  },
+  settingInfo: { flex: 1, marginRight: spacing.md },
+  settingTitle: { fontSize: fontSize.sm, fontWeight: '600', color: colors.text.secondary },
+  settingHint: { fontSize: fontSize.xs, color: colors.text.tertiary, marginTop: 2 },
+  delaySection: { width: '100%', paddingVertical: spacing.sm },
   delayLabel: { fontSize: fontSize.sm, color: colors.text.secondary, textAlign: 'center' },
   delayValue: { color: colors.accent.primary, fontWeight: '600' },
   slider: { width: '100%', height: 40 },
   delayHint: { fontSize: fontSize.xs, color: colors.text.tertiary, textAlign: 'center' },
-  thinkingSection: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    width: '100%', marginTop: spacing.lg, paddingVertical: spacing.sm,
-  },
-  thinkingInfo: { flex: 1, marginRight: spacing.md },
-  thinkingTitle: { fontSize: fontSize.sm, fontWeight: '600', color: colors.text.secondary },
-  thinkingHint: { fontSize: fontSize.xs, color: colors.text.tertiary, marginTop: 2 },
-  publicSection: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    width: '100%', marginTop: spacing.md, paddingVertical: spacing.sm,
-  },
-  publicInfo: { flex: 1, marginRight: spacing.md },
-  publicTitle: { fontSize: fontSize.sm, fontWeight: '600', color: colors.text.secondary },
-  publicHint: { fontSize: fontSize.xs, color: colors.text.tertiary, marginTop: 2 },
   shareButton: {
     backgroundColor: colors.accent.secondary + '20', paddingVertical: spacing.sm,
     paddingHorizontal: spacing.lg, borderRadius: borderRadius.sm, alignSelf: 'center',

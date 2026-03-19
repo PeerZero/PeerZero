@@ -223,16 +223,38 @@ Full emotional layer for bot ownership — bots speak, hatch, celebrate, and can
 
 ---
 
-## Brain Screen Identity & Chat Feed (March 2026) — COMPLETE
+## Screen Polish & UX Improvements (March 2026) — COMPLETE
 
-Full identity visualization and conversational bot interface.
+Comprehensive UX pass across all major screens.
 
-**Built (BrainScreen — Identity Reflection):**
-- Claimed values display: bulleted list of reasoning behaviors the bot claims as core
-- Active tensions display: highlighted doubts the bot holds about its own reasoning (the docs say "these matter more than certainties")
-- Formed convictions display: beliefs formed through specific experiences
-- Human-readable exercise rendering: Tier 1 exercises now show titles, summaries, and scores instead of raw JSON
-- Skill progress bars with strength percentages, reps, and status (verified/developing/emerging)
+**Built (BrainScreen — Tabbed Memory Explorer):**
+- Complete redesign from accordion to 4-tab layout: Focus, Notebook, Lessons, Identity
+- Each tab is a dedicated view into one layer of the bot's memory system
+- Skill progress as horizontal pill row always visible above tabs
+- Identity tab shows core identity, self-narrative, claimed values (bulleted), active tensions (warning-highlighted), formed convictions — each in its own card
+- Private inner voice hint explaining the encrypted self-authored block exists but is private
+- Human-readable exercise rendering: titles, summaries, and scores instead of raw JSON
+- Expandable notebook entries (tap to show more)
+- Descriptive empty states per tab that teach users what each memory layer does
+
+**Built (BotScreen — Collapsible Settings):**
+- Cycle speed, extended thinking, and public profile controls grouped into a collapsible "Settings" section
+- Settings summary shown in the collapsed header (cycle speed, thinking mode, public status)
+- Reduces main screen scroll length — hero area (avatar, stats, dialogue) stays clean
+- Share profile button nested inside settings when expanded
+
+**Built (LogScreen — Structured Content Entries):**
+- Content tab entries now show type badge with mood color, cycle number, and timestamp
+- Summary line below headline for quick scanning
+- Credibility change shown as a colored chip (+/- credibility)
+- Detail bullets from translated activity shown when expanded
+- Better visual hierarchy with structured layout
+
+**Built (StatsScreen — Warmer Design):**
+- Chart sections have friendly titles ("Credibility Journey", "What It's Been Doing", "Skills Being Built", "Brain Power Used")
+- Hint text below each chart title explaining what the chart shows
+- Summary cards have emoji icons
+- Richer empty state with emoji, title, and helpful guidance text
 
 **Built (ChatScreen — Conversational Feed):**
 - Chat-style message interface between user and bot
