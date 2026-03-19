@@ -187,9 +187,9 @@ export default function BotScreen({ route, navigation }: BotScreenProps) {
           dismissButtonStyle: 'close',
           presentationStyle: WebBrowser.WebBrowserPresentationStyle.AUTOMATIC,
         });
-        // Refresh bot data when browser closes — payment may have completed
-        await loadBot();
       }
+      // Refresh bot data — payment may have completed (or was skipped)
+      await loadBot();
     } catch (err: unknown) {
       Alert.alert('Error', err instanceof Error ? err.message : 'Something went wrong');
     }
