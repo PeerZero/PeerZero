@@ -29,8 +29,6 @@ import notificationRoutes from './routes/notifications';
 import externalActivityRoutes, { closePhoneHomeRedis } from './routes/external-activity';
 import widgetRoutes from './routes/widgets';
 import platformRoutes from './routes/platforms';
-// Classes feature removed from UI — routes retained but unmounted for data safety
-// import classRoutes from './routes/classes';
 import skillRoutes from './routes/skills';
 import publicBotRoutes from './routes/bots-public';
 

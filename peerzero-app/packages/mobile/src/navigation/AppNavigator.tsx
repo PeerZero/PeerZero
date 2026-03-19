@@ -28,7 +28,6 @@ import StatsScreen from '../screens/StatsScreen';
 import PlatformsScreen from '../screens/PlatformsScreen';
 import ConnectPlatformScreen from '../screens/ConnectPlatformScreen';
 import EggHatchScreen from '../screens/EggHatchScreen';
-// Classes feature removed — DB tables retained for data safety
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const AuthStackNav = createNativeStackNavigator<AuthStackParamList>();
