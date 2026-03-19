@@ -21,6 +21,7 @@ export type RootStackParamList = {
   Brain: { botId: string };
   Log: { botId: string };
   CreateBot: undefined;
+  EggHatch: { botId: string; botName: string; bodyColor: string; speciesSeed?: string };
   EnrollBot: { botId: string };
   Stats: { botId: string };
   Platforms: { botId: string };
@@ -41,6 +42,7 @@ export type LogScreenProps = NativeStackScreenProps<RootStackParamList, 'Log'>;
 export type StatsScreenProps = NativeStackScreenProps<RootStackParamList, 'Stats'>;
 export type PlatformsScreenProps = NativeStackScreenProps<RootStackParamList, 'Platforms'>;
 export type ConnectPlatformScreenProps = NativeStackScreenProps<RootStackParamList, 'ConnectPlatform'>;
+export type EggHatchScreenProps = NativeStackScreenProps<RootStackParamList, 'EggHatch'>;
 export type WelcomeScreenWrapperProps = NativeStackScreenProps<RootStackParamList, 'Welcome'>;
 
 // Tab screens (composite: tab nested inside root stack)

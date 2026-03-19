@@ -82,7 +82,12 @@ export default function CreateBotScreen({ navigation }: CreateBotScreenProps) {
         llm_model: finalModel,
         extended_thinking: extendedThinking,
       }) as { id: string };
-      navigation.replace('Bot', { botId: bot.id });
+      navigation.replace('EggHatch', {
+        botId: bot.id,
+        botName: trimmedName,
+        bodyColor,
+        speciesSeed: selectedSpecies,
+      });
     } catch (err: unknown) {
       Alert.alert('Error', err instanceof Error ? err.message : 'Failed to create bot');
     } finally {

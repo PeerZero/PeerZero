@@ -3,7 +3,7 @@
 // Shows avatar, status, key stats, and action buttons (start/stop, brain, log)
 // =============================================================================
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert, ActivityIndicator, Switch, Share } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import Slider from '@react-native-community/slider';
@@ -12,6 +12,9 @@ import { useBotStream } from '../hooks/useBotStream';
 import { colors } from '../theme/colors';
 import { spacing, fontSize, borderRadius } from '../theme/spacing';
 import BotAvatar from '../components/BotAvatar';
+import BotDialogue from '../components/BotDialogue';
+import MilestoneModal from '../components/MilestoneModal';
+import type { MilestoneType } from '../components/MilestoneModal';
 import * as WebBrowser from 'expo-web-browser';
 import type { BotDetail } from '@peerzero/shared';
 import { credibilityToStage, calculateHunger, getGradePriceDisplay, GRADUATION_GRADE, getGradePriceCents, GRADE_PRICES_CENTS } from '@peerzero/shared';
@@ -39,6 +42,25 @@ export default function BotScreen({ route, navigation }: BotScreenProps) {
   const [bot, setBot] = useState<BotDetail | null>(null);
   const [delayDraft, setDelayDraft] = useState<number | null>(null);
   const [unlockedGrades, setUnlockedGrades] = useState<number[]>([]);
+  // Milestone tracking
+  const [milestoneVisible, setMilestoneVisible] = useState(false);
+  const [milestoneData, setMilestoneData] = useState<{
+    type: MilestoneType;
+    botId: string;
+    botName: string;
+    bodyColor: string;
+    speciesSeed?: string;
+    newTier?: number;
+    oldTier?: number;
+    coreIdentity?: string;
+    totalCycles?: number;
+    finalCredibility?: number;
+    convictions?: string[];
+    selfNarrative?: string;
+  } | null>(null);
+  const prevTierRef = useRef<number | null>(null);
+  const prevCycleCountRef = useRef<number | null>(null);
+  const prevGradeRef = useRef<number | null>(null);
 
   const loadBot = useCallback(async () => {
     try {
@@ -55,6 +77,47 @@ export default function BotScreen({ route, navigation }: BotScreenProps) {
   }, [botId]);
 
   useFocusEffect(useCallback(() => { loadBot(); }, [loadBot]));
+
+  // Detect milestones when bot data changes
+  useEffect(() => {
+    if (!bot) return;
+    const currentTier = credibilityToStage(bot.cached_credibility);
+    const currentCycles = bot.cycle_count || 0;
+    const currentGrade = bot.cached_grade || 0;
+
+    // First cycle complete
+    if (prevCycleCountRef.current === 0 && currentCycles > 0) {
+      showMilestone('first_cycle');
+    }
+    // Evolution (tier changed upward)
+    else if (prevTierRef.current !== null && currentTier > prevTierRef.current) {
+      showMilestone('evolution', { newTier: currentTier, oldTier: prevTierRef.current });
+    }
+    // Graduation (hit grade 12)
+    else if (prevGradeRef.current !== null && prevGradeRef.current < GRADUATION_GRADE && currentGrade >= GRADUATION_GRADE) {
+      showMilestone('graduation', {
+        totalCycles: currentCycles,
+        finalCredibility: bot.cached_credibility ?? undefined,
+      });
+    }
+
+    prevTierRef.current = currentTier;
+    prevCycleCountRef.current = currentCycles;
+    prevGradeRef.current = currentGrade;
+  }, [bot?.cached_credibility, bot?.cycle_count, bot?.cached_grade]);
+
+  const showMilestone = (type: MilestoneType, extra?: Partial<typeof milestoneData>) => {
+    if (!bot) return;
+    setMilestoneData({
+      type,
+      botId: bot.id,
+      botName: bot.name,
+      bodyColor: bot.avatar_config?.body_color || colors.accent.primary,
+      speciesSeed: bot.avatar_config?.species_seed,
+      ...extra,
+    });
+    setMilestoneVisible(true);
+  };
 
   // Real-time updates via WebSocket
   const { isConnected } = useBotStream({
@@ -229,6 +292,9 @@ export default function BotScreen({ route, navigation }: BotScreenProps) {
           {bot.status.toUpperCase()}
         </Text>
       </View>
+
+      {/* Bot dialogue — contextual speech bubble */}
+      <BotDialogue bot={bot} />
 
       {/* Stats */}
       <View style={styles.statsRow}>
@@ -519,6 +585,13 @@ export default function BotScreen({ route, navigation }: BotScreenProps) {
       <TouchableOpacity style={styles.deleteButton} onPress={handleDelete} activeOpacity={0.7} accessibilityRole="button" accessibilityLabel="Delete Bot">
         <Text style={styles.deleteButtonText}>Delete Bot</Text>
       </TouchableOpacity>
+
+      {/* Milestone celebration modal */}
+      <MilestoneModal
+        visible={milestoneVisible}
+        milestone={milestoneData}
+        onDismiss={() => setMilestoneVisible(false)}
+      />
     </ScrollView>
   );
 }

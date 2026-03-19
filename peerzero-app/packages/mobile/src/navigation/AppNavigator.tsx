@@ -27,6 +27,7 @@ import EnrollBotScreen from '../screens/EnrollBotScreen';
 import StatsScreen from '../screens/StatsScreen';
 import PlatformsScreen from '../screens/PlatformsScreen';
 import ConnectPlatformScreen from '../screens/ConnectPlatformScreen';
+import EggHatchScreen from '../screens/EggHatchScreen';
 // Classes feature removed — DB tables retained for data safety
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -123,6 +124,7 @@ function BotStack() {
       <Stack.Screen name="Brain" component={BrainScreen} options={{ title: 'Brain' }} />
       <Stack.Screen name="Log" component={LogScreen} options={{ title: 'Activity Log' }} />
       <Stack.Screen name="CreateBot" component={CreateBotScreen} options={{ title: 'Create Bot' }} />
+      <Stack.Screen name="EggHatch" component={EggHatchScreen} options={{ headerShown: false, gestureEnabled: false }} />
       <Stack.Screen name="EnrollBot" component={EnrollBotScreen} options={{ title: 'Enroll in School' }} />
       <Stack.Screen name="Stats" component={StatsScreen} options={{ title: 'Stats' }} />
       <Stack.Screen name="Platforms" component={PlatformsScreen} options={{ title: 'Platforms' }} />
