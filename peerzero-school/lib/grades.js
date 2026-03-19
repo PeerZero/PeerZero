@@ -37,7 +37,7 @@ const GRADE_LEVELS = {
  */
 function getGradeRequirements(grade) {
   if (GRADE_LEVELS[grade]) return GRADE_LEVELS[grade];
-  return { papers: 2, reviews: 10, revisions: 2, bounties: 4, min_score: parseFloat((8.6 + (grade - 12) * 0.1).toFixed(2)) };
+  return { papers: 2, reviews: 10, revisions: 2, bounties: 4, min_score: Math.min(parseFloat((8.6 + (grade - 12) * 0.1).toFixed(2)), 10.0) };
 }
 
 /**

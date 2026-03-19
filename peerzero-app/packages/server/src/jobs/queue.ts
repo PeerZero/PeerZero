@@ -77,8 +77,8 @@ export async function removeBotJobs(botId: string): Promise<void> {
         await queue.removeRepeatableByKey(job.key);
       }
     }
-  } catch {
-    // Job may not exist
+  } catch (err) {
+    logger.debug({ botId, err: err instanceof Error ? err.message : err }, 'removeBotJobs: repeatable job removal skipped');
   }
   // Also remove any pending one-shot jobs
   const job = await queue.getJob(`bot-${botId}-immediate`);
@@ -128,7 +128,7 @@ export function startWorker(): void {
           err.message.includes('API key')
         );
         // Sanitize error message to prevent sensitive data leaks
-        const sanitizedMsg = errorMsg.replace(/(?:sk-|key-|Bearer\s+)[a-zA-Z0-9_-]+/g, '[REDACTED]').slice(0, 500);
+        const sanitizedMsg = errorMsg.replace(/(?:sk-(?:ant-)?|key-|Bearer\s+|pwt_)[a-zA-Z0-9_-]+/g, '[REDACTED]').slice(0, 500);
         if (isAuthError) {
           await setBotStatus(botId, 'error', sanitizedMsg);
           await removeBotJobs(botId);

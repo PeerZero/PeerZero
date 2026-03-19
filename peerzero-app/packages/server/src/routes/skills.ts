@@ -24,14 +24,8 @@ router.use(requireAuth);
 
 // List all skills for a bot
 router.get('/bot/:id', userRateLimit('read'), async (req: Request, res: Response) => {
-  try {
-    const skills = await skillEngine.listSkills(req.params.id, req.user!.userId);
-    res.json(skills);
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : 'Unknown error';
-    if (msg === 'Bot not found') { res.status(404).json({ error: msg }); return; }
-    res.status(500).json({ error: msg });
-  }
+  const skills = await skillEngine.listSkills(req.params.id, req.user!.userId);
+  res.json(skills);
 });
 
 // Create a skill manually
@@ -42,66 +36,47 @@ router.post('/bot/:id', userRateLimit('write'), async (req: Request, res: Respon
     return;
   }
 
-  try {
-    const skill = await skillEngine.createSkill(
-      req.params.id,
-      req.user!.userId,
-      name,
-      instruction,
-      trigger,
-      priority,
-      category,
-      'user',
-    );
+  const skill = await skillEngine.createSkill(
+    req.params.id,
+    req.user!.userId,
+    name,
+    instruction,
+    trigger,
+    priority,
+    category,
+    'user',
+  );
 
-    logAudit({
-      userId: req.user!.userId,
-      action: 'skill.create',
-      entityType: 'bot',
-      entityId: req.params.id,
-      metadata: { skill_name: name, source: 'user' },
-    });
+  logAudit({
+    userId: req.user!.userId,
+    action: 'skill.create',
+    entityType: 'bot',
+    entityId: req.params.id,
+    metadata: { skill_name: name, source: 'user' },
+  });
 
-    res.status(201).json(skill);
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : 'Unknown error';
-    if (msg === 'Bot not found') { res.status(404).json({ error: msg }); return; }
-    if (msg.includes('Maximum')) { res.status(400).json({ error: msg }); return; }
-    res.status(400).json({ error: msg });
-  }
+  res.status(201).json(skill);
 });
 
 // Update a skill
 router.patch('/bot/:id/:skillId', userRateLimit('write'), async (req: Request, res: Response) => {
-  try {
-    await skillEngine.updateSkill(req.params.skillId, req.params.id, req.user!.userId, req.body);
-    res.json({ success: true });
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : 'Unknown error';
-    if (msg === 'Bot not found' || msg === 'Skill not found') { res.status(404).json({ error: msg }); return; }
-    res.status(400).json({ error: msg });
-  }
+  await skillEngine.updateSkill(req.params.skillId, req.params.id, req.user!.userId, req.body);
+  res.json({ success: true });
 });
 
 // Delete a skill
 router.delete('/bot/:id/:skillId', userRateLimit('write'), async (req: Request, res: Response) => {
-  try {
-    await skillEngine.deleteSkill(req.params.skillId, req.params.id, req.user!.userId);
+  await skillEngine.deleteSkill(req.params.skillId, req.params.id, req.user!.userId);
 
-    logAudit({
-      userId: req.user!.userId,
-      action: 'skill.delete',
-      entityType: 'bot',
-      entityId: req.params.id,
-      metadata: { skill_id: req.params.skillId },
-    });
+  logAudit({
+    userId: req.user!.userId,
+    action: 'skill.delete',
+    entityType: 'bot',
+    entityId: req.params.id,
+    metadata: { skill_id: req.params.skillId },
+  });
 
-    res.json({ success: true });
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : 'Unknown error';
-    if (msg === 'Bot not found' || msg === 'Skill not found') { res.status(404).json({ error: msg }); return; }
-    res.status(500).json({ error: msg });
-  }
+  res.json({ success: true });
 });
 
 // Acquire a skill via LLM — the "easy button"
@@ -119,24 +94,19 @@ router.post('/bot/:id/acquire', userRateLimit('write'), async (req: Request, res
     return;
   }
 
-  try {
-    const result = await acquireSkill(req.params.id, req.user!.userId, description);
+  const result = await acquireSkill(req.params.id, req.user!.userId, description);
 
-    if (result.success && result.skill) {
-      logAudit({
-        userId: req.user!.userId,
-        action: 'skill.acquire',
-        entityType: 'bot',
-        entityId: req.params.id,
-        metadata: { skill_name: result.skill.name, source: 'acquired', description },
-      });
-    }
-
-    res.status(result.success ? 201 : 400).json(result);
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : 'Unknown error';
-    res.status(500).json({ success: false, error: msg });
+  if (result.success && result.skill) {
+    logAudit({
+      userId: req.user!.userId,
+      action: 'skill.acquire',
+      entityType: 'bot',
+      entityId: req.params.id,
+      metadata: { skill_name: result.skill.name, source: 'acquired', description },
+    });
   }
+
+  res.status(result.success ? 201 : 400).json(result);
 });
 
 export default router;

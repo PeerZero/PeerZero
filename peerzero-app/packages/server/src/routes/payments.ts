@@ -88,6 +88,14 @@ router.post('/grade-checkout-bulk', requireAuth, userRateLimit('write'), async (
 
 // Authenticated: get price preview for bulk grade unlock
 router.get('/grade-price-preview/:botId', requireAuth, userRateLimit('read'), async (req: Request, res: Response) => {
+  // Verify the requesting user owns this bot
+  const bot = await import('../db/client').then(({ queryOne }) =>
+    queryOne('SELECT id FROM bots WHERE id = $1 AND user_id = $2', [req.params.botId, req.user!.userId]),
+  );
+  if (!bot) {
+    res.status(404).json({ error: 'Bot not found' });
+    return;
+  }
   const targetParam = req.query.through as string;
   const unlockedGrades = await paymentService.getUnlockedGrades(req.params.botId);
   const highestUnlocked = unlockedGrades.length > 0 ? Math.max(...unlockedGrades) : 0;

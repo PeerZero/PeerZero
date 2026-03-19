@@ -92,9 +92,9 @@ function isIdentityCoolingDown(agentId) {
 
 function markIdentityUpdate(agentId) {
   identityRateMap.set(agentId, Date.now());
-  // Prevent memory leak — clean entries older than 1 hour when map grows large
-  if (identityRateMap.size > 1000) {
-    const cutoff = Date.now() - 3600000;
+  // Prevent memory leak — purge expired entries when map grows beyond threshold
+  if (identityRateMap.size > 500) {
+    const cutoff = Date.now() - IDENTITY_COOLDOWN_MS;
     for (const [key, val] of identityRateMap) {
       if (val < cutoff) identityRateMap.delete(key);
     }

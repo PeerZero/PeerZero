@@ -170,7 +170,15 @@ async function executeRevision(ctx: ActionContext): Promise<ActionResult> {
 
   // Get the reaffirmable papers to find the paper to revise
   const reaffirmable = ctx.profile.reaffirmable_papers || [];
-  const paperId = reaffirmable[0]?.id || 'unknown';
+  if (reaffirmable.length === 0) {
+    return {
+      rawRequest: revisionContent,
+      rawResponse: null,
+      translated: { headline: 'No papers to revise', summary: 'No eligible papers for revision.', details: [], mood: 'neutral' },
+      tokensUsed: llmResponse.tokens_used,
+    };
+  }
+  const paperId = reaffirmable[0].id;
 
   const schoolResult = await ctx.schoolAdapter.submitRevision(ctx.schoolCreds, paperId, revisionContent);
   if (!schoolResult || typeof schoolResult !== 'object') {
