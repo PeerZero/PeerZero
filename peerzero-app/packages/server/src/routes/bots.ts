@@ -102,7 +102,8 @@ router.post('/:id/start', userRateLimit('bot_control'), async (req: Request, res
 
 // Stop bot
 router.post('/:id/stop', userRateLimit('bot_control'), async (req: Request, res: Response) => {
-  await removeBotJobs(req.params.id);
+  // Always update DB status even if queue cleanup fails (stale locks)
+  await Promise.allSettled([removeBotJobs(req.params.id)]);
   await botService.setBotStatus(req.params.id, 'stopped');
   logAudit({ userId: req.user!.userId, action: 'bot.stop', entityType: 'bot', entityId: req.params.id, ipAddress: req.ip });
   res.json({ status: 'stopped' });

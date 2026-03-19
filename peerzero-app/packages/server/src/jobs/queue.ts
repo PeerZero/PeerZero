@@ -82,7 +82,21 @@ export async function removeBotJobs(botId: string): Promise<void> {
   }
   // Also remove any pending one-shot jobs
   const job = await queue.getJob(`bot-${botId}-immediate`);
-  if (job) await job.remove();
+  if (job) {
+    try {
+      await job.remove();
+    } catch (err) {
+      // Job may be locked by a dead worker — force-discard it
+      logger.debug({ botId, err: err instanceof Error ? err.message : err }, 'removeBotJobs: job.remove() failed, attempting discard');
+      try {
+        await job.moveToFailed(new Error('Force-removed: stale lock'), '0', false);
+        await job.remove();
+      } catch {
+        // Already moved or cleaned up — safe to ignore
+        logger.debug({ botId }, 'removeBotJobs: force-discard also failed, job will expire naturally');
+      }
+    }
+  }
 }
 
 /** Start the worker that processes bot cycle jobs. */
