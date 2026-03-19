@@ -161,7 +161,7 @@ export const bots = {
 
   get: (id: string) => apiFetch(`/bots/${id}`),
 
-  create: (data: { name: string; avatar_config: Record<string, unknown>; llm_api_key_id: string; llm_model?: string }) =>
+  create: (data: { name: string; avatar_config: Record<string, unknown>; llm_api_key_id: string; llm_model?: string; extended_thinking?: boolean }) =>
     apiFetch('/bots', { method: 'POST', body: JSON.stringify(data) }),
 
   update: (id: string, data: Record<string, unknown>) =>
