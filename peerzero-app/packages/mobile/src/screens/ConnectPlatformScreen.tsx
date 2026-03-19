@@ -27,7 +27,7 @@ export default function ConnectPlatformScreen({ route, navigation }: ConnectPlat
           const data = await platformsApi.registry() as PlatformRegistryEntry[];
           setRegistry(data.filter(p => p.is_active));
         } catch (err: unknown) {
-          Alert.alert('Error', err instanceof Error ? err.message : 'Something went wrong');
+          Alert.alert('Connection Error', err instanceof Error ? err.message : 'Could not load available platforms. Check your connection and try again.');
         } finally {
           setLoading(false);
         }
@@ -49,7 +49,7 @@ export default function ConnectPlatformScreen({ route, navigation }: ConnectPlat
       Alert.alert('Connected', `${selected.name} connected successfully.`);
       navigation.goBack();
     } catch (err: unknown) {
-      Alert.alert('Error', err instanceof Error ? err.message : 'Something went wrong');
+      Alert.alert('Connection Failed', err instanceof Error ? err.message : 'Could not connect to platform. Check your API key and try again.');
     } finally {
       setConnecting(false);
     }

@@ -152,6 +152,12 @@ export const auth = {
 
   deleteAccount: () =>
     apiFetch('/auth/account', { method: 'DELETE' }),
+
+  forgotPassword: (email: string) =>
+    apiFetch<{ message: string }>('/auth/forgot-password', { method: 'POST', body: JSON.stringify({ email }) }),
+
+  resetPassword: (email: string, code: string, newPassword: string) =>
+    apiFetch<{ message: string }>('/auth/reset-password', { method: 'POST', body: JSON.stringify({ email, code, new_password: newPassword }) }),
 };
 
 // ── Bots API ──

@@ -5,8 +5,9 @@ import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import type { CompositeScreenProps } from '@react-navigation/native';
 
 export type AuthStackParamList = {
-  Login: undefined;
+  Login: { message?: string } | undefined;
   Register: undefined;
+  ForgotPassword: undefined;
 };
 
 export type TabParamList = {
@@ -32,6 +33,7 @@ export type RootStackParamList = {
 // Auth stack screens
 export type LoginScreenProps = NativeStackScreenProps<AuthStackParamList, 'Login'>;
 export type RegisterScreenProps = NativeStackScreenProps<AuthStackParamList, 'Register'>;
+export type ForgotPasswordScreenProps = NativeStackScreenProps<AuthStackParamList, 'ForgotPassword'>;
 
 // Root stack screens
 export type BotScreenProps = NativeStackScreenProps<RootStackParamList, 'Bot'>;

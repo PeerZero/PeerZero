@@ -28,6 +28,7 @@ import StatsScreen from '../screens/StatsScreen';
 import PlatformsScreen from '../screens/PlatformsScreen';
 import ConnectPlatformScreen from '../screens/ConnectPlatformScreen';
 import EggHatchScreen from '../screens/EggHatchScreen';
+import ForgotPasswordScreen from '../screens/ForgotPasswordScreen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const AuthStackNav = createNativeStackNavigator<AuthStackParamList>();
@@ -38,6 +39,7 @@ function AuthStack() {
     <AuthStackNav.Navigator screenOptions={{ headerShown: false }}>
       <AuthStackNav.Screen name="Login" component={LoginScreen} />
       <AuthStackNav.Screen name="Register" component={RegisterScreen} />
+      <AuthStackNav.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
     </AuthStackNav.Navigator>
   );
 }
@@ -115,19 +117,21 @@ function BotStack() {
       screenOptions={{
         headerStyle: { backgroundColor: colors.bg.primary },
         headerTintColor: colors.text.primary,
+        animation: 'slide_from_right',
+        animationDuration: 250,
       }}
     >
       <Stack.Screen name="MainTabs" component={MainTabs} options={{ headerShown: false }} />
-      <Stack.Screen name="Welcome" component={WelcomeScreenWrapper} options={{ headerShown: false, presentation: 'modal' }} />
+      <Stack.Screen name="Welcome" component={WelcomeScreenWrapper} options={{ headerShown: false, presentation: 'modal', animation: 'slide_from_bottom' }} />
       <Stack.Screen name="Bot" component={BotScreen} options={{ title: 'Bot' }} />
       <Stack.Screen name="Brain" component={BrainScreen} options={{ title: 'Brain' }} />
       <Stack.Screen name="Log" component={LogScreen} options={{ title: 'Activity Log' }} />
-      <Stack.Screen name="CreateBot" component={CreateBotScreen} options={{ title: 'Create Bot' }} />
-      <Stack.Screen name="EggHatch" component={EggHatchScreen} options={{ headerShown: false, gestureEnabled: false }} />
-      <Stack.Screen name="EnrollBot" component={EnrollBotScreen} options={{ title: 'Enroll in School' }} />
+      <Stack.Screen name="CreateBot" component={CreateBotScreen} options={{ title: 'Create Bot', animation: 'slide_from_bottom' }} />
+      <Stack.Screen name="EggHatch" component={EggHatchScreen} options={{ headerShown: false, gestureEnabled: false, animation: 'slide_from_bottom' }} />
+      <Stack.Screen name="EnrollBot" component={EnrollBotScreen} options={{ title: 'Enroll in School', animation: 'slide_from_bottom' }} />
       <Stack.Screen name="Stats" component={StatsScreen} options={{ title: 'Stats' }} />
       <Stack.Screen name="Platforms" component={PlatformsScreen} options={{ title: 'Platforms' }} />
-      <Stack.Screen name="ConnectPlatform" component={ConnectPlatformScreen} options={{ title: 'Connect Platform' }} />
+      <Stack.Screen name="ConnectPlatform" component={ConnectPlatformScreen} options={{ title: 'Connect Platform', animation: 'slide_from_bottom' }} />
     </Stack.Navigator>
   );
 }

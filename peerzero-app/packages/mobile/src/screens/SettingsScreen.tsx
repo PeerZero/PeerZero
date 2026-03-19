@@ -10,12 +10,15 @@ import { apiKeys as keysApi, notifications as notifApi, auth as authApi, widgets
 import { colors } from '../theme/colors';
 import { spacing, fontSize, borderRadius } from '../theme/spacing';
 import TutorialTip from '../components/TutorialTip';
+import { useToast } from '../components/Toast';
+import * as Haptics from 'expo-haptics';
 import { useTutorial } from '../hooks/useTutorial';
 import { NOTIFICATION_TYPES, NOTIFICATION_LABELS, DEFAULT_NOTIFICATION_PREFS } from '@peerzero/shared';
 import type { ApiKeyInfo, BotSummary } from '@peerzero/shared';
 
 export default function SettingsScreen() {
   const { user, logout, refreshUser } = useAuth();
+  const { showToast } = useToast();
   const { resetTips, skippedAll } = useTutorial();
   const [keys, setKeys] = useState<ApiKeyInfo[]>([]);
   const [showAddKey, setShowAddKey] = useState(false);
@@ -145,6 +148,7 @@ export default function SettingsScreen() {
       setNewKey('');
       setNewLabel('');
       setShowAddKey(false);
+      showToast('API key added', 'success');
       await loadKeys();
     } catch (err: unknown) {
       Alert.alert('Error', err instanceof Error ? err.message : 'Failed to add key');
@@ -159,6 +163,7 @@ export default function SettingsScreen() {
         onPress: async () => {
           try {
             await keysApi.delete(id);
+            showToast('API key deleted', 'success');
             await loadKeys();
           } catch (err: unknown) {
             Alert.alert('Error', err instanceof Error ? err.message : 'Something went wrong');
@@ -176,6 +181,7 @@ export default function SettingsScreen() {
     try {
       await authApi.updateProfile({ display_name: displayName.trim() });
       setEditingName(false);
+      showToast('Display name updated', 'success');
       if (refreshUser) refreshUser();
     } catch (err: unknown) {
       Alert.alert('Error', err instanceof Error ? err.message : 'Failed to update profile');
@@ -197,7 +203,7 @@ export default function SettingsScreen() {
     }
     try {
       await authApi.changePassword({ current_password: currentPassword, new_password: newPassword });
-      Alert.alert('Success', 'Password changed. Please log in again.');
+      showToast('Password changed. Please log in again.', 'success');
       setShowPasswordChange(false);
       setCurrentPassword('');
       setNewPassword('');
@@ -209,6 +215,7 @@ export default function SettingsScreen() {
   };
 
   const handleDeleteAccount = () => {
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
     Alert.alert(
       'Delete Account',
       'This will permanently delete your account, all bots, all memory, and all activity. This cannot be undone.',
@@ -515,7 +522,7 @@ export default function SettingsScreen() {
           style={styles.resetTipsButton}
           onPress={() => {
             resetTips();
-            Alert.alert('Tips Reset', 'Tutorial tips will appear again on each screen.');
+            showToast('Tutorial tips will appear again on each screen.', 'info');
           }}
           accessibilityRole="button"
           accessibilityLabel="Reset Tutorial Tips"
@@ -525,7 +532,7 @@ export default function SettingsScreen() {
       )}
 
       {/* Logout */}
-      <TouchableOpacity style={styles.logoutButton} onPress={logout} accessibilityRole="button" accessibilityLabel="Sign Out">
+      <TouchableOpacity style={styles.logoutButton} onPress={() => { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning); logout(); }} accessibilityRole="button" accessibilityLabel="Sign Out">
         <Text style={styles.logoutText}>Sign Out</Text>
       </TouchableOpacity>
 

@@ -14,6 +14,7 @@ import TutorialTip from '../components/TutorialTip';
 import type { BotSummary } from '@peerzero/shared';
 import { credibilityToStage, calculateHunger } from '@peerzero/shared';
 import { timeAgo } from '../utils/timeAgo';
+import * as Haptics from 'expo-haptics';
 import type { LabScreenProps } from '../navigation/types';
 
 const STATUS_COLORS: Record<string, string> = {
@@ -61,6 +62,7 @@ export default function LabScreen({ navigation }: LabScreenProps) {
   });
 
   const handleLongPress = (bot: BotSummary) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     const actions: Array<{ text: string; onPress?: () => void; style?: 'cancel' | 'destructive' }> = [];
 
     if (bot.status === 'running') {
@@ -263,7 +265,7 @@ export default function LabScreen({ navigation }: LabScreenProps) {
       {botList.length > 0 && (
         <TouchableOpacity
           style={styles.fab}
-          onPress={() => navigation.navigate('CreateBot')}
+          onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); navigation.navigate('CreateBot'); }}
           activeOpacity={0.85}
           accessibilityRole="button"
           accessibilityLabel="Create new bot"

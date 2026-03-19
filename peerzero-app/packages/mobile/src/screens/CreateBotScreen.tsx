@@ -12,6 +12,7 @@ import { AVATAR_COLOR_PRESETS, SUPPORTED_MODELS, SPECIES_PRESETS } from '@peerze
 import type { ApiKeyInfo } from '@peerzero/shared';
 import BotAvatar from '../components/BotAvatar';
 import TutorialTip from '../components/TutorialTip';
+import * as Haptics from 'expo-haptics';
 import type { CreateBotScreenProps } from '../navigation/types';
 
 const MAX_NAME_LENGTH = 50;
@@ -58,6 +59,7 @@ export default function CreateBotScreen({ navigation }: CreateBotScreenProps) {
   const modelMatchesKey = availableModels.some(m => m.id === selectedModel);
 
   const handleCreate = async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     const trimmedName = name.trim();
     if (!trimmedName) {
       Alert.alert('Name Required', 'Give your bot a name to get started.');
@@ -145,7 +147,7 @@ export default function CreateBotScreen({ navigation }: CreateBotScreenProps) {
                 styles.speciesCard,
                 selectedSpecies === species.seed && styles.speciesCardSelected,
               ]}
-              onPress={() => setSelectedSpecies(species.seed)}
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setSelectedSpecies(species.seed); }}
               accessibilityRole="radio"
               accessibilityLabel={`${species.name} — ${species.desc}`}
               accessibilityState={{ selected: selectedSpecies === species.seed }}

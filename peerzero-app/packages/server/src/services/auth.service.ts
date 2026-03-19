@@ -12,6 +12,17 @@ import { JwtPayload } from '../middleware/auth';
 
 const SALT_ROUNDS = 12;
 
+// ── In-memory password reset codes ──
+const resetCodes = new Map<string, { code: string; expiresAt: number }>();
+const RESET_CODE_TTL = 15 * 60 * 1000; // 15 minutes
+
+function cleanupExpiredCodes() {
+  const now = Date.now();
+  for (const [email, entry] of resetCodes) {
+    if (entry.expiresAt <= now) resetCodes.delete(email);
+  }
+}
+
 export interface TokenPair {
   accessToken: string;
   refreshToken: string;
@@ -146,6 +157,47 @@ export async function deleteAccount(userId: string): Promise<void> {
   // ON DELETE CASCADE handles: bots, keys, tokens, entitlements, purchases, push_tokens, notification_prefs
   // BullMQ jobs must be cleaned up by the caller before invoking this.
   await query('DELETE FROM users WHERE id = $1', [userId]);
+}
+
+export async function forgotPassword(email: string): Promise<void> {
+  cleanupExpiredCodes();
+
+  // Check if user exists (but don't reveal this to the caller)
+  const user = await queryOne('SELECT id FROM users WHERE email = $1', [email]);
+  if (user) {
+    const code = String(Math.floor(100000 + Math.random() * 900000)); // 6-digit code
+    resetCodes.set(email.toLowerCase(), { code, expiresAt: Date.now() + RESET_CODE_TTL });
+    console.log(`[AUTH] Password reset code for ${email}: ${code}`);
+  }
+}
+
+export async function resetPassword(email: string, code: string, newPassword: string): Promise<void> {
+  cleanupExpiredCodes();
+
+  if (!newPassword || typeof newPassword !== 'string' || newPassword.length < 8) {
+    throw new AppError(400, 'New password must be at least 8 characters');
+  }
+
+  const entry = resetCodes.get(email.toLowerCase());
+  if (!entry || entry.code !== code) {
+    throw new AppError(400, 'Invalid or expired reset code');
+  }
+  if (entry.expiresAt <= Date.now()) {
+    resetCodes.delete(email.toLowerCase());
+    throw new AppError(400, 'Invalid or expired reset code');
+  }
+
+  const user = await queryOne<{ id: string }>('SELECT id FROM users WHERE email = $1', [email]);
+  if (!user) throw new AppError(400, 'Invalid or expired reset code');
+
+  const newHash = await bcrypt.hash(newPassword, SALT_ROUNDS);
+  await query('UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2', [newHash, user.id]);
+
+  // Revoke all refresh tokens — force re-login on all devices
+  await revokeRefreshTokens(user.id);
+
+  // Clear the reset code
+  resetCodes.delete(email.toLowerCase());
 }
 
 export async function getUserProfile(userId: string) {

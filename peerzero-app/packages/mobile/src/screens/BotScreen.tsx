@@ -4,7 +4,7 @@
 // =============================================================================
 
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert, ActivityIndicator, Switch, Share } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert, ActivityIndicator, Switch, Share, RefreshControl } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import Slider from '@react-native-community/slider';
 import { bots as botsApi, payments as paymentsApi } from '../services/api';
@@ -13,10 +13,12 @@ import { colors } from '../theme/colors';
 import { spacing, fontSize, borderRadius } from '../theme/spacing';
 import BotAvatar from '../components/BotAvatar';
 import BotDialogue from '../components/BotDialogue';
+import SkeletonLoader from '../components/SkeletonLoader';
 import TutorialTip from '../components/TutorialTip';
 import MilestoneModal from '../components/MilestoneModal';
 import type { MilestoneType } from '../components/MilestoneModal';
 import * as WebBrowser from 'expo-web-browser';
+import * as Haptics from 'expo-haptics';
 import type { BotDetail } from '@peerzero/shared';
 import { credibilityToStage, calculateHunger, getGradePriceDisplay, GRADUATION_GRADE, getGradePriceCents, GRADE_PRICES_CENTS } from '@peerzero/shared';
 import type { BotScreenProps } from '../navigation/types';
@@ -132,9 +134,19 @@ export default function BotScreen({ route, navigation }: BotScreenProps) {
   });
 
   const [startStopLoading, setStartStopLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [gradeUnlockLoading, setGradeUnlockLoading] = useState(false);
+  const [retryLoading, setRetryLoading] = useState(false);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await loadBot();
+    setRefreshing(false);
+  }, [loadBot]);
 
   const handleStartStop = async () => {
     if (!bot || startStopLoading) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     const wasRunning = bot.status === 'running';
     setStartStopLoading(true);
     // Optimistic update — flip status immediately so the button responds instantly
@@ -156,11 +168,16 @@ export default function BotScreen({ route, navigation }: BotScreenProps) {
   };
 
   const handleRetry = async () => {
+    if (retryLoading) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setRetryLoading(true);
     try {
       await botsApi.start(botId);
       await loadBot();
     } catch (err: unknown) {
       Alert.alert('Error', err instanceof Error ? err.message : 'Something went wrong');
+    } finally {
+      setRetryLoading(false);
     }
   };
 
@@ -187,6 +204,9 @@ export default function BotScreen({ route, navigation }: BotScreenProps) {
   };
 
   const handleGradeUnlock = async (mode: 'next' | 'graduation') => {
+    if (gradeUnlockLoading) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setGradeUnlockLoading(true);
     try {
       const result = mode === 'next'
         ? await paymentsApi.gradeCheckout(botId) as { session_url: string }
@@ -202,6 +222,8 @@ export default function BotScreen({ route, navigation }: BotScreenProps) {
       await loadBot();
     } catch (err: unknown) {
       Alert.alert('Error', err instanceof Error ? err.message : 'Something went wrong');
+    } finally {
+      setGradeUnlockLoading(false);
     }
   };
 
@@ -254,9 +276,38 @@ export default function BotScreen({ route, navigation }: BotScreenProps) {
   };
 
   if (!bot) return (
-    <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
-      <ActivityIndicator size="large" color={colors.accent.primary} />
-      <Text style={{ color: colors.text.secondary, marginTop: 12 }}>Loading bot...</Text>
+    <View style={[styles.container, { alignItems: 'center', paddingTop: spacing.xl }]}>
+      {/* Avatar skeleton */}
+      <SkeletonLoader width={140} height={140} borderRadius={70} />
+      {/* Name skeleton */}
+      <SkeletonLoader width={160} height={22} borderRadius={6} style={{ marginTop: spacing.md }} />
+      {/* School name skeleton */}
+      <SkeletonLoader width={120} height={14} borderRadius={4} style={{ marginTop: spacing.sm }} />
+      {/* Status badge skeleton */}
+      <SkeletonLoader width={80} height={28} borderRadius={999} style={{ marginTop: spacing.md }} />
+      {/* Stats row skeleton */}
+      <View style={{ flexDirection: 'row', marginTop: spacing.xl, gap: spacing.xl }}>
+        <View style={{ alignItems: 'center' }}>
+          <SkeletonLoader width={60} height={28} borderRadius={6} />
+          <SkeletonLoader width={50} height={10} borderRadius={4} style={{ marginTop: spacing.xs }} />
+        </View>
+        <View style={{ alignItems: 'center' }}>
+          <SkeletonLoader width={60} height={28} borderRadius={6} />
+          <SkeletonLoader width={50} height={10} borderRadius={4} style={{ marginTop: spacing.xs }} />
+        </View>
+        <View style={{ alignItems: 'center' }}>
+          <SkeletonLoader width={60} height={28} borderRadius={6} />
+          <SkeletonLoader width={50} height={10} borderRadius={4} style={{ marginTop: spacing.xs }} />
+        </View>
+      </View>
+      {/* Action button skeleton */}
+      <SkeletonLoader width="100%" height={48} borderRadius={borderRadius.md} style={{ marginTop: spacing.xl, paddingHorizontal: spacing.xl }} />
+      {/* Nav buttons skeleton */}
+      <View style={{ flexDirection: 'row', gap: spacing.sm, marginTop: spacing.lg, width: '100%', paddingHorizontal: spacing.xl }}>
+        <SkeletonLoader width={0} height={80} borderRadius={borderRadius.md} style={{ flex: 1 }} />
+        <SkeletonLoader width={0} height={80} borderRadius={borderRadius.md} style={{ flex: 1 }} />
+        <SkeletonLoader width={0} height={80} borderRadius={borderRadius.md} style={{ flex: 1 }} />
+      </View>
     </View>
   );
 
@@ -271,7 +322,7 @@ export default function BotScreen({ route, navigation }: BotScreenProps) {
     : isRunning ? colors.accent.warning : colors.text.tertiary;
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <ScrollView style={styles.container} contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#6C5CE7" colors={['#6C5CE7']} />}>
       <TutorialTip
         tipId="bot_overview"
         title="Your Bot's Home"
@@ -388,8 +439,12 @@ export default function BotScreen({ route, navigation }: BotScreenProps) {
         <View style={styles.errorBox}>
           <Text style={styles.errorTitle}>Error</Text>
           <Text style={styles.errorText} selectable>{bot.error_message}</Text>
-          <TouchableOpacity style={styles.retryButton} onPress={handleRetry} accessibilityRole="button" accessibilityLabel="Retry starting the bot">
-            <Text style={styles.retryButtonText}>Retry</Text>
+          <TouchableOpacity style={[styles.retryButton, retryLoading && styles.actionButtonDisabled]} onPress={handleRetry} disabled={retryLoading} accessibilityRole="button" accessibilityLabel="Retry starting the bot">
+            {retryLoading ? (
+              <ActivityIndicator color="#fff" size="small" />
+            ) : (
+              <Text style={styles.retryButtonText}>Retry</Text>
+            )}
           </TouchableOpacity>
         </View>
       )}
@@ -419,21 +474,30 @@ export default function BotScreen({ route, navigation }: BotScreenProps) {
             <Text style={styles.gradeUnlockText}>
               Your bot completed the previous grade! Unlock the next one to keep learning.
             </Text>
-            <TouchableOpacity style={styles.gradeUnlockButton} onPress={() => handleGradeUnlock('next')} accessibilityRole="button" accessibilityLabel={`Unlock Grade ${currentGrade} for ${getGradePriceDisplay(currentGrade)}`}>
-              <Text style={styles.gradeUnlockButtonText}>
-                Unlock Grade {currentGrade} — {getGradePriceDisplay(currentGrade)}
-              </Text>
+            <TouchableOpacity style={[styles.gradeUnlockButton, gradeUnlockLoading && styles.actionButtonDisabled]} onPress={() => handleGradeUnlock('next')} disabled={gradeUnlockLoading} accessibilityRole="button" accessibilityLabel={`Unlock Grade ${currentGrade} for ${getGradePriceDisplay(currentGrade)}`}>
+              {gradeUnlockLoading ? (
+                <ActivityIndicator color="#fff" size="small" />
+              ) : (
+                <Text style={styles.gradeUnlockButtonText}>
+                  Unlock Grade {currentGrade} — {getGradePriceDisplay(currentGrade)}
+                </Text>
+              )}
             </TouchableOpacity>
             {canShowGraduation && currentGrade < GRADUATION_GRADE && (
               <TouchableOpacity
-                style={[styles.gradeUnlockButton, styles.gradeUnlockButtonAlt]}
+                style={[styles.gradeUnlockButton, styles.gradeUnlockButtonAlt, gradeUnlockLoading && styles.actionButtonDisabled]}
                 onPress={() => handleGradeUnlock('graduation')}
+                disabled={gradeUnlockLoading}
                 accessibilityRole="button"
                 accessibilityLabel={`Unlock all grades through graduation for $${(gradCost / 100).toFixed(2)}`}
               >
-                <Text style={styles.gradeUnlockButtonAltText}>
-                  Unlock All Through Graduation — ${(gradCost / 100).toFixed(2)}
-                </Text>
+                {gradeUnlockLoading ? (
+                  <ActivityIndicator color={colors.accent.primary} size="small" />
+                ) : (
+                  <Text style={styles.gradeUnlockButtonAltText}>
+                    Unlock All Through Graduation — ${(gradCost / 100).toFixed(2)}
+                  </Text>
+                )}
               </TouchableOpacity>
             )}
           </View>

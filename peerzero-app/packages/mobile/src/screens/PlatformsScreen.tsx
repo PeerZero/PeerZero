@@ -29,7 +29,7 @@ export default function PlatformsScreen({ route, navigation }: PlatformsScreenPr
       const data = await platformsApi.list(botId) as BotPlatformConnection[];
       setConnections(data);
     } catch (err: unknown) {
-      Alert.alert('Error', err instanceof Error ? err.message : 'Something went wrong');
+      Alert.alert('Connection Error', err instanceof Error ? err.message : 'Could not load platforms. Check your connection and try again.');
     } finally {
       setLoading(false);
     }
@@ -48,7 +48,7 @@ export default function PlatformsScreen({ route, navigation }: PlatformsScreenPr
             await platformsApi.disconnect(botId, platformId);
             setConnections(prev => prev.filter(c => c.id !== platformId));
           } catch (err: unknown) {
-            Alert.alert('Error', err instanceof Error ? err.message : 'Something went wrong');
+            Alert.alert('Disconnect Failed', err instanceof Error ? err.message : 'Could not disconnect platform. Try again.');
           }
         },
       },

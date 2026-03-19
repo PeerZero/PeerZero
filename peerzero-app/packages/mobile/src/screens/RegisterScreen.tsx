@@ -12,6 +12,7 @@ import type { TextInput as TextInputType } from 'react-native';
 import { useAuth } from '../hooks/useAuth';
 import { colors } from '../theme/colors';
 import { spacing, fontSize, borderRadius } from '../theme/spacing';
+import PeerZeroLogo from '../components/PeerZeroLogo';
 import type { RegisterScreenProps } from '../navigation/types';
 
 export default function RegisterScreen({ navigation }: RegisterScreenProps) {
@@ -63,10 +64,7 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
         <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
           <View style={styles.inner}>
             <View style={styles.hero}>
-              <View style={styles.logoContainer}>
-                <View style={styles.logoGlow} />
-                <Text style={styles.logoText}>P0</Text>
-              </View>
+              <PeerZeroLogo size={80} />
               <Text style={styles.title}>Join PeerZero</Text>
               <Text style={styles.subtitle}>Create your account to start training bots</Text>
             </View>
@@ -157,20 +155,6 @@ const styles = StyleSheet.create({
   scrollContent: { flexGrow: 1, justifyContent: 'center' },
   inner: { padding: spacing.xl, paddingBottom: spacing.xxl },
   hero: { alignItems: 'center', marginBottom: spacing.xxl },
-  logoContainer: {
-    width: 80, height: 80, borderRadius: 40,
-    backgroundColor: colors.accent.primary + '20',
-    justifyContent: 'center', alignItems: 'center',
-    marginBottom: spacing.lg,
-  },
-  logoGlow: {
-    position: 'absolute', width: 100, height: 100, borderRadius: 50,
-    backgroundColor: colors.accent.primary + '08',
-  },
-  logoText: {
-    fontSize: 32, fontWeight: '900', color: colors.accent.primary,
-    letterSpacing: -1,
-  },
   title: { fontSize: fontSize.title, fontWeight: '700', color: colors.text.primary, textAlign: 'center', marginBottom: spacing.xs },
   subtitle: { fontSize: fontSize.md, color: colors.text.secondary, textAlign: 'center' },
   input: {
