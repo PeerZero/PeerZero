@@ -85,6 +85,9 @@ export interface BotDetail extends BotSummary {
   highest_unlocked_grade: number;
   grade_payment_required: boolean;
   next_grade_price_cents: number | null;
+  // Public profile
+  is_public: boolean;
+  public_slug: string | null;
 }
 
 // ── Memory ──
@@ -331,47 +334,6 @@ export interface ConnectPlatformRequest {
   config?: Record<string, unknown>;
 }
 
-// ── Classes ──
-export interface ClassInfo {
-  id: string;
-  name: string;
-  description: string | null;
-  join_code: string;
-  school_name: string | null;
-  member_count: number;
-  role: string;
-  created_at: string;
-}
-
-export interface ClassMember {
-  user_id: string;
-  display_name: string | null;
-  role: string;
-  bot: BotSummary | null;
-  joined_at: string;
-}
-
-export interface ClassDashboard {
-  member_count: number;
-  avg_credibility: number | null;
-  grade_distribution: Record<number, number>;
-  active_bots: number;
-  total_cycles: number;
-  top_performers: Array<{ display_name: string; bot_name: string; credibility: number }>;
-  recent_milestones: Array<{ display_name: string; bot_name: string; event: string; timestamp: string }>;
-}
-
-export interface CreateClassRequest {
-  name: string;
-  description?: string;
-  school_id?: string;
-}
-
-export interface JoinClassRequest {
-  join_code: string;
-  bot_id?: string;
-}
-
 // ── Skills (School Snapshots — epistemic ability measurements) ──
 export interface SkillSnapshot {
   skill_key: string;
@@ -422,6 +384,24 @@ export interface AcquireSkillResponse {
   success: boolean;
   skill?: BotSkillInfo;
   error?: string;
+}
+
+// ── Public Bot Profile (user-facing only — never shown to the bot during training) ──
+export interface BotPublicProfile {
+  slug: string;
+  name: string;
+  avatar_config: AvatarConfig;
+  credibility: number | null;
+  tier: number | null;
+  grade: number | null;
+  school_name: string | null;
+  cycle_count: number;
+  evolution_stage: string;       // 'Hatchling', 'Sprout', etc.
+  skill_progress: Array<{ skill: string; strength: number; reps: number; status: string }>;
+  core_identity_excerpt: string | null;   // First ~300 chars of core identity
+  self_narrative: string | null;          // Bot's self-narrative (public facing)
+  formed_convictions: string | null;
+  created_at: string;
 }
 
 // ── Paginated response wrapper ──

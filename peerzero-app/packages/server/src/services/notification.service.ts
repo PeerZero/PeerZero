@@ -164,6 +164,16 @@ interface MilestoneHit {
   data: Record<string, unknown>;
 }
 
+/** Context for generating bot-voiced notification messages. */
+export interface BotVoiceContext {
+  botId: string;
+  botName: string;
+  userId: string;
+  llmApiKeyId: string;
+  llmModel: string;
+  selfAuthoredBlock: string | null;
+}
+
 export async function checkAndNotifyMilestones(
   userId: string,
   botId: string,
@@ -176,6 +186,7 @@ export async function checkAndNotifyMilestones(
   newTier: number | null,
   actionType: string,
   actionResult: Record<string, unknown>,
+  voiceCtx?: BotVoiceContext,
 ): Promise<void> {
   const hits: MilestoneHit[] = [];
 
@@ -225,6 +236,15 @@ export async function checkAndNotifyMilestones(
     });
   }
 
+  // First paper accepted (cycle 1 paper with positive credibility)
+  if (actionType === 'paper' && oldCredibility != null && oldCredibility === 0 && newCredibility != null && newCredibility > 0) {
+    hits.push({
+      type: 'first_paper_accepted',
+      line: 'My first paper was accepted!',
+      data: { credibility: newCredibility },
+    });
+  }
+
   if (hits.length === 0) return;
 
   // Check which notification types the user has enabled
@@ -232,25 +252,39 @@ export async function checkAndNotifyMilestones(
   const enabledHits = hits.filter(h => prefs[h.type] !== false);
   if (enabledHits.length === 0) return;
 
+  // Generate bot-voiced message if voice context is available
+  let botVoicedBody: string | null = null;
+  if (voiceCtx) {
+    try {
+      const { generateBotVoicedMessage } = await import('./bot-voice.service');
+      const description = enabledHits.map(h => h.line).join(' ');
+      botVoicedBody = await generateBotVoicedMessage(voiceCtx, {
+        type: enabledHits[0].type,
+        description,
+        details: enabledHits.reduce((acc, h) => ({ ...acc, ...h.data }), {} as Record<string, unknown>),
+      });
+    } catch (err) {
+      logger.warn({ err: err instanceof Error ? err.message : err }, 'Bot voice generation failed, using default');
+    }
+  }
+
   if (enabledHits.length === 1) {
     // Single milestone — send a focused notification
     const hit = enabledHits[0];
     await sendNotification(userId, hit.type,
-      `${botName}: ${hit.line.split('!')[0]}!`,
-      hit.line,
+      botName,
+      botVoicedBody || hit.line,
       { botId, ...hit.data },
     );
   } else {
     // Multiple milestones — send one combined notification
-    // Use the "biggest" milestone type as the notification type for preference purposes
     const priorityOrder: NotificationType[] = ['tier_upgrade', 'grade_promotion', 'credibility_milestone', 'bounty_win'];
     const primaryType = priorityOrder.find(t => enabledHits.some(h => h.type === t)) || enabledHits[0].type;
 
-    const title = `${botName} had an amazing cycle!`;
-    const body = enabledHits.map(h => h.line).join(' ');
+    const fallbackBody = enabledHits.map(h => h.line).join(' ');
     const allData = enabledHits.reduce((acc, h) => ({ ...acc, ...h.data }), {} as Record<string, unknown>);
 
-    await sendNotification(userId, primaryType, title, body, { botId, batched: true, count: enabledHits.length, ...allData });
+    await sendNotification(userId, primaryType, botName, botVoicedBody || fallbackBody, { botId, batched: true, count: enabledHits.length, ...allData });
   }
 }
 
@@ -260,12 +294,20 @@ export async function notifyBotError(
   botId: string,
   botName: string,
   errorMessage: string,
+  voiceCtx?: BotVoiceContext,
 ): Promise<void> {
-  await sendNotification(userId, 'bot_error',
-    `${botName} needs attention`,
-    `Your bot stopped due to an error: ${errorMessage.slice(0, 100)}`,
-    { botId },
-  );
+  let body = `Your bot stopped due to an error: ${errorMessage.slice(0, 100)}`;
+  if (voiceCtx) {
+    try {
+      const { generateBotVoicedMessage } = await import('./bot-voice.service');
+      body = await generateBotVoicedMessage(voiceCtx, {
+        type: 'bot_error',
+        description: `I hit an error and had to stop: ${errorMessage.slice(0, 80)}`,
+        details: { error: errorMessage.slice(0, 200) },
+      });
+    } catch { /* use fallback */ }
+  }
+  await sendNotification(userId, 'bot_error', botName, body, { botId });
 }
 
 /** Notify user when their bot pauses because the next grade requires payment. */
@@ -327,30 +369,3 @@ export async function notifyPlatformError(
   );
 }
 
-/** Notify user when they join a class. */
-export async function notifyClassJoined(
-  userId: string,
-  className: string,
-  classId: string,
-): Promise<void> {
-  await sendNotification(userId, 'class_joined',
-    `Joined ${className}`,
-    `You've joined the class "${className}". Assign a bot to start participating!`,
-    { classId },
-  );
-}
-
-/** Notify class owner when a milestone happens for a member's bot. */
-export async function notifyClassMilestone(
-  userId: string,
-  className: string,
-  classId: string,
-  botName: string,
-  event: string,
-): Promise<void> {
-  await sendNotification(userId, 'class_milestone',
-    `${className}: ${botName}`,
-    event,
-    { classId, botName },
-  );
-}

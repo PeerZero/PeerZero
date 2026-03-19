@@ -29,8 +29,10 @@ import notificationRoutes from './routes/notifications';
 import externalActivityRoutes, { closePhoneHomeRedis } from './routes/external-activity';
 import widgetRoutes from './routes/widgets';
 import platformRoutes from './routes/platforms';
-import classRoutes from './routes/classes';
+// Classes feature removed from UI — routes retained but unmounted for data safety
+// import classRoutes from './routes/classes';
 import skillRoutes from './routes/skills';
+import publicBotRoutes from './routes/bots-public';
 
 const app = express();
 
@@ -52,6 +54,7 @@ app.use(express.json());
 // ── Routes ──
 app.use('/api/auth', authLimiter, authRoutes);
 app.use('/api/bots/external-activity', externalActivityRoutes);  // Phone-home from self-hosted bots (token auth, not JWT) — MUST be before /api/bots
+app.use('/api/bots/public', publicBotRoutes);                   // Public bot profiles (no auth) — MUST be before /api/bots
 app.use('/api/bots', botRoutes);
 app.use('/api/keys', apiKeyRoutes);
 app.use('/api/schools', schoolRoutes);
@@ -60,7 +63,6 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/widgets', widgetRoutes);
 app.use('/api/platforms', platformRoutes);
 app.use('/api/skills', skillRoutes);
-app.use('/api/classes', classRoutes);
 app.use('/health', healthRoutes);
 
 // ── Error handler (must be last) ──

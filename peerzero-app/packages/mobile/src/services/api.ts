@@ -203,6 +203,9 @@ export const bots = {
 
   deleteAllExternalActivity: (botId: string) =>
     apiFetch(`/bots/${botId}/external-activity`, { method: 'DELETE' }),
+
+  publicProfile: (slug: string) =>
+    apiFetch(`/bots/public/${slug}`),
 };
 
 // ── API Keys ──
@@ -290,38 +293,6 @@ export const platforms = {
 
   update: (botId: string, platformId: string, data: Record<string, unknown>) =>
     apiFetch(`/platforms/bot/${botId}/${platformId}`, { method: 'PATCH', body: JSON.stringify(data) }),
-};
-
-// ── Classes ──
-
-export const classes = {
-  list: () => apiFetch('/classes'),
-
-  create: (data: { name: string; description?: string; school_id?: string }) =>
-    apiFetch('/classes', { method: 'POST', body: JSON.stringify(data) }),
-
-  get: (id: string) => apiFetch(`/classes/${id}`),
-
-  update: (id: string, data: Record<string, unknown>) =>
-    apiFetch(`/classes/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
-
-  delete: (id: string) => apiFetch(`/classes/${id}`, { method: 'DELETE' }),
-
-  join: (joinCode: string, botId?: string) =>
-    apiFetch('/classes/join', { method: 'POST', body: JSON.stringify({ join_code: joinCode, bot_id: botId }) }),
-
-  leave: (id: string) =>
-    apiFetch(`/classes/${id}/leave`, { method: 'POST' }),
-
-  members: (id: string) => apiFetch(`/classes/${id}/members`),
-
-  removeMember: (id: string, userId: string) =>
-    apiFetch(`/classes/${id}/members/${userId}`, { method: 'DELETE' }),
-
-  updateBot: (id: string, botId: string | null) =>
-    apiFetch(`/classes/${id}/bot`, { method: 'PATCH', body: JSON.stringify({ bot_id: botId }) }),
-
-  dashboard: (id: string) => apiFetch(`/classes/${id}/dashboard`),
 };
 
 // ── Skills ──

@@ -176,13 +176,6 @@ export type PlatformAdapterType = typeof PLATFORM_ADAPTER_TYPES[number];
 // Max platforms per bot (prevent resource exhaustion)
 export const MAX_PLATFORMS_PER_BOT = 10;
 
-// ── Class Constants ──
-export const CLASS_ROLES = ['student', 'teacher', 'observer'] as const;
-export type ClassRole = typeof CLASS_ROLES[number];
-
-export const MAX_CLASS_MEMBERS = 100;
-export const JOIN_CODE_LENGTH = 6;
-
 // ── Push Notification Types ──
 // Users choose which notifications they want in Settings.
 export const NOTIFICATION_TYPES = [
@@ -198,8 +191,6 @@ export const NOTIFICATION_TYPES = [
   'hunger_reminder',       // Bot hasn't learned in a while (very rare, see HUNGER_THRESHOLDS)
   'platform_connected',    // Bot connected to an external platform
   'platform_error',        // Platform cycle failed
-  'class_joined',          // Someone joined your class
-  'class_milestone',       // A class member hit a milestone
 ] as const;
 
 export type NotificationType = typeof NOTIFICATION_TYPES[number];
@@ -218,8 +209,6 @@ export const DEFAULT_NOTIFICATION_PREFS: Record<NotificationType, boolean> = {
   hunger_reminder: false,  // Off by default — we don't pressure spending
   platform_connected: true,
   platform_error: true,
-  class_joined: true,
-  class_milestone: true,
 };
 
 export const NOTIFICATION_LABELS: Record<NotificationType, { title: string; description: string }> = {
@@ -235,8 +224,6 @@ export const NOTIFICATION_LABELS: Record<NotificationType, { title: string; desc
   hunger_reminder: { title: 'Learning Reminders', description: 'Occasional gentle nudge when your bot hasn\'t learned in a while' },
   platform_connected: { title: 'Platform Connected', description: 'When your bot connects to an external platform' },
   platform_error: { title: 'Platform Errors', description: 'When a platform cycle fails' },
-  class_joined: { title: 'Class Joined', description: 'When someone joins your class' },
-  class_milestone: { title: 'Class Milestones', description: 'When a class member hits a milestone' },
 };
 
 // ── Grade Pricing (Tiered Pay-Per-Grade) ──

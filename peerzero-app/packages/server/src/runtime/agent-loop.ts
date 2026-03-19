@@ -23,8 +23,9 @@ import { getDecryptedKey } from '../services/apikey.service';
 import * as memory from '../services/memory.service';
 import * as activity from '../services/activity.service';
 import { query, queryOne } from '../db/client';
-import { notifyGradePaymentNeeded } from '../services/notification.service';
-import { getGradePriceCents } from '@peerzero/shared';
+import { notifyGradePaymentNeeded, checkAndNotifyMilestones } from '../services/notification.service';
+import { generateBotVoicedMessage } from '../services/bot-voice.service';
+import { getGradePriceCents, credibilityToStage } from '@peerzero/shared';
 import { SchoolCredentials } from '../adapters/school.adapter';
 import { buildPrompt } from './prompt-builder';
 import { routeAction } from './action-router';
@@ -166,10 +167,53 @@ export async function runOneCycle(ctx: BotContext): Promise<void> {
       await handleCondensation(ctx, schoolCreds, llmKey, profile);
     }
 
-    // 9. Update cached bot state
+    // 9. Read old cached state for milestone detection BEFORE updating
+    const oldCache = await queryOne<{
+      cached_credibility: number | null;
+      cached_grade: number | null;
+      cached_tier: number | null;
+      name: string;
+      fast_llm_model: string | null;
+    }>('SELECT cached_credibility, cached_grade, cached_tier, name, fast_llm_model FROM bots WHERE id = $1', [ctx.botId]);
+
+    // 10. Update cached bot state
     await updateBotCache(ctx.botId, profile, ctx.cycleNumber);
 
-    // 10. Cache skill snapshots for BrainScreen progress bars
+    // 11. Detect milestones and send bot-voiced notifications
+    try {
+      const newCredibility = profile.agent?.credibility_score ?? null;
+      const newGrade = profile.grade?.grade ?? null;
+      const newTier = newCredibility != null ? credibilityToStage(newCredibility) : null;
+      const voiceModel = ctx.fastLlmModel || ctx.llmModel;
+
+      await checkAndNotifyMilestones(
+        ctx.userId,
+        ctx.botId,
+        oldCache?.name || 'Your bot',
+        oldCache?.cached_credibility ?? null,
+        newCredibility,
+        oldCache?.cached_grade ?? null,
+        newGrade,
+        oldCache?.cached_tier ?? null,
+        newTier,
+        actionType,
+        actionResult.rawResponse || {},
+        // Bot voice context — lets the notification service generate voiced messages
+        {
+          botId: ctx.botId,
+          botName: oldCache?.name || 'Your bot',
+          userId: ctx.userId,
+          llmApiKeyId: ctx.llmApiKeyId,
+          llmModel: voiceModel,
+          selfAuthoredBlock: selfAuthoredBlock,
+        },
+      );
+    } catch (err) {
+      // Never let notification failures break the bot cycle
+      logger.warn({ err: err instanceof Error ? err.message : err }, 'Milestone notification failed (non-fatal)');
+    }
+
+    // 13. Cache skill snapshots for BrainScreen progress bars
     try {
       const skills = extractSkillSnapshots(profile);
       if (skills.length > 0) {
@@ -179,7 +223,7 @@ export async function runOneCycle(ctx: BotContext): Promise<void> {
       logger.warn({ err: err instanceof Error ? err.message : err }, 'Failed to update skill snapshots');
     }
 
-    // 11. Schedule platform cycles for any active platform connections
+    // 14. Schedule platform cycles for any active platform connections
     try {
       const utilityModel = ctx.fastLlmModel || ctx.llmModel;
       await schedulePlatformJobs(ctx.botId, ctx.userId, ctx.llmApiKeyId, utilityModel);

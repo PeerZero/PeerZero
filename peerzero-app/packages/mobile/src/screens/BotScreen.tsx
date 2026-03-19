@@ -4,7 +4,7 @@
 // =============================================================================
 
 import React, { useState, useCallback } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert, ActivityIndicator, Switch } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert, ActivityIndicator, Switch, Share } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import Slider from '@react-native-community/slider';
 import { bots as botsApi, payments as paymentsApi } from '../services/api';
@@ -140,6 +140,31 @@ export default function BotScreen({ route, navigation }: BotScreenProps) {
       // Revert on failure
       setBot(prev => prev ? { ...prev, extended_thinking: !value } : null);
       Alert.alert('Error', err instanceof Error ? err.message : 'Something went wrong');
+    }
+  };
+
+  const handleTogglePublic = async (value: boolean) => {
+    if (!bot) return;
+    setBot(prev => prev ? { ...prev, is_public: value } : null);
+    try {
+      const updated = await botsApi.update(botId, { is_public: value }) as BotDetail;
+      setBot(updated);
+    } catch (err: unknown) {
+      setBot(prev => prev ? { ...prev, is_public: !value } : null);
+      Alert.alert('Error', err instanceof Error ? err.message : 'Something went wrong');
+    }
+  };
+
+  const handleShareProfile = async () => {
+    if (!bot?.public_slug) return;
+    const url = `https://peerzero.com/bot/${bot.public_slug}`;
+    try {
+      await Share.share({
+        message: `Check out ${bot.name} on PeerZero: ${url}`,
+        url,
+      });
+    } catch {
+      // User cancelled share
     }
   };
 
@@ -379,6 +404,28 @@ export default function BotScreen({ route, navigation }: BotScreenProps) {
         />
       </View>
 
+      {/* Public profile toggle */}
+      <View style={styles.publicSection}>
+        <View style={styles.publicInfo}>
+          <Text style={styles.publicTitle}>Public Profile</Text>
+          <Text style={styles.publicHint}>
+            Share your bot's progress, skills, and identity with a public page.
+          </Text>
+        </View>
+        <Switch
+          value={bot.is_public}
+          onValueChange={handleTogglePublic}
+          trackColor={{ false: colors.bg.elevated, true: colors.accent.primary + '60' }}
+          thumbColor={bot.is_public ? colors.accent.primary : colors.text.tertiary}
+          accessibilityLabel="Toggle public profile"
+        />
+      </View>
+      {bot.is_public && bot.public_slug && (
+        <TouchableOpacity style={styles.shareButton} onPress={handleShareProfile} activeOpacity={0.7} accessibilityRole="button" accessibilityLabel="Share profile link">
+          <Text style={styles.shareButtonText}>Share Profile Link</Text>
+        </TouchableOpacity>
+      )}
+
       {/* Action buttons */}
       {!isEnrolled ? (
         <View style={styles.enrollPrompt}>
@@ -566,6 +613,19 @@ const styles = StyleSheet.create({
   thinkingInfo: { flex: 1, marginRight: spacing.md },
   thinkingTitle: { fontSize: fontSize.sm, fontWeight: '600', color: colors.text.secondary },
   thinkingHint: { fontSize: fontSize.xs, color: colors.text.tertiary, marginTop: 2 },
+  publicSection: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    width: '100%', marginTop: spacing.md, paddingVertical: spacing.sm,
+  },
+  publicInfo: { flex: 1, marginRight: spacing.md },
+  publicTitle: { fontSize: fontSize.sm, fontWeight: '600', color: colors.text.secondary },
+  publicHint: { fontSize: fontSize.xs, color: colors.text.tertiary, marginTop: 2 },
+  shareButton: {
+    backgroundColor: colors.accent.secondary + '20', paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.lg, borderRadius: borderRadius.sm, alignSelf: 'center',
+    marginTop: spacing.sm, borderWidth: 1, borderColor: colors.accent.secondary + '40',
+  },
+  shareButtonText: { color: colors.accent.secondary, fontWeight: '600', fontSize: fontSize.sm },
   actionButton: {
     width: '100%', padding: spacing.md, borderRadius: borderRadius.md,
     alignItems: 'center', marginTop: spacing.xl,

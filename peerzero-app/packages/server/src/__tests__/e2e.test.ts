@@ -4,10 +4,9 @@
 // These tests exercise full flows through the system with mock adapters:
 // 1. Agent loop cycle — bot runs a complete cycle through mock adapters
 // 2. Platform connections — connecting a bot to a platform
-// 3. Classes — teacher creates class, student joins
-// 4. Stripe webhooks — payment flow with mock Stripe
-// 5. WebSocket — real-time activity streaming
-// 6. Phone-home — self-hosted bot reporting activity
+// 3. Stripe webhooks — payment flow with mock Stripe
+// 4. WebSocket — real-time activity streaming
+// 5. Phone-home — self-hosted bot reporting activity
 // =============================================================================
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
@@ -157,9 +156,9 @@ vi.mock('../services/skill-engine.service', () => ({
 
 vi.mock('../services/notification.service', () => ({
   notifyGradePaymentNeeded: vi.fn(),
+  checkAndNotifyMilestones: vi.fn(),
   notifyPlatformConnected: vi.fn(),
   notifyPlatformError: vi.fn(),
-  notifyClassJoined: vi.fn(),
 }));
 
 vi.mock('../services/platform.service', () => ({
@@ -187,48 +186,9 @@ vi.mock('../services/audit.service', () => ({
   logAudit: vi.fn(),
 }));
 
-vi.mock('../services/class.service', () => {
-  const classes = new Map<string, { id: string; name: string; join_code: string; owner_id: string; members: Map<string, { role: string; bot_id: string | null }> }>();
-  let classCounter = 0;
-
-  return {
-    createClass: vi.fn().mockImplementation((userId: string, name: string, description?: string) => {
-      const id = `class-${++classCounter}`;
-      const join_code = `JOIN${classCounter}`;
-      const cls = { id, name, join_code, owner_id: userId, members: new Map([[userId, { role: 'teacher', bot_id: null }]]) };
-      classes.set(id, cls);
-      return Promise.resolve({
-        id, name, description: description || null, join_code,
-        school_name: null, member_count: 1, role: 'teacher', created_at: new Date().toISOString(),
-      });
-    }),
-    joinClass: vi.fn().mockImplementation((userId: string, joinCode: string, botId?: string) => {
-      const cls = [...classes.values()].find(c => c.join_code === joinCode);
-      if (!cls) return Promise.reject(new Error('Invalid join code'));
-      if (cls.members.has(userId)) return Promise.reject(new Error('Already a member'));
-      cls.members.set(userId, { role: 'student', bot_id: botId || null });
-      return Promise.resolve({
-        id: cls.id, name: cls.name, description: null, join_code: cls.join_code,
-        school_name: null, member_count: cls.members.size, role: 'student', created_at: new Date().toISOString(),
-      });
-    }),
-    getUserClasses: vi.fn().mockResolvedValue([]),
-    getClass: vi.fn(),
-    updateClass: vi.fn(),
-    deleteClass: vi.fn(),
-    leaveClass: vi.fn(),
-    getClassMembers: vi.fn().mockResolvedValue([]),
-    removeMember: vi.fn(),
-    updateMemberBot: vi.fn(),
-    getClassDashboard: vi.fn().mockResolvedValue({
-      member_count: 2, avg_credibility: 105, grade_distribution: { 2: 1 },
-      active_bots: 1, total_cycles: 10,
-      top_performers: [{ display_name: 'Student', bot_name: 'Bot', credibility: 105 }],
-      recent_milestones: [],
-    }),
-    _reset: () => { classes.clear(); classCounter = 0; },
-  };
-});
+vi.mock('../services/bot-voice.service', () => ({
+  generateBotVoicedMessage: vi.fn().mockResolvedValue('I feel great about this milestone!'),
+}));
 
 vi.mock('../services/payment.service', () => ({
   getProducts: vi.fn().mockResolvedValue([
@@ -285,7 +245,6 @@ import * as memory from '../services/memory.service';
 import * as activity from '../services/activity.service';
 import { updateSkillSnapshots } from '../services/skill.service';
 import { schedulePlatformJobs } from '../jobs/platform-queue';
-import * as classService from '../services/class.service';
 import * as paymentService from '../services/payment.service';
 import { updatePlatformCycleStatus } from '../services/platform.service';
 
@@ -355,7 +314,6 @@ beforeEach(() => {
     apiKey: 'test-school-key', handle: 'test-bot', baseUrl: 'https://school.test',
   });
   (isBotGradeUnlocked as ReturnType<typeof vi.fn>).mockResolvedValue(true);
-  (classService as any)._reset?.();
 });
 
 // =============================================================================
@@ -591,60 +549,7 @@ describe('E2E: Platform connections', () => {
 });
 
 // =============================================================================
-// 3. CLASSES — teacher creates class, student joins
-// =============================================================================
-
-describe('E2E: Classes', () => {
-  it('teacher creates class, student joins with code, dashboard works', async () => {
-    // Teacher creates a class
-    const created = await classService.createClass('teacher-1', 'AP Critical Thinking', 'A class for AP students');
-    expect(created).toMatchObject({
-      name: 'AP Critical Thinking',
-      role: 'teacher',
-      member_count: 1,
-    });
-    expect(created.join_code).toBeTruthy();
-
-    // Student joins with the join code
-    const joined = await classService.joinClass('student-1', created.join_code, 'student-bot-1');
-    expect(joined).toMatchObject({
-      id: created.id,
-      role: 'student',
-      member_count: 2,
-    });
-
-    // Verify createClass and joinClass were called correctly
-    expect(classService.createClass).toHaveBeenCalledWith('teacher-1', 'AP Critical Thinking', 'A class for AP students');
-    expect(classService.joinClass).toHaveBeenCalledWith('student-1', created.join_code, 'student-bot-1');
-  });
-
-  it('rejects duplicate join', async () => {
-    const created = await classService.createClass('teacher-2', 'Ethics 101');
-
-    await classService.joinClass('student-2', created.join_code);
-    await expect(classService.joinClass('student-2', created.join_code)).rejects.toThrow('Already a member');
-  });
-
-  it('rejects invalid join code', async () => {
-    await expect(classService.joinClass('student-3', 'INVALID')).rejects.toThrow('Invalid join code');
-  });
-
-  it('teacher can view dashboard with aggregate stats', async () => {
-    const dashboard = await classService.getClassDashboard('class-1', 'teacher-1');
-
-    expect(dashboard).toMatchObject({
-      member_count: 2,
-      avg_credibility: 105,
-      active_bots: 1,
-      total_cycles: 10,
-    });
-    expect(dashboard.top_performers).toHaveLength(1);
-    expect(dashboard.grade_distribution).toHaveProperty('2');
-  });
-});
-
-// =============================================================================
-// 4. STRIPE WEBHOOKS — payment flow
+// 3. STRIPE WEBHOOKS — payment flow
 // =============================================================================
 
 describe('E2E: Stripe webhooks', () => {
@@ -700,7 +605,7 @@ describe('E2E: Stripe webhooks', () => {
 });
 
 // =============================================================================
-// 5. WEBSOCKET — real-time activity streaming
+// 4. WEBSOCKET — real-time activity streaming
 // =============================================================================
 
 describe('E2E: WebSocket activity streaming', () => {
@@ -768,7 +673,7 @@ describe('E2E: WebSocket activity streaming', () => {
 });
 
 // =============================================================================
-// 6. PHONE-HOME — self-hosted bot reporting activity
+// 5. PHONE-HOME — self-hosted bot reporting activity
 // =============================================================================
 
 describe('E2E: Phone-home', () => {
