@@ -206,6 +206,9 @@ export const bots = {
 
   publicProfile: (slug: string) =>
     apiFetch(`/bots/public/${slug}`),
+
+  speak: (id: string, context: string) =>
+    apiFetch(`/bots/${id}/speak`, { method: 'POST', body: JSON.stringify({ context }) }),
 };
 
 // ── API Keys ──

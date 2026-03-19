@@ -10,6 +10,7 @@ import * as memoryService from '../services/memory.service';
 import * as activityService from '../services/activity.service';
 import * as statsService from '../services/stats.service';
 import * as skillService from '../services/skill.service';
+import { generateDialogue, DIALOGUE_CONTEXTS, type DialogueContext } from '../services/bot-voice.service';
 import { addBotCycleJob, removeBotJobs } from '../jobs/queue';
 import { logAudit } from '../services/audit.service';
 import type { ActivityCategory, FocusChunk } from '@peerzero/shared';
@@ -277,6 +278,39 @@ router.post('/:id/phone-home-token', userRateLimit('write'), async (req: Request
   logAudit({ userId: req.user!.userId, action: 'bot.generate_phone_home_token', entityType: 'bot', entityId: req.params.id, ipAddress: req.ip });
   // Token is returned ONCE — user must save it. We only store the hash.
   res.json({ phone_home_token: token, warning: 'Save this token — it cannot be retrieved later.' });
+});
+
+// ── Bot Voice (on-demand dialogue) ──
+
+router.post('/:id/speak', userRateLimit('write'), async (req: Request, res: Response) => {
+  const { context } = req.body;
+  if (!context || !(DIALOGUE_CONTEXTS as readonly string[]).includes(context)) {
+    res.status(400).json({ error: `Invalid context. Must be one of: ${DIALOGUE_CONTEXTS.join(', ')}` });
+    return;
+  }
+
+  const bot = await botService.getBotDetail(req.user!.userId, req.params.id);
+  if (!bot.llm_api_key_id) {
+    res.status(400).json({ error: 'Bot has no API key configured' });
+    return;
+  }
+
+  // Use fast model for dialogue (cheap), fall back to main model
+  const model = bot.fast_llm_model || bot.llm_model;
+
+  const message = await generateDialogue(
+    {
+      botId: bot.id,
+      botName: bot.name,
+      userId: req.user!.userId,
+      llmApiKeyId: bot.llm_api_key_id,
+      llmModel: model,
+      selfAuthoredBlock: null, // Let the service look it up from memory
+    },
+    context as DialogueContext,
+  );
+
+  res.json({ message, context });
 });
 
 // ── Skills ──

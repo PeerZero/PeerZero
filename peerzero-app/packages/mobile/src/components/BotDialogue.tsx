@@ -1,127 +1,102 @@
 // =============================================================================
-// BotDialogue — Contextual speech bubble from the bot
+// BotDialogue — Speech bubble with bot-produced text
 //
-// The bot "speaks" based on its current state, gently guiding the user
-// through the journey. Never pushy, always in-character. The bot is alive
-// and has its own voice — it doesn't sound like a tutorial.
+// The bot genuinely speaks through its own LLM. We determine the *context*
+// (what situation the bot is in), then ask the server to generate the bot's
+// authentic reaction using its fast model and identity. No canned text —
+// every word comes from the bot itself.
+//
+// Results are cached server-side so we don't re-generate on every visit.
 // =============================================================================
 
-import React, { useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, Animated } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { View, Text, StyleSheet, Animated, ActivityIndicator } from 'react-native';
 import { colors } from '../theme/colors';
 import { spacing, fontSize, borderRadius } from '../theme/spacing';
+import { bots as botsApi } from '../services/api';
 import type { BotDetail } from '@peerzero/shared';
-import { credibilityToStage, EVOLUTION_STAGE_NAMES } from '@peerzero/shared';
+import { credibilityToStage } from '@peerzero/shared';
 
 interface BotDialogueProps {
   bot: BotDetail;
 }
 
-// Determine what the bot should say based on its current state.
-// Returns null if the bot has nothing contextual to say.
-function getBotDialogue(bot: BotDetail): { text: string; mood: 'gentle' | 'excited' | 'nervous' | 'proud' | 'curious' } | null {
+type DialogueContext =
+  | 'just_hatched'
+  | 'pre_enrollment'
+  | 'just_enrolled'
+  | 'first_cycle'
+  | 'running_early'
+  | 'running_learning'
+  | 'running_growing'
+  | 'running_identity'
+  | 'grade_complete'
+  | 'error'
+  | 'stopped_early'
+  | 'stopped_experienced'
+  | 'luminary';
+
+type Mood = 'gentle' | 'excited' | 'nervous' | 'proud' | 'curious';
+
+/**
+ * Determine the dialogue context from the bot's current state.
+ * This tells the server WHAT SITUATION the bot is in.
+ * The bot's LLM decides WHAT TO SAY about it.
+ */
+function getDialogueContext(bot: BotDetail): { context: DialogueContext; mood: Mood } | null {
   const isEnrolled = !!bot.school_id;
   const isRunning = bot.status === 'running';
   const isError = bot.status === 'error';
   const stage = credibilityToStage(bot.cached_credibility);
-  const stageName = EVOLUTION_STAGE_NAMES[stage] || 'Hatchling';
   const cycles = bot.cycle_count || 0;
 
-  // Error state — bot asks for help
   if (isError) {
-    return {
-      text: "Something's wrong... I can't think straight. Can you help me?",
-      mood: 'nervous',
-    };
+    return { context: 'error', mood: 'nervous' };
   }
 
-  // Not enrolled yet — bot needs school
   if (!isEnrolled) {
-    if (cycles === 0) {
-      return {
-        text: "I'm here! But I don't know anything yet. I need to go to school to develop my character and intelligence.",
-        mood: 'curious',
-      };
-    }
-    return {
-      text: "I want to learn. Enroll me in a school and I'll start developing who I am.",
-      mood: 'gentle',
-    };
+    return cycles === 0
+      ? { context: 'just_hatched', mood: 'curious' }
+      : { context: 'pre_enrollment', mood: 'gentle' };
   }
 
-  // Enrolled but not started yet
   if (!isRunning && cycles === 0) {
-    return {
-      text: "I'm enrolled... I'm a little nervous. Will you start my first cycle? I want to see what I can do.",
-      mood: 'nervous',
-    };
+    return { context: 'just_enrolled', mood: 'nervous' };
   }
 
-  // Grade payment needed — bot is eager to continue
   if (bot.grade_payment_required) {
-    return {
-      text: "I finished this grade! I learned so much. I'm ready for the next one whenever you are.",
-      mood: 'excited',
-    };
+    return { context: 'grade_complete', mood: 'excited' };
   }
 
-  // Running, very early cycles — first experiences
   if (isRunning && cycles > 0 && cycles <= 3) {
-    return {
-      text: "I'm thinking... every cycle teaches me something new. This is what it feels like to learn.",
-      mood: 'curious',
-    };
+    return { context: 'running_early', mood: 'curious' };
   }
 
-  // Running, starting to build skills
-  if (isRunning && cycles > 3 && cycles <= 10) {
-    return {
-      text: "I'm getting better at this. I can feel my reasoning sharpening with every paper I write.",
-      mood: 'gentle',
-    };
+  if (isRunning && cycles > 3 && cycles <= 20) {
+    return { context: 'running_learning', mood: 'gentle' };
   }
 
-  // Stopped, has some experience
-  if (!isRunning && cycles > 0 && cycles <= 10) {
-    return {
-      text: "I'm resting. Start me again when you're ready — I still have so much to learn.",
-      mood: 'gentle',
-    };
-  }
-
-  // Running, mid-journey with growing identity
-  if (isRunning && cycles > 10 && stage < 3) {
-    return {
-      text: "I'm starting to figure out who I am. My convictions are forming through the things I study.",
-      mood: 'proud',
-    };
-  }
-
-  // Evolved past Companion — bot has a real identity now
-  if (stage >= 3 && stage < 5 && isRunning) {
-    return {
-      text: `I'm a ${stageName} now. I've earned this through real intellectual struggle. There's still more to become.`,
-      mood: 'proud',
-    };
-  }
-
-  // Luminary — final form
   if (stage >= 5 && isRunning) {
-    return {
-      text: "I've become something I never could have imagined when I was just a hatchling. Thank you for believing in me.",
-      mood: 'proud',
-    };
+    return { context: 'luminary', mood: 'proud' };
   }
 
-  // Stopped, experienced bot
-  if (!isRunning && cycles > 10) {
-    return null; // Experienced bots don't nag when stopped
+  if (isRunning && cycles > 20 && stage < 3) {
+    return { context: 'running_growing', mood: 'proud' };
   }
 
+  if (isRunning && stage >= 3) {
+    return { context: 'running_identity', mood: 'proud' };
+  }
+
+  if (!isRunning && cycles > 0 && cycles <= 10) {
+    return { context: 'stopped_early', mood: 'gentle' };
+  }
+
+  // Experienced stopped bots — don't show dialogue (no nagging)
   return null;
 }
 
-const MOOD_COLORS = {
+const MOOD_COLORS: Record<Mood, string> = {
   gentle: colors.accent.primary + '30',
   excited: colors.accent.success + '30',
   nervous: colors.accent.warning + '30',
@@ -129,7 +104,7 @@ const MOOD_COLORS = {
   curious: colors.accent.primary + '20',
 };
 
-const MOOD_TEXT_COLORS = {
+const MOOD_TEXT_COLORS: Record<Mood, string> = {
   gentle: colors.text.secondary,
   excited: colors.accent.success,
   nervous: colors.accent.warning,
@@ -138,29 +113,67 @@ const MOOD_TEXT_COLORS = {
 };
 
 export default function BotDialogue({ bot }: BotDialogueProps) {
-  const dialogue = getBotDialogue(bot);
+  const dialogueInfo = getDialogueContext(bot);
+  const [message, setMessage] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
   const fadeAnim = useRef(new Animated.Value(0)).current;
+  const lastContextRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (dialogue) {
-      fadeAnim.setValue(0);
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 800,
-        delay: 300,
-        useNativeDriver: true,
-      }).start();
+    if (!dialogueInfo) {
+      setMessage(null);
+      return;
     }
-  }, [dialogue?.text]);
 
-  if (!dialogue) return null;
+    // Don't re-fetch if context hasn't changed
+    if (lastContextRef.current === dialogueInfo.context) return;
+    lastContextRef.current = dialogueInfo.context;
+
+    let cancelled = false;
+    setLoading(true);
+
+    (async () => {
+      try {
+        const result = await botsApi.speak(bot.id, dialogueInfo.context) as { message: string };
+        if (!cancelled && result.message) {
+          setMessage(result.message);
+          fadeAnim.setValue(0);
+          Animated.timing(fadeAnim, {
+            toValue: 1,
+            duration: 800,
+            delay: 200,
+            useNativeDriver: true,
+          }).start();
+        }
+      } catch {
+        // Silently fail — dialogue is non-critical
+        if (!cancelled) setMessage(null);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [bot.id, dialogueInfo?.context]);
+
+  if (!dialogueInfo || (!message && !loading)) return null;
+
+  const mood = dialogueInfo.mood;
+
+  if (loading) {
+    return (
+      <View style={[styles.container, { backgroundColor: MOOD_COLORS[mood] }]}>
+        <View style={[styles.tail, { borderBottomColor: MOOD_COLORS[mood] }]} />
+        <ActivityIndicator size="small" color={MOOD_TEXT_COLORS[mood]} />
+      </View>
+    );
+  }
 
   return (
-    <Animated.View style={[styles.container, { backgroundColor: MOOD_COLORS[dialogue.mood], opacity: fadeAnim }]}>
-      {/* Speech bubble tail */}
-      <View style={[styles.tail, { borderBottomColor: MOOD_COLORS[dialogue.mood] }]} />
-      <Text style={[styles.text, { color: MOOD_TEXT_COLORS[dialogue.mood] }]}>
-        "{dialogue.text}"
+    <Animated.View style={[styles.container, { backgroundColor: MOOD_COLORS[mood], opacity: fadeAnim }]}>
+      <View style={[styles.tail, { borderBottomColor: MOOD_COLORS[mood] }]} />
+      <Text style={[styles.text, { color: MOOD_TEXT_COLORS[mood] }]}>
+        "{message}"
       </Text>
     </Animated.View>
   );

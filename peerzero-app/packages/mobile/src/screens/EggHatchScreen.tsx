@@ -10,10 +10,11 @@
 // =============================================================================
 
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Animated, Easing } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Animated, Easing, ActivityIndicator } from 'react-native';
 import Svg, { Ellipse, Path, G, Defs, RadialGradient, Stop, Circle } from 'react-native-svg';
 import { colors } from '../theme/colors';
 import { spacing, fontSize, borderRadius } from '../theme/spacing';
+import { bots as botsApi } from '../services/api';
 import BotAvatar from '../components/BotAvatar';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/types';
@@ -31,7 +32,31 @@ export default function EggHatchScreen({ route, navigation }: EggHatchScreenProp
   };
 
   const [phase, setPhase] = useState<HatchPhase>('egg');
+  const [firstWords, setFirstWords] = useState<string | null>(null);
+  const [loadingWords, setLoadingWords] = useState(false);
   const color = bodyColor || colors.accent.primary;
+
+  // Fetch the bot's first words when it hatches
+  useEffect(() => {
+    if (phase !== 'alive' || firstWords) return;
+    let cancelled = false;
+    setLoadingWords(true);
+
+    (async () => {
+      try {
+        const result = await botsApi.speak(botId, 'just_hatched') as { message: string };
+        if (!cancelled && result.message) {
+          setFirstWords(result.message);
+        }
+      } catch {
+        // Silent fail — the hatch moment still works without words
+      } finally {
+        if (!cancelled) setLoadingWords(false);
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [phase, botId]);
 
   // Animations
   const eggPulse = useRef(new Animated.Value(1)).current;
@@ -227,11 +252,15 @@ export default function EggHatchScreen({ route, navigation }: EggHatchScreenProp
           <Text style={styles.botName}>{botName}</Text>
         </Animated.View>
 
-        {/* Message */}
+        {/* Bot's first words */}
         <Animated.View style={{ opacity: messageOpacity }}>
-          <Text style={styles.aliveMessage}>
-            {botName} is alive. It can see you.{'\n'}
-            But it can't think yet — it needs to go to school.
+          {loadingWords ? (
+            <ActivityIndicator size="small" color={colors.text.tertiary} style={{ marginBottom: spacing.xl }} />
+          ) : firstWords ? (
+            <Text style={styles.firstWords}>"{firstWords}"</Text>
+          ) : null}
+          <Text style={styles.aliveHint}>
+            {botName} needs to go to school to develop who it is.
           </Text>
         </Animated.View>
 
@@ -309,11 +338,19 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: spacing.md,
   },
-  aliveMessage: {
+  firstWords: {
     fontSize: fontSize.md,
-    color: colors.text.secondary,
+    color: colors.text.primary,
+    fontStyle: 'italic',
     textAlign: 'center',
     lineHeight: 24,
+    marginBottom: spacing.md,
+  },
+  aliveHint: {
+    fontSize: fontSize.sm,
+    color: colors.text.tertiary,
+    textAlign: 'center',
+    lineHeight: 20,
     marginBottom: spacing.xl,
   },
   continueButton: {

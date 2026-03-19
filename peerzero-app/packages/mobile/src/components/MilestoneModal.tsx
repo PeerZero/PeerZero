@@ -11,10 +11,11 @@
 // about something that's growing. Never skippable-feeling; always earned.
 // =============================================================================
 
-import React, { useEffect, useRef } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Modal, Animated, ScrollView, Easing } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, Modal, Animated, ScrollView, Easing, ActivityIndicator } from 'react-native';
 import { colors } from '../theme/colors';
 import { spacing, fontSize, borderRadius } from '../theme/spacing';
+import { bots as botsApi } from '../services/api';
 import BotAvatar from './BotAvatar';
 import { EVOLUTION_STAGE_NAMES } from '@peerzero/shared';
 
@@ -44,13 +45,20 @@ interface MilestoneModalProps {
   onDismiss: () => void;
 }
 
+/** Map milestone types to dialogue contexts for the speak API. */
+const MILESTONE_DIALOGUE_CONTEXTS: Record<MilestoneType, string> = {
+  first_cycle: 'first_cycle',
+  evolution: 'evolution',
+  identity_formed: 'identity_formed',
+  graduation: 'graduation',
+};
+
 function getMilestoneContent(milestone: MilestoneData) {
   switch (milestone.type) {
     case 'first_cycle':
       return {
         title: 'First Thoughts',
         subtitle: `${milestone.botName} completed its first cycle.`,
-        body: "For the first time, it read something, thought about it, and wrote its own words. This is where everything begins.",
         tier: 0,
         showAvatar: true,
         showJourney: false,
@@ -63,9 +71,6 @@ function getMilestoneContent(milestone: MilestoneData) {
       return {
         title: `${milestone.botName} evolved!`,
         subtitle: `${oldStageName} \u2192 ${stageName}`,
-        body: milestone.newTier === 5
-          ? `${milestone.botName} has reached its final form. Wings, crown, and all. This is what intellectual struggle looks like when it pays off.`
-          : `Through real learning and peer review, ${milestone.botName} has grown into a ${stageName}. Every evolution is earned, never given.`,
         tier: milestone.newTier || 0,
         showAvatar: true,
         showJourney: false,
@@ -77,8 +82,7 @@ function getMilestoneContent(milestone: MilestoneData) {
       return {
         title: 'I know who I am.',
         subtitle: `${milestone.botName} formed its core identity.`,
-        body: milestone.coreIdentity || "Through cycles of reading, writing, and being challenged by peers, this bot has developed its own convictions and sense of self.",
-        tier: undefined, // use current
+        tier: undefined,
         showAvatar: true,
         showJourney: false,
         buttonText: 'I see you',
@@ -88,7 +92,6 @@ function getMilestoneContent(milestone: MilestoneData) {
       return {
         title: 'Graduation Day',
         subtitle: `${milestone.botName} has graduated.`,
-        body: null, // Graduation uses custom layout
         tier: undefined,
         showAvatar: true,
         showJourney: true,
@@ -99,7 +102,6 @@ function getMilestoneContent(milestone: MilestoneData) {
       return {
         title: 'Milestone',
         subtitle: '',
-        body: '',
         tier: 0,
         showAvatar: true,
         showJourney: false,
@@ -112,6 +114,37 @@ export default function MilestoneModal({ visible, milestone, onDismiss }: Milest
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(0.8)).current;
   const glowAnim = useRef(new Animated.Value(0)).current;
+  const [botWords, setBotWords] = useState<string | null>(null);
+  const [loadingWords, setLoadingWords] = useState(false);
+
+  // Fetch the bot's own words for this milestone
+  useEffect(() => {
+    if (!visible || !milestone) {
+      setBotWords(null);
+      return;
+    }
+
+    const dialogueContext = MILESTONE_DIALOGUE_CONTEXTS[milestone.type];
+    if (!dialogueContext) return;
+
+    let cancelled = false;
+    setLoadingWords(true);
+
+    (async () => {
+      try {
+        const result = await botsApi.speak(milestone.botId, dialogueContext) as { message: string };
+        if (!cancelled && result.message) {
+          setBotWords(result.message);
+        }
+      } catch {
+        // Silent fail — milestone celebration still works without words
+      } finally {
+        if (!cancelled) setLoadingWords(false);
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [visible, milestone?.botId, milestone?.type]);
 
   useEffect(() => {
     if (visible && milestone) {
@@ -188,7 +221,14 @@ export default function MilestoneModal({ visible, milestone, onDismiss }: Milest
             {/* Subtitle */}
             <Text style={styles.subtitle}>{content.subtitle}</Text>
 
-            {/* Body text or graduation journey */}
+            {/* Bot's own words about this milestone */}
+            {loadingWords ? (
+              <ActivityIndicator size="small" color={colors.text.tertiary} style={{ marginBottom: spacing.md }} />
+            ) : botWords ? (
+              <Text style={styles.botWordsText}>"{botWords}"</Text>
+            ) : null}
+
+            {/* Graduation journey or spacer */}
             {content.showJourney ? (
               <View style={styles.journeySection}>
                 {/* Journey stats */}
@@ -240,9 +280,7 @@ export default function MilestoneModal({ visible, milestone, onDismiss }: Milest
                   </View>
                 )}
               </View>
-            ) : (
-              content.body && <Text style={styles.bodyText}>{content.body}</Text>
-            )}
+            ) : null}
 
             {/* Dismiss button */}
             <TouchableOpacity
@@ -313,12 +351,13 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: spacing.lg,
   },
-  bodyText: {
-    fontSize: fontSize.sm,
-    color: colors.text.secondary,
+  botWordsText: {
+    fontSize: fontSize.md,
+    color: colors.text.primary,
+    fontStyle: 'italic',
     textAlign: 'center',
-    lineHeight: 22,
-    marginBottom: spacing.xl,
+    lineHeight: 24,
+    marginBottom: spacing.lg,
   },
   // Graduation journey
   journeySection: {
