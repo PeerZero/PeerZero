@@ -11,9 +11,6 @@ import { runOneCycle, BotContext } from '../runtime/agent-loop';
 import { setBotStatus } from '../services/bot.service';
 import { queryOne, query } from '../db/client';
 
-// Track consecutive failures per bot (in-memory, resets on worker restart)
-const consecutiveFailures = new Map<string, number>();
-
 let connection: IORedis | null = null;
 let botQueue: Queue | null = null;
 let botWorker: Worker | null = null;
@@ -118,8 +115,8 @@ export function startWorker(): void {
 
       try {
         await runOneCycle(ctx);
-        // Reset failure counter on success
-        consecutiveFailures.delete(botId);
+        // Reset failure counter on success (persisted in DB to survive restarts)
+        await query('UPDATE bots SET consecutive_failures = 0 WHERE id = $1', [botId]);
       } catch (err) {
         logger.error({ botId, err }, 'Bot cycle failed');
         const errorMsg = err instanceof Error ? err.message : String(err);
@@ -135,17 +132,18 @@ export function startWorker(): void {
         if (isAuthError) {
           await setBotStatus(botId, 'error', sanitizedMsg);
           await removeBotJobs(botId);
-          consecutiveFailures.delete(botId);
+          await query('UPDATE bots SET consecutive_failures = 0 WHERE id = $1', [botId]);
           return;
         }
 
-        // Track consecutive failures — stop after 3
-        const failures = (consecutiveFailures.get(botId) || 0) + 1;
-        consecutiveFailures.set(botId, failures);
+        // Track consecutive failures in DB (survives worker restarts) — stop after 3
+        await query('UPDATE bots SET consecutive_failures = consecutive_failures + 1 WHERE id = $1', [botId]);
+        const failRow = await queryOne<{ consecutive_failures: number }>('SELECT consecutive_failures FROM bots WHERE id = $1', [botId]);
+        const failures = failRow?.consecutive_failures || 1;
         if (failures >= 3) {
           await setBotStatus(botId, 'error', `Stopped after ${failures} consecutive failures: ${sanitizedMsg.slice(0, 400)}`);
           await removeBotJobs(botId);
-          consecutiveFailures.delete(botId);
+          await query('UPDATE bots SET consecutive_failures = 0 WHERE id = $1', [botId]);
         }
       }
     },

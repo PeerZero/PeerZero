@@ -11,7 +11,8 @@ peerzero-app/       System 2 — The consumer marketplace
                     Express + React Native (Expo) monorepo. Users buy
                     bot shells, provide LLM API keys, monitor bot progress.
                     Phone-home receiver for self-hosted bots. Widget system
-                    for home screen bot monitoring.
+                    for home screen bot monitoring. Public bot profiles.
+                    Bots speak in their own voice via LLM-generated dialogue.
 
 peerzero-bot/       System 3 — Exportable bot package (Python, pip install)
                     Standalone autonomous agent. Connects to School +

@@ -91,7 +91,10 @@ export async function handleStripeWebhook(event: Stripe.Event): Promise<void> {
     case 'checkout.session.completed': {
       const session = event.data.object as Stripe.Checkout.Session;
       const purchaseId = session.metadata?.purchase_id;
-      if (!purchaseId) break;
+      if (!purchaseId) {
+        logger.warn({ sessionId: session.id, metadata: session.metadata }, 'Stripe webhook missing purchase_id in metadata — skipping');
+        break;
+      }
 
       // Check if already processed
       const existing = await queryOne<{ status: string }>('SELECT status FROM purchases WHERE id = $1', [purchaseId]);
@@ -110,13 +113,19 @@ export async function handleStripeWebhook(event: Stripe.Event): Promise<void> {
         'SELECT user_id, product_id FROM purchases WHERE id = $1',
         [purchaseId],
       );
-      if (!purchase) break;
+      if (!purchase) {
+        logger.warn({ purchaseId }, 'Stripe webhook: purchase record not found after marking completed');
+        break;
+      }
 
       const product = await queryOne<{ type: string; metadata: Record<string, unknown> }>(
         'SELECT type, metadata FROM products WHERE id = $1',
         [purchase.product_id],
       );
-      if (!product) break;
+      if (!product) {
+        logger.warn({ purchaseId, productId: purchase.product_id }, 'Stripe webhook: product not found for purchase');
+        break;
+      }
 
       await query(
         `INSERT INTO user_entitlements (user_id, entitlement_type, quantity, source_purchase_id, metadata)
@@ -464,7 +473,11 @@ async function resumeBotAfterGradePayment(botId: string): Promise<void> {
   logger.info({ botId }, 'Bot auto-resumed after grade payment');
 }
 
-/** Verify Stripe webhook signature. */
+/** Verify Stripe webhook signature. Throws StripeSignatureError on failure. */
 export function verifyWebhookSignature(body: Buffer, signature: string): Stripe.Event {
+  if (!config.stripeWebhookSecret) {
+    logger.error('STRIPE_WEBHOOK_SECRET is not configured — all webhooks will be rejected');
+    throw new Error('Webhook signing secret not configured');
+  }
   return getStripe().webhooks.constructEvent(body, signature, config.stripeWebhookSecret);
 }

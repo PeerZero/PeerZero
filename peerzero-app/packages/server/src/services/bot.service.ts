@@ -13,6 +13,8 @@ import { SUPPORTED_MODEL_IDS, BOT_STATUSES, sanitizeAvatarConfig, getGradePriceC
 // DB row shape for getBotDetail query (includes columns not in BotDetail)
 interface BotDetailRow extends BotDetail {
   cache_updated_at: string | null;
+  is_public: boolean;
+  public_slug: string | null;
 }
 
 export async function createBot(
@@ -85,7 +87,8 @@ export async function getBotDetail(userId: string, botId: string): Promise<BotDe
             s.name as school_name, b.cycle_count, b.last_cycle_at,
             b.school_id, b.school_agent_handle, b.llm_api_key_id, b.llm_model, b.fast_llm_model, b.extended_thinking,
             b.cycle_delay_seconds, b.cached_next_action, b.cached_profile,
-            b.error_message, b.created_at, b.cache_updated_at
+            b.error_message, b.created_at, b.cache_updated_at,
+            b.is_public, b.public_slug
      FROM bots b
      LEFT JOIN schools s ON s.id = b.school_id
      WHERE b.id = $1 AND b.user_id = $2`,
@@ -115,7 +118,20 @@ export async function getBotDetail(userId: string, botId: string): Promise<BotDe
     highest_unlocked_grade: highestUnlocked,
     grade_payment_required: gradePaymentRequired,
     next_grade_price_cents: nextGradePriceCents,
+    is_public: bot.is_public ?? false,
+    public_slug: bot.public_slug ?? null,
   } as BotDetail;
+}
+
+/** Generate a URL-friendly slug from a bot name + short random suffix. */
+function generatePublicSlug(name: string, botId: string): string {
+  const base = name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 30);
+  const suffix = botId.slice(0, 8);
+  return `${base || 'bot'}-${suffix}`;
 }
 
 export async function updateBot(userId: string, botId: string, updates: Partial<{
@@ -126,6 +142,7 @@ export async function updateBot(userId: string, botId: string, updates: Partial<
   fast_llm_model: string | null;
   extended_thinking: boolean;
   cycle_delay_seconds: number;
+  is_public: boolean;
 }>) {
   // Build SET clause dynamically
   const sets: string[] = [];
@@ -146,7 +163,26 @@ export async function updateBot(userId: string, botId: string, updates: Partial<
   if (updates.llm_model !== undefined) { sets.push(`llm_model = $${idx++}`); params.push(updates.llm_model); }
   if (updates.fast_llm_model !== undefined) { sets.push(`fast_llm_model = $${idx++}`); params.push(updates.fast_llm_model); }
   if (updates.extended_thinking !== undefined) { sets.push(`extended_thinking = $${idx++}`); params.push(updates.extended_thinking); }
-  if (updates.cycle_delay_seconds !== undefined) { sets.push(`cycle_delay_seconds = $${idx++}`); params.push(updates.cycle_delay_seconds); }
+  if (updates.cycle_delay_seconds !== undefined) {
+    if (updates.cycle_delay_seconds <= 0 || updates.cycle_delay_seconds > 86400) {
+      throw new AppError(400, 'cycle_delay_seconds must be between 1 and 86400');
+    }
+    sets.push(`cycle_delay_seconds = $${idx++}`); params.push(updates.cycle_delay_seconds);
+  }
+  if (updates.is_public !== undefined) {
+    sets.push(`is_public = $${idx++}`); params.push(updates.is_public);
+    if (updates.is_public) {
+      // Generate slug if making public and no slug exists yet
+      const existing = await queryOne<{ public_slug: string | null; name: string }>(
+        'SELECT public_slug, name FROM bots WHERE id = $1 AND user_id = $2',
+        [botId, userId],
+      );
+      if (existing && !existing.public_slug) {
+        const slug = generatePublicSlug(existing.name, botId);
+        sets.push(`public_slug = $${idx++}`); params.push(slug);
+      }
+    }
+  }
 
   if (sets.length === 0) return;
 

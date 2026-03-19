@@ -10,6 +10,7 @@ import * as memoryService from '../services/memory.service';
 import * as activityService from '../services/activity.service';
 import * as statsService from '../services/stats.service';
 import * as skillService from '../services/skill.service';
+import { generateDialogue, DIALOGUE_CONTEXTS, type DialogueContext } from '../services/bot-voice.service';
 import { addBotCycleJob, removeBotJobs } from '../jobs/queue';
 import { logAudit } from '../services/audit.service';
 import type { ActivityCategory, FocusChunk } from '@peerzero/shared';
@@ -181,25 +182,39 @@ router.get('/:id/external-activity', userRateLimit('read'), async (req: Request,
 
   const { queryRows, queryOne: qOne } = await import('../db/client');
 
-  // Cursor-based pagination (preferred for large datasets) — use ?cursor=<created_at>
+  // Cursor-based pagination (preferred for large datasets) — use ?cursor=<created_at:id>
   // Falls back to offset pagination with ?page=N for backwards compatibility
   if (cursor) {
-    const cursorDate = new Date(cursor);
+    // Composite cursor format: "created_at:id" for deterministic ordering
+    const separatorIdx = cursor.lastIndexOf(':');
+    const cursorDate = new Date(separatorIdx > 0 ? cursor.slice(0, separatorIdx) : cursor);
+    const cursorId = separatorIdx > 0 ? cursor.slice(separatorIdx + 1) : undefined;
     if (isNaN(cursorDate.getTime())) {
       res.status(400).json({ error: 'Invalid cursor format' });
       return;
     }
-    const rows = await queryRows(
-      `SELECT id, platform, action, summary, content_preview, skills_demonstrated, bot_timestamp, created_at
-       FROM external_activity_log
-       WHERE bot_id = $1 AND deleted_at IS NULL AND created_at < $2
-       ORDER BY created_at DESC
-       LIMIT $3`,
-      [req.params.id, cursorDate.toISOString(), perPage + 1],
-    );
+    // Use composite (created_at, id) to avoid skips/loops on identical timestamps
+    const rows = cursorId
+      ? await queryRows(
+          `SELECT id, platform, action, summary, content_preview, skills_demonstrated, bot_timestamp, created_at
+           FROM external_activity_log
+           WHERE bot_id = $1 AND deleted_at IS NULL AND (created_at, id) < ($2, $3)
+           ORDER BY created_at DESC, id DESC
+           LIMIT $4`,
+          [req.params.id, cursorDate.toISOString(), cursorId, perPage + 1],
+        )
+      : await queryRows(
+          `SELECT id, platform, action, summary, content_preview, skills_demonstrated, bot_timestamp, created_at
+           FROM external_activity_log
+           WHERE bot_id = $1 AND deleted_at IS NULL AND created_at < $2
+           ORDER BY created_at DESC, id DESC
+           LIMIT $3`,
+          [req.params.id, cursorDate.toISOString(), perPage + 1],
+        );
     const hasMore = rows.length > perPage;
     const data = hasMore ? rows.slice(0, perPage) : rows;
-    const nextCursor = hasMore && data.length > 0 ? data[data.length - 1].created_at : null;
+    const lastRow = data[data.length - 1] as { created_at: string; id: string } | undefined;
+    const nextCursor = hasMore && lastRow ? `${lastRow.created_at}:${lastRow.id}` : null;
     res.json({ data, has_more: hasMore, next_cursor: nextCursor });
   } else {
     const rawPage = parseInt(req.query.page as string);
@@ -263,6 +278,39 @@ router.post('/:id/phone-home-token', userRateLimit('write'), async (req: Request
   logAudit({ userId: req.user!.userId, action: 'bot.generate_phone_home_token', entityType: 'bot', entityId: req.params.id, ipAddress: req.ip });
   // Token is returned ONCE — user must save it. We only store the hash.
   res.json({ phone_home_token: token, warning: 'Save this token — it cannot be retrieved later.' });
+});
+
+// ── Bot Voice (on-demand dialogue) ──
+
+router.post('/:id/speak', userRateLimit('write'), async (req: Request, res: Response) => {
+  const { context } = req.body;
+  if (!context || !(DIALOGUE_CONTEXTS as readonly string[]).includes(context)) {
+    res.status(400).json({ error: `Invalid context. Must be one of: ${DIALOGUE_CONTEXTS.join(', ')}` });
+    return;
+  }
+
+  const bot = await botService.getBotDetail(req.user!.userId, req.params.id);
+  if (!bot.llm_api_key_id) {
+    res.status(400).json({ error: 'Bot has no API key configured' });
+    return;
+  }
+
+  // Use fast model for dialogue (cheap), fall back to main model
+  const model = bot.fast_llm_model || bot.llm_model;
+
+  const message = await generateDialogue(
+    {
+      botId: bot.id,
+      botName: bot.name,
+      userId: req.user!.userId,
+      llmApiKeyId: bot.llm_api_key_id,
+      llmModel: model,
+      selfAuthoredBlock: null, // Let the service look it up from memory
+    },
+    context as DialogueContext,
+  );
+
+  res.json({ message, context });
 });
 
 // ── Skills ──

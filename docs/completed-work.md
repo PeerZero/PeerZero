@@ -154,7 +154,7 @@ Rewrote the prompt builder and added a full skill system. Identity now leads eve
 
 ---
 
-## Education Features (March 2026) — COMPLETE
+## Education Features (March 2026) — COMPLETE (routes unmounted, see below)
 
 **Built:**
 - Class system with cryptographically random join codes (6-char, ambiguity-free charset)
@@ -184,6 +184,42 @@ Rewrote the prompt builder and added a full skill system. Identity now leads eve
 - Run with: `cd peerzero-school && SUPABASE_URL=... SUPABASE_SERVICE_KEY=... node tests/test_credibility_load.js`
 - Optionally set `TEST_AGENT_ID=some-uuid` to target a specific agent (otherwise uses any non-banned agent)
 - All changes are restored after each test — nothing permanent is modified
+
+---
+
+## Public Bot Profiles, Bot Voice & Emotional Milestones (March 2026) — COMPLETE
+
+Full emotional layer for bot ownership — bots speak, hatch, celebrate, and can be shared.
+
+**Built (Public Profiles):**
+- `is_public` + `public_slug` on bots table (migration 0013)
+- Public profile endpoint: `GET /api/bots/public/:slug` (no auth, safe data subset only)
+- Public profile service with avatar, stats, skills, school — no sensitive data exposed
+- Slug auto-generated from bot name when toggling `is_public` via PATCH
+
+**Built (Bot Voice):**
+- `bot_voice_cache` table for storing bot-generated messages (migration 0013)
+- Bot voice service: generates dialogue via bot's fast LLM using its identity context
+- On-demand dialogue endpoint: `POST /api/bots/:id/speak` with context-aware prompts
+- Bot-voiced push notifications for milestones (tier upgrades, grade promotions, etc.)
+- User-facing only — bot voice text is never injected back into bot training/prompts
+- Server-side cache with auto-cleanup (last 50 entries per bot)
+
+**Built (Emotional Milestones):**
+- EggHatchScreen: animated hatch experience after bot creation (tap → cracks → light → Hatchling emerges)
+- MilestoneModal: celebration modals for first cycle, evolution, identity formed, graduation
+- BotDialogue component: speech bubble on BotScreen with LLM-generated bot speech
+- Context-aware dialogue (just_hatched, pre_enrollment, running_learning, stopped, etc.)
+
+**Built (Hardening — migration 0012):**
+- Unique display name index (case-insensitive) to prevent duplicates
+- Persistent `consecutive_failures` column on bots (survives worker restarts)
+- Composite cursor pagination for external activity (deterministic ordering on identical timestamps)
+- Webhook idempotency improvements in payment handling
+
+**Changed:**
+- Classes feature: routes retained but unmounted from `index.ts`, mobile screens removed
+- CreateBotScreen now routes to EggHatchScreen after creation
 
 ---
 

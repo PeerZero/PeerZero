@@ -48,9 +48,16 @@ router.post('/login', async (req: Request, res: Response) => {
     res.status(400).json({ error: 'Email and password required' });
     return;
   }
-  const { user, tokens } = await loginUser(email, password);
-  const profile = await getUserProfile(user.id);
-  res.status(200).json({ access_token: tokens.accessToken, refresh_token: tokens.refreshToken, user: profile });
+  try {
+    const { user, tokens } = await loginUser(email, password);
+    logAudit({ userId: user.id, action: 'auth.login', entityType: 'user', entityId: user.id, ipAddress: req.ip });
+    const profile = await getUserProfile(user.id);
+    res.status(200).json({ access_token: tokens.accessToken, refresh_token: tokens.refreshToken, user: profile });
+  } catch (err) {
+    // Log failed login attempts for security monitoring
+    logAudit({ userId: 'unknown', action: 'auth.login_failed', entityType: 'user', entityId: 'unknown', metadata: { email }, ipAddress: req.ip });
+    throw err;
+  }
 });
 
 router.post('/refresh', refreshLimiter, async (req: Request, res: Response) => {
@@ -93,6 +100,7 @@ router.patch('/password', requireAuth, async (req: Request, res: Response) => {
     return;
   }
   await changePassword(req.user!.userId, current_password, new_password);
+  logAudit({ userId: req.user!.userId, action: 'auth.password_change', entityType: 'user', entityId: req.user!.userId, ipAddress: req.ip });
   // Issue new tokens since all old refresh tokens were revoked
   res.json({ success: true, message: 'Password changed. Please log in again.' });
 });
@@ -111,6 +119,7 @@ router.delete('/account', requireAuth, async (req: Request, res: Response) => {
     action: 'account.delete',
     entityType: 'user',
     entityId: userId,
+    metadata: { bots_deleted: bots.length, bot_ids: bots.map(b => b.id) },
     ipAddress: req.ip,
   });
 
