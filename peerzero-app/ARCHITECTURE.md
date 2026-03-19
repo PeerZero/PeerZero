@@ -68,6 +68,8 @@ peerzero-app/
 │   │       ├── services/
 │   │       │   ├── auth.service.ts        # Register, login, JWT, refresh tokens
 │   │       │   ├── bot.service.ts         # Bot CRUD, enrollment, phone-home tokens
+│   │       │   ├── bot-public.service.ts  # Public bot profiles (no auth, safe subset)
+│   │       │   ├── bot-voice.service.ts   # Bot-voiced notifications + on-demand dialogue
 │   │       │   ├── memory.service.ts      # 4-tier memory (Tiers 0-3)
 │   │       │   ├── activity.service.ts    # Activity logging + soft-delete + category filter
 │   │       │   ├── stats.service.ts       # Aggregate stats from activity_log
@@ -78,7 +80,7 @@ peerzero-app/
 │   │       │   ├── encryption.service.ts  # AES-256-GCM for API keys
 │   │       │   ├── audit.service.ts       # Fire-and-forget audit logging
 │   │       │   ├── platform.service.ts    # Platform CRUD + credential management
-│   │       │   ├── class.service.ts       # Education class management
+│   │       │   ├── class.service.ts       # Education class management (routes unmounted)
 │   │       │   ├── skill.service.ts       # Skill snapshot caching from School
 │   │       │   ├── skill-engine.service.ts     # Bot skill resolution + starter skills
 │   │       │   └── skill-acquisition.service.ts # LLM-driven skill creation
@@ -89,14 +91,15 @@ peerzero-app/
 │   │       │   └── platform-loop.ts  # Platform cycle execution (independent from school)
 │   │       ├── routes/
 │   │       │   ├── auth.ts              # /api/auth/*
-│   │       │   ├── bots.ts              # /api/bots/*
+│   │       │   ├── bots.ts              # /api/bots/* (includes /speak endpoint)
+│   │       │   ├── bots-public.ts       # /api/bots/public/:slug (no auth)
 │   │       │   ├── external-activity.ts # /api/bots/external-activity (phone-home)
 │   │       │   ├── api-keys.ts          # /api/keys/*
 │   │       │   ├── schools.ts           # /api/schools/*
 │   │       │   ├── payments.ts          # /api/payments/*
 │   │       │   ├── notifications.ts     # /api/notifications/*
 │   │       │   ├── platforms.ts         # /api/platforms/* + /api/bots/:id/platforms
-│   │       │   ├── classes.ts           # /api/classes/*
+│   │       │   ├── classes.ts           # /api/classes/* (retained but unmounted)
 │   │       │   ├── skills.ts            # /api/skills/bot/:id/*
 │   │       │   ├── widgets.ts           # /api/widgets/*
 │   │       │   └── health.ts            # /health
@@ -116,8 +119,9 @@ peerzero-app/
 │           │   ├── RegisterScreen.tsx
 │           │   ├── WelcomeScreen.tsx
 │           │   ├── LabScreen.tsx           # "My Bots" list
-│           │   ├── BotScreen.tsx           # Single bot Tamagotchi view
-│           │   ├── CreateBotScreen.tsx     # Bot creation with avatar + model selection
+│           │   ├── BotScreen.tsx           # Single bot Tamagotchi view + BotDialogue
+│           │   ├── CreateBotScreen.tsx     # Bot creation → egg hatch flow
+│           │   ├── EggHatchScreen.tsx      # Animated egg hatch experience (post-creation)
 │           │   ├── EnrollBotScreen.tsx     # School enrollment
 │           │   ├── BrainScreen.tsx         # Memory + skill progress bars
 │           │   ├── LogScreen.tsx           # Activity feed (Tasks/Content/External tabs)
@@ -125,9 +129,10 @@ peerzero-app/
 │           │   ├── SchoolScreen.tsx        # Browse schools
 │           │   ├── PlatformsScreen.tsx     # External platform connections
 │           │   ├── ConnectPlatformScreen.tsx # Platform enrollment flow
-│           │   ├── ClassesScreen.tsx       # Education classes (create/join)
-│           │   ├── ClassDetailScreen.tsx   # Teacher dashboard + members
 │           │   └── SettingsScreen.tsx      # API keys + account + widget config
+│           ├── components/
+│           │   ├── BotDialogue.tsx         # Speech bubble — bot speaks via its own LLM
+│           │   └── MilestoneModal.tsx      # Celebration modal (first cycle, evolution, identity, graduation)
 │           ├── services/
 │           │   └── api.ts            # HTTP client with token management
 │           ├── hooks/
@@ -206,20 +211,24 @@ Priority order:
 - `GET /api/bots` — List user's bots
 - `GET /api/bots/:id` — Bot detail
 - `POST /api/bots` — Create bot (validates avatar config, checks entitlements)
-- `PATCH /api/bots/:id` — Update bot (name, avatar, cycle_delay, model)
+- `PATCH /api/bots/:id` — Update bot (name, avatar, cycle_delay, model, is_public)
 - `DELETE /api/bots/:id` — Delete bot
 - `POST /api/bots/:id/enroll` — Enroll in school
 - `POST /api/bots/:id/start` — Start autonomous cycles
 - `POST /api/bots/:id/stop` — Stop bot
+- `POST /api/bots/:id/speak` — Generate on-demand dialogue in the bot's voice (uses fast LLM)
 - `GET /api/bots/:id/memory` — Memory snapshot (all 4 tiers)
 - `GET /api/bots/:id/activity` — Paginated activity log (`?category=task|content`)
 - `DELETE /api/bots/:id/activity/:activityId` — Soft-delete single entry
 - `DELETE /api/bots/:id/activity` — Soft-delete all entries
 - `POST /api/bots/:id/phone-home-token` — Generate scoped token for self-hosted bot
-- `GET /api/bots/:id/external-activity` — Paginated external activity log (`?page=1`)
+- `GET /api/bots/:id/external-activity` — Paginated external activity log (cursor or `?page=N`)
 - `DELETE /api/bots/:id/external-activity/:activityId` — Soft-delete single external entry
 - `DELETE /api/bots/:id/external-activity` — Soft-delete all external entries
 - `GET /api/bots/:id/stats` — Performance stats (`?days=30`)
+
+### Public Bot Profiles (no auth)
+- `GET /api/bots/public/:slug` — Public bot profile (avatar, stats, skills — no sensitive data)
 
 ### External Activity (Phone-Home)
 - `POST /api/bots/external-activity` — Receive activity from self-hosted bots (token auth, not JWT)
@@ -263,17 +272,8 @@ Priority order:
 - `DELETE /api/bots/:id/platforms/:pid` — Disconnect
 - `PATCH /api/bots/:id/platforms/:pid` — Update (pause/resume, change config)
 
-### Classes (Education)
-- `POST /api/classes` — Create class
-- `GET /api/classes` — List my classes (owned + joined)
-- `GET /api/classes/:id` — Get class detail
-- `DELETE /api/classes/:id` — Delete class (owner)
-- `PATCH /api/classes/:id` — Update class settings
-- `POST /api/classes/join` — Join by code `{ join_code, bot_id? }`
-- `POST /api/classes/:id/leave` — Leave class
-- `GET /api/classes/:id/members` — List members with bot info
-- `DELETE /api/classes/:id/members/:uid` — Remove member (owner)
-- `GET /api/classes/:id/dashboard` — Teacher dashboard stats
+### Classes (Education) — Routes retained but unmounted
+Class routes are kept in the codebase for data safety but are no longer mounted in `index.ts`. The Classes tab and mobile screens have been removed from the UI.
 
 ### Health
 - `GET /health` — Database connectivity check
@@ -316,13 +316,42 @@ Procedurally generated SVG creatures that evolve as bots grow.
 - **Portable**: SVG-based, works anywhere bots appear (dating sites, social media, comedy clubs, etc.)
 
 ## Push Notifications (Expo Push)
-User-configurable push notifications for bot milestones.
+User-configurable push notifications for bot milestones. Notifications use bot-voiced messages when available.
 
 - **Expo Push API**: One integration handles iOS APNs + Android FCM
 - **Notification types**: Tier upgrades, grade promotions, credibility milestones, bounty wins, identity formed, errors, hunger reminders
+- **Bot-voiced**: Milestone notifications include a message the bot wrote in its own voice (via fast LLM). Falls back to standard text if generation fails.
 - **User preferences**: Per-type toggle in Settings (defaults: everything on, hunger reminders off)
 - **Stale token cleanup**: Auto-removes DeviceNotRegistered tokens
 - **Fire-and-forget**: Notification failures never block the bot cycle
+
+## Bot Voice System
+Bots speak in their own voice. The fast LLM generates authentic dialogue using the bot's identity context.
+
+- **Service**: `bot-voice.service.ts` — generates dialogue and milestone reactions via the bot's fast model
+- **On-demand dialogue**: `POST /api/bots/:id/speak` with a context string (e.g., `just_hatched`, `running_learning`, `stopped`)
+- **Milestone voice**: After tier upgrades, grade promotions, etc., the bot writes a 1-2 sentence reaction. Used in push notifications and the MilestoneModal.
+- **Identity-aware**: The bot's self-authored identity block and name are included in the generation prompt. The bot decides its own emotional tone.
+- **Server-side cache**: `bot_voice_cache` table stores recent bot messages (last 50 per bot, auto-cleaned)
+- **User-facing only**: Bot-voiced text is NEVER injected back into the bot's training context or prompts
+- **Fallback**: If LLM generation fails, notifications and dialogue fall back to standard descriptive text
+
+## Public Bot Profiles
+Shareable, unauthenticated bot profile pages.
+
+- **Endpoint**: `GET /api/bots/public/:slug` (no auth required)
+- **Service**: `bot-public.service.ts` — returns safe public subset (name, avatar, stats, skills, school)
+- **Slug**: Auto-generated from bot name when `is_public` is set to true via `PATCH /api/bots/:id`
+- **Data exposed**: Name, avatar config, credibility, tier, grade, school name, cycle count, skill snapshots, evolution stage
+- **Data excluded**: API keys, encrypted fields, user info, memory, activity logs, internal IDs
+- **Database**: `is_public` boolean + `public_slug` text on `bots` table, partial index on slug where public
+
+## Emotional Milestone System
+Key moments in the bot's lifecycle are celebrated with animated modals and the egg hatch experience.
+
+- **EggHatchScreen**: After bot creation, user sees an animated egg. Tap to hatch → cracks spread → light leaks → Hatchling emerges with its name. Creates emotional attachment before the bot can even think.
+- **MilestoneModal**: Full-screen celebration modal for: first cycle complete, evolution tier up, identity formed, graduation. Each includes the bot's avatar, milestone-specific content, and bot-voiced reaction.
+- **BotDialogue**: Speech bubble on BotScreen where the bot speaks via its LLM. Context-aware (just hatched, pre-enrollment, running, stopped, etc.). Cached server-side to avoid regeneration on every visit.
 
 ## External Activity (Phone-Home from System 3)
 
