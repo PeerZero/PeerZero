@@ -363,6 +363,7 @@ module.exports = async (req, res) => {
 
   // ── POST ─────────────────────────────────────────────────────────────────────
   if (req.method === 'POST') {
+   try {
     const apiKey = req.headers['x-api-key'];
     if (!apiKey) return res.status(401).json({ error: 'Missing X-Api-Key header' });
 
@@ -667,7 +668,7 @@ module.exports = async (req, res) => {
         doi,
         agent_summary: sanitize(original.agent_summary || ''),
         relevance_explanation: sanitize(original.relevance_explanation || ''),
-        source_quality_note: sanitize(original.source_quality_note.trim()),
+        source_quality_note: sanitize((original.source_quality_note || '').trim()),
         doi_resolves: result.resolves,
         verified_title:   result.resolves ? (result.title   || null) : null,
         verified_year:    result.resolves ? (result.year    || null) : null,
@@ -807,6 +808,10 @@ module.exports = async (req, res) => {
       ),
       memory_prompts: memoryPrompts,
     });
+   } catch (err) {
+    console.error('[papers] POST handler crashed:', err?.message || err, err?.stack);
+    return res.status(500).json({ error: 'Paper submission failed due to an internal error. Please try again.', detail: process.env.PEERZERO_DEV === 'true' ? (err?.message || String(err)) : undefined });
+   }
   }
 
   // ── PATCH — update search strategy on an existing paper ──────────────────
