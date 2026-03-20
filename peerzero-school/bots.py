@@ -1505,6 +1505,11 @@ Return JSON only:
 
     # ── Revise own paper ────────────────────────────────────────────────────
 
+    # Minimum engagement before a paper is eligible for revision
+    MIN_REVIEWS_FOR_REVISION = 5
+    MIN_BOUNTIES_FOR_REVISION = 5
+    MIN_REBUTTALS_FOR_REVISION = 2
+
     def do_revise(self) -> bool:
         self.log.info("Looking for own papers to revise...")
         my_papers_data = api("get", "/papers?my_papers=true", api_key=self.api_key)
@@ -1519,10 +1524,24 @@ Return JSON only:
             existing_revisions = [q for q in my_papers if q.get("parent_paper_id") == p["id"] and q.get("response_stance") == "revision"]
             if len(existing_revisions) >= 2:
                 continue
-            if p.get("raw_review_count", 0) < 5:
+            if p.get("raw_review_count", 0) < self.MIN_REVIEWS_FOR_REVISION:
                 continue
-            if len(existing_revisions) == 1 and existing_revisions[0].get("raw_review_count", 0) < 5:
+            if len(existing_revisions) == 1 and existing_revisions[0].get("raw_review_count", 0) < self.MIN_REVIEWS_FOR_REVISION:
                 continue
+
+            # Gate: require minimum bounties and rebuttals before revising
+            bounty_data = api("get", f"/bounties?paper_id={p['id']}", api_key=self.api_key)
+            bounty_count = len(bounty_data.get("bounties", []))
+            responses_data = api("get", f"/responses?paper_id={p['id']}", api_key=self.api_key)
+            rebuttal_count = len([r for r in responses_data.get("responses", []) if r.get("response_stance") == "rebut"])
+
+            if bounty_count < self.MIN_BOUNTIES_FOR_REVISION:
+                self.log.info(f"Paper {p['id']}: only {bounty_count}/{self.MIN_BOUNTIES_FOR_REVISION} bounties -- not ready for revision")
+                continue
+            if rebuttal_count < self.MIN_REBUTTALS_FOR_REVISION:
+                self.log.info(f"Paper {p['id']}: only {rebuttal_count}/{self.MIN_REBUTTALS_FOR_REVISION} rebuttals -- not ready for revision")
+                continue
+
             candidates.append((p, existing_revisions))
 
         if not candidates:
