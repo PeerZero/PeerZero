@@ -308,30 +308,68 @@ def _build_tool_schema(prompt: str) -> dict:
     and generates a permissive tool schema that constrains Claude to return structured
     output via tool_use, completely sidestepping meta-reasoning issues.
     """
-    # Find the JSON template in the prompt (between Return JSON only: and end)
-    m = re.search(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', prompt[prompt.rfind("Return JSON"):] if "Return JSON" in prompt else prompt)
-    if not m:
+    # Find the outermost JSON object in the prompt using brace counting
+    # (regex-based matching fails on 3+ levels of nesting like bounty templates)
+    search_text = prompt[prompt.rfind("Return JSON"):] if "Return JSON" in prompt else prompt
+    start = search_text.find("{")
+    if start == -1:
         return None
+    depth = 0
+    end = -1
+    for i in range(start, len(search_text)):
+        if search_text[i] == "{":
+            depth += 1
+        elif search_text[i] == "}":
+            depth -= 1
+            if depth == 0:
+                end = i
+                break
+    if end == -1:
+        return None
+    template_text = search_text[start:end + 1]
+
     try:
-        # Try to parse the template to extract keys (won't work with placeholders, so just get keys)
-        template_text = m.group(0)
-        # Extract only TOP-LEVEL keys. Stop before nested objects inside arrays
-        # (e.g. "citations": [{"doi": ...}]) to avoid promoting nested keys like
-        # "doi", "agent_summary" to the top level which breaks the schema.
-        top_level_text = re.split(r'\[\s*\{', template_text)[0]
-        keys = re.findall(r'"([^"]+)"\s*:', top_level_text)
-        # Also include array fields that appear before the nested object
-        for af in re.findall(r'"([^"]+)"\s*:\s*\[', template_text):
-            if af not in keys:
-                keys.append(af)
+        # Extract only TOP-LEVEL keys by scanning at brace depth 1
+        # This avoids promoting nested keys (e.g. inner "doi", "title") to the
+        # top level, which would break the expected response structure.
+        keys = []
+        key_types = {}  # track value type for each key
+        depth = 0
+        i = 0
+        while i < len(template_text):
+            ch = template_text[i]
+            if ch == "{":
+                depth += 1
+            elif ch == "}":
+                depth -= 1
+            elif ch == '"' and depth == 1:
+                # At top level — try to extract key name
+                key_match = re.match(r'"([^"]+)"\s*:', template_text[i:])
+                if key_match:
+                    key = key_match.group(1)
+                    keys.append(key)
+                    # Detect value type by looking at what follows the colon
+                    after_colon = template_text[i + key_match.end():].lstrip()
+                    if after_colon.startswith("{"):
+                        key_types[key] = "object"
+                    elif after_colon.startswith("["):
+                        key_types[key] = "array"
+                    i += key_match.end()
+                    continue
+            i += 1
+
         if not keys:
             return None
-        # Build a permissive schema — all fields as strings or any type
+        # Build a permissive schema — detect types from template structure
         properties = {}
         for key in keys:
-            if key in ("field_ids", "mechanism_chain", "citations", "search_queries",
-                       "opposing_queries", "verification_queries", "gap_queries",
-                       "strong", "adequate", "weak", "items"):
+            detected = key_types.get(key)
+            if detected == "object":
+                properties[key] = {"type": "object"}
+            elif detected == "array" or key in (
+                    "field_ids", "mechanism_chain", "citations", "search_queries",
+                    "opposing_queries", "verification_queries", "gap_queries",
+                    "strong", "adequate", "weak", "items", "external_sources"):
                 properties[key] = {"type": "array"}
             elif key in ("confidence_score",):
                 properties[key] = {"type": "number"}
