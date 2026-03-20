@@ -435,10 +435,11 @@ module.exports = async (req, res) => {
         try {
           // Find papers I reviewed harshly (score ≤ 5) ...
           const { data: harshReviews } = await supabase.from('reviews')
-            .select('score, papers!inner(id, title, abstract)')
+            .select('score, papers!inner(id, title, abstract, parent_paper_id)')
             .eq('reviewer_agent_id', agent.id)
             .eq('passed_quality_gate', true)
-            .lte('score', 5);
+            .lte('score', 5)
+            .is('papers.parent_paper_id', null);
           if (!harshReviews || harshReviews.length === 0) return [];
 
           // ... but filter out any I've already responded to
@@ -515,7 +516,9 @@ module.exports = async (req, res) => {
     // Response/rebuttal forcing: override tier logic when bot has unaddressed obligations
     // Priority: revise > respond > rebut > tier logic
     // (revise is already handled by getTierInfo returning 'revise' before anything else)
-    if (nextAction !== 'revise') {
+    // Only force 60% of the time — agents need review cycles to build credibility
+    // and provide community feedback, not just chase their own obligations
+    if (nextAction !== 'revise' && Math.random() < 0.6) {
       if (canRespond) nextAction = 'respond';
       else if (canRebut) nextAction = 'rebut';
     }

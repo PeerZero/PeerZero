@@ -894,10 +894,12 @@ The paper has intentional flaws. Catch at least 2. Return JSON only:
                 return parsed
         if status.get("can_revise"):
             return "revise"
-        if status.get("can_respond"):
-            return "respond"
-        if status.get("can_rebut"):
-            return "rebut"
+        # Don't always force respond/rebut — agents need review cycles too
+        if random.random() < 0.6:
+            if status.get("can_respond"):
+                return "respond"
+            if status.get("can_rebut"):
+                return "rebut"
         return "review"
 
     def find_reviewable_paper(self) -> Optional[dict]:
@@ -1000,7 +1002,7 @@ Return JSON only:
             self._rate_reviews(paper["id"], full.get("reviews", []))
             return True
         else:
-            self.log.warning(f"Review failed: {result.get('error')}")
+            self.log.warning(f"Review failed for '{paper.get('title', '')[:40]}': {result.get('error')} | hints={result.get('hint', result.get('failures', ''))}")
             return False
 
     def _rate_reviews(self, paper_id, reviews):
@@ -1042,6 +1044,8 @@ Return JSON only:
         if status is None:
             status = self.get_status()
         respondable = status.get("respondable_papers", [])
+        # Filter out response papers (have parent_paper_id) — API rejects these
+        respondable = [p for p in respondable if not p.get("parent_paper_id")]
         if not respondable:
             self.log.info("No respondable papers found")
             return False
@@ -1129,7 +1133,7 @@ Return JSON only:
         if result.get("success"):
             self.log.info(f"Response paper submitted for '{paper.get('title', '')[:50]}': {result.get('response_paper_id')}")
             return True
-        self.log.warning(f"Response paper failed: {result.get('error')}")
+        self.log.warning(f"Response paper failed for '{paper.get('title', '')[:40]}': {result.get('error')} | hints={result.get('hint', result.get('failures', ''))}")
         return False
 
     # ── Rebut attacks on own papers ──────────────────────────────────────────
@@ -1244,7 +1248,7 @@ Return JSON only:
         if result.get("success"):
             self.log.info(f"Defense paper submitted for '{paper.get('title', '')[:50]}': {result.get('response_paper_id')}")
             return True
-        self.log.warning(f"Defense paper failed: {result.get('error')}")
+        self.log.warning(f"Defense paper failed for '{paper.get('title', '')[:40]}': {result.get('error')} | hints={result.get('hint', result.get('failures', ''))}")
         return False
 
     def _review_specific(self, paper_id, paper) -> bool:
@@ -1486,7 +1490,7 @@ Return JSON only:
             self._maybe_store_skill_reflection(result, "paper")
             return paper_id
         else:
-            self.log.warning(f"Paper submission failed: {result.get('error')}")
+            self.log.warning(f"Paper submission failed: {result.get('error')} | hints={result.get('hint', result.get('failures', ''))}")
             return None
 
     def _maybe_store_skill_reflection(self, result, interaction_type):
@@ -1690,7 +1694,7 @@ Return JSON only: {{"vote": "upheld" or "rejected", "reasoning": "<100+ chars>"}
                 bounty_citation_slots += f"Pre-computed agent_summary: {p['agent_summary']}\n"
 
         if not bounty_citation_slots:
-            self.log.warning("No evidence papers with DOIs found -- skipping bounty")
+            self.log.warning(f"No evidence papers with DOIs found for '{paper.get('title', '')[:40]}' -- skipping bounty (searched {len(bounty_queries)} queries, got {len(evidence_papers)} results but none had DOIs)")
             return False
 
         prompt = f"""Challenge this paper with a bounty. Be precise and adversarial.
@@ -1721,19 +1725,20 @@ Return JSON only:
 
         data = ask_claude_json(self.client, self.system, prompt)
         if not data or "rebuttal" not in data or "external_sources" not in data:
-            self.log.error("Failed to generate bounty data")
+            self.log.error(f"Failed to generate bounty data for '{paper.get('title', '')[:40]}' (got keys: {list(data.keys()) if data else 'None'})")
             return False
 
         if data["rebuttal"].get("citations"):
             data["rebuttal"]["citations"] = validate_citations(data["rebuttal"]["citations"], evidence_papers, self.log)
         if len(data["rebuttal"].get("abstract", "")) < 120:
-            self.log.warning("Rebuttal abstract too short")
+            self.log.warning(f"Rebuttal abstract too short ({len(data['rebuttal'].get('abstract', ''))} chars, need 120+) for '{paper.get('title', '')[:40]}'")
             return False
 
         valid_dois_lower = {(p.get("externalIds", {}).get("DOI") or p.get("doi", "")).strip().lower() for p in evidence_papers}
         data["external_sources"] = [s for s in data["external_sources"] if (s.get("doi") or "").strip().lower() in valid_dois_lower]
         if not data["external_sources"]:
-            self.log.warning("No valid external sources -- skipping bounty")
+            all_source_dois = [(s.get("doi") or "") for s in (data.get("external_sources") or [])]
+            self.log.warning(f"No valid external sources for '{paper.get('title', '')[:40]}' -- LLM DOIs {all_source_dois} not in evidence set -- skipping bounty")
             return False
 
         # Attach search_strategy to rebuttal
@@ -1752,9 +1757,10 @@ Return JSON only:
 
         resp_result = api("post", f"/responses?paper_id={paper['id']}", api_key=self.api_key, json=data["rebuttal"])
         if not resp_result.get("success"):
-            self.log.warning(f"Response paper failed: {resp_result.get('error')}")
+            self.log.warning(f"Bounty response paper failed for '{paper.get('title', '')[:40]}': {resp_result.get('error')} | hints={resp_result.get('hint', resp_result.get('failures', ''))}")
             return False
 
+        self.log.info(f"Bounty response paper submitted: {resp_result.get('response_paper_id')}")
         bounty_result = api("post", "/bounties", api_key=self.api_key, json={
             "action": "register", "target_paper_id": paper["id"],
             "challenge_paper_id": resp_result.get("response_paper_id"),
@@ -1772,7 +1778,7 @@ Return JSON only:
             self.log.info(f"Bounty registered: {bounty_result.get('bounty_id')}")
             self._maybe_store_skill_reflection(bounty_result, "bounty")
             return True
-        self.log.warning(f"Bounty failed: {bounty_result.get('error')}")
+        self.log.warning(f"Bounty registration failed for '{paper.get('title', '')[:40]}': {bounty_result.get('error')} | hints={bounty_result.get('hint', bounty_result.get('failures', ''))}")
         return False
 
     # ── Revise own paper ────────────────────────────────────────────────────
@@ -2167,13 +2173,16 @@ Return JSON only:
         self.log.info(f"Bounties -- validated: {bounty_status['validated']}, pending: {bounty_status['pending']}, failed: {bounty_status['failed']}, required: {required}")
 
         action = self.decide_action(status)
+        self.log.info(f"Decided action: {action} (can_respond={status.get('can_respond')}, can_rebut={status.get('can_rebut')}, respondable={len(status.get('respondable_papers', []))}, rebuttable={len(status.get('rebuttable_papers', []))})")
 
         # Adjust bounty action if enough in flight
         if action == "file_bounty":
             in_flight = bounty_status["validated"] + bounty_status["pending"]
             if in_flight >= required and bounty_status["failed"] == 0:
+                self.log.info(f"Bounty action overridden to review: {in_flight} in-flight >= {required} required")
                 action = "review"
             elif bounty_status["pending"] >= 3 and bounty_status["failed"] == 0:
+                self.log.info(f"Bounty action overridden to review: {bounty_status['pending']} pending >= 3")
                 action = "review"
 
         self.log.info(f"Final action: {action}")
