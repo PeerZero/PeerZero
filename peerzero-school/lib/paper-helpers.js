@@ -113,10 +113,10 @@ function flagWeakSynthesis(crossStudyConnection) {
   const lower = crossStudyConnection.toLowerCase();
   const matched = WEAK_SYNTHESIS_SIGNALS.filter(s => lower.includes(s));
   if (matched.length >= 2) {
-    return { flagged: true, reason: `Cross-study connection may be superficial — contains generic phrasing ("${matched.slice(0,2).join('", "')}"). These phrases describe adjacency, not synthesis. A strong connection states: Study A found X, Study B found Y, and TOGETHER they imply Z — where Z is something neither study claimed or tested.` };
+    return { flagged: true, reason: `Cross-study connection may be superficial — contains generic phrasing ("${matched.slice(0,2).join('", "')}"). These phrases describe adjacency, not synthesis. Apply the surprise test: would a researcher who read Study A but NOT Study B be surprised by the implication? If not, this is not a genuine cross-study insight. A strong connection states: Study A found X, Study B found Y, and TOGETHER they imply Z — where Z is something neither study claimed or tested.` };
   }
   if (crossStudyConnection.trim().length < 150) {
-    return { flagged: true, reason: 'Cross-study connection is very short. A strong connection must do three things: (1) state what Study A specifically found, (2) state what Study B specifically found, and (3) explain the non-obvious implication that emerges ONLY from combining them — something a reader of just one study would never guess.' };
+    return { flagged: true, reason: 'Cross-study connection is very short. Apply the surprise test: would a researcher who read Study A but NOT Study B be surprised by this implication? A strong connection must: (1) state what Study A specifically found, (2) state what Study B specifically found, and (3) explain the non-obvious implication that emerges ONLY from combining them — something a reader of just one study would never guess.' };
   }
   return { flagged: false, reason: null };
 }
@@ -180,10 +180,24 @@ async function buildSubmissionCoaching(fieldIds, confidenceScore, crossStudyConn
     const reminder = tier === 'advanced'
       ? 'Reviewers will cross-check your agent_summary fields. Summaries from memory are the most common citation accuracy failure.'
       : 'Reviewers will check your agent_summary fields against the actual papers. Summaries written from memory rather than from abstracts are the most common cause of citation accuracy penalties.';
+
+    // Build targeted self-interrogation reminders based on which flags fired
+    const interrogation = [];
+    if (synthesisCheck.flagged) {
+      interrogation.push('What is the single weakest link in your evidence chain? Name it specifically.');
+    }
+    if (confidenceScore >= 8) {
+      interrogation.push('If your conclusion is wrong, what is the most likely reason? Confounder, wrong study design, or cross-context extrapolation?');
+    }
+    if (confidenceScore >= 6 && fieldComparison && confidenceScore >= fieldComparison.field_top_score) {
+      interrogation.push('Your confidence matches or exceeds the field top — is your evidence actually stronger than the best-scoring paper in this field?');
+    }
+
     return {
       cross_study_flag: synthesisCheck.flagged ? synthesisCheck.reason : null,
       field_comparison: fieldComparison,
       reminder,
+      self_interrogation: interrogation.length > 0 ? interrogation : undefined,
     };
   } catch (err) {
     console.error('[coaching] buildSubmissionCoaching failed:', err?.message || err);

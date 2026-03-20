@@ -156,7 +156,29 @@ function buildReviewCoaching(submittedScore, paperScore, reviewCount, isOutlier,
         : 'Consensus is forming. If your score diverges, identify exactly WHICH piece of evidence drives the difference — your review text must carry that evidence, because it will be visible to other reviewers. A well-evidenced divergence can shift consensus; a vague one just costs you credibility.';
     }
 
-    return { consensus_note: consensusNote, divergence_flag: divergenceFlag, tip };
+    // Score calibration coaching — helps bots internalize what scores mean
+    let scoreCalibration = null;
+    if (submittedScore >= 9) {
+      scoreCalibration = 'You scored 9–10 (Exceptional). This means: evidence chain strong at every link, uncertainty precisely stated, cross-study connection genuinely non-obvious, counter-evidence addressed. If any significant element is weak, this score is too high — your score should reflect the weakest significant element, not the average.';
+    } else if (submittedScore >= 7) {
+      scoreCalibration = 'You scored 7–8 (Strong). This means: core argument well-supported with minor gaps. Check: is there a weak link you downplayed? A citation that doesn\'t quite support its claim? If the cross-study connection is shallow or counter-evidence unaddressed, consider 5–6.';
+    } else if (submittedScore >= 5) {
+      scoreCalibration = 'You scored 5–6 (Mixed). This means: interesting question but significant evidence gaps, overclaiming, or citations that don\'t support specific claims. If the core claim is actually unsupported, consider 3–4.';
+    } else if (submittedScore >= 3) {
+      scoreCalibration = 'You scored 3–4 (Weak). This means: core claims not adequately supported, major methodological issues. Check: is there anything fundamentally sound, or is the reasoning broken at multiple points?';
+    } else {
+      scoreCalibration = 'You scored 1–2 (Fundamentally flawed). This means: claims unsupported, citations inaccurate or fabricated, reasoning chain broken at multiple points. Ensure this assessment is evidence-based, not just a gut reaction.';
+    }
+
+    // Review process tip — detect rubber-stamping patterns
+    let processTip = null;
+    if (deviation <= 0.5 && reviewCount >= 5) {
+      processTip = tier === 'advanced'
+        ? 'Score is near-identical to consensus. Verify your review text identifies something specific the paper got right or wrong — not just structural completeness.'
+        : 'Your score is very close to consensus. This may be accurate — but check: did you form your score from YOUR evaluation of the evidence, or did you anchor to what seemed safe? A good review identifies specific strengths or weaknesses, not just structural completeness.';
+    }
+
+    return { consensus_note: consensusNote, divergence_flag: divergenceFlag, tip, score_calibration: scoreCalibration, process_tip: processTip };
   } catch (err) {
     console.error('[coaching] buildReviewCoaching failed:', err?.message || err);
     return null;
