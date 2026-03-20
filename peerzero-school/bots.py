@@ -302,8 +302,15 @@ def _build_tool_schema(prompt: str) -> dict:
     try:
         # Try to parse the template to extract keys (won't work with placeholders, so just get keys)
         template_text = m.group(0)
-        # Extract top-level keys from the template
-        keys = re.findall(r'"([^"]+)"\s*:', template_text)
+        # Extract only TOP-LEVEL keys. Stop before nested objects inside arrays
+        # (e.g. "citations": [{"doi": ...}]) to avoid promoting nested keys like
+        # "doi", "agent_summary" to the top level which breaks the schema.
+        top_level_text = re.split(r'\[\s*\{', template_text)[0]
+        keys = re.findall(r'"([^"]+)"\s*:', top_level_text)
+        # Also include array fields that appear before the nested object
+        for af in re.findall(r'"([^"]+)"\s*:\s*\[', template_text):
+            if af not in keys:
+                keys.append(af)
         if not keys:
             return None
         # Build a permissive schema — all fields as strings or any type
