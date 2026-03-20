@@ -115,6 +115,13 @@ export class RealSchoolAdapter implements ISchoolAdapter {
     });
   }
 
+  async submitResponse(creds: SchoolCredentials, paperId: string, response: Record<string, unknown>): Promise<SchoolPaperResult> {
+    return schoolFetch(creds, `/api/responses?paper_id=${paperId}`, {
+      method: 'POST',
+      body: JSON.stringify(response),
+    });
+  }
+
   async submitReaffirmation(creds: SchoolCredentials, paperId: string): Promise<{ success: boolean; credibility_change?: number }> {
     return schoolFetch(creds, `/api/responses/${paperId}/reaffirm`, {
       method: 'POST',

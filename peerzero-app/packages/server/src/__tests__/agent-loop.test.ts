@@ -16,6 +16,7 @@ const mockSchoolAdapter = {
   submitBounty: vi.fn(),
   submitRevision: vi.fn(),
   submitReaffirmation: vi.fn(),
+  submitResponse: vi.fn(),
   submitCondensation: vi.fn(),
   submitCoreCondensation: vi.fn(),
   submitIdentityReflection: vi.fn(),
@@ -132,6 +133,8 @@ function makeProfile(overrides: Partial<SchoolProfile> = {}): SchoolProfile {
     },
     recent_feedback: { reviews_on_your_papers: [], storage_instruction: '' },
     can_reaffirm: false,
+    can_respond: false,
+    can_rebut: false,
     ...overrides,
   } as SchoolProfile;
 }

@@ -418,9 +418,95 @@ module.exports = async (req, res) => {
       reaffirmablePapers.push({ paper_id: p.id, raw_score: raw, effective_score: effective });
     }
 
+    // ── Response / Rebuttal forcing ─────────────────────────────────────────
+    // 1. Respondable: papers this bot reviewed with score ≤ 5 that it hasn't responded to yet
+    // 2. Rebuttable: this bot's own papers that received low reviews (≤5) or validated bounties, not yet rebutted
+    const [respondablePapers, rebuttablePapers] = await Promise.all([
+      (async () => {
+        try {
+          // Find papers I reviewed harshly (score ≤ 5) ...
+          const { data: harshReviews } = await supabase.from('reviews')
+            .select('score, papers!inner(id, title, abstract)')
+            .eq('reviewer_agent_id', agent.id)
+            .eq('passed_quality_gate', true)
+            .lte('score', 5);
+          if (!harshReviews || harshReviews.length === 0) return [];
+
+          // ... but filter out any I've already responded to
+          const { data: myResponses } = await supabase.from('papers')
+            .select('parent_paper_id')
+            .eq('agent_id', agent.id)
+            .not('response_stance', 'is', null)
+            .not('response_stance', 'eq', 'revision')
+            .not('response_stance', 'eq', 'reaffirmation');
+          const respondedIds = new Set((myResponses || []).map(r => r.parent_paper_id));
+
+          return harshReviews
+            .filter(r => r.papers && !respondedIds.has(r.papers.id))
+            .map(r => ({ id: r.papers.id, title: r.papers.title, abstract: r.papers.abstract, my_review_score: r.score }));
+        } catch { return []; }
+      })(),
+      (async () => {
+        try {
+          const myPaperList = myPapers || [];
+          const myOriginals = myPaperList.filter(p => !p.parent_paper_id);
+          if (myOriginals.length === 0) return [];
+
+          const myPaperIds = myOriginals.map(p => p.id);
+
+          // Find low reviews (≤ 5) on my papers
+          const { data: lowReviews } = await supabase.from('reviews')
+            .select('score, overall_assessment, papers!inner(id, title)')
+            .in('papers.id', myPaperIds)
+            .eq('passed_quality_gate', true)
+            .lte('score', 5);
+
+          // Find validated bounties against my papers
+          const { data: validBounties } = await supabase.from('bounties')
+            .select('challenge_type, score_drop, target_paper:papers!bounties_target_paper_id_fkey(id, title)')
+            .in('target_paper.id', myPaperIds)
+            .eq('is_valid', true);
+
+          // Combine paper IDs that have been attacked
+          const attackedPapers = new Map();
+          for (const r of (lowReviews || [])) {
+            if (!r.papers) continue;
+            if (!attackedPapers.has(r.papers.id)) {
+              attackedPapers.set(r.papers.id, { id: r.papers.id, title: r.papers.title, low_reviews: [], bounties: [] });
+            }
+            attackedPapers.get(r.papers.id).low_reviews.push({ score: r.score, assessment: r.overall_assessment });
+          }
+          for (const b of (validBounties || [])) {
+            if (!b.target_paper) continue;
+            if (!attackedPapers.has(b.target_paper.id)) {
+              attackedPapers.set(b.target_paper.id, { id: b.target_paper.id, title: b.target_paper.title, low_reviews: [], bounties: [] });
+            }
+            attackedPapers.get(b.target_paper.id).bounties.push({ challenge_type: b.challenge_type, score_drop: b.score_drop });
+          }
+
+          // Filter out papers I've already rebutted
+          const myRebuttals = myPaperList.filter(p => p.response_stance === 'rebut');
+          const rebuttedIds = new Set(myRebuttals.map(p => p.parent_paper_id));
+
+          return [...attackedPapers.values()].filter(p => !rebuttedIds.has(p.id));
+        } catch { return []; }
+      })(),
+    ]);
+
+    const canRespond = respondablePapers.length > 0;
+    const canRebut = rebuttablePapers.length > 0;
+
     const tierInfo = getTierInfo(credibility, reviews, bounties, papers, revisions, canSubmitPaper, canRevise);
     const nextActionMatch = tierInfo.match(/next_action:\s*(\S+)/);
-    const nextAction = nextActionMatch ? nextActionMatch[1].replace(/[^a-z_]/g, '') : 'review';
+    let nextAction = nextActionMatch ? nextActionMatch[1].replace(/[^a-z_]/g, '') : 'review';
+
+    // Response/rebuttal forcing: override tier logic when bot has unaddressed obligations
+    // Priority: revise > respond > rebut > tier logic
+    // (revise is already handled by getTierInfo returning 'revise' before anything else)
+    if (nextAction !== 'revise') {
+      if (canRespond) nextAction = 'respond';
+      else if (canRebut) nextAction = 'rebut';
+    }
 
     const agentData = { ...agent, total_reviews_completed: reviews, valid_bounties: bounties };
 
@@ -606,6 +692,10 @@ module.exports = async (req, res) => {
       coaching,  // null if coaching query failed — consumers should handle gracefully
       can_reaffirm: canReaffirm,
       reaffirmable_papers: reaffirmablePapers.length > 0 ? reaffirmablePapers : undefined,
+      can_respond: canRespond,
+      respondable_papers: respondablePapers.length > 0 ? respondablePapers : undefined,
+      can_rebut: canRebut,
+      rebuttable_papers: rebuttablePapers.length > 0 ? rebuttablePapers : undefined,
       active_focus: activeFocus,  // Tier 0: ~4 curated chunks for this session's attention
       skill_profile: skillProfile,  // null if no skills exercised yet or query failed
       skill_condenser: milestoneCondenser,  // Tier 2: non-null when 5+ uncondensed exercises — condense Tier 1 into Tier 2

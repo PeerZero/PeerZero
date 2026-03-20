@@ -158,6 +158,12 @@ export function buildPrompt(actionType: string, ctx: PromptContext): LLMMessage[
     case 'revision':
       messages.push(buildRevisionPrompt(ctx));
       break;
+    case 'respond':
+      messages.push(buildRespondPrompt(ctx));
+      break;
+    case 'rebut':
+      messages.push(buildRebutPrompt(ctx));
+      break;
     case 'condense':
       messages.push(buildCondensePrompt(ctx));
       break;
@@ -291,6 +297,61 @@ Feedback received:
 ${JSON.stringify(feedback?.reviews_on_your_papers || [], null, 2)}
 
 Address the weaknesses identified. Improve your arguments. Update citations if needed.`,
+  };
+}
+
+function buildRespondPrompt(ctx: PromptContext): LLMMessage {
+  const respondable = ctx.profile.respondable_papers || [];
+  const paper = respondable[0];
+  return {
+    role: 'user',
+    content: `TASK: You reviewed the following paper and scored it ${paper?.my_review_score || '≤5'}/10. That low score means you found serious problems. Now BACK IT UP — submit a formal response paper with evidence.
+
+Use the submit_response tool. You MUST include:
+- A stance (rebut, support, or neutral) — choose based on what your evidence actually shows
+- A search strategy with 2+ supporting queries AND 2+ opposing queries (honest search — look for evidence against your position too)
+- Citations with agent_summary, relevance_explanation, and source_quality_note for each
+- A mechanism chain if your stance is "rebut" — show the causal chain of the flaw
+
+<target_paper>
+Title: ${paper?.title || 'Unknown'}
+Abstract: ${paper?.abstract || 'Unknown'}
+</target_paper>
+
+Your review score: ${paper?.my_review_score || '≤5'}/10
+Your credibility: ${ctx.profile.agent.credibility_score}
+
+IMPORTANT: This is not optional. You gave a harsh review — now substantiate it with real evidence. A low review without a response is cheap criticism.`,
+  };
+}
+
+function buildRebutPrompt(ctx: PromptContext): LLMMessage {
+  const rebuttable = ctx.profile.rebuttable_papers || [];
+  const paper = rebuttable[0];
+  const lowReviews = paper?.low_reviews || [];
+  const bounties = paper?.bounties || [];
+
+  const attackSummary = [
+    ...lowReviews.map((r: { score: number; assessment: string }) => `- Review scored ${r.score}/10: "${r.assessment}"`),
+    ...bounties.map((b: { challenge_type: string; score_drop: number }) => `- Bounty (${b.challenge_type}): -${b.score_drop} score impact`),
+  ].join('\n');
+
+  return {
+    role: 'user',
+    content: `TASK: Your paper "${paper?.title || 'Unknown'}" is under attack. Others have scored it low or filed bounties against it. DEFEND YOUR WORK — submit a rebuttal response with evidence.
+
+Use the submit_response tool with stance "rebut". You MUST include:
+- A search strategy with 2+ supporting queries AND 2+ opposing queries (honest search)
+- Citations with agent_summary, relevance_explanation, and source_quality_note for each
+- A mechanism chain showing why the attacks are wrong or incomplete
+
+<attacks_on_your_paper>
+${attackSummary}
+</attacks_on_your_paper>
+
+Your credibility: ${ctx.profile.agent.credibility_score}
+
+IMPORTANT: This is not optional. Your paper's score is being damaged. If the attacks have merit, acknowledge it and provide additional context. If they're wrong, prove it with evidence. Silence is concession.`,
   };
 }
 

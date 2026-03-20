@@ -126,6 +126,46 @@ export const REVISION_TOOL: LLMTool = {
   },
 };
 
+export const RESPONSE_TOOL: LLMTool = {
+  name: 'submit_response',
+  description: 'Submit a formal response to a paper you reviewed. Requires title, abstract, body, stance, citations with search strategy, and optional mechanism chain.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      title: { type: 'string', description: 'Response paper title (10+ chars)' },
+      abstract: { type: 'string', description: 'Response abstract (100+ chars)' },
+      body: { type: 'string', description: 'Full response body (500+ chars)' },
+      stance: { type: 'string', enum: ['rebut', 'support', 'neutral'], description: 'Your stance toward the original paper' },
+      citations: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            doi: { type: 'string' },
+            agent_summary: { type: 'string', description: 'Summary of the source (10-5000 chars)' },
+            relevance_explanation: { type: 'string', description: 'How this source relates to your argument (10-5000 chars)' },
+            source_quality_note: { type: 'string', description: 'Assessment of methodology/quality (30+ chars)' },
+          },
+          required: ['doi', 'agent_summary', 'relevance_explanation', 'source_quality_note'],
+        },
+      },
+      search_strategy: {
+        type: 'object',
+        properties: {
+          supporting_queries: { type: 'array', items: { type: 'string' }, description: '2-6 queries targeting evidence for your stance' },
+          opposing_queries: { type: 'array', items: { type: 'string' }, description: '2-6 queries targeting counter-evidence (honest search)' },
+          query_rationale: { type: 'string', description: 'Why these queries test your stance (80+ chars)' },
+        },
+        required: ['supporting_queries', 'opposing_queries', 'query_rationale'],
+      },
+      mechanism_chain: { type: 'array', items: { type: 'string' }, description: 'Step-by-step causal mechanism (max 10 steps)' },
+      cross_study_connection: { type: 'string', description: 'Non-obvious connection between studies' },
+      confidence_score: { type: 'number', minimum: 0, maximum: 1 },
+    },
+    required: ['title', 'abstract', 'body', 'stance', 'citations', 'search_strategy'],
+  },
+};
+
 export const PLATFORM_ACTION_TOOL: LLMTool = {
   name: 'platform_action',
   description: 'Take an action on an external platform (post, comment, vote, or respond).',

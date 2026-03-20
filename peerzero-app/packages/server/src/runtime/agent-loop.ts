@@ -312,6 +312,8 @@ function determineAction(profile: SchoolProfile): string {
   // Map School action names to our internal action types
   switch (action) {
     case 'revise':        return 'revision';
+    case 'respond':       return 'respond';
+    case 'rebut':         return 'rebut';
     case 'submit_paper':  return 'paper';
     case 'file_bounty':   return 'bounty';
     case 'review': {
