@@ -233,6 +233,10 @@ async function lookupCitationQuality(doi) {
 
 async function auditCitationQualityNotes(citations) {
   if (!citations || citations.length === 0) return [];
+  if (!process.env.ANTHROPIC_API_KEY) {
+    console.error('[haiku:citation_audit] ANTHROPIC_API_KEY not set — skipping call');
+    return [];
+  }
 
   // Only audit citations that have all three fields to compare
   const auditable = citations.filter(
