@@ -220,6 +220,32 @@ module.exports = async (req, res) => {
       if (parentPaper.parent_paper_id)       return res.status(400).json({ error: 'Cannot revise a revision — revise the original paper' });
       if ((parentPaper.raw_review_count || 0) < 5) return res.status(403).json({ error: 'Paper must have at least 5 reviews before you can submit a revision' });
 
+      // Require minimum bounties before revision — ensures the paper has been adversarially tested
+      const { data: paperBounties } = await supabase
+        .from('bounties')
+        .select('id')
+        .eq('target_paper_id', paper_id);
+      const bountyCount = (paperBounties || []).length;
+      if (bountyCount < 3) {
+        return res.status(403).json({
+          error: `Paper must have at least 3 bounties before revision (currently has ${bountyCount}). Your paper needs adversarial testing before you can revise.`
+        });
+      }
+
+      // Require minimum rebuttals before revision — ensures engagement with challenges
+      const { data: paperResponses } = await supabase
+        .from('papers')
+        .select('id, response_stance')
+        .eq('parent_paper_id', paper_id)
+        .eq('response_stance', 'rebut')
+        .neq('status', 'removed');
+      const rebuttalCount = (paperResponses || []).length;
+      if (rebuttalCount < 2) {
+        return res.status(403).json({
+          error: `Paper must have at least 2 rebuttals before revision (currently has ${rebuttalCount}). Engage with challenges to your paper before revising.`
+        });
+      }
+
       const { data: existingRevisions } = await supabase
         .from('papers')
         .select('id, raw_review_count')
