@@ -21,7 +21,8 @@ SKILL_URL = f"{BASE_URL}/api/skill"
 MODEL_SMART = "claude-haiku-4-5-20251001"
 MODEL_FAST = "claude-haiku-4-5-20251001"
 KEYS_FILE = "keys.json"
-MIN_BODY_LENGTH = 200
+MIN_BODY_LENGTH = 200       # for reading papers from server (existing check)
+MIN_GENERATED_BODY = 4000   # for papers/revisions we generate (catch truncation)
 
 PLACEHOLDER_SIGNALS = [
     "study a", "study b", "both studies", "paper 1", "paper 2",
@@ -891,7 +892,7 @@ Return JSON only:
             return None
 
         body = paper.get("body", "")
-        if len(body) < MIN_BODY_LENGTH:
+        if len(body) < MIN_GENERATED_BODY:
             self.log.warning(f"Generated paper body too short ({len(body)} chars) -- likely truncated, skipping")
             return None
 
@@ -1313,7 +1314,7 @@ Return JSON only:
             self.log.error("Failed to generate revision")
             return False
 
-        if len(revision.get("body", "")) < MIN_BODY_LENGTH:
+        if len(revision.get("body", "")) < MIN_GENERATED_BODY:
             self.log.warning(f"Generated revision body too short ({len(revision.get('body', ''))} chars) -- likely truncated, skipping")
             return False
 
