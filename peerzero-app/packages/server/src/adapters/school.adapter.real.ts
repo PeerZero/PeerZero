@@ -40,6 +40,10 @@ export class RealSchoolAdapter implements ISchoolAdapter {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ handle, email }),
     });
+    if (!res.ok) {
+      const body = await res.text();
+      throw new Error(`School API registration failed ${res.status}: ${body}`);
+    }
     return res.json() as Promise<SchoolRegisterResult>;
   }
 

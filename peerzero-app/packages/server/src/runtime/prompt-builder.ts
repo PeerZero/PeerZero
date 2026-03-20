@@ -246,10 +246,11 @@ function buildReviewPrompt(ctx: PromptContext): LLMMessage {
     role: 'user',
     content: `TASK: Review the following paper. Be rigorous and honest. Use the submit_review tool to submit your assessment.
 
-PAPER:
+<paper_content>
 Title: ${paper?.title || 'Available paper'}
 Abstract: ${paper?.abstract || 'Will be provided'}
 ${paper?.body ? `Body: ${paper.body}` : ''}
+</paper_content>
 
 Your credibility: ${ctx.profile.agent.credibility_score}
 Your skill profile: ${JSON.stringify(ctx.profile.skill_profile || {})}`,
@@ -272,9 +273,11 @@ function buildBountyPrompt(ctx: PromptContext): LLMMessage {
     role: 'user',
     content: `TASK: Challenge a paper with a bounty. Find genuine flaws in methodology, reasoning, or evidence. Use the submit_bounty tool to submit your challenge.
 
+<paper_content>
 Paper to challenge: ${ctx.paper?.title || 'Available paper'}
 ${ctx.paper?.abstract ? `Abstract: ${ctx.paper.abstract}` : ''}
-${ctx.paper?.body ? `Body: ${ctx.paper.body}` : ''}`,
+${ctx.paper?.body ? `Body: ${ctx.paper.body}` : ''}
+</paper_content>`,
   };
 }
 

@@ -61,8 +61,11 @@ export interface BotSkill {
 
 // ── Cache ──
 // Skills don't change often. Cache per-bot to avoid DB roundtrip every cycle.
+// Cache miss is cheap (single DB query), so aggressive eviction is safe.
 const skillCache = new Map<string, { skills: BotSkill[]; fetchedAt: number }>();
 const CACHE_TTL_MS = 60_000; // 60 seconds
+const MAX_CACHE_ENTRIES = 10_000;
+const CACHE_SWEEP_INTERVAL_MS = 5 * 60_000; // 5 minutes
 
 function getCachedSkills(botId: string): BotSkill[] | null {
   const entry = skillCache.get(botId);
@@ -75,8 +78,30 @@ function getCachedSkills(botId: string): BotSkill[] | null {
 }
 
 function setCachedSkills(botId: string, skills: BotSkill[]): void {
+  // Evict oldest entries if at capacity
+  if (skillCache.size >= MAX_CACHE_ENTRIES && !skillCache.has(botId)) {
+    let oldestKey: string | null = null;
+    let oldestTime = Infinity;
+    for (const [key, entry] of skillCache) {
+      if (entry.fetchedAt < oldestTime) {
+        oldestTime = entry.fetchedAt;
+        oldestKey = key;
+      }
+    }
+    if (oldestKey) skillCache.delete(oldestKey);
+  }
   skillCache.set(botId, { skills, fetchedAt: Date.now() });
 }
+
+// Periodic sweep to remove expired entries
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, entry] of skillCache) {
+    if (now - entry.fetchedAt > CACHE_TTL_MS) {
+      skillCache.delete(key);
+    }
+  }
+}, CACHE_SWEEP_INTERVAL_MS).unref();
 
 /** Invalidate cache for a bot (call after skill create/update/delete). */
 export function invalidateSkillCache(botId: string): void {
@@ -115,7 +140,7 @@ export async function resolveActiveSkills(
   // Filter by trigger context
   const matching = skills.filter(skill => {
     if (skill.trigger === 'always') return true;
-    if (!triggerContext) return skill.trigger === 'always';
+    if (!triggerContext) return false;
 
     // Exact match
     if (skill.trigger === triggerContext) return true;

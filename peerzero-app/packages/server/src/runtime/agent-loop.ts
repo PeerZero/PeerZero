@@ -95,13 +95,16 @@ export async function runOneCycle(ctx: BotContext): Promise<void> {
 
   // 2. Get decrypted LLM key
   const llmKey = await getDecryptedKey(ctx.llmApiKeyId, ctx.userId);
+  if (!llmKey) {
+    throw new Error(`LLM API key not found or could not be decrypted (key_id=${ctx.llmApiKeyId})`);
+  }
 
   try {
     // 3. Fetch profile from School
     const profile = await schoolAdapter.getProfile(schoolCreds);
 
     // 3.5. Check grade payment gate — if bot's current grade isn't unlocked, pause
-    const currentGrade = profile.grade?.grade || 1;
+    const currentGrade = profile.grade?.grade ?? 1;
     const gradeUnlocked = await isBotGradeUnlocked(ctx.botId, currentGrade);
     if (!gradeUnlocked) {
       logger.info({ botId: ctx.botId, grade: currentGrade }, 'Bot paused — grade not unlocked (payment required)');
@@ -470,14 +473,14 @@ function extractSkillSnapshots(profile: SchoolProfile): Array<{
 }> {
   const skillProfile = profile.skill_profile;
   if (!skillProfile) {
-    return SKILL_NAMES.map((sk: string) => ({ skill_key: sk, strength: 0, reliability: 0, reps: 0, streak: 0, status: 'untested' }));
+    return SKILL_NAMES.map((sk) => ({ skill_key: sk, strength: 0, reliability: 0, reps: 0, streak: 0, status: 'untested' as const }));
   }
 
   // Build a lookup from both verified and developing arrays
   const allSkills = [...(skillProfile.verified || []), ...(skillProfile.developing || [])];
   const skillMap = new Map(allSkills.map(s => [s.skill_key, s]));
 
-  return SKILL_NAMES.map((skillKey: string) => {
+  return SKILL_NAMES.map((skillKey) => {
     const skill = skillMap.get(skillKey);
     if (skill) {
       const reps = skill.reps || 0;
@@ -520,7 +523,7 @@ async function updateBotCache(botId: string, profile: SchoolProfile, cycleNumber
     [
       profile.agent.credibility_score,
       null, // tier computed from credibility on read
-      profile.grade?.grade || null,
+      profile.grade?.grade ?? null,
       profile.next_action,
       JSON.stringify(profile),
       cycleNumber,

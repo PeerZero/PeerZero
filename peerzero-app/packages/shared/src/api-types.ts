@@ -3,7 +3,7 @@
 // These define the contract between the mobile app and the app server.
 // =============================================================================
 
-import { BotStatus, EnrollmentStatus, ActionType, MoodType, LLMProvider, ActivityCategory } from './constants';
+import { BotStatus, EnrollmentStatus, ActionType, MoodType, LLMProvider, ActivityCategory, SkillName, SkillTrigger, SkillCategory, SkillSource } from './constants';
 
 // ── Auth ──
 export interface RegisterRequest {
@@ -336,12 +336,12 @@ export interface ConnectPlatformRequest {
 
 // ── Skills (School Snapshots — epistemic ability measurements) ──
 export interface SkillSnapshot {
-  skill_key: string;
+  skill_key: SkillName;
   strength: number;
   reliability: number;
   reps: number;
   streak: number;
-  status: string;
+  status: 'verified' | 'developing' | 'untested';
 }
 
 // ── Bot Skills (Mobility Package — natural language behavior directives) ──
@@ -349,11 +349,11 @@ export interface BotSkillInfo {
   id: string;
   name: string;
   instruction: string;
-  trigger: string;
+  trigger: SkillTrigger;
   priority: number;
-  category: string;
+  category: SkillCategory;
   is_active: boolean;
-  source: string;   // 'user' | 'acquired' | 'starter' | 'clawhub'
+  source: SkillSource;
   version: number;
   created_at: string;
   updated_at: string;

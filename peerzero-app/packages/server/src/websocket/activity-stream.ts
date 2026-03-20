@@ -13,6 +13,7 @@ import { config } from '../config';
 import { logger } from '../lib/logger';
 import { JwtPayload } from '../middleware/auth';
 import { queryOne } from '../db/client';
+import type { BotMessage } from '@peerzero/shared';
 
 interface ConnectedClient {
   ws: WebSocket;
@@ -198,7 +199,7 @@ export function broadcastStatusChange(botId: string, userId: string, status: str
 }
 
 /** Broadcast a new chat message (activity narration, milestone, or user chat). */
-export function broadcastMessage(botId: string, userId: string, message: Record<string, unknown>): void {
+export function broadcastMessage(botId: string, userId: string, message: BotMessage | Record<string, unknown>): void {
   const botClients = clients.get(botId);
   if (!botClients) return;
 

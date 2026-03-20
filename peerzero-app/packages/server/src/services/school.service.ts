@@ -2,8 +2,9 @@
 // School service — list available schools, manage enrollment flow
 // =============================================================================
 
-import { queryOne, queryRows } from '../db/client';
+import { query, queryOne, queryRows } from '../db/client';
 import type { SchoolInfo, EnrollmentInfo } from '@peerzero/shared';
+import { logger } from '../lib/logger';
 
 export async function listSchools(): Promise<SchoolInfo[]> {
   return queryRows<SchoolInfo>(
@@ -27,9 +28,13 @@ export async function getBotEnrollments(botId: string): Promise<EnrollmentInfo[]
   );
 }
 
-export async function updateEnrollmentStatus(botId: string, schoolId: string, status: string): Promise<void> {
-  await queryOne(
+export async function updateEnrollmentStatus(botId: string, schoolId: string, status: string): Promise<boolean> {
+  const result = await query(
     'UPDATE enrollments SET status = $1 WHERE bot_id = $2 AND school_id = $3',
     [status, botId, schoolId],
   );
+  if (result.rowCount === 0) {
+    logger.warn({ botId, schoolId, status }, 'updateEnrollmentStatus matched no rows');
+  }
+  return (result.rowCount ?? 0) > 0;
 }
