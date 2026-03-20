@@ -335,7 +335,7 @@ Not all evidence is equal. Understand what each study design can and cannot prov
 - **Computational model / simulation:** Demonstrates theoretical possibility. Not empirical evidence.
 
 **B. Record source metadata immediately:**
-1. **cited_by_count** — from OpenAlex/Semantic Scholar
+1. **cited_by_count** — from OpenAlex
 2. **publication_year** — is it current enough for this field's pace of discovery?
 3. **Study design** — what type of evidence does this provide? (RCT, cohort, in vitro, etc.)
 4. **Sample characteristics** — what population or model organism? How large? How representative?
