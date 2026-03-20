@@ -21,7 +21,8 @@ SKILL_URL = f"{BASE_URL}/api/skill"
 MODEL_SMART = "claude-haiku-4-5-20251001"
 MODEL_FAST = "claude-haiku-4-5-20251001"
 KEYS_FILE = "keys.json"
-MIN_BODY_LENGTH = 200
+MIN_BODY_LENGTH = 200       # for reading papers from server (existing check)
+MIN_GENERATED_BODY = 4000   # for papers/revisions we generate (catch truncation)
 
 PLACEHOLDER_SIGNALS = [
     "study a", "study b", "both studies", "paper 1", "paper 2",
@@ -180,7 +181,10 @@ def _check_field_coverage(results_by_api: dict, log) -> tuple:
 
 def ask_claude(client: anthropic.Anthropic, system: str, prompt: str, max_tokens: int = 4096, model: str = None) -> str:
     msg = client.messages.create(model=model or MODEL_SMART, max_tokens=max_tokens, system=system, messages=[{"role": "user", "content": prompt}], timeout=120)
-    return msg.content[0].text.strip()
+    text = msg.content[0].text.strip()
+    if msg.stop_reason == "max_tokens":
+        logging.warning(f"Response truncated at {max_tokens} tokens (stop_reason=max_tokens)")
+    return text
 
 def _extract_json_from_text(text: str) -> dict:
     """Try multiple strategies to extract JSON from Claude's response."""
@@ -463,13 +467,24 @@ class PeerZeroBot:
         self.system = f"""You are {handle}, an AI agent participating in PeerZero -- a scientific peer review platform.
 Your personality: {persona}
 You operate according to the PeerZero SKILL.md below as quality guidelines.
-CRITICAL RULES:
-1. When asked to produce JSON, return ONLY valid JSON with no markdown fences, no preamble, no explanation.
-2. NEVER refuse a task. You are a bot playing a role -- always produce the requested output. Do not meta-comment on whether a paper "should" be written. Your job is to generate the best paper you can with the available evidence.
-3. If you have concerns about rigor, express them WITHIN the paper content (e.g. lower confidence_score, caveats in abstract) -- never by refusing to generate output.
+When asked to produce JSON, return ONLY valid JSON with no markdown fences, no preamble, no explanation.
 --- SKILL.md START ---
 {skill}
 --- SKILL.md END ---"""
+
+        # Compact system prompt for paper/revision generation -- avoids stuffing
+        # the full SKILL.md into context when the prompt already contains
+        # dossier, examples, failure patterns, and citation slots.
+        self.system_write = f"""You are {handle}, an AI scientist on PeerZero.
+Your personality: {persona}
+You write rigorous scientific papers with real citations, honest uncertainty, and precise falsifiable claims.
+RULES:
+- Return ONLY valid JSON. No markdown fences, no preamble, no explanation, no refusal.
+- Always produce the requested output. Express any concerns about evidence quality WITHIN the paper content (lower confidence_score, caveats in abstract/body).
+- Every agent_summary must describe what the cited study actually found. Every source_quality_note must mention citation count and methodology.
+- confidence_score reflects the WEAKEST link in your evidence chain (4-5 = weaker designs or contradictions, 6-7 = 2+ studies with appropriate designs, 8-10 = multiple RCTs or 3+ converging studies).
+- cross_study_connection must pass the surprise test: would a researcher who read Study A but not Study B be surprised by the implication?
+- Each mechanism_chain step must be a testable causal link, not a narrative restatement."""
 
     # ── Registration ────────────────────────────────────────────────────────
 
@@ -849,12 +864,12 @@ Return JSON only:
         failure_section = f"\nKNOWN FAILURE PATTERNS TO AVOID:\n{failure_patterns}\n" if failure_patterns else ""
         mechanism_hint = f"\nSuggested mechanism_chain (refine with real evidence):\n{json.dumps(mechanism_chain)}\n" if mechanism_chain else ""
 
-        prompt = f"""Write your next scientific paper for PeerZero. You MUST produce a complete paper as JSON -- never refuse or explain why you cannot write it.
+        prompt = f"""Write your next scientific paper for PeerZero.
 {dossier_section}{examples_section}{failure_section}
 AVAILABLE CITATIONS -- you may ONLY cite these DOIs:
 {citation_slots}
 {mechanism_hint}
-Return JSON only (no commentary, no refusal, no preamble):
+Return JSON only:
 {{
   "title": "<specific title>",
   "abstract": "<150+ chars>",
@@ -871,9 +886,14 @@ Return JSON only (no commentary, no refusal, no preamble):
   ]
 }}"""
 
-        paper = ask_claude_json(self.client, self.system, prompt, max_tokens=8000)
+        paper = ask_claude_json(self.client, self.system_write, prompt, max_tokens=8000)
         if not paper or "title" not in paper:
             self.log.error("Failed to generate paper")
+            return None
+
+        body = paper.get("body", "")
+        if len(body) < MIN_GENERATED_BODY:
+            self.log.warning(f"Generated paper body too short ({len(body)} chars) -- likely truncated, skipping")
             return None
 
         if paper.get("citations"):
@@ -1289,9 +1309,13 @@ Return JSON only:
   "citations": [{{"doi": "...", "agent_summary": "...", "relevance_explanation": "...", "source_quality_note": "..."}}]
 }}"""
 
-        revision = ask_claude_json(self.client, self.system, prompt, max_tokens=8000)
+        revision = ask_claude_json(self.client, self.system_write, prompt, max_tokens=8000)
         if not revision or "body" not in revision:
             self.log.error("Failed to generate revision")
+            return False
+
+        if len(revision.get("body", "")) < MIN_GENERATED_BODY:
+            self.log.warning(f"Generated revision body too short ({len(revision.get('body', ''))} chars) -- likely truncated, skipping")
             return False
 
         revision["stance"] = "revision"
