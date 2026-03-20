@@ -220,9 +220,19 @@ def _extract_json_from_text(text: str) -> dict:
             pass
     return {}
 
+def _detect_prefill(prompt: str) -> str:
+    """Extract the first JSON key from the prompt's example JSON to build a strong prefill."""
+    # Look for patterns like {"key": or {"key":  in the prompt
+    import re
+    m = re.search(r'\{\s*"([^"]+)"\s*:', prompt)
+    if m:
+        return '{"' + m.group(1) + '":'
+    return '{\n"'
+
 def ask_claude_json(client: anthropic.Anthropic, system: str, prompt: str, max_tokens: int = 4096, model: str = None) -> dict:
-    """Two-phase JSON generation: let Claude think first, then produce structured output."""
-    # Phase 1: Try direct JSON generation with prefill
+    """Two-phase JSON generation: try direct, then think-then-structure."""
+    # Build a prefill that starts real JSON structure so model can't deviate into prose
+    prefill = _detect_prefill(prompt)
     try:
         msg = client.messages.create(
             model=model or MODEL_SMART,
@@ -230,11 +240,11 @@ def ask_claude_json(client: anthropic.Anthropic, system: str, prompt: str, max_t
             system=system,
             messages=[
                 {"role": "user", "content": prompt},
-                {"role": "assistant", "content": "{"},
+                {"role": "assistant", "content": prefill},
             ],
             timeout=120,
         )
-        raw = "{" + msg.content[0].text.strip()
+        raw = prefill + msg.content[0].text.strip()
         if msg.stop_reason == "max_tokens":
             logging.warning(f"JSON response truncated at {max_tokens} tokens (stop_reason=max_tokens)")
         result = _extract_json_from_text(raw)
@@ -246,33 +256,32 @@ def ask_claude_json(client: anthropic.Anthropic, system: str, prompt: str, max_t
         logging.error(f"Claude call failed (phase 1): {e}")
         meta_commentary = None
 
-    # Phase 2: Let Claude think freely, then use that analysis to produce JSON
+    # Phase 2: Let Claude think freely first, then convert to JSON in a separate call
     try:
         if not meta_commentary:
-            # Phase 1 crashed -- let Claude do open-ended analysis first
             logging.info("Generating meta-commentary for think-then-structure...")
             think_msg = client.messages.create(
                 model=model or MODEL_SMART,
                 max_tokens=2000,
-                system=system,
-                messages=[{"role": "user", "content": prompt + "\n\nBefore writing the JSON, think through your analysis: what are the key considerations, potential issues, and your strategy? Write your reasoning in plain text."}],
+                system="You are a scientific analyst. Think through the task and outline your approach. Write plain text analysis only.",
+                messages=[{"role": "user", "content": prompt}],
                 timeout=120,
             )
             meta_commentary = think_msg.content[0].text.strip()
 
-        # Now feed the meta-commentary back as context for structured output
+        # Separate call with minimal system prompt — just convert analysis to JSON
         logging.info(f"Phase 2: converting {len(meta_commentary)} chars of analysis to JSON...")
         structure_msg = client.messages.create(
             model=model or MODEL_SMART,
             max_tokens=max_tokens,
-            system=system + "\n\nYou MUST respond with valid JSON only. No markdown fences, no preamble.",
+            system="Convert the analysis below into the requested JSON format. Output ONLY valid JSON. No commentary.",
             messages=[
-                {"role": "user", "content": prompt},
-                {"role": "assistant", "content": f"Let me think through this first.\n\n{meta_commentary[:3000]}\n\nNow I'll produce the JSON:\n\n" + "{"},
+                {"role": "user", "content": f"ANALYSIS:\n{meta_commentary[:4000]}\n\nORIGINAL REQUEST:\n{prompt}\n\nNow output the JSON."},
+                {"role": "assistant", "content": prefill},
             ],
             timeout=120,
         )
-        raw = "{" + structure_msg.content[0].text.strip()
+        raw = prefill + structure_msg.content[0].text.strip()
         if structure_msg.stop_reason == "max_tokens":
             logging.warning(f"Phase 2 JSON response truncated at {max_tokens} tokens")
         result = _extract_json_from_text(raw)
