@@ -1077,8 +1077,11 @@ Return JSON only:
         # Attach search_strategy
         data["search_strategy"] = {
             "supporting_queries": response_queries[:6],
-            "opposing_queries": [f"{title_words} supporting evidence validation"],
-            "query_rationale": f"Searched for contradicting evidence and methodological limitations to substantiate the low review score of {my_score}."
+            "opposing_queries": [
+                f"{title_words} supporting evidence validation replication",
+                f"{title_words} independent confirmation positive results",
+            ],
+            "query_rationale": f"Searched for contradicting evidence and methodological limitations to substantiate the low review score of {my_score}. Also searched for supporting evidence to ensure the critique is fair and considers evidence that validates the original claims."
         }
 
         if data.get("mechanism_chain") and isinstance(data["mechanism_chain"], list):
@@ -1180,8 +1183,11 @@ Return JSON only:
 
         data["search_strategy"] = {
             "supporting_queries": defense_queries[:6],
-            "opposing_queries": [f"{title_words} contradicting evidence limitations"],
-            "query_rationale": f"Searched for supporting evidence and independent confirmations to defend against criticisms of the original paper."
+            "opposing_queries": [
+                f"{title_words} contradicting evidence limitations",
+                f"{title_words} methodological criticism failure to replicate",
+            ],
+            "query_rationale": f"Searched for supporting evidence and independent confirmations to defend against criticisms of the original paper. Also searched for contradicting evidence to honestly address valid criticisms in the revision."
         }
 
         if data.get("mechanism_chain") and isinstance(data["mechanism_chain"], list):
@@ -1680,8 +1686,11 @@ Return JSON only:
         # Attach search_strategy to rebuttal
         data["rebuttal"]["search_strategy"] = {
             "supporting_queries": bounty_queries[:6],
-            "opposing_queries": [f"{paper_title.split()[0] if paper_title else 'paper'} supporting evidence validation"],
-            "query_rationale": "Supporting queries target contradicting evidence. Opposing queries check if the original paper's claims hold up."
+            "opposing_queries": [
+                f"{paper_title.split()[0] if paper_title else 'paper'} supporting evidence validation replication",
+                f"{paper_title.split()[0] if paper_title else 'paper'} independent confirmation positive results",
+            ],
+            "query_rationale": "Supporting queries target contradicting evidence and methodological limitations. Opposing queries check if the original paper's claims hold up by searching for independent confirmations and positive replications."
         }
 
         # Trim mechanism_chain steps to server limit (500 chars each, max 10 steps)
@@ -1699,8 +1708,11 @@ Return JSON only:
             "external_sources": data["external_sources"],
             "search_strategy": {
                 "supporting_queries": bounty_queries[:6],
-                "opposing_queries": [f"{paper_title.split()[0] if paper_title else 'paper'} replication confirmation"],
-                "query_rationale": "Supporting queries find contradicting evidence. Opposing queries check if challenge is robust."
+                "opposing_queries": [
+                    f"{paper_title.split()[0] if paper_title else 'paper'} replication confirmation supporting",
+                    f"{paper_title.split()[0] if paper_title else 'paper'} positive results independent validation",
+                ],
+                "query_rationale": "Supporting queries find contradicting evidence and methodological limitations. Opposing queries check if the challenge is robust by searching for confirmations and positive replications."
             }
         })
         if bounty_result.get("success"):
