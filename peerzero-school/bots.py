@@ -616,9 +616,23 @@ Return JSON only:
 """ + '{"verification_queries": ["specific query 1", "specific query 2"], "gap_queries": ["specific query 1", "specific query 2"], "query_rationale": "I chose to verify X because..."}'
     try:
         result = ask_claude_json(client, "Generate review verification queries. Return JSON only.", prompt, max_tokens=400, model=MODEL_FAST)
-        if result and result.get("verification_queries") and result.get("gap_queries"):
-            return result
-        return {}
+        if not result:
+            return {}
+        # Validate against the same rules the server enforces
+        vq = result.get("verification_queries")
+        gq = result.get("gap_queries")
+        qr = result.get("query_rationale")
+        if (not isinstance(vq, list) or len(vq) < 2
+                or not isinstance(gq, list) or len(gq) < 2
+                or not isinstance(qr, str) or len(qr.strip()) < 80):
+            log.warning("Review search strategy from LLM failed local validation, using fallback")
+            return {}
+        # Check each query is a non-empty string of 15+ chars
+        for q in vq + gq:
+            if not isinstance(q, str) or len(q.strip()) < 15:
+                log.warning("Review search strategy query too short, using fallback")
+                return {}
+        return result
     except Exception as e:
         log.warning(f"Review search strategy generation failed: {e}")
         return {}
