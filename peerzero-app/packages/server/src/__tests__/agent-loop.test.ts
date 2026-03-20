@@ -211,7 +211,11 @@ describe('runOneCycle', () => {
   });
 
   it('selects revision when can_revise is true (highest priority)', async () => {
-    const profile = makeProfile({ can_revise: true, can_submit_paper: true });
+    const profile = makeProfile({
+      can_revise: true,
+      can_submit_paper: true,
+      reaffirmable_papers: [{ id: 'rev-paper-1', title: 'Old Paper', effective_score: 7.5 }],
+    });
     mockSchoolAdapter.getProfile.mockResolvedValue(profile);
     mockSchoolAdapter.submitRevision.mockResolvedValue({
       success: true, paper_id: 'rev-paper',

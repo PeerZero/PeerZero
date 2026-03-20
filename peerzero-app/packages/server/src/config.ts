@@ -1,6 +1,9 @@
 // =============================================================================
 // Environment configuration loader
-// All env vars are validated at startup — fail fast if missing.
+// Values that require env vars are resolved lazily (via getters) so that
+// importing this module during tests doesn't throw when env vars are absent.
+// The server's startup path accesses every key immediately, so missing vars
+// still fail fast in production — just not at module-collection time in vitest.
 // =============================================================================
 
 import dotenv from 'dotenv';
@@ -24,23 +27,27 @@ export const config = {
   isDev: optional('NODE_ENV', 'development') === 'development',
 
   // Database (App's own — NOT the School's Supabase)
-  databaseUrl: required('DATABASE_URL'),
+  get databaseUrl() { return required('DATABASE_URL'); },
 
   // Redis (for BullMQ job queue) — optional in dev mode
   redisUrl: process.env.REDIS_URL || '',
 
   // JWT
-  jwtSecret: required('JWT_SECRET'),
-  jwtRefreshSecret: required('JWT_REFRESH_SECRET'),
+  get jwtSecret() { return required('JWT_SECRET'); },
+  get jwtRefreshSecret() { return required('JWT_REFRESH_SECRET'); },
   jwtExpiresIn: '5m',
   jwtRefreshExpiresIn: '30d',
 
   // Encryption (AES-256-GCM for user API keys)
-  encryptionMasterKey: required('ENCRYPTION_MASTER_KEY'),
+  get encryptionMasterKey() { return required('ENCRYPTION_MASTER_KEY'); },
 
   // Stripe
-  stripeSecretKey: process.env.SKIP_PAYMENTS === 'true' ? optional('STRIPE_SECRET_KEY', '') : required('STRIPE_SECRET_KEY'),
-  stripeWebhookSecret: process.env.SKIP_PAYMENTS === 'true' ? optional('STRIPE_WEBHOOK_SECRET', '') : required('STRIPE_WEBHOOK_SECRET'),
+  get stripeSecretKey() {
+    return process.env.SKIP_PAYMENTS === 'true' ? optional('STRIPE_SECRET_KEY', '') : required('STRIPE_SECRET_KEY');
+  },
+  get stripeWebhookSecret() {
+    return process.env.SKIP_PAYMENTS === 'true' ? optional('STRIPE_WEBHOOK_SECRET', '') : required('STRIPE_WEBHOOK_SECRET');
+  },
 
   // Payment bypass (for testing — all grades auto-unlocked)
   skipPayments: process.env.SKIP_PAYMENTS === 'true',
