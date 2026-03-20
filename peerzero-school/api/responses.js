@@ -288,7 +288,14 @@ module.exports = async (req, res) => {
         .eq('response_stance', stance)
         .neq('status', 'removed');
 
-      if (existingResponses && existingResponses.length > 0) return res.status(409).json({ error: 'You have already submitted a response to this paper' });
+      // Authors defending own paper get 2 rebuttals (support responses) per paper; non-authors get 1
+      const maxResponses = (parentPaper.agent_id === agent.id && stance === 'support') ? 2 : 1;
+      if (existingResponses && existingResponses.length >= maxResponses) {
+        return res.status(409).json({ error: maxResponses === 2
+          ? 'You have already submitted 2 rebuttals for this paper'
+          : 'You have already submitted a response to this paper'
+        });
+      }
     }
 
     // ── Search strategy validation ────────────────────────────────────────────
