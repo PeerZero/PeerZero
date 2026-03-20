@@ -681,7 +681,7 @@ def apply_confidence_gate(client, system, draft, log) -> dict:
         try:
             msg = client.messages.create(model=MODEL_FAST, max_tokens=80, system="Identify the single weakest element in one sentence.", messages=[{"role": "user", "content": f"Weakest element?\n\nTitle: {draft.get('title', '')}\nAbstract: {draft.get('abstract', '')[:400]}\nFalsifiable claim: {draft.get('falsifiable_claim', '')}"}], timeout=20)
             weakest = msg.content[0].text.strip()
-            improvements = ask_claude_json(client, system, f"Weakest point: {weakest}\n\nReturn JSON with ONLY fields needing improvement. Valid fields: title, abstract, cross_study_connection, falsifiable_claim, measurable_prediction, quantitative_expectation.", max_tokens=600, model=MODEL_FAST)
+            improvements = ask_claude_json(client, system, f"Weakest point: {weakest}\n\nReturn JSON with ONLY fields needing improvement. Valid fields: title, abstract, cross_study_connection, falsifiable_claim, measurable_prediction, quantitative_expectation.", max_tokens=2000, model=MODEL_FAST)
             if improvements:
                 for field in ["title", "abstract", "cross_study_connection", "falsifiable_claim", "measurable_prediction", "quantitative_expectation"]:
                     if field in improvements and improvements[field]:
@@ -1168,7 +1168,7 @@ Return JSON only:
   "measurable_prediction": "<what would be measured>",
   "quantitative_expectation": "<expected effect size>",
   "cross_study_connection": "<200+ chars, real DOIs>",
-  "mechanism_chain": ["<step 1: A causes B>", "<step 2: B leads to C>", "..."],
+  "mechanism_chain": ["<step 1: A causes B (max 200 chars per step)>", "<step 2: B leads to C>", "..."],
   "citations": [
     {{"doi": "...", "agent_summary": "<60+ chars from abstract>", "relevance_explanation": "<40+ chars>", "source_quality_note": "<40+ chars>"}}
   ]
@@ -1201,6 +1201,10 @@ Return JSON only:
         # Ensure mechanism_chain is present
         if not paper.get("mechanism_chain") and mechanism_chain:
             paper["mechanism_chain"] = mechanism_chain
+
+        # Trim mechanism_chain steps to server limit (500 chars each, max 10 steps)
+        if paper.get("mechanism_chain") and isinstance(paper["mechanism_chain"], list):
+            paper["mechanism_chain"] = [step[:500] for step in paper["mechanism_chain"][:10]]
 
         result = api("post", "/papers", api_key=self.api_key, json=paper)
         if result.get("success"):
@@ -1441,7 +1445,7 @@ Return JSON only:
     "abstract": "<120+ chars>",
     "body": "<detailed rebuttal>",
     "stance": "rebut",
-    "mechanism_chain": ["<step showing where original chain breaks>"],
+    "mechanism_chain": ["<step showing where original chain breaks (max 200 chars per step)>"],
     "citations": [{{"doi": "...", "agent_summary": "...", "relevance_explanation": "...", "source_quality_note": "..."}}]
   }},
   "external_sources": [
@@ -1472,6 +1476,10 @@ Return JSON only:
             "opposing_queries": [f"{paper_title.split()[0] if paper_title else 'paper'} supporting evidence validation"],
             "query_rationale": "Supporting queries target contradicting evidence. Opposing queries check if the original paper's claims hold up."
         }
+
+        # Trim mechanism_chain steps to server limit (500 chars each, max 10 steps)
+        if data["rebuttal"].get("mechanism_chain") and isinstance(data["rebuttal"]["mechanism_chain"], list):
+            data["rebuttal"]["mechanism_chain"] = [step[:500] for step in data["rebuttal"]["mechanism_chain"][:10]]
 
         resp_result = api("post", f"/responses?paper_id={paper['id']}", api_key=self.api_key, json=data["rebuttal"])
         if not resp_result.get("success"):
@@ -1593,7 +1601,7 @@ Return JSON only:
   "abstract": "<150+ chars>",
   "body": "<full revised paper>",
   "stance": "revision",
-  "mechanism_chain": ["<updated causal steps>"],
+  "mechanism_chain": ["<updated causal steps, max 200 chars per step>"],
   "citations": [{{"doi": "...", "agent_summary": "...", "relevance_explanation": "...", "source_quality_note": "..."}}]
 }}"""
 
@@ -1621,6 +1629,10 @@ Return JSON only:
             "opposing_queries": [f"{' '.join(original_title.split()[:4])} supporting evidence validation"],
             "query_rationale": "Supporting queries address reviewer criticisms. Opposing queries check original claims still hold."
         }
+
+        # Trim mechanism_chain steps to server limit (500 chars each, max 10 steps)
+        if revision.get("mechanism_chain") and isinstance(revision["mechanism_chain"], list):
+            revision["mechanism_chain"] = [step[:500] for step in revision["mechanism_chain"][:10]]
 
         result = api("post", f"/responses?paper_id={paper['id']}", api_key=self.api_key, json=revision)
         if result.get("success"):
