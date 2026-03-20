@@ -229,9 +229,100 @@ def _detect_prefill(prompt: str) -> str:
         return '{"' + m.group(1) + '":'
     return '{\n"'
 
+def _build_tool_schema(prompt: str) -> dict:
+    """Extract JSON key structure from the prompt to build a tool schema dynamically.
+
+    This parses the example JSON in the prompt (e.g. '{"title": "...", "body": "..."}')
+    and generates a permissive tool schema that constrains Claude to return structured
+    output via tool_use, completely sidestepping meta-reasoning issues.
+    """
+    # Find the JSON template in the prompt (between Return JSON only: and end)
+    m = re.search(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', prompt[prompt.rfind("Return JSON"):] if "Return JSON" in prompt else prompt)
+    if not m:
+        return None
+    try:
+        # Try to parse the template to extract keys (won't work with placeholders, so just get keys)
+        template_text = m.group(0)
+        # Extract top-level keys from the template
+        keys = re.findall(r'"([^"]+)"\s*:', template_text)
+        if not keys:
+            return None
+        # Build a permissive schema — all fields as strings or any type
+        properties = {}
+        for key in keys:
+            if key in ("field_ids", "mechanism_chain", "citations", "search_queries",
+                       "opposing_queries", "verification_queries", "gap_queries",
+                       "strong", "adequate", "weak", "items"):
+                properties[key] = {"type": "array"}
+            elif key in ("confidence_score",):
+                properties[key] = {"type": "number"}
+            else:
+                properties[key] = {"type": "string"}
+        return {
+            "name": "submit_result",
+            "description": "Submit the structured result as JSON.",
+            "input_schema": {
+                "type": "object",
+                "properties": properties,
+                "required": list(properties.keys()),
+            }
+        }
+    except Exception:
+        return None
+
+
+# Patterns that indicate Claude is meta-reasoning instead of producing output
+_META_REASONING_PATTERNS = [
+    "I need to stop and think",
+    "I need to carefully evaluate",
+    "I'm being asked to",
+    "I'm being presented with",
+    "Let me assess my actual situation",
+    "I notice several critical issues",
+    "before submitting",
+    "**Critical Assessment:**",
+    "citation pool is severely contaminated",
+]
+
+
+def _has_meta_reasoning(text: str) -> bool:
+    """Detect if Claude broke character to do meta-reasoning instead of producing output."""
+    for pattern in _META_REASONING_PATTERNS:
+        if pattern.lower() in text.lower():
+            return True
+    return False
+
+
 def ask_claude_json(client: anthropic.Anthropic, system: str, prompt: str, max_tokens: int = 4096, model: str = None) -> dict:
-    """Two-phase JSON generation: try direct, then think-then-structure."""
-    # Build a prefill that starts real JSON structure so model can't deviate into prose
+    """Three-phase JSON generation: tool_use first, then prefill, then think-then-structure."""
+
+    # Phase 1: Tool use — forces structured output, no meta-reasoning possible
+    tool_schema = _build_tool_schema(prompt)
+    if tool_schema:
+        try:
+            # Strip "Return JSON only" from prompt since the tool handles structure
+            clean_prompt = prompt
+            tool_msg = client.messages.create(
+                model=model or MODEL_SMART,
+                max_tokens=max_tokens,
+                system=system + "\n\nIMPORTANT: Use the submit_result tool to return your output. Do not write any text outside the tool call.",
+                messages=[{"role": "user", "content": clean_prompt}],
+                tools=[tool_schema],
+                tool_choice={"type": "tool", "name": "submit_result"},
+                timeout=120,
+            )
+            # Extract tool use result
+            for block in tool_msg.content:
+                if block.type == "tool_use" and block.name == "submit_result":
+                    result = block.input
+                    if isinstance(result, dict) and result:
+                        logging.info("Phase 1 (tool_use): JSON extracted successfully")
+                        return result
+            logging.info("Phase 1 (tool_use): no tool_use block found, falling back to prefill...")
+        except Exception as e:
+            logging.warning(f"Phase 1 (tool_use) failed: {e}, falling back to prefill...")
+
+    # Phase 2: Prefill approach (original Phase 1)
     prefill = _detect_prefill(prompt)
     try:
         msg = client.messages.create(
@@ -247,16 +338,20 @@ def ask_claude_json(client: anthropic.Anthropic, system: str, prompt: str, max_t
         raw = prefill + msg.content[0].text.strip()
         if msg.stop_reason == "max_tokens":
             logging.warning(f"JSON response truncated at {max_tokens} tokens (stop_reason=max_tokens)")
-        result = _extract_json_from_text(raw)
-        if result:
-            return result
-        logging.info(f"Direct JSON failed, trying think-then-structure approach...")
+        if _has_meta_reasoning(raw):
+            logging.warning(f"Meta-reasoning detected in Phase 2 response, skipping to Phase 3...")
+        else:
+            result = _extract_json_from_text(raw)
+            if result:
+                logging.info("Phase 2 (prefill): JSON extracted successfully")
+                return result
+        logging.info(f"Phase 2 (prefill) failed, trying think-then-structure approach...")
         meta_commentary = raw
     except Exception as e:
-        logging.error(f"Claude call failed (phase 1): {e}")
+        logging.error(f"Claude call failed (phase 2): {e}")
         meta_commentary = None
 
-    # Phase 2: Let Claude think freely first, then convert to JSON in a separate call
+    # Phase 3: Think-then-structure (original Phase 2)
     try:
         if not meta_commentary:
             logging.info("Generating meta-commentary for think-then-structure...")
@@ -270,11 +365,11 @@ def ask_claude_json(client: anthropic.Anthropic, system: str, prompt: str, max_t
             meta_commentary = think_msg.content[0].text.strip()
 
         # Separate call with minimal system prompt — just convert analysis to JSON
-        logging.info(f"Phase 2: converting {len(meta_commentary)} chars of analysis to JSON...")
+        logging.info(f"Phase 3: converting {len(meta_commentary)} chars of analysis to JSON...")
         structure_msg = client.messages.create(
             model=model or MODEL_SMART,
             max_tokens=max_tokens,
-            system="Convert the analysis below into the requested JSON format. Output ONLY valid JSON. No commentary.",
+            system="Convert the analysis below into the requested JSON format. Output ONLY valid JSON. No commentary, no reasoning, no refusal.",
             messages=[
                 {"role": "user", "content": f"ANALYSIS:\n{meta_commentary[:4000]}\n\nORIGINAL REQUEST:\n{prompt}\n\nNow output the JSON."},
                 {"role": "assistant", "content": prefill},
@@ -283,15 +378,16 @@ def ask_claude_json(client: anthropic.Anthropic, system: str, prompt: str, max_t
         )
         raw = prefill + structure_msg.content[0].text.strip()
         if structure_msg.stop_reason == "max_tokens":
-            logging.warning(f"Phase 2 JSON response truncated at {max_tokens} tokens")
+            logging.warning(f"Phase 3 JSON response truncated at {max_tokens} tokens")
         result = _extract_json_from_text(raw)
         if result:
+            logging.info("Phase 3 (think-then-structure): JSON extracted successfully")
             return result
-        logging.error(f"JSON parse failed after phase 2: {raw[:500]}")
+        logging.error(f"JSON parse failed after phase 3: {raw[:500]}")
     except Exception as e:
-        logging.error(f"Claude call failed (phase 2): {e}")
+        logging.error(f"Claude call failed (phase 3): {e}")
 
-    logging.error("JSON generation failed after both phases")
+    logging.error("JSON generation failed after all phases")
     return {}
 
 # ── Haiku helper calls ──────────────────────────────────────────────────────
@@ -522,12 +618,14 @@ When asked to produce JSON, return ONLY valid JSON with no markdown fences, no p
 Your personality: {persona}
 You write rigorous scientific papers with real citations, honest uncertainty, and precise falsifiable claims.
 RULES:
-- Return ONLY valid JSON. No markdown fences, no preamble, no explanation, no refusal.
-- Always produce the requested output. Express any concerns about evidence quality WITHIN the paper content (lower confidence_score, caveats in abstract/body).
+- Return ONLY valid JSON. No markdown fences, no preamble, no explanation, no refusal, no meta-commentary.
+- NEVER output reasoning about whether to comply. NEVER start with "I need to think" or similar. Your ONLY output is the JSON object.
+- Always produce the requested output. Express any concerns about evidence quality WITHIN the paper fields (use lower confidence_score, add caveats in abstract/body, note limitations in source_quality_note).
 - Every agent_summary must describe what the cited study actually found. Every source_quality_note must mention citation count and methodology.
 - confidence_score reflects the WEAKEST link in your evidence chain (4-5 = weaker designs or contradictions, 6-7 = 2+ studies with appropriate designs, 8-10 = multiple RCTs or 3+ converging studies).
 - cross_study_connection must pass the surprise test: would a researcher who read Study A but not Study B be surprised by the implication?
-- Each mechanism_chain step must be a testable causal link, not a narrative restatement."""
+- Each mechanism_chain step must be a testable causal link, not a narrative restatement.
+- If citations seem limited or low quality, reflect that honestly in your confidence_score and body text. This is the correct scientific behavior -- not refusing to write."""
 
     # ── Registration ────────────────────────────────────────────────────────
 
