@@ -35,6 +35,10 @@ export interface SchoolProfile {
   recent_feedback: SchoolFeedback | null;
   can_reaffirm: boolean;
   reaffirmable_papers?: Array<{ id: string; title: string; effective_score: number }>;
+  can_respond: boolean;
+  respondable_papers?: Array<{ id: string; title: string; abstract: string; my_review_score: number }>;
+  can_rebut: boolean;
+  rebuttable_papers?: Array<{ id: string; title: string; low_reviews: Array<{ score: number; assessment: string }>; bounties: Array<{ challenge_type: string; score_drop: number }> }>;
 }
 
 export interface SchoolActiveFocus {

@@ -75,6 +75,7 @@ const mockSchoolAdapter = {
   submitBounty: vi.fn(),
   submitRevision: vi.fn(),
   submitReaffirmation: vi.fn(),
+  submitResponse: vi.fn(),
   submitCondensation: vi.fn(),
   submitCoreCondensation: vi.fn(),
   submitIdentityReflection: vi.fn(),
@@ -264,8 +265,8 @@ function makeProfile(overrides: Partial<SchoolProfile> = {}): SchoolProfile {
   return {
     agent: { id: 'agent-1', handle: 'test-bot', credibility_score: 105, total_papers_submitted: 2, registration_review_passed: true },
     tier_info: 'Tested Reasoner',
-    next_action: 'Submit a paper or review.',
-    can_submit_paper: true,
+    next_action: 'review',
+    can_submit_paper: false,
     can_revise: false,
     reviews_completed: 3,
     valid_bounties: 1,
@@ -289,6 +290,8 @@ function makeProfile(overrides: Partial<SchoolProfile> = {}): SchoolProfile {
     },
     recent_feedback: { reviews_on_your_papers: [], storage_instruction: '' },
     can_reaffirm: false,
+    can_respond: false,
+    can_rebut: false,
     ...overrides,
   } as SchoolProfile;
 }
@@ -322,14 +325,9 @@ beforeEach(() => {
 
 describe('E2E: Agent loop cycle', () => {
   it('runs a complete review cycle: profile → LLM → submit → activity → memory → skills', async () => {
-    // Set up profile that forces a review (needs more reviews for grade)
+    // Set up profile that forces a review via tier logic
     const profile = makeProfile({
-      grade: {
-        grade: 2, papers_this_grade: 2, reviews_this_grade: 1, revisions_this_grade: 0,
-        bounties_this_grade: 1, best_score_this_grade: 72,
-        requirements: { papers: 2, reviews: 3, revisions: 1, bounties: 1, min_score: 70 },
-        advanced: false, failed: false,
-      },
+      next_action: 'review',
     });
     mockSchoolAdapter.getProfile.mockResolvedValue(profile);
     mockSchoolAdapter.getReviewablePapers.mockResolvedValue([
@@ -376,12 +374,8 @@ describe('E2E: Agent loop cycle', () => {
 
   it('runs a complete paper submission cycle', async () => {
     const profile = makeProfile({
-      grade: {
-        grade: 2, papers_this_grade: 1, reviews_this_grade: 3, revisions_this_grade: 0,
-        bounties_this_grade: 1, best_score_this_grade: 72,
-        requirements: { papers: 2, reviews: 3, revisions: 1, bounties: 1, min_score: 70 },
-        advanced: false, failed: false,
-      },
+      next_action: 'submit_paper',
+      can_submit_paper: true,
     });
     mockSchoolAdapter.getProfile.mockResolvedValue(profile);
     mockSchoolAdapter.submitPaper.mockResolvedValue({
@@ -404,8 +398,9 @@ describe('E2E: Agent loop cycle', () => {
     );
   });
 
-  it('runs a revision cycle when can_revise is true', async () => {
+  it('runs a revision cycle when tier logic says revise', async () => {
     const profile = makeProfile({
+      next_action: 'revise',
       can_revise: true,
       reaffirmable_papers: [{ id: 'rev-paper-1', title: 'Old Paper', effective_score: 7.5 }],
     });
@@ -427,12 +422,8 @@ describe('E2E: Agent loop cycle', () => {
   it('triggers condensation + memory storage when uncondensed_exercises >= 5', async () => {
     const profile = makeProfile({
       skill_condenser: { exercises: ['ex1', 'ex2', 'ex3', 'ex4', 'ex5'] } as any,
-      grade: {
-        grade: 2, papers_this_grade: 1, reviews_this_grade: 3, revisions_this_grade: 0,
-        bounties_this_grade: 1, best_score_this_grade: 72,
-        requirements: { papers: 2, reviews: 3, revisions: 1, bounties: 1, min_score: 70 },
-        advanced: false, failed: false,
-      },
+      next_action: 'submit_paper',
+      can_submit_paper: true,
     });
     mockSchoolAdapter.getProfile.mockResolvedValue(profile);
     mockSchoolAdapter.submitPaper.mockResolvedValue({

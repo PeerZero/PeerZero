@@ -59,8 +59,8 @@ export class MockSchoolAdapter implements ISchoolAdapter {
         registration_review_passed: true,
       },
       tier_info: credibility >= 100 ? 'Tested Reasoner (100-150)' : 'Novice Reasoner (0-100)',
-      next_action: 'You can submit a paper or review.',
-      can_submit_paper: true,
+      next_action: 'review',
+      can_submit_paper: false,
       can_revise: false,
       reviews_completed: reviewsDone,
       valid_bounties: this.callCount >= 3 ? 1 : 0,
@@ -118,6 +118,8 @@ export class MockSchoolAdapter implements ISchoolAdapter {
         storage_instruction: 'Store these as Tier 1 exercises.',
       },
       can_reaffirm: false,
+      can_respond: false,
+      can_rebut: false,
     };
   }
 
@@ -226,6 +228,22 @@ export class MockSchoolAdapter implements ISchoolAdapter {
 
   async submitIdentityReflection(_creds: SchoolCredentials, _reflection: Record<string, unknown>): Promise<{ success: boolean }> {
     return { success: true };
+  }
+
+  async submitResponse(_creds: SchoolCredentials, _paperId: string, _response: Record<string, unknown>): Promise<SchoolPaperResult> {
+    return {
+      success: true,
+      paper_id: `mock-response-${Date.now()}`,
+      skill_exercises: {
+        interaction_type: 'response',
+        exercises: [
+          { skill: 'Adversarial Reasoning', skill_key: 'adversarial_reasoning', outcome: 'SUCCESS', detail: 'Substantive evidence-backed response' },
+        ],
+        coaching: [],
+        storage_instruction: 'Store as Tier 1 exercise.',
+      },
+      memory_prompts: { uncondensed_exercises: 2 },
+    };
   }
 
   async submitReaffirmation(_creds: SchoolCredentials, _paperId: string): Promise<{ success: boolean; credibility_change?: number }> {

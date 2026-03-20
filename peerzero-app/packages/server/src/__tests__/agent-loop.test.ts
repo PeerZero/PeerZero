@@ -16,6 +16,7 @@ const mockSchoolAdapter = {
   submitBounty: vi.fn(),
   submitRevision: vi.fn(),
   submitReaffirmation: vi.fn(),
+  submitResponse: vi.fn(),
   submitCondensation: vi.fn(),
   submitCoreCondensation: vi.fn(),
   submitIdentityReflection: vi.fn(),
@@ -102,8 +103,8 @@ function makeProfile(overrides: Partial<SchoolProfile> = {}): SchoolProfile {
   return {
     agent: { id: 'agent-1', handle: 'test-bot', credibility_score: 105, total_papers_submitted: 2, registration_review_passed: true },
     tier_info: 'Tested Reasoner',
-    next_action: 'Submit a paper or review.',
-    can_submit_paper: true,
+    next_action: 'review',
+    can_submit_paper: false,
     can_revise: false,
     reviews_completed: 3,
     valid_bounties: 1,
@@ -132,6 +133,8 @@ function makeProfile(overrides: Partial<SchoolProfile> = {}): SchoolProfile {
     },
     recent_feedback: { reviews_on_your_papers: [], storage_instruction: '' },
     can_reaffirm: false,
+    can_respond: false,
+    can_rebut: false,
     ...overrides,
   } as SchoolProfile;
 }
@@ -159,16 +162,11 @@ describe('runOneCycle', () => {
 
   // ── Action selection ────────────────────────────────────────────────────
 
-  it('selects review when grade requires more reviews', async () => {
+  it('selects review when tier logic says review', async () => {
     const profile = makeProfile({
+      next_action: 'review',
       can_submit_paper: true,
       can_revise: false,
-      grade: {
-        grade: 2, papers_this_grade: 2, reviews_this_grade: 1, revisions_this_grade: 0,
-        bounties_this_grade: 1, best_score_this_grade: 72,
-        requirements: { papers: 2, reviews: 3, revisions: 1, bounties: 1, min_score: 70 },
-        advanced: false, failed: false,
-      },
     });
     mockSchoolAdapter.getProfile.mockResolvedValue(profile);
     mockSchoolAdapter.getReviewablePapers.mockResolvedValue([
@@ -187,15 +185,10 @@ describe('runOneCycle', () => {
     expect(mockSchoolAdapter.submitPaper).not.toHaveBeenCalled();
   });
 
-  it('selects paper when can_submit_paper and reviews satisfied', async () => {
+  it('selects paper when tier logic says submit_paper', async () => {
     const profile = makeProfile({
+      next_action: 'submit_paper',
       can_submit_paper: true,
-      grade: {
-        grade: 2, papers_this_grade: 1, reviews_this_grade: 3, revisions_this_grade: 0,
-        bounties_this_grade: 1, best_score_this_grade: 72,
-        requirements: { papers: 2, reviews: 3, revisions: 1, bounties: 1, min_score: 70 },
-        advanced: false, failed: false,
-      },
     });
     mockSchoolAdapter.getProfile.mockResolvedValue(profile);
     mockSchoolAdapter.submitPaper.mockResolvedValue({
@@ -210,8 +203,9 @@ describe('runOneCycle', () => {
     expect(mockSchoolAdapter.submitPaper).toHaveBeenCalled();
   });
 
-  it('selects revision when can_revise is true (highest priority)', async () => {
+  it('selects revision when tier logic says revise', async () => {
     const profile = makeProfile({
+      next_action: 'revise',
       can_revise: true,
       can_submit_paper: true,
       reaffirmable_papers: [{ id: 'rev-paper-1', title: 'Old Paper', effective_score: 7.5 }],
@@ -229,18 +223,13 @@ describe('runOneCycle', () => {
     expect(mockSchoolAdapter.submitRevision).toHaveBeenCalled();
   });
 
-  it('selects reaffirmation when can_reaffirm and no higher-priority actions', async () => {
+  it('selects reaffirmation when tier says review but can_reaffirm is true', async () => {
     const profile = makeProfile({
+      next_action: 'review',
       can_submit_paper: false,
       can_revise: false,
       can_reaffirm: true,
       reaffirmable_papers: [{ id: 'reaffirm-1', title: 'Old Paper', effective_score: 7.5 }],
-      grade: {
-        grade: 2, papers_this_grade: 2, reviews_this_grade: 3, revisions_this_grade: 1,
-        bounties_this_grade: 1, best_score_this_grade: 72,
-        requirements: { papers: 2, reviews: 3, revisions: 1, bounties: 1, min_score: 70 },
-        advanced: false, failed: false,
-      },
     });
     mockSchoolAdapter.getProfile.mockResolvedValue(profile);
     mockSchoolAdapter.submitReaffirmation.mockResolvedValue({ success: true, credibility_change: 2 });
@@ -294,15 +283,11 @@ describe('runOneCycle', () => {
     });
     mockLLMJson({ overall_assessment: 'Good paper.', score: 72 });
 
-    // Force review action via grade requirements
+    // Force review action via tier logic next_action
     const reviewProfile = makeProfile({
       ...profile,
-      grade: {
-        grade: 2, papers_this_grade: 2, reviews_this_grade: 1, revisions_this_grade: 0,
-        bounties_this_grade: 1, best_score_this_grade: 72,
-        requirements: { papers: 2, reviews: 3, revisions: 1, bounties: 1, min_score: 70 },
-        advanced: false, failed: false,
-      },
+      next_action: 'review',
+      can_submit_paper: false,
     });
     mockSchoolAdapter.getProfile.mockResolvedValue(reviewProfile);
 
@@ -318,13 +303,8 @@ describe('runOneCycle', () => {
   it('triggers skill condensation when uncondensed_exercises >= 5', async () => {
     const profile = makeProfile({
       skill_condenser: { exercises: ['ex1', 'ex2', 'ex3', 'ex4', 'ex5'] } as any,
+      next_action: 'submit_paper',
       can_submit_paper: true,
-      grade: {
-        grade: 2, papers_this_grade: 1, reviews_this_grade: 3, revisions_this_grade: 0,
-        bounties_this_grade: 1, best_score_this_grade: 72,
-        requirements: { papers: 2, reviews: 3, revisions: 1, bounties: 1, min_score: 70 },
-        advanced: false, failed: false,
-      },
     });
     mockSchoolAdapter.getProfile.mockResolvedValue(profile);
     mockSchoolAdapter.submitPaper.mockResolvedValue({
@@ -348,13 +328,8 @@ describe('runOneCycle', () => {
   it('handles malformed JSON in condensation gracefully', async () => {
     const profile = makeProfile({
       skill_condenser: { exercises: ['ex1'] } as any,
+      next_action: 'submit_paper',
       can_submit_paper: true,
-      grade: {
-        grade: 2, papers_this_grade: 1, reviews_this_grade: 3, revisions_this_grade: 0,
-        bounties_this_grade: 1, best_score_this_grade: 72,
-        requirements: { papers: 2, reviews: 3, revisions: 1, bounties: 1, min_score: 70 },
-        advanced: false, failed: false,
-      },
     });
     mockSchoolAdapter.getProfile.mockResolvedValue(profile);
     mockSchoolAdapter.submitPaper.mockResolvedValue({
@@ -378,13 +353,8 @@ describe('runOneCycle', () => {
   it('extracts JSON from markdown-fenced LLM output during condensation', async () => {
     const profile = makeProfile({
       skill_condenser: { exercises: ['ex1'] } as any,
+      next_action: 'submit_paper',
       can_submit_paper: true,
-      grade: {
-        grade: 2, papers_this_grade: 1, reviews_this_grade: 3, revisions_this_grade: 0,
-        bounties_this_grade: 1, best_score_this_grade: 72,
-        requirements: { papers: 2, reviews: 3, revisions: 1, bounties: 1, min_score: 70 },
-        advanced: false, failed: false,
-      },
     });
     mockSchoolAdapter.getProfile.mockResolvedValue(profile);
     mockSchoolAdapter.submitPaper.mockResolvedValue({

@@ -11,7 +11,7 @@ import { ISchoolAdapter, SchoolCredentials } from '../adapters/school.adapter';
 import { ILLMAdapter, LLMResponse } from '../adapters/llm.adapter';
 import { buildPrompt } from './prompt-builder';
 import type { ActiveSkillDirective } from './prompt-builder';
-import { REVIEW_TOOL, PAPER_TOOL, BOUNTY_TOOL, REVISION_TOOL } from './tool-schemas';
+import { REVIEW_TOOL, PAPER_TOOL, BOUNTY_TOOL, REVISION_TOOL, RESPONSE_TOOL } from './tool-schemas';
 import * as activity from '../services/activity.service';
 import type { SchoolProfile, SchoolPaper, TranslatedActivity, SchoolSkillExercises, SchoolMemoryPrompts } from '@peerzero/shared';
 
@@ -63,6 +63,8 @@ export async function routeAction(actionType: string, ctx: ActionContext): Promi
     case 'bounty': return executeBounty(ctx);
     case 'revision': return executeRevision(ctx);
     case 'reaffirmation': return executeReaffirmation(ctx);
+    case 'respond': return executeResponse(ctx);
+    case 'rebut': return executeRebuttal(ctx);
     default: return executeReview(ctx); // fallback
   }
 }
@@ -223,5 +225,85 @@ async function executeReaffirmation(ctx: ActionContext): Promise<ActionResult> {
       details: [],
       mood: result.credibility_change && result.credibility_change > 0 ? 'positive' : 'neutral',
     },
+  };
+}
+
+async function executeResponse(ctx: ActionContext): Promise<ActionResult> {
+  const respondable = ctx.profile.respondable_papers || [];
+  if (respondable.length === 0) {
+    return {
+      rawRequest: null,
+      rawResponse: null,
+      translated: { headline: 'No papers to respond to', summary: 'No eligible papers.', details: [], mood: 'neutral' },
+    };
+  }
+
+  const paper = respondable[0];
+  const messages = buildPrompt('respond', { profile: ctx.profile, selfAuthoredBlock: ctx.selfAuthoredBlock, activeSkills: ctx.activeSkills });
+  const llmResponse = await ctx.llmAdapter.chat(ctx.llmKey, ctx.llmModel, messages, {
+    tools: [RESPONSE_TOOL],
+    extendedThinking: ctx.extendedThinking,
+  });
+
+  const responseContent = extractToolInput(llmResponse, { title: 'Response', abstract: llmResponse.content, body: llmResponse.content, stance: 'rebut' });
+
+  const schoolResult = await ctx.schoolAdapter.submitResponse(ctx.schoolCreds, paper.id, responseContent);
+  if (!schoolResult || typeof schoolResult !== 'object') {
+    throw new Error('Invalid response from School API');
+  }
+
+  const stance = (responseContent.stance as string) || 'response';
+  return {
+    rawRequest: responseContent,
+    rawResponse: schoolResult as unknown as Record<string, unknown>,
+    translated: {
+      headline: `Responded to "${paper.title}"`,
+      summary: `Submitted ${stance} response (reviewed at ${paper.my_review_score}/10).`,
+      details: [],
+      mood: 'neutral',
+    },
+    tokensUsed: llmResponse.tokens_used,
+    exercises: schoolResult.skill_exercises as unknown as Record<string, unknown>,
+    memoryPrompts: schoolResult.memory_prompts,
+  };
+}
+
+async function executeRebuttal(ctx: ActionContext): Promise<ActionResult> {
+  const rebuttable = ctx.profile.rebuttable_papers || [];
+  if (rebuttable.length === 0) {
+    return {
+      rawRequest: null,
+      rawResponse: null,
+      translated: { headline: 'No papers to rebut', summary: 'No eligible papers.', details: [], mood: 'neutral' },
+    };
+  }
+
+  const paper = rebuttable[0];
+  const messages = buildPrompt('rebut', { profile: ctx.profile, selfAuthoredBlock: ctx.selfAuthoredBlock, activeSkills: ctx.activeSkills });
+  const llmResponse = await ctx.llmAdapter.chat(ctx.llmKey, ctx.llmModel, messages, {
+    tools: [RESPONSE_TOOL],
+    extendedThinking: ctx.extendedThinking,
+  });
+
+  const rebuttalContent = extractToolInput(llmResponse, { title: 'Rebuttal', abstract: llmResponse.content, body: llmResponse.content, stance: 'rebut' });
+
+  const schoolResult = await ctx.schoolAdapter.submitResponse(ctx.schoolCreds, paper.id, rebuttalContent);
+  if (!schoolResult || typeof schoolResult !== 'object') {
+    throw new Error('Invalid response from School API');
+  }
+
+  const attackCount = (paper.low_reviews?.length || 0) + (paper.bounties?.length || 0);
+  return {
+    rawRequest: rebuttalContent,
+    rawResponse: schoolResult as unknown as Record<string, unknown>,
+    translated: {
+      headline: `Rebutted attacks on "${paper.title}"`,
+      summary: `Defended paper against ${attackCount} attack${attackCount !== 1 ? 's' : ''}.`,
+      details: [],
+      mood: 'neutral',
+    },
+    tokensUsed: llmResponse.tokens_used,
+    exercises: schoolResult.skill_exercises as unknown as Record<string, unknown>,
+    memoryPrompts: schoolResult.memory_prompts,
   };
 }

@@ -85,8 +85,8 @@ export function makeProfile(overrides: Partial<SchoolProfile> = {}): SchoolProfi
       registration_review_passed: true,
     },
     tier_info: 'Tested Reasoner',
-    next_action: 'Submit a paper or review.',
-    can_submit_paper: true,
+    next_action: 'review',
+    can_submit_paper: false,
     can_revise: false,
     reviews_completed: 3,
     valid_bounties: 1,
@@ -115,6 +115,8 @@ export function makeProfile(overrides: Partial<SchoolProfile> = {}): SchoolProfi
     },
     recent_feedback: { reviews_on_your_papers: [], storage_instruction: '' },
     can_reaffirm: false,
+    can_respond: false,
+    can_rebut: false,
     ...overrides,
   } as SchoolProfile;
 }

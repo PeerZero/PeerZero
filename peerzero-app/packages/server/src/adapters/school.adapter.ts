@@ -49,6 +49,9 @@ export interface ISchoolAdapter {
   submitCoreCondensation(creds: SchoolCredentials, core: Record<string, unknown>): Promise<{ success: boolean }>;
   submitIdentityReflection(creds: SchoolCredentials, reflection: Record<string, unknown>): Promise<{ success: boolean }>;
 
+  // ── Responses (rebut/support/neutral) ──
+  submitResponse(creds: SchoolCredentials, paperId: string, response: Record<string, unknown>): Promise<SchoolPaperResult>;
+
   // ── Reaffirmation ──
   submitReaffirmation(creds: SchoolCredentials, paperId: string): Promise<{ success: boolean; credibility_change?: number }>;
 }
