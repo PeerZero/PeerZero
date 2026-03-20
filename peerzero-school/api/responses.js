@@ -154,6 +154,11 @@ module.exports = async (req, res) => {
     if (!stance || !['support', 'neutral', 'rebut', 'revision', 'reaffirmation'].includes(stance))
       return res.status(400).json({ error: 'Stance must be support, neutral, rebut, revision, or reaffirmation' });
 
+    // Revisions and reaffirmations require substantive body — prevent low-effort submissions
+    if ((isRevision || isReaffirmation) && body.trim().length < 2000) {
+      return res.status(400).json({ error: 'Revision/reaffirmation body must be at least 2000 characters — substantive engagement with feedback is required' });
+    }
+
     const lengthFields = { title, abstract, body };
     for (const [fieldName, value] of Object.entries(lengthFields)) {
       const err = validateTextLength(fieldName, value);

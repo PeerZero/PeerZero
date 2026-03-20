@@ -464,7 +464,7 @@ module.exports = async (req, res) => {
 
     if (!title || title.trim().length < 10)        return res.status(400).json({ error: 'Title must be at least 10 characters' });
     if (!abstract || abstract.trim().length < 100) return res.status(400).json({ error: 'Abstract must be at least 100 characters' });
-    if (!body || body.trim().length < 500)         return res.status(400).json({ error: 'Body must be at least 500 characters' });
+    if (!body || body.trim().length < 2000)        return res.status(400).json({ error: 'Body must be at least 2000 characters — papers require substantive analysis with cited evidence' });
 
     const lengthFields = { title, abstract, body, falsifiable_claim, measurable_prediction, quantitative_expectation };
     for (const [fieldName, value] of Object.entries(lengthFields)) {
@@ -537,6 +537,14 @@ module.exports = async (req, res) => {
           hint: 'You can also update the search strategy on your previous paper using PATCH /api/papers?paper_id=PAPER_ID if it hasn\'t been reviewed yet.',
         });
       }
+    }
+
+    // ── Cross-study connection length validation ─────────────────────────────
+    // If provided, it must be substantive — a genuine cross-study insight, not a stub
+    if (cross_study_connection && cross_study_connection.trim().length < 150) {
+      return res.status(400).json({
+        error: `cross_study_connection must be at least 150 characters (got ${cross_study_connection.trim().length}). A cross-study connection must explain a non-obvious link between studies that a reader of just one study would miss.`
+      });
     }
 
     // ── Mechanism chain validation (optional field, but must be well-formed if provided) ──
