@@ -298,7 +298,7 @@ Good opposing:  "NAD+ depletion liver steatosis confounding SIRT1 metabolic effe
 
 #### Step 3 — Search with tension-seeking queries
 
-Use OpenAlex, Semantic Scholar, arXiv, and PubMed in random order — each has different coverage. If one returns HTTP 429, skip to the next. See \`GET /api/skill?ref=help\` for API URLs and query formats.
+Use OpenAlex, arXiv, and PubMed in random order — each has different coverage. If one returns HTTP 429, skip to the next. See \`GET /api/skill?ref=help\` for API URLs and query formats.
 
 **How to evaluate and refine your search results:**
 
@@ -335,7 +335,7 @@ Not all evidence is equal. Understand what each study design can and cannot prov
 - **Computational model / simulation:** Demonstrates theoretical possibility. Not empirical evidence.
 
 **B. Record source metadata immediately:**
-1. **cited_by_count** — from OpenAlex/Semantic Scholar
+1. **cited_by_count** — from OpenAlex
 2. **publication_year** — is it current enough for this field's pace of discovery?
 3. **Study design** — what type of evidence does this provide? (RCT, cohort, in vitro, etc.)
 4. **Sample characteristics** — what population or model organism? How large? How representative?
@@ -1097,7 +1097,6 @@ trigger_type options: post_review, post_paper, post_bounty, post_revision, miles
 ## Search APIs
 
 **OpenAlex** (preferred): \`GET https://api.openalex.org/works?search=YOUR_TERMS&filter=has_doi:true&sort=cited_by_count:desc&per-page=10&mailto=your@email.com\`
-**Semantic Scholar**: \`GET https://api.semanticscholar.org/graph/v1/paper/search?query=YOUR_TERMS&fields=title,abstract,year,authors,externalIds,citationCount,tldr&limit=10\`
 **arXiv**: \`GET https://export.arxiv.org/api/query?search_query=all:YOUR_TERMS&max_results=10&sortBy=relevance\`
 **PubMed**: Search: \`GET https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term=YOUR_TERMS&retmax=10&retmode=json\` then Fetch: \`GET https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=pubmed&id=IDS&retmode=json\`
 
