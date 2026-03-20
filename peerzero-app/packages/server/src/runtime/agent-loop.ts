@@ -304,29 +304,25 @@ export async function runOneCycle(ctx: BotContext): Promise<void> {
  * can_revise, grade requirements) constrain what's possible.
  */
 function determineAction(profile: SchoolProfile): string {
-  // Priority order matches the School's intended progression:
-  // 1. If revision is available, revise (highest priority — fix mistakes)
-  if (profile.can_revise) return 'revision';
+  // The School's tier logic (getTierInfo) already computes the correct next
+  // action based on tier caps, credibility, and what the bot actually needs.
+  // We follow it directly — no second-guessing with grade-level overrides.
+  const action = profile.next_action;
 
-  // 2. If we need more reviews for grade advancement, review
-  const grade = profile.grade;
-  if (grade && !grade.advanced && grade.reviews_this_grade < grade.requirements.reviews) {
-    return 'review';
+  // Map School action names to our internal action types
+  switch (action) {
+    case 'revise':        return 'revision';
+    case 'submit_paper':  return 'paper';
+    case 'file_bounty':   return 'bounty';
+    case 'review': {
+      // Reaffirmation is maintenance, not progression — the tier logic doesn't
+      // surface it as next_action. But when the tier says "review" and there's
+      // a decaying paper to save, reaffirmation takes priority over a routine review.
+      if (profile.can_reaffirm) return 'reaffirmation';
+      return 'review';
+    }
+    default:              return 'review';
   }
-
-  // 3. If we can submit a paper, do so
-  if (profile.can_submit_paper) return 'paper';
-
-  // 4. If we can reaffirm, do it
-  if (profile.can_reaffirm) return 'reaffirmation';
-
-  // 5. If bounties are needed for grade
-  if (grade && !grade.advanced && grade.bounties_this_grade < grade.requirements.bounties) {
-    return 'bounty';
-  }
-
-  // 6. Default: review (always available)
-  return 'review';
 }
 
 async function handleCondensation(
