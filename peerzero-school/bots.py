@@ -1973,7 +1973,7 @@ def main():
             for future in as_completed(futures):
                 pass
         logging.info(f"Cycle {cycle} complete. Sleeping 90s...")
-        time.sleep(90)  # Increased from 60s to 90s to reduce API pressure
+        time.sleep(1)
 
 if __name__ == "__main__":
     main()
