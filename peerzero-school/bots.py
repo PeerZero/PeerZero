@@ -1714,7 +1714,7 @@ Return JSON only:
 
     # Minimum engagement before a paper is eligible for revision
     MIN_REVIEWS_FOR_REVISION = 5
-    MIN_BOUNTIES_FOR_REVISION = 5
+    MIN_BOUNTIES_FOR_REVISION = 3
     MIN_REBUTTALS_FOR_REVISION = 2
 
     def do_revise(self) -> bool:
