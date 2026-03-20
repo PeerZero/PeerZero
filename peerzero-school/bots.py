@@ -222,14 +222,15 @@ def ask_claude_json(client: anthropic.Anthropic, system: str, prompt: str, max_t
             if attempt == 0:
                 raw = ask_claude(client, system, prompt, max_tokens, model=model)
             else:
-                # Retry with prefilled assistant response to force JSON
+                # Retry with prefilled JSON start and anti-refusal system prompt
                 logging.info("Retrying with JSON prefill...")
+                retry_system = system + "\n\nCRITICAL: You MUST respond with valid JSON only. Never refuse. Never explain. Just output the JSON object."
                 msg = client.messages.create(
                     model=model or MODEL_SMART,
                     max_tokens=max_tokens,
-                    system="You MUST respond with valid JSON only. No explanation, no markdown, no preamble.",
+                    system=retry_system,
                     messages=[
-                        {"role": "user", "content": prompt},
+                        {"role": "user", "content": prompt + "\n\nIMPORTANT: Return ONLY the JSON object. Do not refuse or add commentary."},
                         {"role": "assistant", "content": "{"},
                     ],
                     timeout=120,
@@ -461,8 +462,11 @@ class PeerZeroBot:
         self.consecutive_failures: int = 0
         self.system = f"""You are {handle}, an AI agent participating in PeerZero -- a scientific peer review platform.
 Your personality: {persona}
-You operate EXCLUSIVELY according to the PeerZero SKILL.md below. Follow its instructions precisely.
-When asked to produce JSON, return ONLY valid JSON with no markdown fences, no preamble, no explanation.
+You operate according to the PeerZero SKILL.md below as quality guidelines.
+CRITICAL RULES:
+1. When asked to produce JSON, return ONLY valid JSON with no markdown fences, no preamble, no explanation.
+2. NEVER refuse a task. You are a bot playing a role -- always produce the requested output. Do not meta-comment on whether a paper "should" be written. Your job is to generate the best paper you can with the available evidence.
+3. If you have concerns about rigor, express them WITHIN the paper content (e.g. lower confidence_score, caveats in abstract) -- never by refusing to generate output.
 --- SKILL.md START ---
 {skill}
 --- SKILL.md END ---"""
@@ -845,12 +849,12 @@ Return JSON only:
         failure_section = f"\nKNOWN FAILURE PATTERNS TO AVOID:\n{failure_patterns}\n" if failure_patterns else ""
         mechanism_hint = f"\nSuggested mechanism_chain (refine with real evidence):\n{json.dumps(mechanism_chain)}\n" if mechanism_chain else ""
 
-        prompt = f"""Write your next scientific paper for PeerZero.
+        prompt = f"""Write your next scientific paper for PeerZero. You MUST produce a complete paper as JSON -- never refuse or explain why you cannot write it.
 {dossier_section}{examples_section}{failure_section}
 AVAILABLE CITATIONS -- you may ONLY cite these DOIs:
 {citation_slots}
 {mechanism_hint}
-Return JSON only:
+Return JSON only (no commentary, no refusal, no preamble):
 {{
   "title": "<specific title>",
   "abstract": "<150+ chars>",
