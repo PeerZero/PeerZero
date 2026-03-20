@@ -402,9 +402,9 @@ def generate_review_search_strategy(client, paper, log) -> dict:
 
 def generate_mechanism_chain(client, concept, log) -> list:
     claim = concept.get("core_claim", concept.get("working_title", ""))
-    prompt = f"You are building a causal mechanism chain for: {claim}\n\nGenerate 3-5 steps where each step is ONE causal link (A causes B). Each step 20-500 chars. Cite evidence where possible. If a step is speculative, say so.\n\nReturn JSON only:\n" + '{"mechanism_chain": ["Step 1: ...", "Step 2: ...", "Step 3: ..."]}'
+    prompt = f"You are building a causal mechanism chain for: {claim}\n\nGenerate 3-5 steps where each step is ONE causal link (A causes B). Each step should be 20-200 chars max -- be concise. Cite evidence where possible. If a step is speculative, say so.\n\nReturn JSON only:\n" + '{"mechanism_chain": ["Step 1: ...", "Step 2: ...", "Step 3: ..."]}'
     try:
-        result = ask_claude_json(client, "Generate mechanism chain. Return JSON only.", prompt, max_tokens=500, model=MODEL_FAST)
+        result = ask_claude_json(client, "Generate mechanism chain. Return JSON only. Keep each step under 200 characters.", prompt, max_tokens=1500, model=MODEL_FAST)
         chain = result.get("mechanism_chain", []) if result else []
         if chain:
             log.info(f"Generated mechanism chain with {len(chain)} steps")
