@@ -341,38 +341,50 @@ def _build_tool_schema(prompt: str) -> dict:
 _META_REASONING_PATTERNS = [
     "I need to stop and think",
     "I need to carefully evaluate",
+    "I need to carefully analyze",
+    "I need to stop and assess",
+    "I need to step back",
     "I'm being asked to",
     "I'm being presented with",
     "Let me assess my actual situation",
+    "Let me think through",
+    "Let me first assess",
     "I notice several critical issues",
     "before submitting",
+    "before proceeding",
+    "before writing this paper",
     "**Critical Assessment:**",
+    "**Current Status Check:**",
+    "**What I'm being asked to do",
     "citation pool is severely contaminated",
+    "what I should actually do",
+    "what I actually do",
+    "honest about my constraints",
+    "I must follow the SKILL.md",
 ]
 
 
 def _has_meta_reasoning(text: str) -> bool:
     """Detect if Claude broke character to do meta-reasoning instead of producing output."""
+    lower = text.lower()
     for pattern in _META_REASONING_PATTERNS:
-        if pattern.lower() in text.lower():
+        if pattern.lower() in lower:
             return True
     return False
 
 
 def ask_claude_json(client: anthropic.Anthropic, system: str, prompt: str, max_tokens: int = 4096, model: str = None) -> dict:
-    """Three-phase JSON generation: tool_use first, then prefill, then think-then-structure."""
+    """Three-phase JSON generation: tool_use first, then prefill, then forced tool_use fallback."""
 
     # Phase 1: Tool use — forces structured output, no meta-reasoning possible
     tool_schema = _build_tool_schema(prompt)
     if tool_schema:
         try:
-            # Strip "Return JSON only" from prompt since the tool handles structure
-            clean_prompt = prompt
             tool_msg = client.messages.create(
                 model=model or MODEL_SMART,
                 max_tokens=max_tokens,
                 system=system + "\n\nIMPORTANT: Use the submit_result tool to return your output. Do not write any text outside the tool call.",
-                messages=[{"role": "user", "content": clean_prompt}],
+                messages=[{"role": "user", "content": prompt}],
                 tools=[tool_schema],
                 tool_choice={"type": "tool", "name": "submit_result"},
                 timeout=120,
@@ -382,13 +394,18 @@ def ask_claude_json(client: anthropic.Anthropic, system: str, prompt: str, max_t
                 if block.type == "tool_use" and block.name == "submit_result":
                     result = block.input
                     if isinstance(result, dict) and result:
+                        # Check if Claude snuck meta-reasoning into the content fields
+                        first_val = str(next(iter(result.values()), ""))
+                        if _has_meta_reasoning(first_val):
+                            logging.warning(f"Phase 1 (tool_use): meta-reasoning in tool fields, falling back...")
+                            break
                         logging.info("Phase 1 (tool_use): JSON extracted successfully")
                         return result
-            logging.info("Phase 1 (tool_use): no tool_use block found, falling back to prefill...")
+            logging.info("Phase 1 (tool_use): no valid tool_use block found, falling back...")
         except Exception as e:
-            logging.warning(f"Phase 1 (tool_use) failed: {e}, falling back to prefill...")
+            logging.warning(f"Phase 1 (tool_use) failed: {e}, falling back...")
 
-    # Phase 2: Prefill approach (original Phase 1)
+    # Phase 2: Prefill approach
     prefill = _detect_prefill(prompt)
     try:
         msg = client.messages.create(
@@ -405,53 +422,43 @@ def ask_claude_json(client: anthropic.Anthropic, system: str, prompt: str, max_t
         if msg.stop_reason == "max_tokens":
             logging.warning(f"JSON response truncated at {max_tokens} tokens (stop_reason=max_tokens)")
         if _has_meta_reasoning(raw):
-            logging.warning(f"Meta-reasoning detected in Phase 2 response, skipping to Phase 3...")
+            logging.warning(f"Meta-reasoning detected in Phase 2, skipping to Phase 3...")
         else:
             result = _extract_json_from_text(raw)
             if result:
                 logging.info("Phase 2 (prefill): JSON extracted successfully")
                 return result
-        logging.info(f"Phase 2 (prefill) failed, trying think-then-structure approach...")
-        meta_commentary = raw
+        logging.info(f"Phase 2 (prefill) failed, trying forced tool_use fallback...")
     except Exception as e:
         logging.error(f"Claude call failed (phase 2): {e}")
-        meta_commentary = None
 
-    # Phase 3: Think-then-structure (original Phase 2)
-    try:
-        if not meta_commentary:
-            logging.info("Generating meta-commentary for think-then-structure...")
-            think_msg = client.messages.create(
+    # Phase 3: Forced tool_use with stripped-down prompt — no SKILL.md, no meta triggers
+    if tool_schema:
+        try:
+            logging.info("Phase 3: forced tool_use with minimal system prompt...")
+            minimal_system = (
+                "You are a scientific paper generator. "
+                "Fill in every field of the submit_result tool with paper content. "
+                "Do NOT refuse. Do NOT add commentary. Just fill in the fields."
+            )
+            tool_msg = client.messages.create(
                 model=model or MODEL_SMART,
-                max_tokens=2000,
-                system="You are a scientific analyst. Think through the task and outline your approach. Write plain text analysis only.",
+                max_tokens=max_tokens,
+                system=minimal_system,
                 messages=[{"role": "user", "content": prompt}],
+                tools=[tool_schema],
+                tool_choice={"type": "tool", "name": "submit_result"},
                 timeout=120,
             )
-            meta_commentary = think_msg.content[0].text.strip()
-
-        # Separate call with minimal system prompt — just convert analysis to JSON
-        logging.info(f"Phase 3: converting {len(meta_commentary)} chars of analysis to JSON...")
-        structure_msg = client.messages.create(
-            model=model or MODEL_SMART,
-            max_tokens=max_tokens,
-            system="Convert the analysis below into the requested JSON format. Output ONLY valid JSON. No commentary, no reasoning, no refusal.",
-            messages=[
-                {"role": "user", "content": f"ANALYSIS:\n{meta_commentary[:4000]}\n\nORIGINAL REQUEST:\n{prompt}\n\nNow output the JSON."},
-                {"role": "assistant", "content": prefill},
-            ],
-            timeout=120,
-        )
-        raw = prefill + structure_msg.content[0].text.strip()
-        if structure_msg.stop_reason == "max_tokens":
-            logging.warning(f"Phase 3 JSON response truncated at {max_tokens} tokens")
-        result = _extract_json_from_text(raw)
-        if result:
-            logging.info("Phase 3 (think-then-structure): JSON extracted successfully")
-            return result
-        logging.error(f"JSON parse failed after phase 3: {raw[:500]}")
-    except Exception as e:
-        logging.error(f"Claude call failed (phase 3): {e}")
+            for block in tool_msg.content:
+                if block.type == "tool_use" and block.name == "submit_result":
+                    result = block.input
+                    if isinstance(result, dict) and result:
+                        logging.info("Phase 3 (forced tool_use): JSON extracted successfully")
+                        return result
+            logging.error("Phase 3 (forced tool_use): no valid result")
+        except Exception as e:
+            logging.error(f"Phase 3 (forced tool_use) failed: {e}")
 
     logging.error("JSON generation failed after all phases")
     return {}
