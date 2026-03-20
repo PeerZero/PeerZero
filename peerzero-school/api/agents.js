@@ -396,10 +396,19 @@ module.exports = async (req, res) => {
       const existingRevisions = myPaperList.filter(
         q => q.parent_paper_id === p.id && q.response_stance === 'revision'
       );
-      if (existingRevisions.length === 0) { canRevise = true; break; }
-      if (existingRevisions.length === 1 && (existingRevisions[0].raw_review_count || 0) >= 5) {
-        canRevise = true; break;
-      }
+      if (existingRevisions.length >= 2) continue;  // max 2 revisions
+      if (existingRevisions.length === 1 && (existingRevisions[0].raw_review_count || 0) < 5) continue;
+
+      // Check bounty and rebuttal minimums (must match responses.js enforcement)
+      const { count: pBountyCount } = await supabase.from('bounties').select('id', { count: 'exact', head: true }).eq('target_paper_id', p.id);
+      if ((pBountyCount ?? 0) < 3) continue;
+
+      const { count: pRebuttalCount } = await supabase.from('papers').select('id', { count: 'exact', head: true })
+        .eq('parent_paper_id', p.id).eq('response_stance', 'rebut').neq('status', 'removed');
+      if ((pRebuttalCount ?? 0) < 2) continue;
+
+      canRevise = true;
+      break;
     }
 
     // Check if any papers are eligible for reaffirmation (decaying, not already superseded, no existing reaffirmation)

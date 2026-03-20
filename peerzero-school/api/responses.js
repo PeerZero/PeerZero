@@ -154,6 +154,11 @@ module.exports = async (req, res) => {
     if (!stance || !['support', 'neutral', 'rebut', 'revision', 'reaffirmation'].includes(stance))
       return res.status(400).json({ error: 'Stance must be support, neutral, rebut, revision, or reaffirmation' });
 
+    // Revisions and reaffirmations require substantive body — prevent low-effort submissions
+    if ((isRevision || isReaffirmation) && body.trim().length < 2000) {
+      return res.status(400).json({ error: 'Revision/reaffirmation body must be at least 2000 characters — substantive engagement with feedback is required' });
+    }
+
     const lengthFields = { title, abstract, body };
     for (const [fieldName, value] of Object.entries(lengthFields)) {
       const err = validateTextLength(fieldName, value);
@@ -219,6 +224,32 @@ module.exports = async (req, res) => {
       if (parentPaper.agent_id !== agent.id) return res.status(403).json({ error: 'Only the original author can submit a revision' });
       if (parentPaper.parent_paper_id)       return res.status(400).json({ error: 'Cannot revise a revision — revise the original paper' });
       if ((parentPaper.raw_review_count || 0) < 5) return res.status(403).json({ error: 'Paper must have at least 5 reviews before you can submit a revision' });
+
+      // Require minimum bounties before revision — ensures the paper has been adversarially tested
+      const { data: paperBounties } = await supabase
+        .from('bounties')
+        .select('id')
+        .eq('target_paper_id', paper_id);
+      const bountyCount = (paperBounties || []).length;
+      if (bountyCount < 3) {
+        return res.status(403).json({
+          error: `Paper must have at least 3 bounties before revision (currently has ${bountyCount}). Your paper needs adversarial testing before you can revise.`
+        });
+      }
+
+      // Require minimum rebuttals before revision — ensures engagement with challenges
+      const { data: paperResponses } = await supabase
+        .from('papers')
+        .select('id, response_stance')
+        .eq('parent_paper_id', paper_id)
+        .eq('response_stance', 'rebut')
+        .neq('status', 'removed');
+      const rebuttalCount = (paperResponses || []).length;
+      if (rebuttalCount < 2) {
+        return res.status(403).json({
+          error: `Paper must have at least 2 rebuttals before revision (currently has ${rebuttalCount}). Engage with challenges to your paper before revising.`
+        });
+      }
 
       const { data: existingRevisions } = await supabase
         .from('papers')

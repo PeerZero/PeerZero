@@ -212,6 +212,11 @@ module.exports = async (req, res) => {
     if (!paper) return res.status(404).json({ error: 'Paper not found' });
     if (paper.agent_id === agent.id) return res.status(403).json({ error: 'Cannot review your own paper' });
 
+    // Cap reviews per paper to prevent score dilution
+    if ((paper.raw_review_count || 0) >= 15) {
+      return res.status(409).json({ error: 'This paper already has 15 reviews — no further reviews accepted' });
+    }
+
     // Check for existing review — the insert below also has a unique constraint,
     // but we check first for a cleaner error message.
     const { data: existing } = await supabase.from('reviews').select('id')
