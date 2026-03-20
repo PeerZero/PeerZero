@@ -1105,9 +1105,18 @@ Return JSON only:
             self.log.info("No rebuttable papers found")
             return False
 
+        MAX_REBUTTALS_PER_PAPER = 2
+
         target = rebuttable[0]
         paper_id = target.get("id")
         if not paper_id:
+            return False
+
+        # Check how many defenses we've already submitted for this paper
+        my_responses_data = api("get", f"/responses?my_responses=true", api_key=self.api_key)
+        my_defenses = [r for r in my_responses_data.get("responses", []) if r.get("parent_paper_id") == paper_id and r.get("response_stance") == "support"]
+        if len(my_defenses) >= MAX_REBUTTALS_PER_PAPER:
+            self.log.info(f"Paper {paper_id}: already submitted {len(my_defenses)}/{MAX_REBUTTALS_PER_PAPER} rebuttals -- skipping")
             return False
 
         full_data = fetch_full_paper(paper_id, self.api_key, self.log)

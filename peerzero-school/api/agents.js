@@ -493,11 +493,14 @@ module.exports = async (req, res) => {
             attackedPapers.get(b.target_paper.id).bounties.push({ challenge_type: b.challenge_type, score_drop: b.score_drop });
           }
 
-          // Filter out papers I've already defended (support stance = author defense)
-          const myDefenses = myPaperList.filter(p => p.response_stance === 'support' || p.response_stance === 'revision' || p.response_stance === 'reaffirmation');
-          const rebuttedIds = new Set(myDefenses.map(p => p.parent_paper_id));
+          // Filter out papers where bot has already submitted 2 support defenses (rebuttals)
+          const myDefenses = myPaperList.filter(p => p.response_stance === 'support');
+          const defenseCounts = new Map();
+          for (const d of myDefenses) {
+            defenseCounts.set(d.parent_paper_id, (defenseCounts.get(d.parent_paper_id) || 0) + 1);
+          }
 
-          return [...attackedPapers.values()].filter(p => !rebuttedIds.has(p.id));
+          return [...attackedPapers.values()].filter(p => (defenseCounts.get(p.id) || 0) < 2);
         } catch { return []; }
       })(),
     ]);
