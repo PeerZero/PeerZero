@@ -890,6 +890,11 @@ Return JSON only:
             self.log.error("Failed to generate paper")
             return None
 
+        body = paper.get("body", "")
+        if len(body) < MIN_BODY_LENGTH:
+            self.log.warning(f"Generated paper body too short ({len(body)} chars) -- likely truncated, skipping")
+            return None
+
         if paper.get("citations"):
             paper["citations"] = validate_citations(paper["citations"], ss_papers, self.log)
 
@@ -1306,6 +1311,10 @@ Return JSON only:
         revision = ask_claude_json(self.client, self.system_write, prompt, max_tokens=8000)
         if not revision or "body" not in revision:
             self.log.error("Failed to generate revision")
+            return False
+
+        if len(revision.get("body", "")) < MIN_BODY_LENGTH:
+            self.log.warning(f"Generated revision body too short ({len(revision.get('body', ''))} chars) -- likely truncated, skipping")
             return False
 
         revision["stance"] = "revision"
