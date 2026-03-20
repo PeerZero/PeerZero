@@ -846,16 +846,20 @@ The paper has intentional flaws. Catch at least 2. Return JSON only:
 
     def decide_action(self, status) -> str:
         action = status.get("next_action", "")
-        if action in ("submit_paper", "review", "file_bounty", "revise", "validate_all"):
+        if action in ("submit_paper", "review", "file_bounty", "revise", "validate_all", "respond", "rebut"):
             return action
         tier_info = status.get("tier_info", "")
         match = re.search(r"next_action:\s*(\S+)", tier_info)
         if match:
             parsed = re.sub(r"[^a-z_]", "", match.group(1))
-            if parsed in ("submit_paper", "review", "file_bounty", "revise", "validate_all"):
+            if parsed in ("submit_paper", "review", "file_bounty", "revise", "validate_all", "respond", "rebut"):
                 return parsed
         if status.get("can_revise"):
             return "revise"
+        if status.get("can_respond"):
+            return "respond"
+        if status.get("can_rebut"):
+            return "rebut"
         return "review"
 
     def find_reviewable_paper(self) -> Optional[dict]:
@@ -992,6 +996,203 @@ Return JSON only:
                         self.log.info(f"Rated review {review_id}: helpful={rating['helpful']}, tags={rating.get('tags', [])}")
             except Exception as e:
                 self.log.warning(f"Review rating failed: {e}")
+
+    # ── Respond to a paper reviewed harshly ────────────────────────────────
+
+    def do_respond(self, status=None) -> bool:
+        """Write a response paper to a paper this bot reviewed with score <= 5."""
+        if status is None:
+            status = self.get_status()
+        respondable = status.get("respondable_papers", [])
+        if not respondable:
+            self.log.info("No respondable papers found")
+            return False
+
+        target = respondable[0]
+        paper_id = target.get("id")
+        if not paper_id:
+            return False
+
+        full_data = fetch_full_paper(paper_id, self.api_key, self.log)
+        if not full_data:
+            return False
+
+        paper = full_data["paper"]
+        full = full_data["full"]
+        self.log.info(f"Responding to harshly-reviewed paper: {paper.get('title', '')[:60]}")
+
+        # Search for evidence to build response
+        title_words = " ".join(paper.get("title", "").split()[:6])
+        claim = paper.get("falsifiable_claim", "") or title_words
+        response_queries = [
+            f"{claim} contradicting evidence alternative explanation",
+            f"{title_words} methodology limitations confounders",
+            f"{claim} replication failure negative results",
+        ]
+        evidence_papers = search_and_summarize(response_queries, self.log, self.client, paper_context=f"Challenge: {paper.get('title', '')}")
+
+        citation_slots = ""
+        for p in evidence_papers:
+            doi = p.get("externalIds", {}).get("DOI") or p.get("doi", "")
+            if not doi:
+                continue
+            citation_slots += f"\n--- CITATION SLOT ---\nDOI: {doi}\nTitle: {p.get('title', '')}\nAbstract: {str(p.get('abstract', ''))[:600]}\n"
+            if p.get("agent_summary"):
+                citation_slots += f"Pre-computed agent_summary: {p['agent_summary']}\n"
+
+        my_score = target.get("my_review_score", "unknown")
+        prompt = f"""You previously reviewed this paper and gave it a score of {my_score}/10.
+Now write a detailed response paper explaining your critique and providing evidence.
+
+Target paper:
+Title: {paper.get('title')}
+Abstract: {paper.get('abstract')}
+Body: {paper.get('body', '')}
+Citations: {json.dumps(full.get('citations', []))}
+
+AVAILABLE EVIDENCE -- ONLY cite these DOIs:
+{citation_slots}
+
+Return JSON only:
+{{
+  "title": "Response: <shortened original title>",
+  "abstract": "<120+ chars explaining your key critique>",
+  "body": "<detailed critique with evidence>",
+  "stance": "rebut",
+  "mechanism_chain": ["<step showing where original reasoning breaks (max 200 chars per step)>"],
+  "citations": [{{"doi": "...", "agent_summary": "...", "relevance_explanation": "...", "source_quality_note": "..."}}]
+}}"""
+
+        data = ask_claude_json(self.client, self.system, prompt)
+        if not data:
+            self.log.error("Failed to generate response paper")
+            return False
+
+        if data.get("citations"):
+            data["citations"] = validate_citations(data["citations"], evidence_papers, self.log)
+        if len(data.get("abstract", "")) < 120:
+            self.log.warning("Response abstract too short")
+            return False
+
+        # Attach search_strategy
+        data["search_strategy"] = {
+            "supporting_queries": response_queries[:6],
+            "opposing_queries": [f"{title_words} supporting evidence validation"],
+            "query_rationale": f"Searched for contradicting evidence and methodological limitations to substantiate the low review score of {my_score}."
+        }
+
+        if data.get("mechanism_chain") and isinstance(data["mechanism_chain"], list):
+            data["mechanism_chain"] = [step[:500] for step in data["mechanism_chain"][:10]]
+
+        result = api("post", f"/responses?paper_id={paper_id}", api_key=self.api_key, json=data)
+        if result.get("success"):
+            self.log.info(f"Response paper submitted for '{paper.get('title', '')[:50]}': {result.get('response_paper_id')}")
+            return True
+        self.log.warning(f"Response paper failed: {result.get('error')}")
+        return False
+
+    # ── Rebut attacks on own papers ──────────────────────────────────────────
+
+    def do_rebut(self, status=None) -> bool:
+        """Defend own paper that received low reviews or validated bounties."""
+        if status is None:
+            status = self.get_status()
+        rebuttable = status.get("rebuttable_papers", [])
+        if not rebuttable:
+            self.log.info("No rebuttable papers found")
+            return False
+
+        target = rebuttable[0]
+        paper_id = target.get("id")
+        if not paper_id:
+            return False
+
+        full_data = fetch_full_paper(paper_id, self.api_key, self.log)
+        if not full_data:
+            return False
+
+        paper = full_data["paper"]
+        full = full_data["full"]
+        self.log.info(f"Defending own paper: {paper.get('title', '')[:60]}")
+
+        low_reviews = target.get("low_reviews", [])
+        bounties = target.get("bounties", [])
+
+        criticisms = ""
+        for r in low_reviews[:5]:
+            criticisms += f"\n- Review score {r.get('score')}: {str(r.get('assessment', ''))[:300]}"
+        for b in bounties[:3]:
+            criticisms += f"\n- Bounty ({b.get('challenge_type', 'unknown')}): score drop {b.get('score_drop', 'unknown')}"
+
+        # Search for additional supporting evidence
+        title_words = " ".join(paper.get("title", "").split()[:6])
+        claim = paper.get("falsifiable_claim", "") or title_words
+        defense_queries = [
+            f"{claim} supporting evidence replication",
+            f"{title_words} meta-analysis systematic review",
+            f"{claim} mechanism validation independent confirmation",
+        ]
+        evidence_papers = search_and_summarize(defense_queries, self.log, self.client, paper_context=f"Defense: {paper.get('title', '')}")
+
+        citation_slots = ""
+        for p in evidence_papers:
+            doi = p.get("externalIds", {}).get("DOI") or p.get("doi", "")
+            if not doi:
+                continue
+            citation_slots += f"\n--- CITATION SLOT ---\nDOI: {doi}\nTitle: {p.get('title', '')}\nAbstract: {str(p.get('abstract', ''))[:600]}\n"
+            if p.get("agent_summary"):
+                citation_slots += f"Pre-computed agent_summary: {p['agent_summary']}\n"
+
+        prompt = f"""Your paper has been criticized. Write a defense addressing the specific criticisms.
+
+Your paper:
+Title: {paper.get('title')}
+Abstract: {paper.get('abstract')}
+Body: {paper.get('body', '')}
+
+Criticisms received:{criticisms}
+
+AVAILABLE EVIDENCE -- ONLY cite these DOIs:
+{citation_slots}
+
+Be honest: concede valid criticisms, but defend claims that have evidence. Address EACH criticism specifically.
+
+Return JSON only:
+{{
+  "title": "Defense: <shortened original title>",
+  "abstract": "<120+ chars explaining your defense>",
+  "body": "<detailed defense addressing each criticism>",
+  "stance": "support",
+  "mechanism_chain": ["<step reinforcing your causal chain (max 200 chars per step)>"],
+  "citations": [{{"doi": "...", "agent_summary": "...", "relevance_explanation": "...", "source_quality_note": "..."}}]
+}}"""
+
+        data = ask_claude_json(self.client, self.system, prompt)
+        if not data:
+            self.log.error("Failed to generate defense paper")
+            return False
+
+        if data.get("citations"):
+            data["citations"] = validate_citations(data["citations"], evidence_papers, self.log)
+        if len(data.get("abstract", "")) < 120:
+            self.log.warning("Defense abstract too short")
+            return False
+
+        data["search_strategy"] = {
+            "supporting_queries": defense_queries[:6],
+            "opposing_queries": [f"{title_words} contradicting evidence limitations"],
+            "query_rationale": f"Searched for supporting evidence and independent confirmations to defend against criticisms of the original paper."
+        }
+
+        if data.get("mechanism_chain") and isinstance(data["mechanism_chain"], list):
+            data["mechanism_chain"] = [step[:500] for step in data["mechanism_chain"][:10]]
+
+        result = api("post", f"/responses?paper_id={paper_id}", api_key=self.api_key, json=data)
+        if result.get("success"):
+            self.log.info(f"Defense paper submitted for '{paper.get('title', '')[:50]}': {result.get('response_paper_id')}")
+            return True
+        self.log.warning(f"Defense paper failed: {result.get('error')}")
+        return False
 
     def _review_specific(self, paper_id, paper) -> bool:
         prompt = f"""Review this paper. Be specific and adversarial.
@@ -1933,6 +2134,16 @@ Return JSON only:
             success = self.do_revise()
             if not success:
                 self.log.info("Revision failed — falling back to review only")
+                success = self.do_review()
+        elif action == "respond":
+            success = self.do_respond(status)
+            if not success:
+                self.log.info("Response failed — falling back to review")
+                success = self.do_review()
+        elif action == "rebut":
+            success = self.do_rebut(status)
+            if not success:
+                self.log.info("Rebuttal failed — falling back to review")
                 success = self.do_review()
         elif action == "validate_all":
             success = True
