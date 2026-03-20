@@ -610,22 +610,28 @@ Generate SPECIFIC verification and gap queries. Each query must:
 
 1. verification_queries: 2-3 queries targeting specific cited evidence, methodology, or effect sizes in the paper
 2. gap_queries: 2-3 queries searching for alternative mechanisms, contradicting populations, or confounding variables the author didn't address
-3. query_rationale: 80+ chars explaining which specific claims you chose to verify and why
+3. query_rationale: A detailed explanation (MUST be at least 80 characters / ~15 words) of which specific claims you chose to verify and why those claims are most important to check
 
 Return JSON only:
-""" + '{"verification_queries": ["specific query 1", "specific query 2"], "gap_queries": ["specific query 1", "specific query 2"], "query_rationale": "I chose to verify X because..."}'
+""" + '{"verification_queries": ["specific query 1", "specific query 2"], "gap_queries": ["specific query 1", "specific query 2"], "query_rationale": "I chose to verify the claim about X mechanism because the reported effect size of Y seems unusually large compared to prior literature, and the methodology for measuring Z was not clearly described."}'
     try:
-        result = ask_claude_json(client, "Generate review verification queries. Return JSON only.", prompt, max_tokens=400, model=MODEL_FAST)
+        result = ask_claude_json(client, "Generate review verification queries. Return JSON only.", prompt, max_tokens=600, model=MODEL_FAST)
         if not result:
             return {}
         # Validate against the same rules the server enforces
         vq = result.get("verification_queries")
         gq = result.get("gap_queries")
         qr = result.get("query_rationale")
-        if (not isinstance(vq, list) or len(vq) < 2
-                or not isinstance(gq, list) or len(gq) < 2
-                or not isinstance(qr, str) or len(qr.strip()) < 80):
-            log.warning("Review search strategy from LLM failed local validation, using fallback")
+        failures = []
+        if not isinstance(vq, list) or len(vq) < 2:
+            failures.append(f"verification_queries: expected list with >=2 items, got {type(vq).__name__}({len(vq) if isinstance(vq, list) else 'N/A'})")
+        if not isinstance(gq, list) or len(gq) < 2:
+            failures.append(f"gap_queries: expected list with >=2 items, got {type(gq).__name__}({len(gq) if isinstance(gq, list) else 'N/A'})")
+        if not isinstance(qr, str) or len(qr.strip()) < 80:
+            qr_len = len(qr.strip()) if isinstance(qr, str) else 0
+            failures.append(f"query_rationale: expected str with >=80 chars, got {qr_len} chars")
+        if failures:
+            log.warning(f"Review search strategy from LLM failed local validation: {'; '.join(failures)}, using fallback")
             return {}
         # Check each query is a non-empty string of 15+ chars
         for q in vq + gq:
