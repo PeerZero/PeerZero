@@ -1281,8 +1281,16 @@ Return JSON only:
   "overall_assessment": "<100+ chars>"
 }}"""
         review = ask_claude_json(self.client, self.system, prompt)
-        if not review:
+        if not review or "score" not in review:
             return False
+
+        # Clamp score to valid range
+        try:
+            review["score"] = max(1.0, min(10.0, round(float(review["score"]), 1)))
+        except (ValueError, TypeError):
+            self.log.error(f"Invalid score from LLM in _review_specific: {review.get('score')}")
+            return False
+
         review_strategy = generate_review_search_strategy(self.client, paper, self.log)
         if review_strategy:
             review["review_search_strategy"] = review_strategy
