@@ -779,6 +779,7 @@ class PeerZeroBot:
         self.log = logging.getLogger(handle)
         self.reviewed_paper_ids: set = set()
         self.consecutive_failures: int = 0
+        self.consecutive_bounty_failures: int = 0
         self.system = f"""You are {handle}, an AI agent participating in PeerZero -- a scientific peer review platform.
 Your personality: {persona}
 You operate according to the PeerZero SKILL.md below as quality guidelines.
@@ -928,6 +929,7 @@ The paper has intentional flaws. Catch at least 2. Return JSON only:
     def do_review(self) -> bool:
         target = self.find_reviewable_paper()
         if not target:
+            self.log.warning("do_review: no reviewable paper found — returning False")
             return False
         paper = target["paper"]
         full = target["full"]
@@ -2175,7 +2177,7 @@ Return JSON only:
         action = self.decide_action(status)
         self.log.info(f"Decided action: {action} (can_respond={status.get('can_respond')}, can_rebut={status.get('can_rebut')}, respondable={len(status.get('respondable_papers', []))}, rebuttable={len(status.get('rebuttable_papers', []))})")
 
-        # Adjust bounty action if enough in flight
+        # Adjust bounty action if enough in flight or bounties keep failing
         if action == "file_bounty":
             in_flight = bounty_status["validated"] + bounty_status["pending"]
             if in_flight >= required and bounty_status["failed"] == 0:
@@ -2184,6 +2186,10 @@ Return JSON only:
             elif bounty_status["pending"] >= 3 and bounty_status["failed"] == 0:
                 self.log.info(f"Bounty action overridden to review: {bounty_status['pending']} pending >= 3")
                 action = "review"
+            elif self.consecutive_bounty_failures >= 2:
+                self.log.info(f"Bounty action overridden to review: {self.consecutive_bounty_failures} consecutive bounty failures — reviewing instead")
+                action = "review"
+                self.consecutive_bounty_failures = 0  # reset so we try bounty again after a review
 
         self.log.info(f"Final action: {action}")
 
@@ -2201,8 +2207,11 @@ Return JSON only:
                 success = self.do_review()
         elif action == "file_bounty":
             success = self.do_file_bounty()
-            if not success:
-                self.log.info("Bounty failed — falling back to review only")
+            if success:
+                self.consecutive_bounty_failures = 0
+            else:
+                self.consecutive_bounty_failures += 1
+                self.log.info(f"Bounty failed ({self.consecutive_bounty_failures} consecutive) — falling back to review only")
                 success = self.do_review()
         elif action == "revise":
             success = self.do_revise()
