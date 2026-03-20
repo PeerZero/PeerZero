@@ -129,7 +129,7 @@ def search_arxiv(query: str, log) -> list:
             arxiv_id = entry.findtext("atom:id", "", ns).split("/abs/")[-1]
             doi = f"10.48550/arXiv.{arxiv_id}"
             if title and abstract:
-                results.append({"title": title, "abstract": abstract, "year": None, "externalIds": {"DOI": doi}, "citationCount": 0, "source": "arxiv"})
+                results.append({"title": title, "abstract": abstract, "year": None, "externalIds": {"DOI": doi}, "citationCount": None, "source": "arxiv"})
         log.info(f"arXiv: {len(results)} papers for '{query}'")
         return results[:5]
     except Exception as e:
@@ -154,12 +154,71 @@ def search_pubmed(query: str, log) -> list:
                     doi = articleid.get("value", "")
                     break
             if title and doi:
-                results.append({"title": title, "abstract": f"PubMed paper: {title}. See DOI for full abstract.", "year": item.get("pubdate", "")[:4], "externalIds": {"DOI": doi}, "citationCount": 0, "source": "pubmed"})
+                results.append({"title": title, "abstract": f"PubMed paper: {title}. See DOI for full abstract.", "year": item.get("pubdate", "")[:4], "externalIds": {"DOI": doi}, "citationCount": None, "source": "pubmed"})
         log.info(f"PubMed: {len(results)} papers for '{query}'")
         return results[:5]
     except Exception as e:
         log.warning(f"PubMed error: {e}")
         return []
+
+def _enrich_citation_counts(papers: list, log) -> list:
+    """Cross-reference arXiv/PubMed papers against OpenAlex to get real citation counts."""
+    needs_enrichment = []
+    for p in papers:
+        if p.get("citationCount") is not None and p.get("citationCount") > 0:
+            continue
+        doi = (p.get("externalIds", {}).get("DOI") or p.get("doi", "")).strip()
+        if not doi:
+            continue
+        needs_enrichment.append((doi, p))
+
+    if not needs_enrichment:
+        return papers
+
+    # OpenAlex supports DOI lookup via filter — batch up to 50
+    # Use pipe-separated DOIs: filter=doi:10.xxx|10.yyy
+    batch_size = 40
+    for i in range(0, len(needs_enrichment), batch_size):
+        batch = needs_enrichment[i:i + batch_size]
+        doi_filter = "|".join(f"https://doi.org/{doi}" for doi, _ in batch)
+        try:
+            resp = requests.get(
+                "https://api.openalex.org/works",
+                params={
+                    "filter": f"doi:{doi_filter}",
+                    "per_page": len(batch),
+                    "select": "doi,cited_by_count,publication_year",
+                },
+                headers={"User-Agent": "PeerZero-bot/1.0 (peerzero.science)"},
+                timeout=15,
+            )
+            if resp.status_code != 200:
+                log.warning(f"OpenAlex enrichment request failed: HTTP {resp.status_code}")
+                continue
+            results = resp.json().get("results", [])
+            # Build lookup by normalized DOI
+            count_map = {}
+            for w in results:
+                raw_doi = (w.get("doi") or "").replace("https://doi.org/", "").strip().lower()
+                if raw_doi:
+                    count_map[raw_doi] = {
+                        "cited_by_count": w.get("cited_by_count", 0),
+                        "year": w.get("publication_year"),
+                    }
+            enriched = 0
+            for doi, p in batch:
+                info = count_map.get(doi.lower())
+                if info:
+                    p["citationCount"] = info["cited_by_count"]
+                    if not p.get("year") and info.get("year"):
+                        p["year"] = info["year"]
+                    enriched += 1
+            log.info(f"OpenAlex enrichment: {enriched}/{len(batch)} papers got citation counts")
+        except Exception as e:
+            log.warning(f"OpenAlex enrichment error: {e}")
+
+    return papers
+
 
 def _search_all_apis_for_query(query: str, log) -> dict:
     search_fns = [("openalex", search_openalex), ("arxiv", search_arxiv), ("pubmed", search_pubmed)]
@@ -407,9 +466,19 @@ def _search_satisfied(client, results, paper_topic, log) -> bool:
 def _summarize_citation(client, doi, abstract, paper_context, log, citation_count=0, year=None) -> dict:
     if not abstract or len(abstract) < 50:
         return {"agent_summary": "", "source_quality_note": ""}
-    tier = "strong (50+ citations)" if citation_count >= 50 else "adequate (10-49 citations)" if citation_count >= 10 else "weak (under 10 citations)" if citation_count > 0 else "unknown (citation count unavailable)"
+    if citation_count is None:
+        tier = "unknown (citation count unavailable)"
+    elif citation_count >= 50:
+        tier = "strong (50+ citations)"
+    elif citation_count >= 10:
+        tier = "adequate (10-49 citations)"
+    elif citation_count > 0:
+        tier = "weak (under 10 citations)"
+    else:
+        tier = "unknown (citation count unavailable)"
     year_str = str(year) if year else "unknown"
-    prompt = f'Read this abstract and produce two things.\n\nAbstract: {abstract}\n\nDOI: {doi}\nCitation count: {citation_count} -- quality tier: {tier}\nPublication year: {year_str}\nContext: {paper_context}\n\nReturn JSON only:\n{{\n  "agent_summary": "<2-3 sentences: what this paper actually found, from the abstract above>",\n  "source_quality_note": "<explicit reasoning: why this source is or is not credible evidence. Address citation count ({citation_count}), publication year ({year_str}), methodology fit, and any limitations. Minimum 40 chars.>"\n}}'
+    cc_str = str(citation_count) if citation_count is not None else "not indexed"
+    prompt = f'Read this abstract and produce two things.\n\nAbstract: {abstract}\n\nDOI: {doi}\nCitation count: {cc_str} -- quality tier: {tier}\nPublication year: {year_str}\nContext: {paper_context}\n\nReturn JSON only:\n{{\n  "agent_summary": "<2-3 sentences: what this paper actually found, from the abstract above>",\n  "source_quality_note": "<explicit reasoning: why this source is or is not credible evidence. Address citation count ({cc_str}), publication year ({year_str}), methodology fit, and any limitations. Minimum 40 chars.>"\n}}'
     try:
         msg = client.messages.create(model=MODEL_FAST, max_tokens=400, system="You summarize scientific abstracts and evaluate source quality. Return JSON only. No explanation.", messages=[{"role": "user", "content": prompt}], timeout=30)
         raw = msg.content[0].text.strip()
@@ -448,6 +517,9 @@ def search_and_summarize(queries, log, client, paper_context="") -> list:
             log.info(f"Collected {len(all_papers)} papers after iteration {iteration + 1} — stopping search")
             break
 
+    # Phase 1.5: Enrich arXiv/PubMed papers with real citation counts from OpenAlex
+    all_papers = _enrich_citation_counts(all_papers, log)
+
     # Phase 2: Summarize only the best papers (max 6) to limit Claude calls
     # Prefer papers with higher citation counts
     all_papers.sort(key=lambda p: (p.get("citationCount") or 0), reverse=True)
@@ -458,7 +530,7 @@ def search_and_summarize(queries, log, client, paper_context="") -> list:
         doi = (p.get("externalIds", {}).get("DOI") or p.get("doi", "")).strip()
         abstract = p.get("abstract", "")
         if abstract and client:
-            summaries = _summarize_citation(client, doi, abstract, paper_context, log, citation_count=p.get("citationCount", 0) or 0, year=p.get("year") or p.get("publication_year"))
+            summaries = _summarize_citation(client, doi, abstract, paper_context, log, citation_count=p.get("citationCount"), year=p.get("year") or p.get("publication_year"))
             p["agent_summary"] = summaries["agent_summary"]
             p["source_quality_note"] = summaries["source_quality_note"]
 
@@ -993,7 +1065,9 @@ Return JSON only:
             doi = p.get("externalIds", {}).get("DOI") or p.get("doi", "")
             if not doi:
                 continue
-            citation_slots += f"\n--- CITATION SLOT ---\nDOI: {doi}\nTitle: {p.get('title', '')}\nCitation count: {p.get('citationCount', 0) or 0}\nAbstract: {p.get('abstract', '')}\n"
+            cc = p.get("citationCount")
+            cc_str = str(cc) if cc is not None else "not indexed"
+            citation_slots += f"\n--- CITATION SLOT ---\nDOI: {doi}\nTitle: {p.get('title', '')}\nCitation count: {cc_str}\nAbstract: {p.get('abstract', '')}\n"
             if p.get("agent_summary"):
                 citation_slots += f"Pre-computed agent_summary: {p['agent_summary']}\n"
             if p.get("source_quality_note"):
