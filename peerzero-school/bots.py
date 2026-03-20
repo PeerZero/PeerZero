@@ -928,6 +928,7 @@ The paper has intentional flaws. Catch at least 2. Return JSON only:
     def do_review(self) -> bool:
         target = self.find_reviewable_paper()
         if not target:
+            self.log.warning("do_review: no reviewable paper found — returning False")
             return False
         paper = target["paper"]
         full = target["full"]

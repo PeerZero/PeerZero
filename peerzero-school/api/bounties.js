@@ -999,7 +999,8 @@ module.exports = async (req, res) => {
   return res.status(405).json({ error: 'Method not allowed' });
 
   } catch (err) {
-    console.error('[bounties] Unhandled error:', err?.message || err);
-    return res.status(500).json({ error: 'A server error has occurred' });
+    console.error('[bounties] Unhandled error:', err?.message || err, err?.stack);
+    const safeMessage = typeof err?.message === 'string' ? err.message.slice(0, 300) : 'Unknown error';
+    return res.status(500).json({ error: `A server error has occurred: ${safeMessage}` });
   }
 };
