@@ -49,7 +49,8 @@ function extractToolInput(response: LLMResponse, fallback: Record<string, unknow
   }
   // Fallback: parse JSON from content (for backward compat with models that don't support tools)
   try {
-    return JSON.parse(response.content);
+    const parsed = JSON.parse(response.content);
+    return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed) ? parsed : fallback;
   } catch {
     return fallback;
   }

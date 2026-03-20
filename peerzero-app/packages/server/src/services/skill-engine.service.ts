@@ -115,7 +115,7 @@ export async function resolveActiveSkills(
   // Filter by trigger context
   const matching = skills.filter(skill => {
     if (skill.trigger === 'always') return true;
-    if (!triggerContext) return skill.trigger === 'always';
+    if (!triggerContext) return false;
 
     // Exact match
     if (skill.trigger === triggerContext) return true;

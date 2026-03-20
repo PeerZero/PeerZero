@@ -83,6 +83,7 @@ export async function acquireSkill(
   // Use fast model for skill generation (cost optimization)
   const model = bot.fast_llm_model || bot.llm_model;
   const llmKey = await getDecryptedKey(bot.llm_api_key_id, userId);
+  if (!llmKey) return { success: false, error: 'LLM API key not found or could not be decrypted' };
   const llmAdapter = getLLMAdapter();
 
   // Build the acquisition prompt

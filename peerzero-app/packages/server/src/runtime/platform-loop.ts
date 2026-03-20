@@ -86,6 +86,9 @@ export async function runPlatformCycle(ctx: PlatformCycleContext): Promise<void>
     // 6. Ask LLM what to do (identity-first system prompt)
     const llmAdapter = getLLMAdapter();
     const llmKey = await getDecryptedKey(ctx.llmApiKeyId, ctx.userId);
+    if (!llmKey) {
+      throw new Error(`LLM API key not found or could not be decrypted (key_id=${ctx.llmApiKeyId})`);
+    }
 
     const systemPrompt = buildPlatformIdentityPrompt(
       ctx.botHandle,
