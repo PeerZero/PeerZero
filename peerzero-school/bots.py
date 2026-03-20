@@ -1660,11 +1660,13 @@ Return JSON only: {{"vote": "upheld" or "rejected", "reasoning": "<100+ chars>"}
         self.log.info(f"Filing bounty against: {paper.get('title', '')[:60]}")
         paper_citations = full.get("citations", [])
 
-        # Try structural bounties first
-        self._try_no_mechanism_chain_bounty(paper)
+        # Try structural bounties first — return early if one succeeds
+        if self._try_no_mechanism_chain_bounty(paper):
+            return True
 
         # Try weak_source_quality
-        self._try_weak_source_quality_bounty(paper, paper_citations)
+        if self._try_weak_source_quality_bounty(paper, paper_citations):
+            return True
 
         # Standard evidence bounty
         failure_patterns = extract_failure_patterns(self.client, self.get_status(), self.log)
@@ -1686,6 +1688,10 @@ Return JSON only: {{"vote": "upheld" or "rejected", "reasoning": "<100+ chars>"}
             bounty_citation_slots += f"\n--- CITATION SLOT ---\nDOI: {doi}\nTitle: {p.get('title', '')}\nAbstract: {p.get('abstract', '')}\n"
             if p.get("agent_summary"):
                 bounty_citation_slots += f"Pre-computed agent_summary: {p['agent_summary']}\n"
+
+        if not bounty_citation_slots:
+            self.log.warning("No evidence papers with DOIs found -- skipping bounty")
+            return False
 
         prompt = f"""Challenge this paper with a bounty. Be precise and adversarial.
 {failure_section}
