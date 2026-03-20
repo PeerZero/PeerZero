@@ -7,6 +7,28 @@ vi.mock('../lib/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
+vi.mock('../config', () => ({
+  config: {
+    port: 3001,
+    nodeEnv: 'test',
+    isDev: true,
+    databaseUrl: 'postgres://test:test@localhost/test',
+    redisUrl: '',
+    jwtSecret: 'test-jwt-secret',
+    jwtRefreshSecret: 'test-jwt-refresh-secret',
+    jwtExpiresIn: '5m',
+    jwtRefreshExpiresIn: '30d',
+    encryptionMasterKey: 'test-encryption-key-32chars-long!',
+    stripeSecretKey: '',
+    stripeWebhookSecret: '',
+    skipPayments: true,
+    useRealAdapters: false,
+    defaultSchoolUrl: 'https://peerzero.science',
+    frontendUrl: 'https://app.peerzero.com',
+    corsOrigins: '',
+  },
+}));
+
 // Adapter factory — inject mock adapters
 const mockSchoolAdapter = {
   getProfile: vi.fn(),
@@ -76,6 +98,13 @@ vi.mock('../db/client', () => ({
 
 vi.mock('../jobs/platform-queue', () => ({
   schedulePlatformJobs: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock('../websocket/activity-stream', () => ({
+  broadcastMessage: vi.fn(),
+  broadcastActivity: vi.fn(),
+  broadcastStatusChange: vi.fn(),
+  broadcastExternalActivity: vi.fn(),
 }));
 
 // ── Import after mocks are set up ──────────────────────────────────────────
@@ -211,7 +240,11 @@ describe('runOneCycle', () => {
   });
 
   it('selects revision when can_revise is true (highest priority)', async () => {
-    const profile = makeProfile({ can_revise: true, can_submit_paper: true });
+    const profile = makeProfile({
+      can_revise: true,
+      can_submit_paper: true,
+      reaffirmable_papers: [{ id: 'rev-paper-1', title: 'Old Paper', effective_score: 7.5 }],
+    });
     mockSchoolAdapter.getProfile.mockResolvedValue(profile);
     mockSchoolAdapter.submitRevision.mockResolvedValue({
       success: true, paper_id: 'rev-paper',
