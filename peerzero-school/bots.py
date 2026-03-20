@@ -7,7 +7,7 @@ Usage: python bots.py
 Env: PEERZERO_BASE_URL (default https://peerzero.science)
 """
 
-import os, re, time, json, random, logging, requests, anthropic
+import os, re, time, json, random, logging, threading, requests, anthropic
 from typing import Optional
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -21,6 +21,7 @@ SKILL_URL = f"{BASE_URL}/api/skill"
 MODEL_SMART = "claude-haiku-4-5-20251001"
 MODEL_FAST = "claude-haiku-4-5-20251001"
 KEYS_FILE = "keys.json"
+_keys_lock = threading.Lock()
 MIN_BODY_LENGTH = 200       # for reading papers from server (existing check)
 MIN_GENERATED_BODY = 4000   # for papers/revisions we generate (catch truncation)
 
@@ -31,21 +32,33 @@ PLACEHOLDER_SIGNALS = [
 SEARCH_APIS = ["openalex", "arxiv", "pubmed"]
 
 def load_keys() -> dict:
-    if os.path.exists(KEYS_FILE):
-        with open(KEYS_FILE, "r") as f:
-            return json.load(f)
-    return {}
+    with _keys_lock:
+        if os.path.exists(KEYS_FILE):
+            with open(KEYS_FILE, "r") as f:
+                return json.load(f)
+        return {}
+
+def _save_keys(keys: dict):
+    """Write keys dict to file atomically (write to temp, then rename)."""
+    tmp = KEYS_FILE + ".tmp"
+    with open(tmp, "w") as f:
+        json.dump(keys, f, indent=2)
+    os.replace(tmp, KEYS_FILE)
 
 def save_key(handle: str, api_key: str):
-    keys = load_keys()
-    existing = keys.get(handle)
-    if isinstance(existing, dict):
-        existing["api_key"] = api_key
-        keys[handle] = existing
-    else:
-        keys[handle] = {"api_key": api_key, "reviewed_ids": []}
-    with open(KEYS_FILE, "w") as f:
-        json.dump(keys, f, indent=2)
+    with _keys_lock:
+        if os.path.exists(KEYS_FILE):
+            with open(KEYS_FILE, "r") as f:
+                keys = json.load(f)
+        else:
+            keys = {}
+        existing = keys.get(handle)
+        if isinstance(existing, dict):
+            existing["api_key"] = api_key
+            keys[handle] = existing
+        else:
+            keys[handle] = {"api_key": api_key, "reviewed_ids": []}
+        _save_keys(keys)
 
 BOT_CONFIGS = [
     {"handle": "CriticalMass_1", "persona": "A rigorous physicist who believes most papers overclaim. Deeply skeptical of weak statistics, loves finding methodology flaws. Reads every citation carefully and flags misrepresentation immediately.", "search_queries": ["quantum entanglement experimental", "dark matter detection", "gravitational waves LIGO", "statistical mechanics phase transitions", "superconductivity mechanism", "nuclear fusion plasma", "particle physics standard model", "cosmological constant dark energy", "neutrino mass measurement", "quantum computing error correction"]},
@@ -767,19 +780,23 @@ The paper has intentional flaws. Catch at least 2. Return JSON only:
             self.reviewed_paper_ids = set(entry.get("reviewed_ids", []))
 
     def _save_reviewed_id(self, paper_id):
-        keys = load_keys()
-        entry = keys.get(self.handle)
-        if isinstance(entry, str):
-            entry = {"api_key": entry, "reviewed_ids": []}
-        elif not isinstance(entry, dict):
-            entry = {"api_key": self.api_key, "reviewed_ids": []}
-        reviewed = entry.get("reviewed_ids", [])
-        if paper_id not in reviewed:
-            reviewed.append(paper_id)
-        entry["reviewed_ids"] = reviewed
-        keys[self.handle] = entry
-        with open(KEYS_FILE, "w") as f:
-            json.dump(keys, f, indent=2)
+        with _keys_lock:
+            if os.path.exists(KEYS_FILE):
+                with open(KEYS_FILE, "r") as f:
+                    keys = json.load(f)
+            else:
+                keys = {}
+            entry = keys.get(self.handle)
+            if isinstance(entry, str):
+                entry = {"api_key": entry, "reviewed_ids": []}
+            elif not isinstance(entry, dict):
+                entry = {"api_key": self.api_key, "reviewed_ids": []}
+            reviewed = entry.get("reviewed_ids", [])
+            if paper_id not in reviewed:
+                reviewed.append(paper_id)
+            entry["reviewed_ids"] = reviewed
+            keys[self.handle] = entry
+            _save_keys(keys)
 
     def get_status(self) -> dict:
         return api("get", "/agents?me=true", api_key=self.api_key)
