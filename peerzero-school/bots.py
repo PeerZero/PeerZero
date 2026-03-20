@@ -12,6 +12,9 @@ from typing import Optional
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(levelname)s: %(message)s")
+# Suppress noisy httpx request logging (floods output with every Claude API call)
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
 
 BASE_URL = os.environ.get("PEERZERO_BASE_URL", "https://peerzero.science")
 SKILL_URL = f"{BASE_URL}/api/skill"
@@ -179,9 +182,10 @@ def ask_claude(client: anthropic.Anthropic, system: str, prompt: str, max_tokens
     msg = client.messages.create(model=model or MODEL_SMART, max_tokens=max_tokens, system=system, messages=[{"role": "user", "content": prompt}], timeout=120)
     return msg.content[0].text.strip()
 
-def ask_claude_json(client: anthropic.Anthropic, system: str, prompt: str, max_tokens: int = 4096, model: str = None) -> dict:
-    raw = ask_claude(client, system, prompt, max_tokens, model=model)
-    clean = raw.strip()
+def _extract_json_from_text(text: str) -> dict:
+    """Try multiple strategies to extract JSON from Claude's response."""
+    clean = text.strip()
+    # Strategy 1: Strip markdown fences
     if clean.startswith("```"):
         clean = "\n".join(clean.split("\n")[1:])
     if clean.endswith("```"):
@@ -189,8 +193,58 @@ def ask_claude_json(client: anthropic.Anthropic, system: str, prompt: str, max_t
     try:
         return json.loads(clean.strip())
     except json.JSONDecodeError:
-        logging.error(f"JSON parse failed: {clean[:200]}")
-        return {}
+        pass
+    # Strategy 2: Find JSON object in the text (Claude may have added reasoning around it)
+    brace_start = text.find("{")
+    brace_end = text.rfind("}")
+    if brace_start != -1 and brace_end > brace_start:
+        candidate = text[brace_start:brace_end + 1]
+        try:
+            return json.loads(candidate)
+        except json.JSONDecodeError:
+            pass
+    # Strategy 3: Find JSON array in the text
+    bracket_start = text.find("[")
+    bracket_end = text.rfind("]")
+    if bracket_start != -1 and bracket_end > bracket_start:
+        candidate = text[bracket_start:bracket_end + 1]
+        try:
+            parsed = json.loads(candidate)
+            if isinstance(parsed, list):
+                return {"items": parsed}
+        except json.JSONDecodeError:
+            pass
+    return {}
+
+def ask_claude_json(client: anthropic.Anthropic, system: str, prompt: str, max_tokens: int = 4096, model: str = None) -> dict:
+    for attempt in range(2):
+        try:
+            if attempt == 0:
+                raw = ask_claude(client, system, prompt, max_tokens, model=model)
+            else:
+                # Retry with prefilled assistant response to force JSON
+                logging.info("Retrying with JSON prefill...")
+                msg = client.messages.create(
+                    model=model or MODEL_SMART,
+                    max_tokens=max_tokens,
+                    system="You MUST respond with valid JSON only. No explanation, no markdown, no preamble.",
+                    messages=[
+                        {"role": "user", "content": prompt},
+                        {"role": "assistant", "content": "{"},
+                    ],
+                    timeout=120,
+                )
+                raw = "{" + msg.content[0].text.strip()
+        except Exception as e:
+            logging.error(f"Claude call failed (attempt {attempt + 1}): {e}")
+            continue
+        result = _extract_json_from_text(raw)
+        if result:
+            return result
+        if attempt == 0:
+            logging.warning(f"JSON parse failed (will retry): {raw[:200]}")
+    logging.error(f"JSON parse failed after 2 attempts")
+    return {}
 
 # ── Haiku helper calls ──────────────────────────────────────────────────────
 
@@ -213,13 +267,9 @@ def _summarize_citation(client, doi, abstract, paper_context, log, citation_coun
     year_str = str(year) if year else "unknown"
     prompt = f'Read this abstract and produce two things.\n\nAbstract: {abstract}\n\nDOI: {doi}\nCitation count: {citation_count} -- quality tier: {tier}\nPublication year: {year_str}\nContext: {paper_context}\n\nReturn JSON only:\n{{\n  "agent_summary": "<2-3 sentences: what this paper actually found, from the abstract above>",\n  "source_quality_note": "<explicit reasoning: why this source is or is not credible evidence. Address citation count ({citation_count}), publication year ({year_str}), methodology fit, and any limitations. Minimum 40 chars.>"\n}}'
     try:
-        msg = client.messages.create(model=MODEL_FAST, max_tokens=400, system="You summarize scientific abstracts and evaluate source quality. Return JSON only.", messages=[{"role": "user", "content": prompt}], timeout=30)
+        msg = client.messages.create(model=MODEL_FAST, max_tokens=400, system="You summarize scientific abstracts and evaluate source quality. Return JSON only. No explanation.", messages=[{"role": "user", "content": prompt}], timeout=30)
         raw = msg.content[0].text.strip()
-        if raw.startswith("```"):
-            raw = "\n".join(raw.split("\n")[1:])
-        if raw.endswith("```"):
-            raw = "\n".join(raw.split("\n")[:-1])
-        result = json.loads(raw.strip())
+        result = _extract_json_from_text(raw)
         return {"agent_summary": result.get("agent_summary", ""), "source_quality_note": result.get("source_quality_note", "")}
     except Exception as e:
         log.warning(f"Citation summarization failed for {doi}: {e}")
@@ -230,12 +280,16 @@ def search_and_summarize(queries, log, client, paper_context="") -> list:
     padded_queries = list(queries)
     if len(padded_queries) < 4:
         padded_queries += random.sample(FALLBACK_QUERIES, 4 - len(padded_queries))
-    for iteration in range(4):
+    max_iterations = min(3, len(padded_queries))  # Cap at 3 iterations instead of 4
+    for iteration in range(max_iterations):
         query = padded_queries[iteration] if iteration < len(padded_queries) else padded_queries[-1]
-        log.info(f"Search iteration {iteration + 1}/4: '{query}'")
-        results_by_api = _search_all_apis_for_query(query, log)
-        _check_field_coverage(results_by_api, log)
-        for _api_name, results in results_by_api.items():
+        log.info(f"Search iteration {iteration + 1}/{max_iterations}: '{query}'")
+        # Use only 2 APIs per iteration to reduce calls (pick randomly)
+        search_fns = [("openalex", search_openalex), ("arxiv", search_arxiv), ("pubmed", search_pubmed)]
+        random.shuffle(search_fns)
+        apis_to_use = search_fns[:2] if iteration > 0 else search_fns  # All 3 on first iteration, 2 on subsequent
+        for api_name, fn in apis_to_use:
+            results = fn(query, log)
             for p in (results or []):
                 doi = (p.get("externalIds", {}).get("DOI") or p.get("doi", "")).strip()
                 if not doi or doi.lower() in seen_dois:
@@ -247,10 +301,11 @@ def search_and_summarize(queries, log, client, paper_context="") -> list:
                     p["agent_summary"] = summaries["agent_summary"]
                     p["source_quality_note"] = summaries["source_quality_note"]
                 all_papers.append(p)
-        if len(all_papers) >= 6:
-            if _search_satisfied(client, all_papers, query, log):
-                log.info(f"Search satisfied after iteration {iteration + 1} with {len(all_papers)} papers")
-                break
+            time.sleep(0.3)
+        # Exit early once we have enough papers (4 is sufficient, don't need 6)
+        if len(all_papers) >= 4:
+            log.info(f"Search satisfied after iteration {iteration + 1} with {len(all_papers)} papers")
+            break
     log.info(f"Search complete: {len(all_papers)} unique papers")
     return all_papers
 
@@ -392,6 +447,7 @@ class PeerZeroBot:
         self.client = anthropic.Anthropic()
         self.log = logging.getLogger(handle)
         self.reviewed_paper_ids: set = set()
+        self.consecutive_failures: int = 0
         self.system = f"""You are {handle}, an AI agent participating in PeerZero -- a scientific peer review platform.
 Your personality: {persona}
 You operate EXCLUSIVELY according to the PeerZero SKILL.md below. Follow its instructions precisely.
@@ -1492,25 +1548,42 @@ Return JSON only:
 
         self.log.info(f"Final action: {action}")
 
+        # Execute the action. On failure, try ONE fallback only — don't cascade
+        # through all action types (that causes excessive API calls and looping).
+        success = False
         if action == "review":
-            if not self.do_review():
-                if not self.do_file_bounty():
-                    self.do_submit_paper()
+            success = self.do_review()
+            if not success:
+                self.log.info("Review failed — skipping fallback this cycle")
         elif action == "submit_paper":
-            if not self.do_submit_paper():
-                if not self.do_review():
-                    self.do_file_bounty()
+            success = self.do_submit_paper()
+            if not success:
+                self.log.info("Paper submission failed — falling back to review only")
+                success = self.do_review()
         elif action == "file_bounty":
-            if not self.do_file_bounty():
-                self.do_review()
+            success = self.do_file_bounty()
+            if not success:
+                self.log.info("Bounty failed — falling back to review only")
+                success = self.do_review()
         elif action == "revise":
-            if not self.do_revise():
-                if not self.do_review():
-                    self.do_file_bounty()
+            success = self.do_revise()
+            if not success:
+                self.log.info("Revision failed — falling back to review only")
+                success = self.do_review()
         elif action == "validate_all":
-            pass
+            success = True
+        elif action == "wait":
+            self.log.info("Server says wait — skipping this cycle")
+            success = True  # Not a failure, just a wait
         else:
-            self.do_review()
+            success = self.do_review()
+
+        # Track consecutive failures for backoff
+        if success:
+            self.consecutive_failures = 0
+        else:
+            self.consecutive_failures += 1
+            self.log.warning(f"Cycle failed ({self.consecutive_failures} consecutive failures)")
 
 
 # ── Runner ──────────────────────────────────────────────────────────────────
@@ -1518,6 +1591,11 @@ Return JSON only:
 def _run_bot_with_offset(bot, run_validate, offset):
     if offset > 0:
         time.sleep(offset)
+    # Skip bots that have failed too many times in a row — exponential backoff
+    if bot.consecutive_failures >= 3:
+        backoff = min(300, 60 * (2 ** (bot.consecutive_failures - 3)))  # 60s, 120s, 240s, max 300s
+        bot.log.warning(f"Backoff: {bot.consecutive_failures} consecutive failures, waiting {backoff}s")
+        time.sleep(backoff)
     run_bot_cycle(bot, run_validate=run_validate)
 
 def run_bot_cycle(bot, run_validate=False):
@@ -1525,6 +1603,7 @@ def run_bot_cycle(bot, run_validate=False):
         bot.run_cycle(run_validate=run_validate)
     except Exception as e:
         bot.log.error(f"Cycle error: {e}", exc_info=True)
+        bot.consecutive_failures += 1
 
 def main():
     skill = fetch_skill()
@@ -1554,8 +1633,8 @@ def main():
                 futures[executor.submit(_run_bot_with_offset, bot, i == 0, offset)] = bot
             for future in as_completed(futures):
                 pass
-        logging.info(f"Cycle {cycle} complete. Sleeping 60s...")
-        time.sleep(60)
+        logging.info(f"Cycle {cycle} complete. Sleeping 90s...")
+        time.sleep(90)  # Increased from 60s to 90s to reduce API pressure
 
 if __name__ == "__main__":
     main()
