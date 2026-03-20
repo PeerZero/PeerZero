@@ -278,16 +278,18 @@ def _summarize_citation(client, doi, abstract, paper_context, log, citation_coun
 def search_and_summarize(queries, log, client, paper_context="") -> list:
     all_papers, seen_dois = [], set()
     padded_queries = list(queries)
-    if len(padded_queries) < 4:
-        padded_queries += random.sample(FALLBACK_QUERIES, 4 - len(padded_queries))
-    max_iterations = min(3, len(padded_queries))  # Cap at 3 iterations instead of 4
+    if len(padded_queries) < 3:
+        padded_queries += random.sample(FALLBACK_QUERIES, 3 - len(padded_queries))
+    max_iterations = min(3, len(padded_queries))
+
+    # Phase 1: Collect papers WITHOUT summarizing (fast, no Claude calls)
     for iteration in range(max_iterations):
         query = padded_queries[iteration] if iteration < len(padded_queries) else padded_queries[-1]
         log.info(f"Search iteration {iteration + 1}/{max_iterations}: '{query}'")
-        # Use only 2 APIs per iteration to reduce calls (pick randomly)
         search_fns = [("openalex", search_openalex), ("arxiv", search_arxiv), ("pubmed", search_pubmed)]
         random.shuffle(search_fns)
-        apis_to_use = search_fns[:2] if iteration > 0 else search_fns  # All 3 on first iteration, 2 on subsequent
+        # First iteration: all 3 APIs. After that: only 2.
+        apis_to_use = search_fns if iteration == 0 else search_fns[:2]
         for api_name, fn in apis_to_use:
             results = fn(query, log)
             for p in (results or []):
@@ -295,19 +297,28 @@ def search_and_summarize(queries, log, client, paper_context="") -> list:
                 if not doi or doi.lower() in seen_dois:
                     continue
                 seen_dois.add(doi.lower())
-                abstract = p.get("abstract", "")
-                if abstract and client:
-                    summaries = _summarize_citation(client, doi, abstract, paper_context, log, citation_count=p.get("citationCount", 0) or 0, year=p.get("year") or p.get("publication_year"))
-                    p["agent_summary"] = summaries["agent_summary"]
-                    p["source_quality_note"] = summaries["source_quality_note"]
                 all_papers.append(p)
             time.sleep(0.3)
-        # Exit early once we have enough papers (4 is sufficient, don't need 6)
-        if len(all_papers) >= 4:
-            log.info(f"Search satisfied after iteration {iteration + 1} with {len(all_papers)} papers")
+        # Exit search early if we have enough raw papers
+        if len(all_papers) >= 6:
+            log.info(f"Collected {len(all_papers)} papers after iteration {iteration + 1} — stopping search")
             break
-    log.info(f"Search complete: {len(all_papers)} unique papers")
-    return all_papers
+
+    # Phase 2: Summarize only the best papers (max 6) to limit Claude calls
+    # Prefer papers with higher citation counts
+    all_papers.sort(key=lambda p: (p.get("citationCount") or 0), reverse=True)
+    papers_to_summarize = all_papers[:6]
+    log.info(f"Search collected {len(all_papers)} papers, summarizing top {len(papers_to_summarize)}")
+
+    for p in papers_to_summarize:
+        doi = (p.get("externalIds", {}).get("DOI") or p.get("doi", "")).strip()
+        abstract = p.get("abstract", "")
+        if abstract and client:
+            summaries = _summarize_citation(client, doi, abstract, paper_context, log, citation_count=p.get("citationCount", 0) or 0, year=p.get("year") or p.get("publication_year"))
+            p["agent_summary"] = summaries["agent_summary"]
+            p["source_quality_note"] = summaries["source_quality_note"]
+
+    return papers_to_summarize
 
 def extract_failure_patterns(client, agent_data, log) -> str:
     coaching = agent_data.get("coaching", {})
