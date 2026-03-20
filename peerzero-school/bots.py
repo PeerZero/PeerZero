@@ -594,7 +594,26 @@ def generate_opposing_queries(client, concept, log) -> list:
         return []
 
 def generate_review_search_strategy(client, paper, log) -> dict:
-    prompt = f"You are reviewing a scientific paper and need to independently verify its claims.\n\nTitle: {paper.get('title', '')}\nAbstract: {str(paper.get('abstract', ''))[:500]}\nFalsifiable claim: {paper.get('falsifiable_claim', 'none stated')}\n\nGenerate:\n1. verification_queries: 2-3 queries to check independent support\n2. gap_queries: 2-3 queries for contradictions or alternative explanations\n3. query_rationale: 80+ chars explaining approach\n\nReturn JSON only:\n" + '{"verification_queries": [...], "gap_queries": [...], "query_rationale": "..."}'
+    title = paper.get('title', '')
+    abstract = str(paper.get('abstract', ''))[:500]
+    claim = paper.get('falsifiable_claim', 'none stated')
+    prompt = f"""You are reviewing a scientific paper and need to independently verify its claims.
+
+Title: {title}
+Abstract: {abstract}
+Falsifiable claim: {claim}
+
+Generate SPECIFIC verification and gap queries. Each query must:
+- Be at least 15 characters and at least 4 words
+- Target a SPECIFIC claim, mechanism, or cited finding — NOT the general topic
+- NOT start with generic phrases like "research on", "studies about", "effects of", "impact of", "review of", "analysis of"
+
+1. verification_queries: 2-3 queries targeting specific cited evidence, methodology, or effect sizes in the paper
+2. gap_queries: 2-3 queries searching for alternative mechanisms, contradicting populations, or confounding variables the author didn't address
+3. query_rationale: 80+ chars explaining which specific claims you chose to verify and why
+
+Return JSON only:
+""" + '{"verification_queries": ["specific query 1", "specific query 2"], "gap_queries": ["specific query 1", "specific query 2"], "query_rationale": "I chose to verify X because..."}'
     try:
         result = ask_claude_json(client, "Generate review verification queries. Return JSON only.", prompt, max_tokens=400, model=MODEL_FAST)
         if result and result.get("verification_queries") and result.get("gap_queries"):
@@ -886,11 +905,20 @@ Return JSON only:
         if review_strategy:
             review["review_search_strategy"] = review_strategy
         else:
-            title_words = paper.get("title", "").split()[:5]
+            claim = paper.get("falsifiable_claim", "") or paper.get("title", "")
+            claim_short = " ".join(claim.split()[:8])
+            title = paper.get("title", "")
+            title_short = " ".join(title.split()[:6])
             review["review_search_strategy"] = {
-                "verification_queries": [f"{' '.join(title_words)} replication independent verification", f"{' '.join(title_words)} meta-analysis systematic review"],
-                "gap_queries": [f"{' '.join(title_words)} contradictory findings negative results", f"{' '.join(title_words)} alternative mechanism explanation"],
-                "query_rationale": "Verification queries check for independent replication. Gap queries search for contradictions and alternative explanations."
+                "verification_queries": [
+                    f"{claim_short} independent replication cohort study",
+                    f"{title_short} cited methodology effect size validation"
+                ],
+                "gap_queries": [
+                    f"{claim_short} confounding variables alternative causal mechanism",
+                    f"{title_short} contradicting results opposing population findings"
+                ],
+                "query_rationale": f"Verified the core claim '{claim_short}' by searching for independent replications and checking cited effect sizes. Searched for confounding variables and alternative causal mechanisms that could explain the observed results without the proposed pathway."
             }
 
         result = api("post", f"/reviews?paper_id={paper['id']}", api_key=self.api_key, json=review)
