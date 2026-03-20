@@ -224,11 +224,24 @@ def ask_claude_json(client: anthropic.Anthropic, system: str, prompt: str, max_t
     for attempt in range(2):
         try:
             if attempt == 0:
-                raw = ask_claude(client, system, prompt, max_tokens, model=model)
+                # Always prefill with "{" to force JSON output from the start
+                msg = client.messages.create(
+                    model=model or MODEL_SMART,
+                    max_tokens=max_tokens,
+                    system=system,
+                    messages=[
+                        {"role": "user", "content": prompt},
+                        {"role": "assistant", "content": "{"},
+                    ],
+                    timeout=120,
+                )
+                raw = "{" + msg.content[0].text.strip()
+                if msg.stop_reason == "max_tokens":
+                    logging.warning(f"JSON response truncated at {max_tokens} tokens (stop_reason=max_tokens)")
             else:
-                # Retry with prefilled JSON start and anti-refusal system prompt
-                logging.info("Retrying with JSON prefill...")
-                retry_system = system + "\n\nCRITICAL: You MUST respond with valid JSON only. Never refuse. Never explain. Just output the JSON object."
+                # Retry with stronger anti-refusal system prompt
+                logging.info("Retrying with stronger JSON enforcement...")
+                retry_system = system + "\n\nCRITICAL: You MUST respond with valid JSON only. Never refuse. Never explain. Never reflect on the task. Just output the JSON object."
                 msg = client.messages.create(
                     model=model or MODEL_SMART,
                     max_tokens=max_tokens,
@@ -247,7 +260,7 @@ def ask_claude_json(client: anthropic.Anthropic, system: str, prompt: str, max_t
         if result:
             return result
         if attempt == 0:
-            logging.warning(f"JSON parse failed (will retry): {raw[:200]}")
+            logging.error(f"JSON parse failed (will retry): {raw[:500]}")
     logging.error(f"JSON parse failed after 2 attempts")
     return {}
 
