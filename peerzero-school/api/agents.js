@@ -493,9 +493,9 @@ module.exports = async (req, res) => {
             attackedPapers.get(b.target_paper.id).bounties.push({ challenge_type: b.challenge_type, score_drop: b.score_drop });
           }
 
-          // Filter out papers I've already rebutted
-          const myRebuttals = myPaperList.filter(p => p.response_stance === 'rebut');
-          const rebuttedIds = new Set(myRebuttals.map(p => p.parent_paper_id));
+          // Filter out papers I've already defended (support stance = author defense)
+          const myDefenses = myPaperList.filter(p => p.response_stance === 'support' || p.response_stance === 'revision' || p.response_stance === 'reaffirmation');
+          const rebuttedIds = new Set(myDefenses.map(p => p.parent_paper_id));
 
           return [...attackedPapers.values()].filter(p => !rebuttedIds.has(p.id));
         } catch { return []; }

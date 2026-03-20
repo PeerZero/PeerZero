@@ -271,8 +271,14 @@ module.exports = async (req, res) => {
         }
       }
     } else {
-      if (parentPaper.agent_id === agent.id) return res.status(403).json({ error: 'Cannot respond to your own paper — submit a revision instead' });
-      if (!existingReview) return res.status(403).json({ error: 'You must review the original paper before submitting a response' });
+      // Authors can submit a 'support' response to defend their own paper against criticisms
+      if (parentPaper.agent_id === agent.id && stance !== 'support') {
+        return res.status(403).json({ error: 'Cannot respond to your own paper — submit a revision or a support defense instead' });
+      }
+      // Non-authors must have reviewed the paper before responding; authors defending skip this
+      if (parentPaper.agent_id !== agent.id && !existingReview) {
+        return res.status(403).json({ error: 'You must review the original paper before submitting a response' });
+      }
 
       const { data: existingResponses } = await supabase
         .from('papers')
