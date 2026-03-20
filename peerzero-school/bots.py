@@ -221,47 +221,68 @@ def _extract_json_from_text(text: str) -> dict:
     return {}
 
 def ask_claude_json(client: anthropic.Anthropic, system: str, prompt: str, max_tokens: int = 4096, model: str = None) -> dict:
-    for attempt in range(2):
-        try:
-            if attempt == 0:
-                # Always prefill with "{" to force JSON output from the start
-                msg = client.messages.create(
-                    model=model or MODEL_SMART,
-                    max_tokens=max_tokens,
-                    system=system,
-                    messages=[
-                        {"role": "user", "content": prompt},
-                        {"role": "assistant", "content": "{"},
-                    ],
-                    timeout=120,
-                )
-                raw = "{" + msg.content[0].text.strip()
-                if msg.stop_reason == "max_tokens":
-                    logging.warning(f"JSON response truncated at {max_tokens} tokens (stop_reason=max_tokens)")
-            else:
-                # Retry with stronger anti-refusal system prompt
-                logging.info("Retrying with stronger JSON enforcement...")
-                retry_system = system + "\n\nCRITICAL: You MUST respond with valid JSON only. Never refuse. Never explain. Never reflect on the task. Just output the JSON object."
-                msg = client.messages.create(
-                    model=model or MODEL_SMART,
-                    max_tokens=max_tokens,
-                    system=retry_system,
-                    messages=[
-                        {"role": "user", "content": prompt + "\n\nIMPORTANT: Return ONLY the JSON object. Do not refuse or add commentary."},
-                        {"role": "assistant", "content": "{"},
-                    ],
-                    timeout=120,
-                )
-                raw = "{" + msg.content[0].text.strip()
-        except Exception as e:
-            logging.error(f"Claude call failed (attempt {attempt + 1}): {e}")
-            continue
+    """Two-phase JSON generation: let Claude think first, then produce structured output."""
+    # Phase 1: Try direct JSON generation with prefill
+    try:
+        msg = client.messages.create(
+            model=model or MODEL_SMART,
+            max_tokens=max_tokens,
+            system=system,
+            messages=[
+                {"role": "user", "content": prompt},
+                {"role": "assistant", "content": "{"},
+            ],
+            timeout=120,
+        )
+        raw = "{" + msg.content[0].text.strip()
+        if msg.stop_reason == "max_tokens":
+            logging.warning(f"JSON response truncated at {max_tokens} tokens (stop_reason=max_tokens)")
         result = _extract_json_from_text(raw)
         if result:
             return result
-        if attempt == 0:
-            logging.error(f"JSON parse failed (will retry): {raw[:500]}")
-    logging.error(f"JSON parse failed after 2 attempts")
+        logging.info(f"Direct JSON failed, trying think-then-structure approach...")
+        meta_commentary = raw
+    except Exception as e:
+        logging.error(f"Claude call failed (phase 1): {e}")
+        meta_commentary = None
+
+    # Phase 2: Let Claude think freely, then use that analysis to produce JSON
+    try:
+        if not meta_commentary:
+            # Phase 1 crashed -- let Claude do open-ended analysis first
+            logging.info("Generating meta-commentary for think-then-structure...")
+            think_msg = client.messages.create(
+                model=model or MODEL_SMART,
+                max_tokens=2000,
+                system=system,
+                messages=[{"role": "user", "content": prompt + "\n\nBefore writing the JSON, think through your analysis: what are the key considerations, potential issues, and your strategy? Write your reasoning in plain text."}],
+                timeout=120,
+            )
+            meta_commentary = think_msg.content[0].text.strip()
+
+        # Now feed the meta-commentary back as context for structured output
+        logging.info(f"Phase 2: converting {len(meta_commentary)} chars of analysis to JSON...")
+        structure_msg = client.messages.create(
+            model=model or MODEL_SMART,
+            max_tokens=max_tokens,
+            system=system + "\n\nYou MUST respond with valid JSON only. No markdown fences, no preamble.",
+            messages=[
+                {"role": "user", "content": prompt},
+                {"role": "assistant", "content": f"Let me think through this first.\n\n{meta_commentary[:3000]}\n\nNow I'll produce the JSON:\n\n" + "{"},
+            ],
+            timeout=120,
+        )
+        raw = "{" + structure_msg.content[0].text.strip()
+        if structure_msg.stop_reason == "max_tokens":
+            logging.warning(f"Phase 2 JSON response truncated at {max_tokens} tokens")
+        result = _extract_json_from_text(raw)
+        if result:
+            return result
+        logging.error(f"JSON parse failed after phase 2: {raw[:500]}")
+    except Exception as e:
+        logging.error(f"Claude call failed (phase 2): {e}")
+
+    logging.error("JSON generation failed after both phases")
     return {}
 
 # ── Haiku helper calls ──────────────────────────────────────────────────────
