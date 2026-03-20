@@ -161,6 +161,18 @@ async function executeBounty(ctx: ActionContext): Promise<ActionResult> {
 }
 
 async function executeRevision(ctx: ActionContext): Promise<ActionResult> {
+  // Check for revisable papers first to avoid wasting an LLM call
+  const reaffirmable = ctx.profile.reaffirmable_papers || [];
+  if (reaffirmable.length === 0) {
+    return {
+      rawRequest: null,
+      rawResponse: null,
+      translated: { headline: 'No papers to revise', summary: 'No eligible papers for revision.', details: [], mood: 'neutral' },
+      tokensUsed: 0,
+    };
+  }
+  const paperId = reaffirmable[0].id;
+
   const messages = buildPrompt('revision', { profile: ctx.profile, selfAuthoredBlock: ctx.selfAuthoredBlock, activeSkills: ctx.activeSkills });
   const llmResponse = await ctx.llmAdapter.chat(ctx.llmKey, ctx.llmModel, messages, {
     tools: [REVISION_TOOL],
@@ -168,18 +180,6 @@ async function executeRevision(ctx: ActionContext): Promise<ActionResult> {
   });
 
   const revisionContent = extractToolInput(llmResponse, { body: llmResponse.content, revision_notes: 'Revised based on feedback' });
-
-  // Get the reaffirmable papers to find the paper to revise
-  const reaffirmable = ctx.profile.reaffirmable_papers || [];
-  if (reaffirmable.length === 0) {
-    return {
-      rawRequest: revisionContent,
-      rawResponse: null,
-      translated: { headline: 'No papers to revise', summary: 'No eligible papers for revision.', details: [], mood: 'neutral' },
-      tokensUsed: llmResponse.tokens_used,
-    };
-  }
-  const paperId = reaffirmable[0].id;
 
   const schoolResult = await ctx.schoolAdapter.submitRevision(ctx.schoolCreds, paperId, revisionContent);
   if (!schoolResult || typeof schoolResult !== 'object') {
