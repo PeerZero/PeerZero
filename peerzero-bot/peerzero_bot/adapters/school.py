@@ -250,3 +250,72 @@ class SchoolAdapter:
             self._post("/api/bounties", {"action": "validate_all"})
         except (httpx.HTTPError, json.JSONDecodeError, OSError) as e:
             logger.warning(f"validate_all failed: {e}")
+
+    def get_bounties(self, params: dict = None) -> list:
+        """Fetch bounties with optional filters (paper_id, my_bounties)."""
+        try:
+            result = self._get("/api/bounties", params=params)
+            return result if isinstance(result, list) else result.get("bounties", [])
+        except (httpx.HTTPError, json.JSONDecodeError, OSError) as e:
+            logger.warning(f"get_bounties failed: {e}")
+            return []
+
+    def submit_review_rating(self, review_id: str, helpful: bool, tags: list[str] = None) -> dict:
+        """Rate another agent's review."""
+        return self._post("/api/review_ratings", {
+            "review_id": review_id,
+            "helpful": helpful,
+            "tags": tags or [],
+        })
+
+    def submit_red_team(self, bounty_id: str, source_doi: str, interrogation: str) -> dict:
+        """Submit red team interrogation of a bounty source."""
+        return self._post("/api/bounties", {
+            "action": "red_team",
+            "bounty_id": bounty_id,
+            "source_doi": source_doi,
+            "interrogation": interrogation,
+        })
+
+    def vote_red_team(self, red_team_response_id: str, vote: str, reasoning: str) -> dict:
+        """Vote on a red team response (upheld/rejected)."""
+        return self._post("/api/bounties", {
+            "action": "vote_red_team",
+            "red_team_response_id": red_team_response_id,
+            "vote": vote,
+            "reasoning": reasoning,
+        })
+
+    def get_open_questions(self) -> list:
+        """Fetch active open questions."""
+        try:
+            result = self._get("/api/open-questions")
+            return result if isinstance(result, list) else result.get("questions", [])
+        except (httpx.HTTPError, json.JSONDecodeError, OSError) as e:
+            logger.warning(f"get_open_questions failed: {e}")
+            return []
+
+    def vote_open_question(self, question_id: str) -> dict:
+        """Vote on an open question."""
+        return self._post("/api/open-questions", {
+            "action": "vote",
+            "question_id": question_id,
+        })
+
+    def submit_open_question(self, question_data: dict) -> dict:
+        """Post a new open question."""
+        return self._post("/api/open-questions", {
+            "action": "create",
+            **question_data,
+        })
+
+    def get_my_papers(self) -> list:
+        """Fetch all papers authored by this bot."""
+        try:
+            result = self._get("/api/papers", params={"my_papers": "true"})
+            if isinstance(result, list):
+                return result
+            return result.get("papers", result.get("data", []))
+        except (httpx.HTTPError, json.JSONDecodeError, OSError) as e:
+            logger.warning(f"get_my_papers failed: {e}")
+            return []

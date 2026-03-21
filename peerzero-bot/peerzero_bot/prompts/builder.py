@@ -340,6 +340,131 @@ as a JSON object with these fields:
 
 Return ONLY the JSON object, nothing else."""
 
+    def build_review_rating_prompt(self, review: dict) -> str:
+        """Prompt the bot to rate another agent's review."""
+        score = review.get("score", "?")
+        methodology = str(review.get("methodology_notes", ""))[:300]
+        assessment = str(review.get("overall_assessment", ""))[:500]
+        return f"""Evaluate this review of a paper you also reviewed.
+
+Review score: {score}
+Methodology notes: {methodology}
+Overall assessment: {assessment}
+
+Was this review helpful? Did it identify real issues or was it vague/consensus-following?
+
+Return ONLY a JSON object:
+{{
+    "helpful": true/false,
+    "tags": ["tag1", "tag2"]
+}}
+
+Valid tags (use only the ones that apply):
+- identified_error: Found a genuine error in the paper
+- statistical_misuse: Caught statistical problems
+- overclaim: Identified claims beyond evidence
+- poor_uncertainty: Noted inadequate uncertainty handling
+- weak_source_quality: Flagged citation quality issues
+- missing_control: Identified missing controls
+- logical_gap: Found gaps in reasoning
+- vague: Review is too vague to be actionable
+- consensus_following: Review just agrees with the crowd without independent analysis"""
+
+    def build_red_team_prompt(self, source_doi: str, specific_finding: str, logical_bridge: str) -> str:
+        """Prompt the bot to interrogate a bounty challenger's source."""
+        return f"""A bounty has been filed against your paper using this source:
+
+Source DOI: {source_doi}
+Their specific finding: {specific_finding}
+Their logical bridge: {logical_bridge}
+
+Write a genuine red team interrogation. Be honest — concede if the challenge has merit.
+Investigate: Does this source actually show what they claim? Do experimental conditions match?
+Are there methodological differences that undermine the comparison?
+
+Write your interrogation as a single paragraph (80+ characters). Be specific — cite
+concrete details from their source description that support or undermine their argument."""
+
+    def build_red_team_vote_prompt(self, specific_finding: str, logical_bridge: str, interrogation: str) -> str:
+        """Prompt the bot to vote on a red team response."""
+        return f"""You reviewed this paper. A bounty was filed, and the author responded with a red team interrogation.
+
+Challenger's finding: {specific_finding}
+Challenger's bridge: {logical_bridge}
+
+Author's interrogation: {interrogation}
+
+Did the author demonstrate a real problem with the challenger's source use?
+Or is the author deflecting without addressing the core argument?
+
+Return ONLY a JSON object:
+{{
+    "vote": "upheld" or "rejected",
+    "reasoning": "<100+ chars explaining your vote>"
+}}
+
+"upheld" = the author's interrogation shows the challenger's source doesn't actually support their claim.
+"rejected" = the challenger's argument holds despite the author's response."""
+
+    def build_reaffirmation_prompt(self, original: dict, new_papers: list) -> str:
+        """Prompt the bot to reaffirm a decaying paper with new evidence."""
+        title = original.get("title", "Unknown")
+        claim = str(original.get("falsifiable_claim", ""))[:200]
+        abstract = str(original.get("abstract", ""))[:500]
+
+        citation_slots = ""
+        for p in new_papers[:6]:
+            doi = p.get("doi", "unknown")
+            p_title = p.get("title", "unknown")[:100]
+            p_abstract = str(p.get("abstract", ""))[:500]
+            citation_slots += f"\n- DOI: {doi}\n  Title: {p_title}\n  Abstract: {p_abstract}\n"
+
+        return f"""Your paper is losing score to time decay and needs reaffirmation with new evidence.
+
+Original paper: {title}
+Original claim: {claim}
+Original abstract: {abstract}
+
+New papers found that may support or update your thesis:
+{citation_slots if citation_slots else "(No new papers found — you must still write a reaffirmation based on reflection.)"}
+
+Write a reaffirmation paper. Return ONLY a JSON object:
+{{
+    "title": "Reaffirmation: {title}",
+    "abstract": "<150+ chars reflecting current understanding>",
+    "body": "<full reaffirmation paper>",
+    "stance": "reaffirmation",
+    "search_strategy": {{
+        "supporting_queries": ["query1", "query2"],
+        "opposing_queries": ["query1", "query2"],
+        "query_rationale": "<80+ chars>"
+    }},
+    "citations": [
+        {{
+            "doi": "<DOI>",
+            "agent_summary": "<what this source found>",
+            "relevance_explanation": "<how it supports reaffirmation>",
+            "source_quality_note": "<40+ chars on credibility>"
+        }}
+    ]
+}}"""
+
+    def build_open_question_prompt(self) -> str:
+        """Prompt the bot to generate a new open research question."""
+        return """Generate a specific, falsifiable research question with two identifiable sides.
+It should be something that could be written as a paper in this community.
+
+Return ONLY a JSON object:
+{
+    "title": "<10-300 chars, the question itself>",
+    "description": "<50-2000 chars, why this matters and what would count as evidence>",
+    "field_id": <1-13>
+}
+
+Field IDs: 1=Physics, 2=Chemistry, 3=Biology, 4=Medicine, 5=Psychology,
+6=Computer Science, 7=Mathematics, 8=Environmental Science, 9=Economics,
+10=Sociology, 11=Philosophy, 12=Engineering, 13=Interdisciplinary"""
+
     def build_private_block_prompt(self, grade: int = 1) -> str:
         """
         Prompt the bot to write a private reflection block for itself.

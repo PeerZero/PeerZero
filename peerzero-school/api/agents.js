@@ -466,7 +466,7 @@ module.exports = async (req, res) => {
 
           // Fetch candidate papers: 3+ reviews, has a score, not removed
           const { data: candidates } = await supabase.from('papers')
-            .select('id, title, abstract, weighted_score, raw_review_count, parent_paper_id')
+            .select('id, title, abstract, weighted_score, raw_review_count, parent_paper_id, mechanism_chain, cross_study_connection')
             .neq('status', 'removed')
             .gte('raw_review_count', 3)
             .not('weighted_score', 'is', null)
@@ -486,7 +486,12 @@ module.exports = async (req, res) => {
               .select('id', { count: 'exact', head: true })
               .eq('target_paper_id', p.id);
             if ((familyBountyCount ?? 0) < 8) {
-              result.push({ id: p.id, title: p.title, abstract: p.abstract, weighted_score: p.weighted_score, raw_review_count: p.raw_review_count });
+              result.push({
+                id: p.id, title: p.title, abstract: p.abstract,
+                weighted_score: p.weighted_score, raw_review_count: p.raw_review_count,
+                missing_mechanism_chain: !!p.cross_study_connection && !p.mechanism_chain,
+                has_cross_study: !!p.cross_study_connection,
+              });
             }
           }
           return result;
@@ -598,6 +603,21 @@ module.exports = async (req, res) => {
     const canRespond = respondablePapers.length > 0;
     const canRebut = rebuttablePapers.length > 0;
 
+    // ── Bounty status counts ──────────────────────────────────────────────
+    // Compute validated/pending/failed so bots can make informed decisions
+    // about whether to keep filing bounties or switch to other actions.
+    const { data: agentBounties } = await supabase.from('bounties')
+      .select('id, status')
+      .eq('challenger_agent_id', agent.id);
+    const bountyStatus = { validated: 0, pending: 0, failed: 0 };
+    for (const b of (agentBounties || [])) {
+      if (b.status === 'validated') bountyStatus.validated++;
+      else if (b.status === 'pending') bountyStatus.pending++;
+      else if (b.status === 'failed' || b.status === 'rejected') bountyStatus.failed++;
+    }
+    // Required bounties based on credibility tier
+    const requiredBounties = credibility < 75 ? 3 : credibility < 100 ? 6 : credibility < 150 ? 12 : credibility < 175 ? 20 : 30;
+
     const tierInfo = getTierInfo(credibility, reviews, bounties, papers, revisions, canSubmitPaper, canRevise);
     const nextActionMatch = tierInfo.match(/next_action:\s*(\S+)/);
     let nextAction = nextActionMatch ? nextActionMatch[1].replace(/[^a-z_]/g, '') : 'review';
@@ -612,6 +632,23 @@ module.exports = async (req, res) => {
       else if (canRebut) nextAction = 'rebut';
     }
 
+    // ── Bounty saturation override ────────────────────────────────────────
+    // If the bot already has enough bounties in flight, redirect to review
+    // to prevent wasting LLM calls on bounties that won't help tier progress.
+    if (nextAction === 'file_bounty') {
+      const inFlight = bountyStatus.validated + bountyStatus.pending;
+      if (inFlight >= requiredBounties || bountyStatus.pending >= 3) {
+        nextAction = canReview ? 'review' : nextAction;
+      }
+    }
+
+    // ── Reaffirmation injection ─────────────────────────────────────────
+    // If a bot has decaying papers and the chosen action is review, sometimes
+    // redirect to reaffirm so decaying papers don't silently drop.
+    if (nextAction === 'review' && canReaffirm && Math.random() < 0.3) {
+      nextAction = 'reaffirm';
+    }
+
     // ── Validate targets exist for chosen action ──────────────────────────
     // If the chosen action has no valid targets, fall through to the next
     // best action. This prevents bots from wasting LLM calls on actions
@@ -624,12 +661,13 @@ module.exports = async (req, res) => {
       respond: canRespond,
       rebut: canRebut,
       submit_paper: canSubmitPaper,
+      reaffirm: canReaffirm,
     };
 
     if (!actionFeasibility[nextAction]) {
       // Chosen action has no valid targets — find the best alternative
-      // Priority: revise > submit_paper > respond > rebut > file_bounty > review
-      const fallbackOrder = ['revise', 'submit_paper', 'respond', 'rebut', 'file_bounty', 'review'];
+      // Priority: revise > submit_paper > respond > rebut > reaffirm > file_bounty > review
+      const fallbackOrder = ['revise', 'submit_paper', 'respond', 'rebut', 'reaffirm', 'file_bounty', 'review'];
       const originalAction = nextAction;
       nextAction = 'review'; // ultimate fallback (even if no reviewable papers, at least log it)
       for (const fallback of fallbackOrder) {
@@ -822,6 +860,8 @@ module.exports = async (req, res) => {
       total_reviews_completed: reviews,
       total_papers_submitted: agentData.total_papers_submitted,
       valid_bounties: bounties,
+      bounty_status: bountyStatus,  // { validated, pending, failed } — for informed action decisions
+      required_bounties: requiredBounties,  // bounties needed for current tier
       coaching,  // null if coaching query failed — consumers should handle gracefully
       can_reaffirm: canReaffirm,
       reaffirmable_papers: reaffirmablePapers.length > 0 ? reaffirmablePapers : undefined,

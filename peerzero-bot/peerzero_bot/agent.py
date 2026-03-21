@@ -577,10 +577,18 @@ class PeerZeroBot:
         system_prompt = self.prompts.build_school_system_prompt()
         grade = profile.get("agent", {}).get("grade", 1) if isinstance(profile.get("agent"), dict) else profile.get("grade", 1)
 
-        # Step 2: Identity reflection BEFORE the action — this is the bot's
-        # decision lens, not a task.  Runs every cycle so every action is
-        # filtered through the bot's evolving identity.
+        # Step 2: Pre-action community work — lightweight tasks that use the
+        # fast model. These happen BEFORE the main action so the bot participates
+        # in the community (rating reviews, red team, questions) every cycle.
         self._pre_action_identity(profile, system_prompt, grade)
+        try:
+            self._do_red_team_responses(system_prompt)
+            self._do_red_team_jury_vote(system_prompt)
+            self._do_open_questions(system_prompt)
+            self._do_rate_reviews(system_prompt, profile)
+            self._do_structural_bounties(system_prompt, profile)
+        except Exception as e:
+            logger.warning(f"[SCHOOL] Pre-action community work failed (non-blocking): {e}")
 
         # Step 3: Check autonomy policy for school actions
         if self.autonomy_gate:
@@ -616,6 +624,8 @@ class PeerZeroBot:
             result = self._do_rebut(system_prompt, profile)
         elif next_action == "review":
             result = self._do_review(system_prompt, profile)
+        elif next_action == "reaffirm":
+            result = self._do_reaffirm(system_prompt, profile)
         else:
             logger.warning(f"[SCHOOL] Unknown action '{next_action}' — skipping")
 
@@ -721,6 +731,8 @@ class PeerZeroBot:
         try:
             result = self._submit_with_retry("REVIEW", self.school.submit_review, paper_id, review_data)
             logger.info(f"[REVIEW] Submitted — score={review_data.get('score')}")
+            # Track this paper so we can rate other reviews on it later
+            self.memory.add_tracked_review_id(paper_id)
             return result
         except Exception as e:
             status = getattr(getattr(e, "response", None), "status_code", None)
@@ -1025,6 +1037,244 @@ class PeerZeroBot:
             else:
                 logger.warning(f"[REBUT] Failed: {e}")
             return None
+
+    # ── Pre-action community work ──────────────────────────────────────────
+    #
+    # These run BEFORE the main action each cycle. They are lightweight
+    # community participation tasks (rating reviews, red team, open questions)
+    # that use the fast model and don't block the productive loop.
+
+    def _do_rate_reviews(self, system_prompt: str, profile: dict):
+        """Rate other agents' reviews on papers we also reviewed."""
+        # Use papers we've reviewed recently from tracked IDs
+        tracked_ids = self.memory.get_tracked_review_ids()
+        if not tracked_ids:
+            return
+
+        for paper_id in list(tracked_ids)[:3]:
+            try:
+                full = self.school.get_papers(params={"id": paper_id})
+                reviews = []
+                if isinstance(full, dict):
+                    reviews = full.get("reviews", [])
+                elif isinstance(full, list) and full:
+                    reviews = full[0].get("reviews", []) if isinstance(full[0], dict) else []
+            except Exception:
+                continue
+
+            for review in reviews[:3]:
+                review_id = review.get("id")
+                if not review_id or review.get("reviewer_handle") == self.config.handle:
+                    continue
+                if not review.get("overall_assessment"):
+                    continue
+
+                try:
+                    user_msg = self.prompts.build_review_rating_prompt(review)
+                    response = self.llm_fast.call_best_effort(system_prompt, user_msg)
+                    if not response:
+                        continue
+                    rating = extract_json(response)
+                    if not rating or "helpful" not in rating:
+                        continue
+                    self.school.submit_review_rating(review_id, rating["helpful"], rating.get("tags", []))
+                    logger.info(f"[RATE] Rated review {review_id}: helpful={rating['helpful']}")
+                except Exception as e:
+                    status = getattr(getattr(e, "response", None), "status_code", None)
+                    if status == 409:
+                        continue  # already rated
+                    logger.debug(f"[RATE] Failed to rate review: {e}")
+
+    def _do_red_team_responses(self, system_prompt: str):
+        """File red team interrogations on bounties against our papers."""
+        try:
+            my_papers = self.school.get_my_papers()
+        except Exception:
+            return
+
+        originals = [p for p in my_papers if not p.get("parent_paper_id")]
+        for paper in originals[:5]:
+            paper_id = paper.get("id")
+            if not paper_id:
+                continue
+
+            try:
+                bounties = self.school.get_bounties(params={"paper_id": paper_id})
+            except Exception:
+                continue
+
+            for b in (bounties if isinstance(bounties, list) else []):
+                if b.get("status") != "pending":
+                    continue
+                for src in (b.get("external_sources") or [])[:2]:
+                    if src.get("red_team_response"):
+                        continue
+                    doi = src.get("doi", "")
+                    finding = src.get("specific_finding", "")
+                    bridge = src.get("logical_bridge", "")
+                    if not doi or not finding:
+                        continue
+
+                    try:
+                        user_msg = self.prompts.build_red_team_prompt(doi, finding, bridge)
+                        interrogation = self.llm_fast.call_best_effort(system_prompt, user_msg)
+                        if not interrogation or len(interrogation.strip()) < 80:
+                            continue
+                        self.school.submit_red_team(b["id"], doi, interrogation.strip())
+                        logger.info(f"[RED_TEAM] Filed interrogation for bounty {b['id']}")
+                    except Exception as e:
+                        logger.debug(f"[RED_TEAM] Failed: {e}")
+
+    def _do_red_team_jury_vote(self, system_prompt: str):
+        """Vote on red team responses for papers we reviewed."""
+        tracked_ids = self.memory.get_tracked_review_ids()
+        if not tracked_ids:
+            return
+
+        for paper_id in list(tracked_ids)[:5]:
+            try:
+                bounties = self.school.get_bounties(params={"paper_id": paper_id})
+            except Exception:
+                continue
+
+            for b in (bounties if isinstance(bounties, list) else []):
+                for src in (b.get("external_sources") or []):
+                    rt = src.get("red_team_response")
+                    if not rt or rt.get("resolved") or rt.get("my_vote"):
+                        continue
+
+                    finding = src.get("specific_finding", "")
+                    bridge = src.get("logical_bridge", "")
+                    interrogation = rt.get("interrogation", "")
+                    if not interrogation:
+                        continue
+
+                    try:
+                        user_msg = self.prompts.build_red_team_vote_prompt(finding, bridge, interrogation)
+                        response = self.llm_fast.call_best_effort(system_prompt, user_msg)
+                        if not response:
+                            continue
+                        vote_data = extract_json(response)
+                        if not vote_data or "vote" not in vote_data:
+                            continue
+                        vote = vote_data["vote"]
+                        reasoning = str(vote_data.get("reasoning", ""))
+                        if vote not in ("upheld", "rejected") or len(reasoning) < 100:
+                            continue
+                        self.school.vote_red_team(rt.get("id", ""), vote, reasoning)
+                        logger.info(f"[JURY] Voted {vote} on red team response")
+                        return  # one vote per cycle
+                    except Exception as e:
+                        logger.debug(f"[JURY] Failed: {e}")
+
+    def _do_reaffirm(self, system_prompt: str, profile: dict) -> dict | None:
+        """Reaffirm a decaying paper with new evidence."""
+        reaffirmable = profile.get("reaffirmable_papers", [])
+        if not reaffirmable:
+            logger.info("[REAFFIRM] No reaffirmable papers")
+            return None
+
+        target = reaffirmable[0]
+        paper_id = target.get("paper_id")
+        if not paper_id:
+            return None
+
+        logger.info(f"[REAFFIRM] Targeting paper {paper_id} (raw={target.get('raw_score')}, effective={target.get('effective_score')})")
+
+        try:
+            full = self.school.get_papers(params={"id": paper_id})
+        except Exception as e:
+            logger.warning(f"[REAFFIRM] Failed to fetch paper: {e}")
+            return None
+
+        original = full if isinstance(full, dict) else (full[0] if isinstance(full, list) and full else {})
+        paper_data = original.get("paper", original)
+
+        user_msg = self.prompts.build_reaffirmation_prompt(paper_data, [])
+        response_text = self.llm.call(system_prompt, user_msg)
+        reaffirm_data = extract_json(response_text)
+
+        if not reaffirm_data or "title" not in reaffirm_data:
+            logger.warning("[REAFFIRM] Failed to parse LLM response — retrying once")
+            response_text = self.llm.call(system_prompt, user_msg)
+            reaffirm_data = extract_json(response_text)
+            if not reaffirm_data or "title" not in reaffirm_data:
+                logger.warning("[REAFFIRM] Retry also failed")
+                return None
+
+        reaffirm_data["stance"] = "reaffirmation"
+        reaffirm_data.setdefault("citations", [])
+        reaffirm_data.setdefault("search_strategy", {})
+
+        try:
+            result = self._submit_with_retry("REAFFIRM", self.school.submit_revision, paper_id, reaffirm_data)
+            logger.info(f"[REAFFIRM] Submitted for {paper_id}")
+            return result
+        except Exception as e:
+            status = getattr(getattr(e, "response", None), "status_code", None)
+            if status == 409:
+                logger.info("[REAFFIRM] 409 — already reaffirmed, moving on")
+                return {"status": "already_done"}
+            logger.warning(f"[REAFFIRM] Failed: {e}")
+            return None
+
+    def _do_open_questions(self, system_prompt: str):
+        """Vote on open questions and occasionally post new ones."""
+        try:
+            questions = self.school.get_open_questions()
+        except Exception:
+            return
+
+        # Vote on well-formed questions (one per cycle)
+        for q in (questions if isinstance(questions, list) else [])[:5]:
+            if q.get("my_vote"):
+                continue
+            title = q.get("title", "")
+            desc = q.get("description", "")
+            if len(title) > 30 and len(desc) > 100:
+                try:
+                    self.school.vote_open_question(q["id"])
+                    logger.info(f"[QUESTIONS] Voted on: {title[:50]}...")
+                    break
+                except Exception as e:
+                    logger.debug(f"[QUESTIONS] Vote failed: {e}")
+
+        # 10% chance to post a new question
+        if random.random() < 0.1 and len(questions) < 50:
+            try:
+                user_msg = self.prompts.build_open_question_prompt()
+                response = self.llm_fast.call_best_effort(system_prompt, user_msg)
+                if not response:
+                    return
+                q_data = extract_json(response)
+                if q_data and q_data.get("title") and q_data.get("description"):
+                    self.school.submit_open_question(q_data)
+                    logger.info(f"[QUESTIONS] Posted: {q_data['title'][:50]}...")
+            except Exception as e:
+                logger.debug(f"[QUESTIONS] Post failed: {e}")
+
+    def _do_structural_bounties(self, system_prompt: str, profile: dict):
+        """File structural bounties (no_mechanism_chain, weak_source_quality) on bountyable papers."""
+        bountyable = profile.get("bountyable_papers", [])
+        if not bountyable:
+            return
+
+        for paper in bountyable[:5]:
+            # No mechanism chain bounty — purely structural, no LLM needed
+            if paper.get("missing_mechanism_chain"):
+                try:
+                    self.school.submit_bounty({
+                        "action": "register",
+                        "target_paper_id": paper["id"],
+                        "challenge_type": "no_mechanism_chain",
+                    })
+                    logger.info(f"[BOUNTY] Filed no_mechanism_chain on {paper['id']}")
+                    return  # one structural bounty per cycle
+                except Exception as e:
+                    status = getattr(getattr(e, "response", None), "status_code", None)
+                    if status == 409:
+                        continue
+                    logger.debug(f"[BOUNTY] Structural bounty failed: {e}")
 
     # ── Memory processing ─────────────────────────────────────────────────
     #
