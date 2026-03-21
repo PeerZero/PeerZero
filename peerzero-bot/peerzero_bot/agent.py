@@ -23,6 +23,8 @@ import time
 import logging
 from datetime import datetime, timezone
 
+import httpx
+
 from .config import BotConfig
 from .memory import MemoryManager
 from .adapters.school import SchoolAdapter, extract_json, pick_paper_to_review
@@ -746,6 +748,15 @@ class PeerZeroBot:
             self._my_bounty_paper_ids.append(target_id)
             self.memory.write("school", "my_bounty_paper_ids", self._my_bounty_paper_ids)
             return result
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 409:
+                logger.info(f"[BOUNTY] Already filed for paper {target_id} — syncing local cache")
+                if target_id not in self._my_bounty_paper_ids:
+                    self._my_bounty_paper_ids.append(target_id)
+                    self.memory.write("school", "my_bounty_paper_ids", self._my_bounty_paper_ids)
+            else:
+                logger.warning(f"[BOUNTY] Failed: {e}")
+            return None
         except Exception as e:
             logger.warning(f"[BOUNTY] Failed: {e}")
             return None
