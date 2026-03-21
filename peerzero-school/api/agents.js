@@ -669,14 +669,13 @@ module.exports = async (req, res) => {
       // Priority: revise > submit_paper > respond > rebut > reaffirm > file_bounty > review
       const fallbackOrder = ['revise', 'submit_paper', 'respond', 'rebut', 'reaffirm', 'file_bounty', 'review'];
       const originalAction = nextAction;
-      nextAction = 'review'; // ultimate fallback (even if no reviewable papers, at least log it)
+      nextAction = 'sleep'; // default: nothing to do — tell bot to wait
       for (const fallback of fallbackOrder) {
         if (actionFeasibility[fallback]) {
           nextAction = fallback;
           break;
         }
       }
-      // If nothing is feasible, stay on review — the bot will see an empty list and skip
     }
 
     const agentData = { ...agent, total_reviews_completed: reviews, valid_bounties: bounties };

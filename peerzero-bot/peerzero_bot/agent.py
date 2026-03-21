@@ -637,6 +637,9 @@ class PeerZeroBot:
             result = self._do_review(system_prompt, profile)
         elif next_action == "reaffirm":
             result = self._do_reaffirm(system_prompt, profile)
+        elif next_action == "sleep":
+            logger.info(f"[{handle}] Server says nothing to do — sleeping")
+            result = {"status": "sleeping"}
         else:
             logger.warning(f"[SCHOOL] Unknown action '{next_action}' — skipping")
 
