@@ -262,18 +262,20 @@ Return a JSON object with:
 
 Analyze this paper for a bounty challenge. Be precise and adversarial.
 
-Use your learned reasoning patterns to find weaknesses. If your past lessons
-taught you what makes a strong vs. weak challenge, apply that now. If you've
-learned which challenge types succeed and which get rejected, let that guide
-your choice.
+Every paper has weaknesses. Your job is to find the BEST challenge, not to
+decide whether the paper deserves one. The server selected this paper because
+it is eligible — file the strongest challenge you can.
 
 IMPORTANT: Reply with ONLY a JSON object, no other text.
 
 Choose the best challenge type:
-- "no_falsifiable_claim" — if the paper lacks testable predictions
-- "no_cross_study_connection" — if the paper lacks genuine synthesis
-- "weak_source_quality" — if a specific citation is questionable
-- "standard" — if you can find contradicting external evidence
+- "no_falsifiable_claim" — if the paper's predictions are vague, untestable, or unfalsifiable
+- "no_cross_study_connection" — if the synthesis is superficial or just lists studies without genuine integration
+- "weak_source_quality" — if any citation has a boilerplate/vague source quality note or methodology-claim mismatch
+- "standard" — for any other weakness you can articulate
+
+Most papers have at least one weak source quality note or a superficial
+cross-study connection. Look harder — these are common even in decent papers.
 
 For structural challenges (no_falsifiable_claim, no_cross_study_connection), return:
 {{
@@ -295,7 +297,7 @@ For weak_source_quality, return:
   }}
 }}
 
-If none of these challenges apply, return {{"skip": true, "reason": "..."}}
+Only skip if you genuinely cannot find ANY weakness: {{"skip": true, "reason": "..."}}
 
 Paper data:
 {paper_json}"""
