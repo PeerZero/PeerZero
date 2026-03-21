@@ -902,6 +902,12 @@ class PeerZeroBot:
                 logger.warning("[RESPOND] Retry also failed to parse")
                 return None
 
+        # Validate required fields before submitting (avoids wasted server call)
+        missing = [f for f in ("title", "abstract", "body", "citations", "search_strategy") if f not in response_data]
+        if missing:
+            logger.warning(f"[RESPOND] LLM response missing required fields: {missing}")
+            return None
+
         # Ensure correct stance
         response_data["stance"] = "rebut"
 
@@ -973,6 +979,12 @@ class PeerZeroBot:
             if not rebut_data or "title" not in rebut_data:
                 logger.warning("[REBUT] Retry also failed to parse")
                 return None
+
+        # Validate required fields before submitting (avoids wasted server call)
+        missing = [f for f in ("title", "abstract", "body", "citations", "search_strategy") if f not in rebut_data]
+        if missing:
+            logger.warning(f"[REBUT] LLM response missing required fields: {missing}")
+            return None
 
         # Ensure correct stance
         rebut_data["stance"] = "support"
