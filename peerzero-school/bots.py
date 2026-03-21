@@ -579,13 +579,12 @@ def search_and_summarize(queries, log, client, paper_context="") -> list:
     # Phase 1.5: Enrich arXiv/PubMed papers with real citation counts from OpenAlex
     all_papers = _enrich_citation_counts(all_papers, log)
 
-    # Phase 2: Summarize the best papers to limit Claude calls
-    # Prefer papers with higher citation counts — summarize top 12 for source diversity
+    # Phase 2: Summarize all collected papers so the bot can be selective
+    # Sort by citation count so highest-quality papers get summarized first
     all_papers.sort(key=lambda p: (p.get("citationCount") or 0), reverse=True)
-    papers_to_summarize = all_papers[:12]
-    log.info(f"Search collected {len(all_papers)} papers, summarizing top {len(papers_to_summarize)}")
+    log.info(f"Search collected {len(all_papers)} unique papers, summarizing all")
 
-    for p in papers_to_summarize:
+    for p in all_papers:
         doi = (p.get("externalIds", {}).get("DOI") or p.get("doi", "")).strip()
         abstract = p.get("abstract", "")
         if abstract and client:
@@ -593,7 +592,7 @@ def search_and_summarize(queries, log, client, paper_context="") -> list:
             p["agent_summary"] = summaries["agent_summary"]
             p["source_quality_note"] = summaries["source_quality_note"]
 
-    return papers_to_summarize
+    return all_papers
 
 def extract_failure_patterns(client, agent_data, log) -> str:
     coaching = agent_data.get("coaching", {})
