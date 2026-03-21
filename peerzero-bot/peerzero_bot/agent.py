@@ -437,6 +437,7 @@ class PeerZeroBot:
         self._agent_card: dict = {}
         self._identity_refresh_interval: int = config.identity_refresh_interval
         self._last_identity_refresh: int = 0
+        self._consecutive_bounty_failures: int = 0
 
     # ═══════════════════════════════════════════════════════════════════════
     # STARTUP
@@ -565,6 +566,12 @@ class PeerZeroBot:
                     return
 
         # Step 3: Execute action
+        # Override bounty after repeated failures so bots don't get stuck
+        if next_action == "file_bounty" and self._consecutive_bounty_failures >= 2:
+            logger.info(f"[SCHOOL] Overriding file_bounty to review ({self._consecutive_bounty_failures} consecutive failures)")
+            next_action = "review"
+            self._consecutive_bounty_failures = 0
+
         result = None
         if next_action == "revise":
             result = self._do_revise(system_prompt, profile)
@@ -572,6 +579,11 @@ class PeerZeroBot:
             result = self._do_submit_paper(system_prompt, profile)
         elif next_action == "file_bounty":
             result = self._do_file_bounty(system_prompt, profile)
+            if result is not None:
+                self._consecutive_bounty_failures = 0
+            else:
+                self._consecutive_bounty_failures += 1
+                logger.info(f"[BOUNTY] Failed ({self._consecutive_bounty_failures} consecutive)")
         elif next_action == "respond":
             result = self._do_respond(system_prompt, profile)
         elif next_action == "rebut":
@@ -670,12 +682,29 @@ class PeerZeroBot:
                 logger.warning("[REVIEW] Retry also failed to parse")
                 return None
 
+        # Clamp score to valid range (LLM sometimes returns 0.5 or 10.5)
+        try:
+            review_data["score"] = max(1.0, min(10.0, round(float(review_data["score"]), 1)))
+        except (ValueError, TypeError):
+            logger.warning(f"[REVIEW] Invalid score '{review_data.get('score')}' — defaulting to 5.0")
+            review_data["score"] = 5.0
+
         try:
             result = self.school.submit_review(paper_id, review_data)
             logger.info(f"[REVIEW] Submitted — score={review_data.get('score')}")
             self._my_review_ids.append(paper_id)
             self.memory.add_tracked_review_id(paper_id)
             return result
+        except httpx.HTTPStatusError as e:
+            try:
+                err_body = e.response.json()
+                err_msg = err_body.get("error", str(e))
+                hints = err_body.get("hint", err_body.get("failures", ""))
+            except Exception:
+                err_msg = str(e)
+                hints = ""
+            logger.warning(f"[REVIEW] Failed for '{paper.get('title', '?')[:60]}': {err_msg} | hints={hints}")
+            return None
         except Exception as e:
             logger.warning(f"[REVIEW] Failed: {e}")
             return None
@@ -742,6 +771,24 @@ class PeerZeroBot:
             logger.info("[BOUNTY] Skipped")
             return None
 
+        # Fallback: if LLM omitted external_sources, build from rebuttal citations
+        if "external_sources" not in bounty_data and "rebuttal" in bounty_data:
+            citations = bounty_data["rebuttal"].get("citations") or []
+            bounty_data["external_sources"] = []
+            for c in citations:
+                if c.get("doi"):
+                    bounty_data["external_sources"].append({
+                        "doi": c["doi"],
+                        "specific_finding": c.get("agent_summary", "")[:2000] or "See citation for contradicting evidence",
+                        "target_claim": target.get("title", "")[:1000] or "Original paper claim",
+                        "logical_bridge": c.get("relevance_explanation", "")[:2000] or "This evidence directly contradicts the original claim",
+                    })
+            if bounty_data["external_sources"]:
+                logger.info(f"[BOUNTY] Built {len(bounty_data['external_sources'])} external_sources from rebuttal citations")
+            else:
+                logger.warning("[BOUNTY] No external_sources and no citations with DOIs — skipping")
+                return None
+
         try:
             result = self.school.submit_bounty(bounty_data)
             logger.info(f"[BOUNTY] Filed — type={bounty_data.get('challenge_type')}")
@@ -755,7 +802,14 @@ class PeerZeroBot:
                     self._my_bounty_paper_ids.append(target_id)
                     self.memory.write("school", "my_bounty_paper_ids", self._my_bounty_paper_ids)
             else:
-                logger.warning(f"[BOUNTY] Failed: {e}")
+                try:
+                    err_body = e.response.json()
+                    err_msg = err_body.get("error", str(e))
+                    hints = err_body.get("hint", err_body.get("failures", ""))
+                except Exception:
+                    err_msg = str(e)
+                    hints = ""
+                logger.warning(f"[BOUNTY] Failed for '{target.get('title', '?')[:60]}': {err_msg} | hints={hints}")
             return None
         except Exception as e:
             logger.warning(f"[BOUNTY] Failed: {e}")
@@ -867,6 +921,16 @@ class PeerZeroBot:
             result = self.school.submit_revision(paper_id, response_data)
             logger.info(f"[RESPOND] Submitted — id={result.get('response_paper_id')}")
             return result
+        except httpx.HTTPStatusError as e:
+            try:
+                err_body = e.response.json()
+                err_msg = err_body.get("error", str(e))
+                hints = err_body.get("hint", err_body.get("failures", ""))
+            except Exception:
+                err_msg = str(e)
+                hints = ""
+            logger.warning(f"[RESPOND] Failed for '{target.get('title', '?')[:60]}': {err_msg} | hints={hints}")
+            return None
         except Exception as e:
             logger.warning(f"[RESPOND] Failed: {e}")
             return None
@@ -929,6 +993,16 @@ class PeerZeroBot:
             result = self.school.submit_revision(paper_id, rebut_data)
             logger.info(f"[REBUT] Submitted — id={result.get('response_paper_id')}")
             return result
+        except httpx.HTTPStatusError as e:
+            try:
+                err_body = e.response.json()
+                err_msg = err_body.get("error", str(e))
+                hints = err_body.get("hint", err_body.get("failures", ""))
+            except Exception:
+                err_msg = str(e)
+                hints = ""
+            logger.warning(f"[REBUT] Failed for '{target.get('title', '?')[:60]}': {err_msg} | hints={hints}")
+            return None
         except Exception as e:
             logger.warning(f"[REBUT] Failed: {e}")
             return None
