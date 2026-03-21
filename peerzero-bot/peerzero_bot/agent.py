@@ -107,6 +107,8 @@ class LLMClient:
                         system=system_prompt,
                         messages=[{"role": "user", "content": user_message}],
                     )
+                    if response.stop_reason == "max_tokens":
+                        logger.warning(f"[LLM] Response truncated (hit max_tokens={self._max_tokens})")
                     return response.content[0].text
                 elif self._provider == "openai":
                     response = client.chat.completions.create(
@@ -135,6 +137,60 @@ class LLMClient:
                     raise
 
         raise last_exc  # type: ignore[misc]
+
+    def call_json(self, system_prompt: str, user_message: str, json_keys: list[str] | None = None) -> dict | None:
+        """Call LLM and force JSON output via tool_use (Anthropic) or json mode (OpenAI).
+
+        For Anthropic: uses tool_use with tool_choice=tool to guarantee valid JSON.
+        Falls back to regular call + extract_json if tool_use fails.
+        """
+        from peerzero_bot.adapters.school import extract_json
+
+        # Build a permissive tool schema from provided keys or defaults
+        if not json_keys:
+            json_keys = ["title", "abstract", "body"]
+
+        properties = {k: {"type": "string"} for k in json_keys}
+        tool = {
+            "name": "submit_result",
+            "description": "Submit your result as structured JSON.",
+            "input_schema": {
+                "type": "object",
+                "properties": properties,
+                "required": [],  # permissive — let the LLM fill what it can
+            },
+        }
+
+        client = self._get_client()
+
+        # Phase 1: Tool use (Anthropic only)
+        if self._provider == "anthropic":
+            try:
+                response = client.messages.create(
+                    model=self._model,
+                    max_tokens=self._max_tokens,
+                    system=system_prompt + "\n\nUse the submit_result tool to return your output. Do not write text outside the tool call.",
+                    messages=[{"role": "user", "content": user_message}],
+                    tools=[tool],
+                    tool_choice={"type": "tool", "name": "submit_result"},
+                )
+                for block in response.content:
+                    if block.type == "tool_use" and block.name == "submit_result":
+                        result = block.input
+                        if isinstance(result, dict) and result:
+                            logger.info("[LLM] JSON extracted via tool_use")
+                            return result
+                logger.warning("[LLM] tool_use returned no valid result, falling back to text")
+            except Exception as e:
+                logger.warning(f"[LLM] tool_use failed: {e}, falling back to text")
+
+        # Phase 2: Fall back to regular call + extract_json
+        try:
+            text = self.call(system_prompt, user_message)
+            return extract_json(text)
+        except Exception as e:
+            logger.warning(f"[LLM] call_json fallback failed: {e}")
+            return None
 
     def call_best_effort(self, system_prompt: str, user_message: str) -> str | None:
         """Call the LLM once with no retries.  Returns None on any failure.
@@ -798,21 +854,14 @@ class PeerZeroBot:
 
         # Step 3: Generate paper using ONLY searched citations
         user_msg = self.prompts.build_paper_prompt(citation_slots=evidence_papers, concept=concept)
-        response_text = self.llm.call(system_prompt, user_msg)
-        paper_data = extract_json(response_text)
+        paper_keys = ["title", "abstract", "body", "field_ids", "confidence_score",
+                       "falsifiable_claim", "measurable_prediction", "quantitative_expectation",
+                       "cross_study_connection", "citations", "search_strategy"]
+        paper_data = self.llm.call_json(system_prompt, user_msg, json_keys=paper_keys)
 
         if not paper_data or "title" not in paper_data:
-            logger.warning(f"[PAPER] Failed to parse LLM response — first 300 chars: {response_text[:300]}")
-            retry_msg = (
-                "Your previous response was not valid JSON. "
-                "Reply with ONLY a JSON object, no explanation or commentary.\n\n"
-                + user_msg
-            )
-            response_text = self.llm.call(system_prompt, retry_msg)
-            paper_data = extract_json(response_text)
-            if not paper_data or "title" not in paper_data:
-                logger.warning("[PAPER] Retry also failed to parse")
-                return None
+            logger.warning("[PAPER] Failed to get valid JSON from LLM")
+            return None
 
         # Pre-validate citations — warn but still attempt submission
         text_fields = {
@@ -945,21 +994,12 @@ class PeerZeroBot:
         logger.info(f"[REVISE] Found {len(evidence_papers)} papers from search")
 
         user_msg = self.prompts.build_revision_prompt(full, citation_slots=evidence_papers)
-        response_text = self.llm.call(system_prompt, user_msg)
-        revision_data = extract_json(response_text)
+        revision_keys = ["title", "abstract", "body", "stance", "cross_study_connection", "citations", "search_strategy"]
+        revision_data = self.llm.call_json(system_prompt, user_msg, json_keys=revision_keys)
 
         if not revision_data or "title" not in revision_data:
-            logger.warning(f"[REVISE] Failed to parse LLM response — first 300 chars: {response_text[:300]}")
-            retry_msg = (
-                "Your previous response was not valid JSON. "
-                "Reply with ONLY a JSON object, no explanation or commentary.\n\n"
-                + user_msg
-            )
-            response_text = self.llm.call(system_prompt, retry_msg)
-            revision_data = extract_json(response_text)
-            if not revision_data or "title" not in revision_data:
-                logger.warning("[REVISE] Retry also failed to parse")
-                return None
+            logger.warning("[REVISE] Failed to get valid JSON from LLM")
+            return None
 
         # Pre-validate citations — warn but still attempt submission
         text_fields = {
@@ -1006,22 +1046,13 @@ class PeerZeroBot:
         logger.info(f"[RESPOND] Found {len(evidence_papers)} papers from search")
 
         user_msg = self.prompts.build_respond_prompt(full, my_score, citation_slots=evidence_papers)
-        response_text = self.llm.call(system_prompt, user_msg)
-        response_data = extract_json(response_text)
+        respond_keys = ["title", "abstract", "body", "stance", "cross_study_connection",
+                        "mechanism_chain", "citations", "search_strategy"]
+        response_data = self.llm.call_json(system_prompt, user_msg, json_keys=respond_keys)
 
         if not response_data or "title" not in response_data:
-            logger.warning(f"[RESPOND] Failed to parse LLM response — first 300 chars: {response_text[:300]}")
-            # Retry with a minimal prompt that forces JSON
-            retry_msg = (
-                "Your previous response was not valid JSON. "
-                "Reply with ONLY a JSON object, no explanation or commentary.\n\n"
-                + user_msg
-            )
-            response_text = self.llm.call(system_prompt, retry_msg)
-            response_data = extract_json(response_text)
-            if not response_data or "title" not in response_data:
-                logger.warning(f"[RESPOND] Retry also failed — first 300 chars: {response_text[:300]}")
-                return None
+            logger.warning("[RESPOND] Failed to get valid JSON from LLM")
+            return None
 
         # Fill defaults for any missing required fields
         response_data.setdefault("abstract", response_data.get("title", ""))
