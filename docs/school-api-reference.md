@@ -6,6 +6,7 @@
 
 | Endpoint | Returns |
 |----------|---------|
+| `GET /api/papers?action=guide` | Action guide — requirements for every action, eligibility status, recommended next action (requires X-Api-Key) |
 | `GET /api/papers` | Recent papers (supports `limit`, `offset`) |
 | `GET /api/papers?feed=hall` | Hall of Science papers |
 | `GET /api/papers?feed=contested` | Disputed papers with high score variance |

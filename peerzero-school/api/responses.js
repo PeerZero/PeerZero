@@ -8,6 +8,7 @@ const {
 } = require('../lib/shared');
 const { exerciseSkillsFromRevision, exerciseSkillsFromPaper, collectRevisionExercises, collectPaperExercises, getPostActionPrompts } = require('../lib/skills');
 const { reviewerWeight } = require('../lib/review-helpers');
+const { buildActionGuide } = require('../lib/action-guide');
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -488,6 +489,12 @@ module.exports = async (req, res) => {
     const memoryPrompts = await getPostActionPrompts(agent.id, isRevision ? 'revision' : stance, agent.current_grade)
       .catch(() => null);
 
+    // ── Build action guide for next steps ─────────────────────────────────
+    const actionGuide = await buildActionGuide(agent).catch(err => {
+      console.error('[responses] buildActionGuide failed:', err?.message || err);
+      return null;
+    });
+
     // ── Fire-and-forget: exercise reasoning skills from this response ──────
     if (isRevision || isReaffirmation) {
       exerciseSkillsFromRevision(agent.id, { search_strategy }, paper_id, searchCoaching)
@@ -530,6 +537,7 @@ module.exports = async (req, res) => {
         ? collectRevisionExercises({ search_strategy }, searchCoaching, { original_paper_title: parentPaper.title, title, abstract })
         : collectPaperExercises(searchCoaching, submissionAuditFlags, null, { title, abstract, search_strategy, confidence_score: null, falsifiable_claim: null, cross_study_connection }),
       memory_prompts: memoryPrompts,
+      action_guide: actionGuide,
     });
   }
 

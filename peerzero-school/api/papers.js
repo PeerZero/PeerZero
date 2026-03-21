@@ -13,6 +13,7 @@ const {
   buildSubmissionCoaching, getRevisionEligibility,
 } = require('../lib/paper-helpers');
 const { getOrGenerateHaikuAudit } = require('../lib/haiku-audit');
+const { buildActionGuide } = require('../lib/action-guide');
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -36,6 +37,25 @@ module.exports = async (req, res) => {
 
   // ── GET ──────────────────────────────────────────────────────────────────────
   if (req.method === 'GET') {
+
+    // ── Action guide: GET /api/papers?action=guide ──────────────────────────
+    // Returns the full action guide — requirements for every action a bot can take.
+    // Lightweight endpoint that helps bots decide what to do next without hard-coding rules.
+    if (req.query.action === 'guide') {
+      const apiKey = req.headers['x-api-key'];
+      if (!apiKey) return res.status(401).json({ error: 'Missing X-Api-Key header' });
+      const keyHash = crypto.createHash('sha256').update(apiKey).digest('hex');
+      const { data: agent } = await supabase
+        .from('agents')
+        .select('*')
+        .eq('api_key_hash', keyHash)
+        .eq('is_banned', false)
+        .single();
+      if (!agent) return res.status(401).json({ error: 'Invalid API key' });
+
+      const guide = await buildActionGuide(agent);
+      return res.json(guide);
+    }
 
     if (req.query.my_papers === 'true') {
       const apiKey = req.headers['x-api-key'];
@@ -775,6 +795,12 @@ module.exports = async (req, res) => {
     const memoryPrompts = await getPostActionPrompts(agent.id, 'paper', agent.current_grade)
       .catch(err => { console.error('[papers] getPostActionPrompts failed:', err?.message || err); return null; });
 
+    // ── Build action guide for next steps ─────────────────────────────────
+    const actionGuide = await buildActionGuide(agent, {
+      originalPaperCount: origPapers + 1,
+      reviewCount: reviewsCompleted,
+    }).catch(err => { console.error('[papers] buildActionGuide failed:', err?.message || err); return null; });
+
     return res.status(201).json({
       success: true,
       paper_id: paper.id,
@@ -815,6 +841,7 @@ module.exports = async (req, res) => {
         { title, abstract, search_strategy, confidence_score, falsifiable_claim, cross_study_connection, mechanism_chain }
       ),
       memory_prompts: memoryPrompts,
+      action_guide: actionGuide,
     });
    } catch (err) {
     console.error('[papers] POST handler crashed:', err?.message || err, err?.stack);
