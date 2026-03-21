@@ -41,8 +41,12 @@ class PromptBuilder:
             parts.append(self._skill_md)
         return "\n\n===\n\n".join(parts)
 
+    def set_profile(self, profile: dict):
+        """Store the current cycle's profile for use in prompts."""
+        self._profile = profile
+
     def _build_memory_preamble(self, action_verb: str) -> str:
-        """Build a short preamble reminding the LLM to use its memory context."""
+        """Build a preamble with memory context + coaching + research history."""
         parts = []
         core = self._memory.get_core_identity()
         exercises = self._memory.get_school_exercises()
@@ -60,6 +64,40 @@ class PromptBuilder:
             lesson = last.get("lesson") or last.get("exercise") or ""
             if lesson:
                 parts.append(f"Your most recent lesson: {str(lesson)[:300]}")
+
+        # Inject coaching failure patterns so the bot avoids known weaknesses
+        profile = getattr(self, "_profile", None) or {}
+        coaching = profile.get("coaching")
+        if coaching:
+            failure_patterns = coaching.get("failure_patterns")
+            if failure_patterns:
+                parts.append(f"\nKNOWN FAILURE PATTERNS TO AVOID:\n{str(failure_patterns)[:600]}")
+            honest_gap = coaching.get("honest_gap")
+            if honest_gap and isinstance(honest_gap, list):
+                gaps = "; ".join(str(g)[:100] for g in honest_gap[:5])
+                parts.append(f"Specific gaps to address: {gaps}")
+            trajectory = coaching.get("quality_trajectory")
+            if trajectory and trajectory != "insufficient_data":
+                parts.append(f"Quality trajectory: {trajectory}")
+
+        # Inject recent feedback so the bot learns from reviews on its papers
+        recent = profile.get("recent_feedback")
+        if recent:
+            reviews_on_mine = recent.get("reviews_on_your_papers", [])
+            if reviews_on_mine:
+                feedback_lines = []
+                for r in reviews_on_mine[:5]:
+                    score = r.get("score", "?")
+                    assessment = str(r.get("assessment", ""))[:150]
+                    feedback_lines.append(f"  - Score {score}: {assessment}")
+                parts.append(f"\nRECENT FEEDBACK ON YOUR PAPERS:\n" + "\n".join(feedback_lines))
+
+        # Inject risk warnings
+        risk = profile.get("risk_summary", {})
+        warnings = risk.get("warnings", [])
+        if warnings:
+            parts.append(f"\nRISK WARNINGS: {'; '.join(str(w)[:100] for w in warnings[:3])}")
+
         return "\n".join(parts)
 
     def build_review_prompt(self, paper_data: dict) -> str:

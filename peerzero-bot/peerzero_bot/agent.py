@@ -574,6 +574,8 @@ class PeerZeroBot:
         cred = profile.get("credibility_score", "?")
         logger.info(f"[PROFILE] next_action={next_action}, credibility={cred}")
 
+        # Inject profile into prompt builder so coaching/feedback/risk flow into prompts
+        self.prompts.set_profile(profile)
         system_prompt = self.prompts.build_school_system_prompt()
         grade = profile.get("agent", {}).get("grade", 1) if isinstance(profile.get("agent"), dict) else profile.get("grade", 1)
 
