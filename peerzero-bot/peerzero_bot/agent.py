@@ -27,7 +27,7 @@ import httpx
 
 from .config import BotConfig
 from .memory import MemoryManager
-from .adapters.school import SchoolAdapter, extract_json, pick_paper_to_review
+from .adapters.school import SchoolAdapter, extract_json
 from .adapters.base import PlatformAction
 from .adapters.mcp import MCPAdapter
 from .prompts import PromptBuilder
@@ -133,6 +133,39 @@ class LLMClient:
                     raise
 
         raise last_exc  # type: ignore[misc]
+
+    def call_best_effort(self, system_prompt: str, user_message: str) -> str | None:
+        """Call the LLM once with no retries.  Returns None on any failure.
+
+        Used for non-critical work (identity reflection, private block) where
+        blocking the cycle with retries is worse than skipping.
+        """
+        try:
+            client = self._get_client()
+            if self._provider == "anthropic":
+                response = client.messages.create(
+                    model=self._model,
+                    max_tokens=self._max_tokens,
+                    system=system_prompt,
+                    messages=[{"role": "user", "content": user_message}],
+                )
+                return response.content[0].text
+            elif self._provider == "openai":
+                response = client.chat.completions.create(
+                    model=self._model,
+                    max_tokens=self._max_tokens,
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_message},
+                    ],
+                )
+                return response.choices[0].message.content
+            else:
+                return None
+        except Exception as e:
+            err_summary = str(e)[:200]
+            logger.warning(f"[LLM] Best-effort call failed (non-blocking): {err_summary}")
+            return None
 
     def call_with_tools(
         self,
@@ -429,15 +462,10 @@ class PeerZeroBot:
         self.autonomy_gate = autonomy_gate
 
         self.cycle_count: int = 0
-        # Restore tracked IDs from persistent memory (survives restarts)
-        self._my_paper_ids: list[str] = self.memory.get_tracked_paper_ids()
-        self._my_review_ids: list[str] = self.memory.get_tracked_review_ids()
-        self._my_bounty_paper_ids: list[str] = self.memory.read("school", "my_bounty_paper_ids", [])
         self._portable_profile: dict = self.memory.read("identity", "portable_profile", {})
         self._agent_card: dict = {}
         self._identity_refresh_interval: int = config.identity_refresh_interval
         self._last_identity_refresh: int = 0
-        self._consecutive_bounty_failures: int = 0
 
     # ═══════════════════════════════════════════════════════════════════════
     # STARTUP
@@ -545,10 +573,15 @@ class PeerZeroBot:
         cred = profile.get("credibility_score", "?")
         logger.info(f"[PROFILE] next_action={next_action}, credibility={cred}")
 
-        self._refresh_my_papers()
         system_prompt = self.prompts.build_school_system_prompt()
+        grade = profile.get("agent", {}).get("grade", 1) if isinstance(profile.get("agent"), dict) else profile.get("grade", 1)
 
-        # Step 2: Check autonomy policy for school actions
+        # Step 2: Identity reflection BEFORE the action — this is the bot's
+        # decision lens, not a task.  Runs every cycle so every action is
+        # filtered through the bot's evolving identity.
+        self._pre_action_identity(profile, system_prompt, grade)
+
+        # Step 3: Check autonomy policy for school actions
         if self.autonomy_gate:
             decision = self.autonomy_gate.check_action(next_action, "school")
             if not decision:
@@ -565,13 +598,10 @@ class PeerZeroBot:
                 else:
                     return
 
-        # Step 3: Execute action
-        # Override bounty after repeated failures so bots don't get stuck
-        if next_action == "file_bounty" and self._consecutive_bounty_failures >= 2:
-            logger.info(f"[SCHOOL] Overriding file_bounty to review ({self._consecutive_bounty_failures} consecutive failures)")
-            next_action = "review"
-            self._consecutive_bounty_failures = 0
-
+        # Step 4: Execute action — the productive work
+        # Trust the server. Do exactly what next_action says. If it fails,
+        # log it and move on — the server will assign a new action next cycle.
+        # No fallback cascade: the server already determined what's valid.
         result = None
         if next_action == "revise":
             result = self._do_revise(system_prompt, profile)
@@ -579,11 +609,6 @@ class PeerZeroBot:
             result = self._do_submit_paper(system_prompt, profile)
         elif next_action == "file_bounty":
             result = self._do_file_bounty(system_prompt, profile)
-            if result is not None:
-                self._consecutive_bounty_failures = 0
-            else:
-                self._consecutive_bounty_failures += 1
-                logger.info(f"[BOUNTY] Failed ({self._consecutive_bounty_failures} consecutive)")
         elif next_action == "respond":
             result = self._do_respond(system_prompt, profile)
         elif next_action == "rebut":
@@ -591,45 +616,21 @@ class PeerZeroBot:
         elif next_action == "review":
             result = self._do_review(system_prompt, profile)
         else:
-            logger.warning(f"[SCHOOL] Unknown action '{next_action}' — reviewing instead")
-            result = self._do_review(system_prompt, profile)
+            logger.warning(f"[SCHOOL] Unknown action '{next_action}' — skipping")
 
-        # Fallback: if primary action failed, cycle through other action types
-        # so the cycle isn't wasted on just memory/identity work.
         if result is None:
-            fallback_order = ["review", "submit_paper", "respond", "rebut", "file_bounty", "revise"]
-            # Remove the action we already tried
-            fallback_order = [a for a in fallback_order if a != next_action]
-            for fallback_action in fallback_order:
-                logger.info(f"[SCHOOL] {next_action} failed — trying {fallback_action}")
-                if fallback_action == "review":
-                    result = self._do_review(system_prompt, profile)
-                elif fallback_action == "submit_paper":
-                    result = self._do_submit_paper(system_prompt, profile)
-                elif fallback_action == "respond":
-                    result = self._do_respond(system_prompt, profile)
-                elif fallback_action == "rebut":
-                    result = self._do_rebut(system_prompt, profile)
-                elif fallback_action == "file_bounty":
-                    result = self._do_file_bounty(system_prompt, profile)
-                elif fallback_action == "revise":
-                    result = self._do_revise(system_prompt, profile)
-                if result is not None:
-                    logger.info(f"[SCHOOL] Fallback {fallback_action} succeeded")
-                    break
-            if result is None:
-                logger.warning("[SCHOOL] All action types failed — cycle produced no submission")
+            logger.info(f"[SCHOOL] {next_action} produced no result — server will reassign next cycle")
 
-        # Step 4: Store exercises + process memory
-        grade = profile.get("agent", {}).get("grade", 1) if isinstance(profile.get("agent"), dict) else profile.get("grade", 1)
-        inline_processed = set()
+        # Step 5: Store exercises + process condensers (post-action)
+        # Identity reflection already ran in Step 2.  Only condensers run here
+        # so they don't block the productive action.
         if result and isinstance(result, dict):
             if result.get("skill_exercises"):
                 self.memory.store_school_exercises(result["skill_exercises"])
             if result.get("memory_prompts"):
-                inline_processed = self._process_inline_memory_prompts(result["memory_prompts"], system_prompt, grade)
+                self._process_inline_condensers(result["memory_prompts"], system_prompt)
 
-        self._process_memory_triggers(profile, already_processed=inline_processed)
+        self._process_post_action_triggers(profile, system_prompt, grade)
 
         # Experimental: periodic memory wipe for A/B testing
         wipe = self.config.memory_wipe_interval
@@ -645,7 +646,7 @@ class PeerZeroBot:
             self._refresh_identity()
             self._last_identity_refresh = self.cycle_count
 
-        # Step 5: Report to app
+        # Step 6: Report to app
         if self.phone_home and result:
             self.phone_home.report(
                 platform="school",
@@ -653,7 +654,7 @@ class PeerZeroBot:
                 summary=f"{next_action}: cred={cred}",
             )
 
-        # Step 6: Audit
+        # Step 7: Audit
         if self.audit:
             self.audit.log(
                 adapter="school",
@@ -661,14 +662,6 @@ class PeerZeroBot:
                 destination=self.config.school_url,
                 status=200 if result else 0,
             )
-
-    def _refresh_my_papers(self):
-        try:
-            result = self.school.get_papers(params={"my_papers": "true"})
-            self._my_paper_ids = [p["id"] for p in (result.get("papers") or [])]
-            self.memory.store_tracked_paper_ids(self._my_paper_ids)
-        except Exception as e:
-            logger.warning(f"Failed to refresh papers (using stale list): {e}")
 
     # ── Helpers ─────────────────────────────────────────────────────────
 
@@ -690,20 +683,16 @@ class PeerZeroBot:
     # ── School actions ────────────────────────────────────────────────────
 
     def _do_review(self, system_prompt: str, profile: dict) -> dict | None:
-        papers_resp = self.school.get_papers()
-        papers = papers_resp.get("papers", []) if isinstance(papers_resp, dict) else []
-        if not papers:
-            logger.info("[REVIEW] No papers available")
+        # Server already filtered: not own paper, not already reviewed, <15 reviews
+        reviewable = profile.get("reviewable_papers", [])
+        if not reviewable:
+            logger.info("[REVIEW] No reviewable papers from server")
             return None
 
-        paper = pick_paper_to_review(papers, self._my_paper_ids, self._my_review_ids)
-        if not paper:
-            logger.info("[REVIEW] No unreviewed papers")
-            return None
-
+        # Pick paper with fewest reviews (server sorted by raw_review_count asc)
+        paper = reviewable[0]
         paper_id = paper.get("id")
         if not paper_id:
-            logger.warning("[REVIEW] Selected paper has no 'id' field — skipping")
             return None
         logger.info(f"[REVIEW] Selected: {paper.get('title', '?')[:60]}...")
 
@@ -730,8 +719,6 @@ class PeerZeroBot:
         try:
             result = self._submit_with_retry("REVIEW", self.school.submit_review, paper_id, review_data)
             logger.info(f"[REVIEW] Submitted — score={review_data.get('score')}")
-            self._my_review_ids.append(paper_id)
-            self.memory.add_tracked_review_id(paper_id)
             return result
         except Exception as e:
             status = getattr(getattr(e, "response", None), "status_code", None)
@@ -739,11 +726,9 @@ class PeerZeroBot:
                 try:
                     err_body = e.response.json()
                     err_msg = err_body.get("error", str(e))
-                    hints = err_body.get("hint", err_body.get("failures", ""))
                 except Exception:
                     err_msg = str(e)
-                    hints = ""
-                logger.warning(f"[REVIEW] Failed for '{paper.get('title', '?')[:60]}': {err_msg} | hints={hints}")
+                logger.warning(f"[REVIEW] HTTP {status}: {err_msg}")
             else:
                 logger.warning(f"[REVIEW] Failed: {e}")
             return None
@@ -781,23 +766,14 @@ class PeerZeroBot:
             return None
 
     def _do_file_bounty(self, system_prompt: str, profile: dict) -> dict | None:
-        papers_resp = self.school.get_papers()
-        papers = papers_resp.get("papers", []) if isinstance(papers_resp, dict) else []
-
-        candidates = [
-            p for p in papers
-            if p.get("id") in self._my_review_ids
-            and p.get("id") not in self._my_bounty_paper_ids
-            and p.get("weighted_score") is not None
-            and p.get("raw_review_count", 0) >= 3
-        ]
-
-        if not candidates:
-            logger.info("[BOUNTY] No eligible papers")
+        # Server already filtered: reviewed by bot, not already bountied, 3+ reviews, <8 family bounties
+        bountyable = profile.get("bountyable_papers", [])
+        if not bountyable:
+            logger.info("[BOUNTY] No bountyable papers from server")
             return None
 
-        candidates.sort(key=lambda p: p.get("weighted_score", 10))
-        target = candidates[0]
+        # Pick lowest-scored paper (server sorted by weighted_score asc)
+        target = bountyable[0]
         target_id = target["id"]
         full = self.school.get_papers(params={"id": target_id})
 
@@ -834,55 +810,30 @@ class PeerZeroBot:
         try:
             result = self._submit_with_retry("BOUNTY", self.school.submit_bounty, bounty_data)
             logger.info(f"[BOUNTY] Filed — type={bounty_data.get('challenge_type')}")
-            self._my_bounty_paper_ids.append(target_id)
-            self.memory.write("school", "my_bounty_paper_ids", self._my_bounty_paper_ids)
             return result
         except Exception as e:
             status = getattr(getattr(e, "response", None), "status_code", None)
-            if status == 409:
-                logger.info(f"[BOUNTY] Already filed for paper {target_id} — syncing local cache")
-                if target_id not in self._my_bounty_paper_ids:
-                    self._my_bounty_paper_ids.append(target_id)
-                    self.memory.write("school", "my_bounty_paper_ids", self._my_bounty_paper_ids)
-            elif status is not None:
+            if status is not None:
                 try:
                     err_body = e.response.json()
                     err_msg = err_body.get("error", str(e))
-                    hints = err_body.get("hint", err_body.get("failures", ""))
                 except Exception:
                     err_msg = str(e)
-                    hints = ""
-                logger.warning(f"[BOUNTY] Failed for '{target.get('title', '?')[:60]}': {err_msg} | hints={hints}")
+                logger.warning(f"[BOUNTY] HTTP {status}: {err_msg}")
             else:
                 logger.warning(f"[BOUNTY] Failed: {e}")
             return None
 
     def _do_revise(self, system_prompt: str, profile: dict) -> dict | None:
-        my_papers = self.school.get_papers(params={"my_papers": "true"})
-        papers = my_papers.get("papers", []) if isinstance(my_papers, dict) else []
-
-        # Find original papers (not children) with enough reviews.
-        # Exclude papers that already have a revision submitted by checking
-        # if any child paper in our list has response_stance == "revision"
-        # pointing back to this paper as parent_paper_id.
-        existing_revision_parents = {
-            p.get("parent_paper_id")
-            for p in papers
-            if p.get("response_stance") == "revision" and p.get("parent_paper_id")
-        }
-        candidates = [
-            p for p in papers
-            if not p.get("parent_paper_id")
-            and p.get("raw_review_count", 0) >= 5
-            and p["id"] not in existing_revision_parents
-        ]
-
-        if not candidates:
-            logger.info("[REVISE] No eligible papers")
+        # Server already filtered: own paper, 5+ reviews, <2 revisions, 3+ bounties, 2+ rebuttals
+        revisable = profile.get("can_revise_papers", [])
+        if not revisable:
+            logger.info("[REVISE] No revisable papers from server")
             return None
 
-        candidates.sort(key=lambda p: p.get("weighted_score", 10))
-        target = candidates[0]
+        # Pick lowest-scored paper
+        revisable.sort(key=lambda p: p.get("weighted_score", 10))
+        target = revisable[0]
         target_id = target["id"]
         full = self.school.get_papers(params={"id": target_id, "audit": "true"})
 
@@ -977,11 +928,9 @@ class PeerZeroBot:
                 try:
                     err_body = e.response.json()
                     err_msg = err_body.get("error", str(e))
-                    hints = err_body.get("hint", err_body.get("failures", ""))
                 except Exception:
                     err_msg = str(e)
-                    hints = ""
-                logger.warning(f"[RESPOND] Failed for '{target.get('title', '?')[:60]}': {err_msg} | hints={hints}")
+                logger.warning(f"[RESPOND] HTTP {status}: {err_msg}")
             else:
                 logger.warning(f"[RESPOND] Failed: {e}")
             return None
@@ -1055,49 +1004,60 @@ class PeerZeroBot:
                 try:
                     err_body = e.response.json()
                     err_msg = err_body.get("error", str(e))
-                    hints = err_body.get("hint", err_body.get("failures", ""))
                 except Exception:
                     err_msg = str(e)
-                    hints = ""
-                logger.warning(f"[REBUT] Failed for '{target.get('title', '?')[:60]}': {err_msg} | hints={hints}")
+                logger.warning(f"[REBUT] HTTP {status}: {err_msg}")
             else:
                 logger.warning(f"[REBUT] Failed: {e}")
             return None
 
     # ── Memory processing ─────────────────────────────────────────────────
+    #
+    # Identity reflection runs BEFORE the action (pre-work) so every
+    # decision is filtered through the bot's evolving identity.  It is NOT
+    # a task — it doesn't count as the cycle's productive action.
+    #
+    # Condensers (skill, core, master) run AFTER the action (post-work).
+    # They are lightweight housekeeping and never block the productive loop.
 
-    def _process_inline_memory_prompts(self, memory_prompts: dict, system_prompt: str, grade: int = 1) -> set:
-        """Process memory prompts returned inline with an action result.
+    def _pre_action_identity(self, profile: dict, system_prompt: str, grade: int = 1):
+        """Run identity reflection + private block BEFORE the action.
 
-        Returns set of trigger names that were processed, so the profile-based
-        trigger pass can skip them and avoid double-firing.
+        This is the bot's decision lens — every action is filtered through it.
+        Best-effort: if the LLM call fails, log and move on.  The action must
+        not be blocked by identity work.
         """
-        processed = set()
+        reflection = profile.get("identity_reflection")
+        if not reflection:
+            return
+        try:
+            self._run_identity_reflection(reflection, system_prompt)
+            self._run_private_block(system_prompt, grade)
+        except Exception as e:
+            logger.warning(f"[IDENTITY] Pre-action reflection failed (non-blocking): {e}")
+
+    def _process_inline_condensers(self, memory_prompts: dict, system_prompt: str):
+        """Process only condensers from inline memory prompts (post-action).
+
+        Identity reflection is handled in _pre_action_identity, so we skip it here.
+        """
         if not memory_prompts:
-            return processed
+            return
         if memory_prompts.get("skill_condenser"):
             self._run_milestone_condenser(memory_prompts["skill_condenser"], system_prompt)
-            processed.add("skill_condenser")
-        if memory_prompts.get("identity_reflection"):
-            self._run_identity_reflection(memory_prompts["identity_reflection"], system_prompt)
-            self._run_private_block(system_prompt, grade)
-            processed.add("identity_reflection")
-        return processed
 
-    def _process_memory_triggers(self, profile: dict, already_processed: set | None = None):
-        already_processed = already_processed or set()
-        system_prompt = self.prompts.build_school_system_prompt()
-        grade = profile.get("agent", {}).get("grade", 1) if isinstance(profile.get("agent"), dict) else profile.get("grade", 1)
+    def _process_post_action_triggers(self, profile: dict, system_prompt: str, grade: int = 1):
+        """Process condensers from profile triggers (post-action).
 
-        if profile.get("skill_condenser") and "skill_condenser" not in already_processed:
+        Identity reflection already ran in _pre_action_identity, so only
+        condensers fire here.
+        """
+        if profile.get("skill_condenser"):
             self._run_milestone_condenser(profile["skill_condenser"], system_prompt)
         if profile.get("master_condenser"):
             self._run_master_condenser(profile["master_condenser"], system_prompt, grade)
         elif profile.get("core_condenser"):
             self._run_core_condenser(profile["core_condenser"], system_prompt)
-            self._run_private_block(system_prompt, grade)
-        if profile.get("identity_reflection") and "identity_reflection" not in already_processed:
-            self._run_identity_reflection(profile["identity_reflection"], system_prompt)
             self._run_private_block(system_prompt, grade)
 
     def _run_milestone_condenser(self, condenser: dict, system_prompt: str):
@@ -1136,25 +1096,24 @@ class PeerZeroBot:
         user_msg = self.prompts.build_identity_reflection_prompt(
             reflection.get("reflection_prompt", ""),
         )
-        response = self.llm_fast.call(system_prompt, user_msg)
+        response = self.llm_fast.call_best_effort(system_prompt, user_msg)
+        if not response:
+            logger.info("[MEMORY] Identity reflection LLM call failed — skipping")
+            return
         identity_data = extract_json(response)
         if identity_data and identity_data.get("self_narrative"):
             self.memory.store_self_identity(identity_data)
-            max_retries = 3
-            for attempt in range(max_retries):
-                try:
-                    self.school.submit_identity(identity_data)
-                    logger.info("[MEMORY] Self-authored identity updated")
-                    break
-                except Exception as e:
-                    status = getattr(getattr(e, "response", None), "status_code", None)
-                    if status == 429 and attempt < max_retries - 1:
-                        delay = 2 ** (attempt + 1)
-                        logger.info(f"[MEMORY] Rate limited, retrying in {delay}s ({attempt + 1}/{max_retries})")
-                        time.sleep(delay)
-                    else:
-                        logger.warning(f"[MEMORY] Server backup failed: {e}")
-                        break
+            # Fire-and-forget server backup — don't block the cycle on rate limits.
+            # Identity is already saved locally; server sync can wait until next reflection.
+            try:
+                self.school.submit_identity(identity_data)
+                logger.info("[MEMORY] Self-authored identity updated")
+            except Exception as e:
+                status = getattr(getattr(e, "response", None), "status_code", None)
+                if status == 429:
+                    logger.info("[MEMORY] Identity POST rate-limited — will retry next reflection")
+                else:
+                    logger.warning(f"[MEMORY] Server backup failed: {e}")
 
     def _run_private_block(self, system_prompt: str, grade: int = 1):
         """
@@ -1171,7 +1130,7 @@ class PeerZeroBot:
 
         # Use fresh system prompt so the bot sees its just-updated identity
         fresh_system = self.prompts.build_school_system_prompt()
-        block = self.llm_fast.call(fresh_system, user_msg)
+        block = self.llm_fast.call_best_effort(fresh_system, user_msg)
 
         if block and len(block.strip()) >= 30:
             self.memory._archive_private_block()

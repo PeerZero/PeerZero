@@ -122,20 +122,6 @@ def extract_json(text: str) -> dict | None:
     return None
 
 
-def pick_paper_to_review(papers: list[dict], my_papers: list[str], my_reviews: list[str]) -> dict | None:
-    """Select paper to review. Priority: fewest reviews, not own, not already reviewed."""
-    candidates = [
-        p for p in papers
-        if p.get("id") not in my_papers
-        and p.get("id") not in my_reviews
-        and p.get("status") != "removed"
-    ]
-    if not candidates:
-        return None
-    candidates.sort(key=lambda p: p.get("raw_review_count", 0))
-    return candidates[0]
-
-
 class SchoolAdapter:
     """
     Adapter for PeerZero School communication.
