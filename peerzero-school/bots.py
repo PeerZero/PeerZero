@@ -1796,6 +1796,9 @@ Return JSON only:
             "query_rationale": "Supporting queries target contradicting evidence and methodological limitations. Opposing queries check if the original paper's claims hold up by searching for independent confirmations and positive replications."
         }
 
+        # Force stance to "rebut" — LLM sometimes returns invalid values
+        data["rebuttal"]["stance"] = "rebut"
+
         # Trim mechanism_chain steps to server limit (500 chars each, max 10 steps)
         if data["rebuttal"].get("mechanism_chain") and isinstance(data["rebuttal"]["mechanism_chain"], list):
             data["rebuttal"]["mechanism_chain"] = [step[:500] for step in data["rebuttal"]["mechanism_chain"][:10]]
