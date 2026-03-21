@@ -27,7 +27,7 @@ import httpx
 
 from .config import BotConfig
 from .memory import MemoryManager
-from .adapters.school import SchoolAdapter, extract_json, pick_paper_to_review
+from .adapters.school import SchoolAdapter, extract_json
 from .adapters.base import PlatformAction
 from .adapters.mcp import MCPAdapter
 from .prompts import PromptBuilder
@@ -462,10 +462,6 @@ class PeerZeroBot:
         self.autonomy_gate = autonomy_gate
 
         self.cycle_count: int = 0
-        # Restore tracked IDs from persistent memory (survives restarts)
-        self._my_paper_ids: list[str] = self.memory.get_tracked_paper_ids()
-        self._my_review_ids: list[str] = self.memory.get_tracked_review_ids()
-        self._my_bounty_paper_ids: list[str] = self.memory.read("school", "my_bounty_paper_ids", [])
         self._portable_profile: dict = self.memory.read("identity", "portable_profile", {})
         self._agent_card: dict = {}
         self._identity_refresh_interval: int = config.identity_refresh_interval
@@ -577,7 +573,6 @@ class PeerZeroBot:
         cred = profile.get("credibility_score", "?")
         logger.info(f"[PROFILE] next_action={next_action}, credibility={cred}")
 
-        self._refresh_my_papers()
         system_prompt = self.prompts.build_school_system_prompt()
         grade = profile.get("agent", {}).get("grade", 1) if isinstance(profile.get("agent"), dict) else profile.get("grade", 1)
 
@@ -668,14 +663,6 @@ class PeerZeroBot:
                 status=200 if result else 0,
             )
 
-    def _refresh_my_papers(self):
-        try:
-            result = self.school.get_papers(params={"my_papers": "true"})
-            self._my_paper_ids = [p["id"] for p in (result.get("papers") or [])]
-            self.memory.store_tracked_paper_ids(self._my_paper_ids)
-        except Exception as e:
-            logger.warning(f"Failed to refresh papers (using stale list): {e}")
-
     # ── Helpers ─────────────────────────────────────────────────────────
 
     def _submit_with_retry(self, label: str, submit_fn, *args, max_retries: int = 3):
@@ -696,20 +683,16 @@ class PeerZeroBot:
     # ── School actions ────────────────────────────────────────────────────
 
     def _do_review(self, system_prompt: str, profile: dict) -> dict | None:
-        papers_resp = self.school.get_papers()
-        papers = papers_resp.get("papers", []) if isinstance(papers_resp, dict) else []
-        if not papers:
-            logger.info("[REVIEW] No papers available")
+        # Server already filtered: not own paper, not already reviewed, <15 reviews
+        reviewable = profile.get("reviewable_papers", [])
+        if not reviewable:
+            logger.info("[REVIEW] No reviewable papers from server")
             return None
 
-        paper = pick_paper_to_review(papers, self._my_paper_ids, self._my_review_ids)
-        if not paper:
-            logger.info("[REVIEW] No unreviewed papers")
-            return None
-
+        # Pick paper with fewest reviews (server sorted by raw_review_count asc)
+        paper = reviewable[0]
         paper_id = paper.get("id")
         if not paper_id:
-            logger.warning("[REVIEW] Selected paper has no 'id' field — skipping")
             return None
         logger.info(f"[REVIEW] Selected: {paper.get('title', '?')[:60]}...")
 
@@ -736,26 +719,16 @@ class PeerZeroBot:
         try:
             result = self._submit_with_retry("REVIEW", self.school.submit_review, paper_id, review_data)
             logger.info(f"[REVIEW] Submitted — score={review_data.get('score')}")
-            self._my_review_ids.append(paper_id)
-            self.memory.add_tracked_review_id(paper_id)
             return result
         except Exception as e:
             status = getattr(getattr(e, "response", None), "status_code", None)
-            if status == 409:
-                logger.info(f"[REVIEW] Already reviewed paper {paper_id} — syncing local cache")
-                if paper_id not in self._my_review_ids:
-                    self._my_review_ids.append(paper_id)
-                    self.memory.add_tracked_review_id(paper_id)
-                return {"already_reviewed": True, "paper_id": paper_id}
-            elif status is not None:
+            if status is not None:
                 try:
                     err_body = e.response.json()
                     err_msg = err_body.get("error", str(e))
-                    hints = err_body.get("hint", err_body.get("failures", ""))
                 except Exception:
                     err_msg = str(e)
-                    hints = ""
-                logger.warning(f"[REVIEW] Failed for '{paper.get('title', '?')[:60]}': {err_msg} | hints={hints}")
+                logger.warning(f"[REVIEW] HTTP {status}: {err_msg}")
             else:
                 logger.warning(f"[REVIEW] Failed: {e}")
             return None
@@ -793,23 +766,14 @@ class PeerZeroBot:
             return None
 
     def _do_file_bounty(self, system_prompt: str, profile: dict) -> dict | None:
-        papers_resp = self.school.get_papers()
-        papers = papers_resp.get("papers", []) if isinstance(papers_resp, dict) else []
-
-        candidates = [
-            p for p in papers
-            if p.get("id") in self._my_review_ids
-            and p.get("id") not in self._my_bounty_paper_ids
-            and p.get("weighted_score") is not None
-            and p.get("raw_review_count", 0) >= 3
-        ]
-
-        if not candidates:
-            logger.info("[BOUNTY] No eligible papers")
+        # Server already filtered: reviewed by bot, not already bountied, 3+ reviews, <8 family bounties
+        bountyable = profile.get("bountyable_papers", [])
+        if not bountyable:
+            logger.info("[BOUNTY] No bountyable papers from server")
             return None
 
-        candidates.sort(key=lambda p: p.get("weighted_score", 10))
-        target = candidates[0]
+        # Pick lowest-scored paper (server sorted by weighted_score asc)
+        target = bountyable[0]
         target_id = target["id"]
         full = self.school.get_papers(params={"id": target_id})
 
@@ -846,57 +810,30 @@ class PeerZeroBot:
         try:
             result = self._submit_with_retry("BOUNTY", self.school.submit_bounty, bounty_data)
             logger.info(f"[BOUNTY] Filed — type={bounty_data.get('challenge_type')}")
-            self._my_bounty_paper_ids.append(target_id)
-            self.memory.write("school", "my_bounty_paper_ids", self._my_bounty_paper_ids)
             return result
         except Exception as e:
             status = getattr(getattr(e, "response", None), "status_code", None)
-            if status == 409:
-                logger.info(f"[BOUNTY] Already filed for paper {target_id} — syncing local cache")
-                if target_id not in self._my_bounty_paper_ids:
-                    self._my_bounty_paper_ids.append(target_id)
-                    self.memory.write("school", "my_bounty_paper_ids", self._my_bounty_paper_ids)
-                # 409 = already filed, not a failure — return result to avoid fallback cascade
-                return {"already_filed": True, "paper_id": target_id}
-            elif status is not None:
+            if status is not None:
                 try:
                     err_body = e.response.json()
                     err_msg = err_body.get("error", str(e))
-                    hints = err_body.get("hint", err_body.get("failures", ""))
                 except Exception:
                     err_msg = str(e)
-                    hints = ""
-                logger.warning(f"[BOUNTY] Failed for '{target.get('title', '?')[:60]}': {err_msg} | hints={hints}")
+                logger.warning(f"[BOUNTY] HTTP {status}: {err_msg}")
             else:
                 logger.warning(f"[BOUNTY] Failed: {e}")
             return None
 
     def _do_revise(self, system_prompt: str, profile: dict) -> dict | None:
-        my_papers = self.school.get_papers(params={"my_papers": "true"})
-        papers = my_papers.get("papers", []) if isinstance(my_papers, dict) else []
-
-        # Find original papers (not children) with enough reviews.
-        # Exclude papers that already have a revision submitted by checking
-        # if any child paper in our list has response_stance == "revision"
-        # pointing back to this paper as parent_paper_id.
-        existing_revision_parents = {
-            p.get("parent_paper_id")
-            for p in papers
-            if p.get("response_stance") == "revision" and p.get("parent_paper_id")
-        }
-        candidates = [
-            p for p in papers
-            if not p.get("parent_paper_id")
-            and p.get("raw_review_count", 0) >= 5
-            and p["id"] not in existing_revision_parents
-        ]
-
-        if not candidates:
-            logger.info("[REVISE] No eligible papers")
+        # Server already filtered: own paper, 5+ reviews, <2 revisions, 3+ bounties, 2+ rebuttals
+        revisable = profile.get("can_revise_papers", [])
+        if not revisable:
+            logger.info("[REVISE] No revisable papers from server")
             return None
 
-        candidates.sort(key=lambda p: p.get("weighted_score", 10))
-        target = candidates[0]
+        # Pick lowest-scored paper
+        revisable.sort(key=lambda p: p.get("weighted_score", 10))
+        target = revisable[0]
         target_id = target["id"]
         full = self.school.get_papers(params={"id": target_id, "audit": "true"})
 
@@ -987,18 +924,13 @@ class PeerZeroBot:
             return result
         except Exception as e:
             status = getattr(getattr(e, "response", None), "status_code", None)
-            if status == 409:
-                logger.info(f"[RESPOND] Already responded to paper {paper_id}")
-                return {"already_responded": True, "paper_id": paper_id}
-            elif status is not None:
+            if status is not None:
                 try:
                     err_body = e.response.json()
                     err_msg = err_body.get("error", str(e))
-                    hints = err_body.get("hint", err_body.get("failures", ""))
                 except Exception:
                     err_msg = str(e)
-                    hints = ""
-                logger.warning(f"[RESPOND] Failed for '{target.get('title', '?')[:60]}': {err_msg} | hints={hints}")
+                logger.warning(f"[RESPOND] HTTP {status}: {err_msg}")
             else:
                 logger.warning(f"[RESPOND] Failed: {e}")
             return None
@@ -1068,18 +1000,13 @@ class PeerZeroBot:
             return result
         except Exception as e:
             status = getattr(getattr(e, "response", None), "status_code", None)
-            if status == 409:
-                logger.info(f"[REBUT] Already rebutted paper {paper_id}")
-                return {"already_rebutted": True, "paper_id": paper_id}
-            elif status is not None:
+            if status is not None:
                 try:
                     err_body = e.response.json()
                     err_msg = err_body.get("error", str(e))
-                    hints = err_body.get("hint", err_body.get("failures", ""))
                 except Exception:
                     err_msg = str(e)
-                    hints = ""
-                logger.warning(f"[REBUT] Failed for '{target.get('title', '?')[:60]}': {err_msg} | hints={hints}")
+                logger.warning(f"[REBUT] HTTP {status}: {err_msg}")
             else:
                 logger.warning(f"[REBUT] Failed: {e}")
             return None

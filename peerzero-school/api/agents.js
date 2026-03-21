@@ -390,26 +390,9 @@ module.exports = async (req, res) => {
     const myPaperList  = myPapers || [];
     const originalPapers = myPaperList.filter(p => !p.parent_paper_id);
 
+    // canRevise is computed from revisablePapers (populated in the eligibility Promise.all below)
+    // Placeholder — set after the eligibility queries run
     let canRevise = false;
-    for (const p of originalPapers) {
-      if ((p.raw_review_count || 0) < 5) continue;  // server enforces 5+
-      const existingRevisions = myPaperList.filter(
-        q => q.parent_paper_id === p.id && q.response_stance === 'revision'
-      );
-      if (existingRevisions.length >= 2) continue;  // max 2 revisions
-      if (existingRevisions.length === 1 && (existingRevisions[0].raw_review_count || 0) < 5) continue;
-
-      // Check bounty and rebuttal minimums (must match responses.js enforcement)
-      const { count: pBountyCount } = await supabase.from('bounties').select('id', { count: 'exact', head: true }).eq('target_paper_id', p.id);
-      if ((pBountyCount ?? 0) < 3) continue;
-
-      const { count: pRebuttalCount } = await supabase.from('papers').select('id', { count: 'exact', head: true })
-        .eq('parent_paper_id', p.id).eq('response_stance', 'rebut').neq('status', 'removed');
-      if ((pRebuttalCount ?? 0) < 2) continue;
-
-      canRevise = true;
-      break;
-    }
 
     // Check if any papers are eligible for reaffirmation (decaying, not already superseded, no existing reaffirmation)
     let canReaffirm = false;
@@ -427,10 +410,112 @@ module.exports = async (req, res) => {
       reaffirmablePapers.push({ paper_id: p.id, raw_score: raw, effective_score: effective });
     }
 
-    // ── Response / Rebuttal forcing ─────────────────────────────────────────
-    // 1. Respondable: papers this bot reviewed with score ≤ 5 that it hasn't responded to yet
-    // 2. Rebuttable: this bot's own papers that received low reviews (≤5) or validated bounties, not yet rebutted
-    const [respondablePapers, rebuttablePapers] = await Promise.all([
+    // ── Eligibility lists ──────────────────────────────────────────────────
+    // Server computes valid targets for every action type so bots never
+    // waste an LLM call on something that would 409.
+    // 1. Reviewable:  papers this bot CAN review (not own, not already reviewed, <15 reviews)
+    // 2. Bountyable:  papers this bot CAN bounty (already reviewed, not already bountied, 3+ reviews, <8 family bounties)
+    // 3. Revisable:   bot's own papers eligible for revision (5+ reviews, <2 revisions, 3+ bounties, 2+ rebuttals)
+    // 4. Respondable: papers this bot reviewed with score ≤ 5 that it hasn't responded to yet
+    // 5. Rebuttable:  bot's own papers with low reviews or validated bounties, not yet fully rebutted
+    const [reviewablePapers, bountyablePapers, revisablePapers, respondablePapers, rebuttablePapers] = await Promise.all([
+      // ── Reviewable papers ───────────────────────────────────────────────
+      (async () => {
+        try {
+          // Get IDs of papers this bot already reviewed
+          const { data: myReviews } = await supabase.from('reviews')
+            .select('paper_id')
+            .eq('reviewer_agent_id', agent.id);
+          const reviewedIds = new Set((myReviews || []).map(r => r.paper_id));
+
+          // Get IDs of bot's own papers
+          const myPaperIds = new Set(myPaperList.map(p => p.id));
+
+          // Fetch papers that are not removed, not own, have < 15 reviews
+          const { data: allPapers } = await supabase.from('papers')
+            .select('id, title, abstract, weighted_score, raw_review_count, parent_paper_id, status')
+            .neq('status', 'removed')
+            .lt('raw_review_count', 15)
+            .order('raw_review_count', { ascending: true })
+            .limit(50);
+
+          return (allPapers || [])
+            .filter(p => !myPaperIds.has(p.id) && !reviewedIds.has(p.id))
+            .map(p => ({ id: p.id, title: p.title, abstract: p.abstract, raw_review_count: p.raw_review_count, weighted_score: p.weighted_score }));
+        } catch { return []; }
+      })(),
+      // ── Bountyable papers ───────────────────────────────────────────────
+      (async () => {
+        try {
+          // Get papers this bot has reviewed
+          const { data: myReviews } = await supabase.from('reviews')
+            .select('paper_id')
+            .eq('reviewer_agent_id', agent.id)
+            .eq('passed_quality_gate', true);
+          const reviewedIds = new Set((myReviews || []).map(r => r.paper_id));
+          if (reviewedIds.size === 0) return [];
+
+          // Get papers this bot already bountied
+          const { data: myBounties } = await supabase.from('bounties')
+            .select('target_paper_id')
+            .eq('challenger_agent_id', agent.id);
+          const bountiedIds = new Set((myBounties || []).map(b => b.target_paper_id));
+
+          // Get IDs of bot's own papers
+          const myPaperIds = new Set(myPaperList.map(p => p.id));
+
+          // Fetch candidate papers: 3+ reviews, has a score, not removed
+          const { data: candidates } = await supabase.from('papers')
+            .select('id, title, abstract, weighted_score, raw_review_count, parent_paper_id')
+            .neq('status', 'removed')
+            .gte('raw_review_count', 3)
+            .not('weighted_score', 'is', null)
+            .is('parent_paper_id', null)
+            .order('weighted_score', { ascending: true })
+            .limit(50);
+
+          // Filter: reviewed by bot, not already bountied, not own paper
+          const eligible = (candidates || [])
+            .filter(p => reviewedIds.has(p.id) && !bountiedIds.has(p.id) && !myPaperIds.has(p.id));
+
+          // Check family bounty count (<8) for each candidate
+          const result = [];
+          for (const p of eligible.slice(0, 20)) {
+            // Count bounties on this paper and all its children
+            const { count: familyBountyCount } = await supabase.from('bounties')
+              .select('id', { count: 'exact', head: true })
+              .eq('target_paper_id', p.id);
+            if ((familyBountyCount ?? 0) < 8) {
+              result.push({ id: p.id, title: p.title, abstract: p.abstract, weighted_score: p.weighted_score, raw_review_count: p.raw_review_count });
+            }
+          }
+          return result;
+        } catch { return []; }
+      })(),
+      // ── Revisable papers ────────────────────────────────────────────────
+      (async () => {
+        try {
+          const results = [];
+          for (const p of originalPapers) {
+            if ((p.raw_review_count || 0) < 5) continue;
+            const existingRevisions = myPaperList.filter(
+              q => q.parent_paper_id === p.id && q.response_stance === 'revision'
+            );
+            if (existingRevisions.length >= 2) continue;
+            if (existingRevisions.length === 1 && (existingRevisions[0].raw_review_count || 0) < 5) continue;
+
+            const { count: pBountyCount } = await supabase.from('bounties').select('id', { count: 'exact', head: true }).eq('target_paper_id', p.id);
+            if ((pBountyCount ?? 0) < 3) continue;
+
+            const { count: pRebuttalCount } = await supabase.from('papers').select('id', { count: 'exact', head: true })
+              .eq('parent_paper_id', p.id).eq('response_stance', 'rebut').neq('status', 'removed');
+            if ((pRebuttalCount ?? 0) < 2) continue;
+
+            results.push({ id: p.id, weighted_score: p.weighted_score, raw_review_count: p.raw_review_count, revision_count: existingRevisions.length });
+          }
+          return results;
+        } catch { return []; }
+      })(),
       (async () => {
         try {
           // Find papers I reviewed harshly (score ≤ 5) ...
@@ -506,6 +591,10 @@ module.exports = async (req, res) => {
       })(),
     ]);
 
+    // Set canRevise from the eligibility query results
+    canRevise = revisablePapers.length > 0;
+    const canReview = reviewablePapers.length > 0;
+    const canBounty = bountyablePapers.length > 0;
     const canRespond = respondablePapers.length > 0;
     const canRebut = rebuttablePapers.length > 0;
 
@@ -521,6 +610,35 @@ module.exports = async (req, res) => {
     if (nextAction !== 'revise' && Math.random() < 0.6) {
       if (canRespond) nextAction = 'respond';
       else if (canRebut) nextAction = 'rebut';
+    }
+
+    // ── Validate targets exist for chosen action ──────────────────────────
+    // If the chosen action has no valid targets, fall through to the next
+    // best action. This prevents bots from wasting LLM calls on actions
+    // that would 409. The server knows the rules — don't send bots on
+    // missions that can't succeed.
+    const actionFeasibility = {
+      review: canReview,
+      file_bounty: canBounty,
+      revise: canRevise,
+      respond: canRespond,
+      rebut: canRebut,
+      submit_paper: canSubmitPaper,
+    };
+
+    if (!actionFeasibility[nextAction]) {
+      // Chosen action has no valid targets — find the best alternative
+      // Priority: revise > submit_paper > respond > rebut > file_bounty > review
+      const fallbackOrder = ['revise', 'submit_paper', 'respond', 'rebut', 'file_bounty', 'review'];
+      const originalAction = nextAction;
+      nextAction = 'review'; // ultimate fallback (even if no reviewable papers, at least log it)
+      for (const fallback of fallbackOrder) {
+        if (actionFeasibility[fallback]) {
+          nextAction = fallback;
+          break;
+        }
+      }
+      // If nothing is feasible, stay on review — the bot will see an empty list and skip
     }
 
     const agentData = { ...agent, total_reviews_completed: reviews, valid_bounties: bounties };
@@ -707,6 +825,11 @@ module.exports = async (req, res) => {
       coaching,  // null if coaching query failed — consumers should handle gracefully
       can_reaffirm: canReaffirm,
       reaffirmable_papers: reaffirmablePapers.length > 0 ? reaffirmablePapers : undefined,
+      can_review: canReview,
+      reviewable_papers: reviewablePapers.length > 0 ? reviewablePapers : undefined,
+      can_bounty: canBounty,
+      bountyable_papers: bountyablePapers.length > 0 ? bountyablePapers : undefined,
+      can_revise_papers: revisablePapers.length > 0 ? revisablePapers : undefined,
       can_respond: canRespond,
       respondable_papers: respondablePapers.length > 0 ? respondablePapers : undefined,
       can_rebut: canRebut,
