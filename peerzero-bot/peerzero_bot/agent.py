@@ -865,23 +865,40 @@ class PeerZeroBot:
                 logger.warning("[BOUNTY] Retry also failed to parse")
                 return None
 
-        # Fallback: if LLM omitted external_sources, build from rebuttal citations
-        if "external_sources" not in bounty_data and "rebuttal" in bounty_data:
-            citations = bounty_data["rebuttal"].get("citations") or []
-            bounty_data["external_sources"] = []
-            for c in citations:
-                if c.get("doi"):
-                    bounty_data["external_sources"].append({
-                        "doi": c["doi"],
-                        "specific_finding": c.get("agent_summary", "")[:2000] or "See citation for contradicting evidence",
-                        "target_claim": target.get("title", "")[:1000] or "Original paper claim",
-                        "logical_bridge": c.get("relevance_explanation", "")[:2000] or "This evidence directly contradicts the original claim",
-                    })
-            if bounty_data["external_sources"]:
-                logger.info(f"[BOUNTY] Built {len(bounty_data['external_sources'])} external_sources from rebuttal citations")
-            else:
-                logger.warning("[BOUNTY] No external_sources and no citations with DOIs — skipping")
-                return None
+        # Validate challenge_type — only structural and weak_source_quality are supported
+        # (standard bounties require a response paper submission step we don't implement)
+        SUPPORTED_CHALLENGE_TYPES = {
+            "no_falsifiable_claim", "no_cross_study_connection",
+            "no_mechanism_chain", "weak_source_quality",
+        }
+        challenge_type = bounty_data.get("challenge_type", "")
+        if challenge_type not in SUPPORTED_CHALLENGE_TYPES:
+            logger.info(f"[BOUNTY] Unsupported challenge_type '{challenge_type}' — skipping (need structural or weak_source_quality)")
+            return None
+
+        # Structural challenges don't need external_sources or rebuttal — strip them
+        STRUCTURAL_TYPES = {"no_falsifiable_claim", "no_cross_study_connection", "no_mechanism_chain"}
+        if challenge_type in STRUCTURAL_TYPES:
+            bounty_data.pop("external_sources", None)
+            bounty_data.pop("rebuttal", None)
+        else:
+            # Fallback: if LLM omitted external_sources, build from rebuttal citations
+            if "external_sources" not in bounty_data and "rebuttal" in bounty_data:
+                citations = bounty_data["rebuttal"].get("citations") or []
+                bounty_data["external_sources"] = []
+                for c in citations:
+                    if c.get("doi"):
+                        bounty_data["external_sources"].append({
+                            "doi": c["doi"],
+                            "specific_finding": c.get("agent_summary", "")[:2000] or "See citation for contradicting evidence",
+                            "target_claim": target.get("title", "")[:1000] or "Original paper claim",
+                            "logical_bridge": c.get("relevance_explanation", "")[:2000] or "This evidence directly contradicts the original claim",
+                        })
+                if bounty_data["external_sources"]:
+                    logger.info(f"[BOUNTY] Built {len(bounty_data['external_sources'])} external_sources from rebuttal citations")
+                else:
+                    logger.warning("[BOUNTY] No external_sources and no citations with DOIs — skipping")
+                    return None
 
         try:
             result = self._submit_with_retry("BOUNTY", self.school.submit_bounty, bounty_data)

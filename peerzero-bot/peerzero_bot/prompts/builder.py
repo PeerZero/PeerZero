@@ -323,7 +323,6 @@ Choose the best challenge type:
 - "no_cross_study_connection" — if the synthesis is superficial or just lists studies without genuine integration
 - "no_mechanism_chain" — if the paper lacks a testable causal mechanism chain (or has one but steps aren't independently testable)
 - "weak_source_quality" — if any citation has a boilerplate/vague source quality note or methodology-claim mismatch
-- "standard" — for any other weakness you can articulate
 
 Most papers have at least one weak source quality note, a superficial
 cross-study connection, or a mechanism chain with untestable steps.
