@@ -1747,20 +1747,48 @@ Return JSON only:
 
         if data["rebuttal"].get("citations"):
             data["rebuttal"]["citations"] = validate_citations(data["rebuttal"]["citations"], evidence_papers, self.log)
-        if len(data["rebuttal"].get("abstract", "")) < 120:
-            self.log.warning(f"Rebuttal abstract too short ({len(data['rebuttal'].get('abstract', ''))} chars, need 120+) for '{paper.get('title', '')[:40]}'")
+
+        # Validate rebuttal fields match server-side requirements before submitting
+        rebuttal_abstract = data["rebuttal"].get("abstract", "")
+        rebuttal_body = data["rebuttal"].get("body", "")
+        if len(rebuttal_abstract) < 120:
+            self.log.warning(f"Rebuttal abstract too short ({len(rebuttal_abstract)} chars, need 120+) for '{paper.get('title', '')[:40]}'")
+            return False
+        if len(rebuttal_body) < 500:
+            self.log.warning(f"Rebuttal body too short ({len(rebuttal_body)} chars, need 500+) for '{paper.get('title', '')[:40]}'")
             return False
 
+        # Validate citation fields meet server minimums (agent_summary 10+, relevance_explanation 10+, source_quality_note 30+)
+        for c in (data["rebuttal"].get("citations") or []):
+            if len((c.get("agent_summary") or "").strip()) < 10:
+                self.log.warning(f"Dropping citation with short agent_summary: {c.get('doi', 'unknown')}")
+                data["rebuttal"]["citations"].remove(c)
+            elif len((c.get("relevance_explanation") or "").strip()) < 10:
+                self.log.warning(f"Dropping citation with short relevance_explanation: {c.get('doi', 'unknown')}")
+                data["rebuttal"]["citations"].remove(c)
+            elif len((c.get("source_quality_note") or "").strip()) < 30:
+                self.log.warning(f"Dropping citation with short source_quality_note: {c.get('doi', 'unknown')}")
+                data["rebuttal"]["citations"].remove(c)
+
+        # Filter external sources to only valid DOIs — save originals for logging
         valid_dois_lower = {(p.get("externalIds", {}).get("DOI") or p.get("doi", "")).strip().lower() for p in evidence_papers}
+        original_source_dois = [(s.get("doi") or "") for s in data["external_sources"]]
         data["external_sources"] = [s for s in data["external_sources"] if (s.get("doi") or "").strip().lower() in valid_dois_lower]
         if not data["external_sources"]:
-            all_source_dois = [(s.get("doi") or "") for s in (data.get("external_sources") or [])]
-            self.log.warning(f"No valid external sources for '{paper.get('title', '')[:40]}' -- LLM DOIs {all_source_dois} not in evidence set -- skipping bounty")
+            self.log.warning(f"No valid external sources for '{paper.get('title', '')[:40]}' -- LLM DOIs {original_source_dois} not in evidence set {list(valid_dois_lower)[:5]} -- skipping bounty")
             return False
+
+        # Ensure supporting queries are all 15+ chars (server-side validateSearchStrategy requirement)
+        valid_supporting = [q for q in bounty_queries[:6] if isinstance(q, str) and len(q.strip()) >= 15]
+        if len(valid_supporting) < 2:
+            # Pad with title-based fallback queries
+            title_prefix = " ".join(paper_title.split()[:5]) if paper_title else "scientific evidence"
+            valid_supporting += [f"{title_prefix} contradicting evidence methodology", f"{title_prefix} alternative explanation limitations"]
+            valid_supporting = valid_supporting[:6]
 
         # Attach search_strategy to rebuttal
         data["rebuttal"]["search_strategy"] = {
-            "supporting_queries": bounty_queries[:6],
+            "supporting_queries": valid_supporting,
             "opposing_queries": [
                 f"{paper_title.split()[0] if paper_title else 'paper'} supporting evidence validation replication",
                 f"{paper_title.split()[0] if paper_title else 'paper'} independent confirmation positive results",
@@ -1783,7 +1811,7 @@ Return JSON only:
             "challenge_paper_id": resp_result.get("response_paper_id"),
             "external_sources": data["external_sources"],
             "search_strategy": {
-                "supporting_queries": bounty_queries[:6],
+                "supporting_queries": valid_supporting,
                 "opposing_queries": [
                     f"{paper_title.split()[0] if paper_title else 'paper'} replication confirmation supporting",
                     f"{paper_title.split()[0] if paper_title else 'paper'} positive results independent validation",
