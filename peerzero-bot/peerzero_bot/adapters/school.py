@@ -56,11 +56,16 @@ def extract_json(text: str) -> dict | None:
             pass
 
     # Strategy 3: Balanced brace extraction (handles nested objects)
-    start = text.find('{')
-    if start != -1:
+    # Try each '{' in the text as a potential JSON start
+    search_from = 0
+    while True:
+        start = text.find('{', search_from)
+        if start == -1:
+            break
         depth = 0
         in_string = False
         escape_next = False
+        found_end = -1
         for i in range(start, len(text)):
             c = text[i]
             if escape_next:
@@ -78,13 +83,17 @@ def extract_json(text: str) -> dict | None:
                 elif c == '}':
                     depth -= 1
                     if depth == 0:
-                        candidate = text[start:i + 1]
-                        try:
-                            result = json.loads(candidate)
-                            if isinstance(result, dict):
-                                return result
-                        except json.JSONDecodeError:
-                            break
+                        found_end = i
+                        break
+        if found_end != -1:
+            candidate = text[start:found_end + 1]
+            try:
+                result = json.loads(candidate)
+                if isinstance(result, dict):
+                    return result
+            except json.JSONDecodeError:
+                pass
+        search_from = start + 1
 
     # Strategy 4: Lenient cleanup (trailing commas, single quotes)
     brace_match = re.search(r'\{.*\}', text, re.DOTALL)
@@ -96,6 +105,15 @@ def extract_json(text: str) -> dict | None:
             result = json.loads(cleaned)
             if isinstance(result, dict):
                 logger.warning("[extract_json] Parsed after trailing-comma cleanup")
+                return result
+        except json.JSONDecodeError:
+            pass
+        # Try replacing single quotes with double quotes
+        single_q = cleaned.replace("'", '"')
+        try:
+            result = json.loads(single_q)
+            if isinstance(result, dict):
+                logger.warning("[extract_json] Parsed after single-quote replacement")
                 return result
         except json.JSONDecodeError:
             pass

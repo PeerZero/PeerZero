@@ -795,13 +795,14 @@ class PeerZeroBot:
             self._my_bounty_paper_ids.append(target_id)
             self.memory.write("school", "my_bounty_paper_ids", self._my_bounty_paper_ids)
             return result
-        except httpx.HTTPStatusError as e:
-            if e.response.status_code == 409:
+        except Exception as e:
+            status = getattr(getattr(e, "response", None), "status_code", None)
+            if status == 409:
                 logger.info(f"[BOUNTY] Already filed for paper {target_id} — syncing local cache")
                 if target_id not in self._my_bounty_paper_ids:
                     self._my_bounty_paper_ids.append(target_id)
                     self.memory.write("school", "my_bounty_paper_ids", self._my_bounty_paper_ids)
-            else:
+            elif status is not None:
                 try:
                     err_body = e.response.json()
                     err_msg = err_body.get("error", str(e))
@@ -810,9 +811,8 @@ class PeerZeroBot:
                     err_msg = str(e)
                     hints = ""
                 logger.warning(f"[BOUNTY] Failed for '{target.get('title', '?')[:60]}': {err_msg} | hints={hints}")
-            return None
-        except Exception as e:
-            logger.warning(f"[BOUNTY] Failed: {e}")
+            else:
+                logger.warning(f"[BOUNTY] Failed: {e}")
             return None
 
     def _do_revise(self, system_prompt: str, profile: dict) -> dict | None:
@@ -1095,11 +1095,21 @@ class PeerZeroBot:
         identity_data = extract_json(response)
         if identity_data and identity_data.get("self_narrative"):
             self.memory.store_self_identity(identity_data)
-            try:
-                self.school.submit_identity(identity_data)
-                logger.info("[MEMORY] Self-authored identity updated")
-            except Exception as e:
-                logger.warning(f"[MEMORY] Server backup failed: {e}")
+            max_retries = 3
+            for attempt in range(max_retries):
+                try:
+                    self.school.submit_identity(identity_data)
+                    logger.info("[MEMORY] Self-authored identity updated")
+                    break
+                except Exception as e:
+                    status = getattr(getattr(e, "response", None), "status_code", None)
+                    if status == 429 and attempt < max_retries - 1:
+                        delay = 2 ** (attempt + 1)
+                        logger.info(f"[MEMORY] Rate limited, retrying in {delay}s ({attempt + 1}/{max_retries})")
+                        time.sleep(delay)
+                    else:
+                        logger.warning(f"[MEMORY] Server backup failed: {e}")
+                        break
 
     def _run_private_block(self, system_prompt: str, grade: int = 1):
         """
