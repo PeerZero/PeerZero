@@ -594,10 +594,31 @@ class PeerZeroBot:
             logger.warning(f"[SCHOOL] Unknown action '{next_action}' — reviewing instead")
             result = self._do_review(system_prompt, profile)
 
-        # Fallback: if primary action failed, try a review so the cycle isn't wasted
-        if result is None and next_action != "review":
-            logger.info(f"[SCHOOL] {next_action} failed — falling back to review")
-            result = self._do_review(system_prompt, profile)
+        # Fallback: if primary action failed, cycle through other action types
+        # so the cycle isn't wasted on just memory/identity work.
+        if result is None:
+            fallback_order = ["review", "submit_paper", "respond", "rebut", "file_bounty", "revise"]
+            # Remove the action we already tried
+            fallback_order = [a for a in fallback_order if a != next_action]
+            for fallback_action in fallback_order:
+                logger.info(f"[SCHOOL] {next_action} failed — trying {fallback_action}")
+                if fallback_action == "review":
+                    result = self._do_review(system_prompt, profile)
+                elif fallback_action == "submit_paper":
+                    result = self._do_submit_paper(system_prompt, profile)
+                elif fallback_action == "respond":
+                    result = self._do_respond(system_prompt, profile)
+                elif fallback_action == "rebut":
+                    result = self._do_rebut(system_prompt, profile)
+                elif fallback_action == "file_bounty":
+                    result = self._do_file_bounty(system_prompt, profile)
+                elif fallback_action == "revise":
+                    result = self._do_revise(system_prompt, profile)
+                if result is not None:
+                    logger.info(f"[SCHOOL] Fallback {fallback_action} succeeded")
+                    break
+            if result is None:
+                logger.warning("[SCHOOL] All action types failed — cycle produced no submission")
 
         # Step 4: Store exercises + process memory
         grade = profile.get("agent", {}).get("grade", 1) if isinstance(profile.get("agent"), dict) else profile.get("grade", 1)
@@ -755,8 +776,8 @@ class PeerZeroBot:
         ]
 
         if not candidates:
-            logger.info("[BOUNTY] No eligible papers — reviewing instead")
-            return self._do_review(system_prompt, profile)
+            logger.info("[BOUNTY] No eligible papers")
+            return None
 
         candidates.sort(key=lambda p: p.get("weighted_score", 10))
         target = candidates[0]
@@ -836,8 +857,8 @@ class PeerZeroBot:
         ]
 
         if not candidates:
-            logger.info("[REVISE] No eligible papers — reviewing instead")
-            return self._do_review(system_prompt, profile)
+            logger.info("[REVISE] No eligible papers")
+            return None
 
         candidates.sort(key=lambda p: p.get("weighted_score", 10))
         target = candidates[0]
