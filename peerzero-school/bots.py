@@ -556,19 +556,17 @@ def _summarize_citation(client, doi, abstract, paper_context, log, citation_coun
 def search_and_summarize(queries, log, client, paper_context="") -> list:
     all_papers, seen_dois = [], set()
     padded_queries = list(queries)
-    if len(padded_queries) < 3:
-        padded_queries += random.sample(FALLBACK_QUERIES, 3 - len(padded_queries))
-    max_iterations = min(3, len(padded_queries))
+    if len(padded_queries) < 4:
+        padded_queries += random.sample(FALLBACK_QUERIES, 4 - len(padded_queries))
 
     # Phase 1: Collect papers WITHOUT summarizing (fast, no Claude calls)
-    for iteration in range(max_iterations):
+    # Use all 3 APIs per iteration across 4 iterations for maximum source diversity
+    for iteration in range(4):
         query = padded_queries[iteration] if iteration < len(padded_queries) else padded_queries[-1]
-        log.info(f"Search iteration {iteration + 1}/{max_iterations}: '{query}'")
+        log.info(f"Search iteration {iteration + 1}/4: '{query}'")
         search_fns = [("openalex", search_openalex), ("arxiv", search_arxiv), ("pubmed", search_pubmed)]
         random.shuffle(search_fns)
-        # First iteration: all 3 APIs. After that: only 2.
-        apis_to_use = search_fns if iteration == 0 else search_fns[:2]
-        for api_name, fn in apis_to_use:
+        for api_name, fn in search_fns:
             results = fn(query, log)
             for p in (results or []):
                 doi = (p.get("externalIds", {}).get("DOI") or p.get("doi", "")).strip()
@@ -577,18 +575,14 @@ def search_and_summarize(queries, log, client, paper_context="") -> list:
                 seen_dois.add(doi.lower())
                 all_papers.append(p)
             time.sleep(0.3)
-        # Exit search early if we have enough raw papers
-        if len(all_papers) >= 6:
-            log.info(f"Collected {len(all_papers)} papers after iteration {iteration + 1} — stopping search")
-            break
 
     # Phase 1.5: Enrich arXiv/PubMed papers with real citation counts from OpenAlex
     all_papers = _enrich_citation_counts(all_papers, log)
 
-    # Phase 2: Summarize only the best papers (max 6) to limit Claude calls
-    # Prefer papers with higher citation counts
+    # Phase 2: Summarize the best papers to limit Claude calls
+    # Prefer papers with higher citation counts — summarize top 12 for source diversity
     all_papers.sort(key=lambda p: (p.get("citationCount") or 0), reverse=True)
-    papers_to_summarize = all_papers[:6]
+    papers_to_summarize = all_papers[:12]
     log.info(f"Search collected {len(all_papers)} papers, summarizing top {len(papers_to_summarize)}")
 
     for p in papers_to_summarize:
