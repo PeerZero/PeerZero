@@ -243,10 +243,11 @@ module.exports = async (req, res) => {
       }
     }
 
-    // Insert new version
+    // Insert new version — use upsert to handle race conditions where two
+    // reflections compute the same nextVersion simultaneously
     const { data: inserted, error: insertErr } = await supabase
       .from('agent_identity_cores')
-      .insert({
+      .upsert({
         agent_id: agent.id,
         self_narrative: self_narrative.trim(),
         claimed_values: (claimed_values || []).map(v => v.trim()),
@@ -254,7 +255,7 @@ module.exports = async (req, res) => {
         formed_convictions: formed_convictions ? formed_convictions.trim() : null,
         version: nextVersion,
         trigger_type: triggerValue,
-      })
+      }, { onConflict: 'agent_id,version' })
       .select()
       .single();
 

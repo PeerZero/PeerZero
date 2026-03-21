@@ -559,38 +559,47 @@ class PeerZeroBot:
     def run_school_cycle(self):
         """Execute one School learning cycle."""
         self.cycle_count += 1
+        handle = self.config.handle or "bot"
 
         # Reset autonomy counters each school cycle (same as platform cycles)
         if self.autonomy_gate:
             self.autonomy_gate.reset_cycle_counters()
 
         logger.info(f"\n{'='*60}")
-        logger.info(f"SCHOOL CYCLE {self.cycle_count}")
+        logger.info(f"[{handle}] SCHOOL CYCLE {self.cycle_count}")
         logger.info(f"{'='*60}")
 
         # Step 1: Get profile
         profile = self.school.get_profile()
         next_action = profile.get("next_action", "review")
         cred = profile.get("credibility_score", "?")
-        logger.info(f"[PROFILE] next_action={next_action}, credibility={cred}")
+        logger.info(f"[{handle}] next_action={next_action}, credibility={cred}")
 
         # Inject profile into prompt builder so coaching/feedback/risk flow into prompts
         self.prompts.set_profile(profile)
         system_prompt = self.prompts.build_school_system_prompt()
         grade = profile.get("agent", {}).get("grade", 1) if isinstance(profile.get("agent"), dict) else profile.get("grade", 1)
 
-        # Step 2: Pre-action community work — lightweight tasks that use the
-        # fast model. These happen BEFORE the main action so the bot participates
-        # in the community (rating reviews, red team, questions) every cycle.
+        # Step 2: Identity reflection — only when server triggers it (~33% of cycles).
+        # Runs BEFORE the action so decisions are filtered through evolving identity.
         self._pre_action_identity(profile, system_prompt, grade)
-        try:
-            self._do_red_team_responses(system_prompt)
-            self._do_red_team_jury_vote(system_prompt)
-            self._do_open_questions(system_prompt)
-            self._do_rate_reviews(system_prompt, profile)
-            self._do_structural_bounties(system_prompt, profile)
-        except Exception as e:
-            logger.warning(f"[SCHOOL] Pre-action community work failed (non-blocking): {e}")
+
+        # Step 2b: Action-relevant community work — only run tasks that relate to
+        # what the server told us to do. No fetching bounty data for a review cycle.
+        if self.cycle_count % 3 == 0:
+            try:
+                if next_action in ("file_bounty", "rebut", "reaffirm"):
+                    # Bounty-related actions: red team our papers, file structural bounties
+                    self._do_red_team_responses(system_prompt)
+                    self._do_structural_bounties(system_prompt, profile)
+                elif next_action == "review":
+                    # Review actions: rate other reviews, vote on red team responses
+                    self._do_rate_reviews(system_prompt, profile)
+                    self._do_red_team_jury_vote(system_prompt)
+                # Open questions are cheap (no LLM unless posting) — run for any action
+                self._do_open_questions(system_prompt)
+            except Exception as e:
+                logger.warning(f"[{handle}] Community work failed (non-blocking): {e}")
 
         # Step 3: Check autonomy policy for school actions
         if self.autonomy_gate:
@@ -632,7 +641,7 @@ class PeerZeroBot:
             logger.warning(f"[SCHOOL] Unknown action '{next_action}' — skipping")
 
         if result is None:
-            logger.info(f"[SCHOOL] {next_action} produced no result — server will reassign next cycle")
+            logger.info(f"[{handle}] {next_action} produced no result — server will reassign next cycle")
 
         # Step 5: Store exercises + process condensers (post-action)
         # Identity reflection already ran in Step 2.  Only condensers run here
