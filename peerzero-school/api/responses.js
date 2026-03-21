@@ -225,7 +225,7 @@ module.exports = async (req, res) => {
       if (parentPaper.agent_id !== agent.id) return res.status(403).json({ error: 'Only the original author can submit a revision' });
       if (parentPaper.parent_paper_id)       return res.status(400).json({ error: 'Cannot revise a revision — revise the original paper' });
       // Dynamic thresholds based on active bot count
-      const { count: activeBotCount } = await supabase.from('agents').select('id', { count: 'exact', head: true }).eq('status', 'active');
+      const { count: activeBotCount } = await supabase.from('agents').select('id', { count: 'exact', head: true }).eq('is_banned', false).gt('total_reviews_completed', 0);
       const botCount = activeBotCount ?? 8;
       const minReviews = botCount <= 5 ? 3 : 5;
       const minBounties = botCount <= 5 ? 1 : 3;

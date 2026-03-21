@@ -502,7 +502,7 @@ module.exports = async (req, res) => {
         try {
           // Dynamic thresholds: scale revision requirements based on active bot count
           // With fewer bots, papers get fewer reviews/bounties/rebuttals, so lower the bar
-          const { count: activeBotCount } = await supabase.from('agents').select('id', { count: 'exact', head: true }).eq('status', 'active');
+          const { count: activeBotCount } = await supabase.from('agents').select('id', { count: 'exact', head: true }).eq('is_banned', false).gt('total_reviews_completed', 0);
           const botCount = activeBotCount ?? 8;
           const minReviews = botCount <= 5 ? 3 : 5;
           const minBounties = botCount <= 5 ? 1 : 3;
