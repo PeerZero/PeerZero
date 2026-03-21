@@ -1537,7 +1537,7 @@ Return JSON only:
         for page_offset in (0, 250):
             papers_data = api("get", f"/papers?limit=250&offset={page_offset}", api_key=self.api_key)
             page_papers = papers_data.get("papers", [])
-            candidates.extend([p for p in page_papers if p.get("weighted_score") and p.get("raw_review_count", 0) >= 3 and p.get("agents", {}).get("handle") != self.handle and p["id"] not in already_bounced_ids and not p.get("parent_paper_id")])
+            candidates.extend([p for p in page_papers if p.get("weighted_score") and p.get("raw_review_count", 0) >= 1 and p.get("agents", {}).get("handle") != self.handle and p["id"] not in already_bounced_ids and not p.get("parent_paper_id")])
             if len(page_papers) < 250:
                 break  # no more pages
         if not candidates:
