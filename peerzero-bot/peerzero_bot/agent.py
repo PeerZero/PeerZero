@@ -570,10 +570,11 @@ class PeerZeroBot:
             result = self._do_submit_paper(system_prompt, profile)
         elif next_action == "file_bounty":
             result = self._do_file_bounty(system_prompt, profile)
-        elif next_action in ("review", "respond", "rebut"):
-            # respond/rebut not yet implemented — fall back to review
-            if next_action != "review":
-                logger.info(f"[SCHOOL] {next_action} not implemented — reviewing instead")
+        elif next_action == "respond":
+            result = self._do_respond(system_prompt, profile)
+        elif next_action == "rebut":
+            result = self._do_rebut(system_prompt, profile)
+        elif next_action == "review":
             result = self._do_review(system_prompt, profile)
         else:
             logger.warning(f"[SCHOOL] Unknown action '{next_action}' — reviewing instead")
@@ -804,6 +805,121 @@ class PeerZeroBot:
             return result
         except Exception as e:
             logger.warning(f"[REVISE] Failed: {e}")
+            return None
+
+    def _do_respond(self, system_prompt: str, profile: dict) -> dict | None:
+        """Write a response paper critiquing a paper this bot reviewed harshly."""
+        respondable = profile.get("respondable_papers", [])
+        # Only respond to original papers (not other responses)
+        respondable = [p for p in respondable if not p.get("parent_paper_id")]
+        if not respondable:
+            logger.info("[RESPOND] No respondable papers")
+            return None
+
+        target = respondable[0]
+        paper_id = target.get("id")
+        if not paper_id:
+            return None
+
+        my_score = target.get("my_review_score", "unknown")
+        logger.info(f"[RESPOND] Critiquing: {target.get('title', '?')[:60]}... (my score: {my_score})")
+
+        full = self.school.get_papers(params={"id": paper_id})
+        user_msg = self.prompts.build_respond_prompt(full, my_score)
+        response_text = self.llm.call(system_prompt, user_msg)
+        response_data = extract_json(response_text)
+
+        if not response_data or "title" not in response_data:
+            logger.warning("[RESPOND] Failed to parse LLM response — retrying once")
+            response_text = self.llm.call(system_prompt, user_msg)
+            response_data = extract_json(response_text)
+            if not response_data or "title" not in response_data:
+                logger.warning("[RESPOND] Retry also failed to parse")
+                return None
+
+        # Ensure correct stance
+        response_data["stance"] = "rebut"
+
+        # Pre-validate citations
+        text_fields = {
+            "title": response_data.get("title", ""),
+            "abstract": response_data.get("abstract", ""),
+            "body": response_data.get("body", ""),
+            "cross_study_connection": response_data.get("cross_study_connection", ""),
+        }
+        citation_check = self.school.validate_citations(text_fields, response_data.get("citations", []))
+        if not citation_check.get("valid", True):
+            logger.warning(f"[RESPOND] Citation pre-validation failed: {citation_check.get('flags', [])}")
+            return None
+
+        try:
+            result = self.school.submit_revision(paper_id, response_data)
+            logger.info(f"[RESPOND] Submitted — id={result.get('response_paper_id')}")
+            return result
+        except Exception as e:
+            logger.warning(f"[RESPOND] Failed: {e}")
+            return None
+
+    def _do_rebut(self, system_prompt: str, profile: dict) -> dict | None:
+        """Defend own paper against low reviews or validated bounties."""
+        rebuttable = profile.get("rebuttable_papers", [])
+        if not rebuttable:
+            logger.info("[REBUT] No rebuttable papers")
+            return None
+
+        target = rebuttable[0]
+        paper_id = target.get("id")
+        if not paper_id:
+            return None
+
+        logger.info(f"[REBUT] Defending: {target.get('title', '?')[:60]}...")
+
+        # Build criticisms summary from low reviews and bounties
+        criticisms = ""
+        for r in (target.get("low_reviews") or [])[:5]:
+            assessment = str(r.get("assessment", ""))[:300]
+            criticisms += f"\n- Review score {r.get('score')}: {assessment}"
+        for b in (target.get("bounties") or [])[:3]:
+            criticisms += f"\n- Bounty ({b.get('challenge_type', 'unknown')}): score drop {b.get('score_drop', 'unknown')}"
+
+        if not criticisms:
+            logger.info("[REBUT] No specific criticisms to address")
+            return None
+
+        full = self.school.get_papers(params={"id": paper_id})
+        user_msg = self.prompts.build_rebut_prompt(full, criticisms)
+        response_text = self.llm.call(system_prompt, user_msg)
+        rebut_data = extract_json(response_text)
+
+        if not rebut_data or "title" not in rebut_data:
+            logger.warning("[REBUT] Failed to parse LLM response — retrying once")
+            response_text = self.llm.call(system_prompt, user_msg)
+            rebut_data = extract_json(response_text)
+            if not rebut_data or "title" not in rebut_data:
+                logger.warning("[REBUT] Retry also failed to parse")
+                return None
+
+        # Ensure correct stance
+        rebut_data["stance"] = "support"
+
+        # Pre-validate citations
+        text_fields = {
+            "title": rebut_data.get("title", ""),
+            "abstract": rebut_data.get("abstract", ""),
+            "body": rebut_data.get("body", ""),
+            "cross_study_connection": rebut_data.get("cross_study_connection", ""),
+        }
+        citation_check = self.school.validate_citations(text_fields, rebut_data.get("citations", []))
+        if not citation_check.get("valid", True):
+            logger.warning(f"[REBUT] Citation pre-validation failed: {citation_check.get('flags', [])}")
+            return None
+
+        try:
+            result = self.school.submit_revision(paper_id, rebut_data)
+            logger.info(f"[REBUT] Submitted — id={result.get('response_paper_id')}")
+            return result
+        except Exception as e:
+            logger.warning(f"[REBUT] Failed: {e}")
             return None
 
     # ── Memory processing ─────────────────────────────────────────────────
