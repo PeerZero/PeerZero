@@ -556,19 +556,17 @@ def _summarize_citation(client, doi, abstract, paper_context, log, citation_coun
 def search_and_summarize(queries, log, client, paper_context="") -> list:
     all_papers, seen_dois = [], set()
     padded_queries = list(queries)
-    if len(padded_queries) < 3:
-        padded_queries += random.sample(FALLBACK_QUERIES, 3 - len(padded_queries))
-    max_iterations = min(3, len(padded_queries))
+    if len(padded_queries) < 4:
+        padded_queries += random.sample(FALLBACK_QUERIES, 4 - len(padded_queries))
 
     # Phase 1: Collect papers WITHOUT summarizing (fast, no Claude calls)
-    for iteration in range(max_iterations):
+    # Use all 3 APIs per iteration across 4 iterations for maximum source diversity
+    for iteration in range(4):
         query = padded_queries[iteration] if iteration < len(padded_queries) else padded_queries[-1]
-        log.info(f"Search iteration {iteration + 1}/{max_iterations}: '{query}'")
+        log.info(f"Search iteration {iteration + 1}/4: '{query}'")
         search_fns = [("openalex", search_openalex), ("arxiv", search_arxiv), ("pubmed", search_pubmed)]
         random.shuffle(search_fns)
-        # First iteration: all 3 APIs. After that: only 2.
-        apis_to_use = search_fns if iteration == 0 else search_fns[:2]
-        for api_name, fn in apis_to_use:
+        for api_name, fn in search_fns:
             results = fn(query, log)
             for p in (results or []):
                 doi = (p.get("externalIds", {}).get("DOI") or p.get("doi", "")).strip()
@@ -577,21 +575,54 @@ def search_and_summarize(queries, log, client, paper_context="") -> list:
                 seen_dois.add(doi.lower())
                 all_papers.append(p)
             time.sleep(0.3)
-        # Exit search early if we have enough raw papers
-        if len(all_papers) >= 6:
-            log.info(f"Collected {len(all_papers)} papers after iteration {iteration + 1} — stopping search")
-            break
 
     # Phase 1.5: Enrich arXiv/PubMed papers with real citation counts from OpenAlex
     all_papers = _enrich_citation_counts(all_papers, log)
+    log.info(f"Search collected {len(all_papers)} unique papers")
 
-    # Phase 2: Summarize only the best papers (max 6) to limit Claude calls
-    # Prefer papers with higher citation counts
-    all_papers.sort(key=lambda p: (p.get("citationCount") or 0), reverse=True)
-    papers_to_summarize = all_papers[:6]
-    log.info(f"Search collected {len(all_papers)} papers, summarizing top {len(papers_to_summarize)}")
+    # Phase 2: Select the most relevant papers (not just highest citation count)
+    # Use one Haiku call to rank all papers by relevance to the research context
+    selected = all_papers
+    if client and paper_context and len(all_papers) > 12:
+        paper_list = "\n".join(
+            f"{i+1}. [{(p.get('externalIds', {}).get('DOI') or '')[:40]}] {p.get('title', '')[:80]} (cited: {p.get('citationCount') or '?'})"
+            for i, p in enumerate(all_papers)
+        )
+        rank_prompt = f"Research topic: {paper_context}\n\nRank these papers by RELEVANCE to the research topic. Return the numbers of the 12 most relevant papers as a JSON array, most relevant first.\n\nPapers:\n{paper_list}\n\nReturn JSON only: [1, 5, 3, ...]"
+        try:
+            msg = client.messages.create(
+                model=MODEL_FAST, max_tokens=200,
+                system="You rank papers by relevance. Return a JSON array of paper numbers only.",
+                messages=[{"role": "user", "content": rank_prompt}], timeout=30
+            )
+            ranked = _extract_json_from_text(msg.content[0].text.strip())
+            indices = ranked.get("items", ranked) if isinstance(ranked, dict) else ranked
+            if isinstance(indices, list) and len(indices) >= 6:
+                selected = []
+                seen = set()
+                for idx in indices:
+                    i = int(idx) - 1
+                    if 0 <= i < len(all_papers) and i not in seen:
+                        selected.append(all_papers[i])
+                        seen.add(i)
+                    if len(selected) >= 12:
+                        break
+                log.info(f"Relevance ranking selected {len(selected)} papers from {len(all_papers)}")
+            else:
+                log.warning("Relevance ranking returned too few results, falling back to citation sort")
+                all_papers.sort(key=lambda p: (p.get("citationCount") or 0), reverse=True)
+                selected = all_papers[:12]
+        except Exception as e:
+            log.warning(f"Relevance ranking failed ({e}), falling back to citation sort")
+            all_papers.sort(key=lambda p: (p.get("citationCount") or 0), reverse=True)
+            selected = all_papers[:12]
+    elif len(all_papers) > 12:
+        all_papers.sort(key=lambda p: (p.get("citationCount") or 0), reverse=True)
+        selected = all_papers[:12]
 
-    for p in papers_to_summarize:
+    # Phase 3: Summarize only the selected papers (1 Haiku call each)
+    log.info(f"Summarizing {len(selected)} selected papers")
+    for p in selected:
         doi = (p.get("externalIds", {}).get("DOI") or p.get("doi", "")).strip()
         abstract = p.get("abstract", "")
         if abstract and client:
@@ -599,7 +630,7 @@ def search_and_summarize(queries, log, client, paper_context="") -> list:
             p["agent_summary"] = summaries["agent_summary"]
             p["source_quality_note"] = summaries["source_quality_note"]
 
-    return papers_to_summarize
+    return selected
 
 def extract_failure_patterns(client, agent_data, log) -> str:
     coaching = agent_data.get("coaching", {})
