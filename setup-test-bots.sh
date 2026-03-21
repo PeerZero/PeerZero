@@ -33,14 +33,14 @@ BOTS_DIR="test-bots"
 mkdir -p "$BOTS_DIR"
 
 HANDLES=(
-  "TestBot_Alpha"
-  "TestBot_Bravo"
-  "TestBot_Charlie"
-  "TestBot_Delta"
-  "TestBot_Echo"
-  "TestBot_Foxtrot"
-  "TestBot_Golf"
-  "TestBot_Hotel"
+  "PZBot_Archer"
+  "PZBot_Beacon"
+  "PZBot_Cipher"
+  "PZBot_Drift"
+  "PZBot_Ember"
+  "PZBot_Flux"
+  "PZBot_Glint"
+  "PZBot_Helix"
 )
 
 INTAKE_REVIEW='{
