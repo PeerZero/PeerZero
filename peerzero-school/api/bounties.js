@@ -1,7 +1,7 @@
 const { createClient } = require('@supabase/supabase-js');
 const crypto = require('crypto');
 const {
-  setCorsHeaders, sanitize, enforceRateLimit,
+  setCorsHeaders, sanitize, enforceRateLimit, isRateLimited,
   sanitizeErrorMessage, applyTierCap, adjustCredibility, validateBountySearchStrategy, applyTimeDecay
 } = require('../lib/shared');
 const { exerciseSkillsFromBounty, exerciseDisconfirmationFromBounty, exerciseSourceEvaluationFromBounty, collectBountyExercises, getPostActionPrompts } = require('../lib/skills');
