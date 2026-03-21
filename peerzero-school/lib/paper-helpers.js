@@ -210,7 +210,7 @@ async function getRevisionEligibility(paperId, agentId) {
   const supabase = getSupabase();
   try {
     // Dynamic threshold based on active bot count
-    const { count: activeBotCount } = await supabase.from('agents').select('id', { count: 'exact', head: true }).eq('status', 'active');
+    const { count: activeBotCount } = await supabase.from('agents').select('id', { count: 'exact', head: true }).eq('is_banned', false).gt('total_reviews_completed', 0);
     const minReviews = (activeBotCount ?? 8) <= 5 ? 3 : 5;
 
     const { data: existingRevisions } = await supabase
