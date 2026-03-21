@@ -176,7 +176,45 @@ IMPORTANT: Reply with ONLY a JSON object, no other text. Format:
 Paper data:
 {paper_json}"""
 
-    def build_paper_prompt(self) -> str:
+    def build_paper_concept_prompt(self) -> str:
+        """Generate a paper concept with search queries before searching."""
+        profile = getattr(self, "_profile", None) or {}
+        history = profile.get("research_history", [])
+        prior_titles = [str(h.get("title", ""))[:60] for h in history[:5]] if history else []
+        avoid = f"\nDo NOT repeat these topics: {'; '.join(prior_titles)}" if prior_titles else ""
+
+        return f"""Generate a NEW paper concept with a cross-domain connection.{avoid}
+
+Return JSON only:
+{{
+  "working_title": "...",
+  "domain_a": "...",
+  "domain_b": "...",
+  "core_claim": "...",
+  "search_queries": ["q1", "q2", "q3", "q4", "q5"],
+  "opposing_queries": ["oq1", "oq2", "oq3"]
+}}"""
+
+    @staticmethod
+    def _build_citation_slots(papers: list) -> str:
+        """Build citation slot text from search results."""
+        if not papers:
+            return ""
+        slots = ""
+        for p in papers:
+            doi = p.get("externalIds", {}).get("DOI") or p.get("doi", "")
+            if not doi:
+                continue
+            cc = p.get("citationCount")
+            cc_str = str(cc) if cc is not None else "not indexed"
+            slots += f"\n--- CITATION SLOT ---\nDOI: {doi}\nTitle: {p.get('title', '')}\nCitation count: {cc_str}\nAbstract: {p.get('abstract', '')}\n"
+            if p.get("agent_summary"):
+                slots += f"Pre-computed agent_summary: {p['agent_summary']}\n"
+            if p.get("source_quality_note"):
+                slots += f"Pre-computed source_quality_note: {p['source_quality_note']}\n"
+        return slots
+
+    def build_paper_prompt(self, citation_slots: list = None, concept: dict = None) -> str:
         preamble = self._build_memory_preamble("write your next paper")
 
         # Inject paper-specific context: what topics you've already written about,
@@ -196,9 +234,22 @@ Paper data:
             prior_titles = [str(h.get("title", ""))[:60] for h in history[:5]]
             paper_context += f"\nDo NOT repeat these topics from your prior papers: {'; '.join(prior_titles)}"
 
+        # Concept context
+        concept_section = ""
+        if concept and concept.get("core_claim"):
+            concept_section = f"\nYour paper concept: {concept.get('working_title', '')}\nCore claim: {concept['core_claim']}\n"
+
+        # Citation slots from real search results
+        slots_text = self._build_citation_slots(citation_slots or [])
+        citation_instruction = (
+            f"\nAVAILABLE CITATIONS — you may ONLY cite these DOIs:\n{slots_text}"
+            if slots_text else
+            "\nNo search results available — use DOIs you know are real."
+        )
+
         return f"""{preamble}
 {paper_context}
-
+{concept_section}
 Write your next scientific paper. Draw on everything you've learned.
 
 Your identity and skill lessons (in your system context) reflect patterns you've
@@ -207,14 +258,13 @@ approaches score well or poorly, that certain citation patterns matter, that
 certain claim structures get challenged — let that shape what you write now.
 
 Avoid your known failure patterns. Build on what has worked.
+{citation_instruction}
 
 You must:
 1. Choose a field from: physics, biology, chemistry, medicine, computer-science, mathematics, environmental-science, psychology, economics, astronomy, materials-science, interdisciplinary, methodology
-2. Plan your search strategy (supporting + opposing queries)
-3. Write the full paper with citations, falsifiable claims, and cross-study connection
-4. Include real DOIs for citations (use DOIs you know are real)
-5. confidence_score reflects the WEAKEST link in your evidence chain (4-5 = weaker designs, 6-7 = 2+ studies, 8-10 = multiple RCTs or 3+ converging studies)
-6. cross_study_connection must pass the surprise test: would a researcher who read Study A but not Study B be surprised by the implication?
+2. Write the full paper using ONLY the citation slots provided above
+3. confidence_score reflects the WEAKEST link in your evidence chain (4-5 = weaker designs, 6-7 = 2+ studies, 8-10 = multiple RCTs or 3+ converging studies)
+4. cross_study_connection must pass the surprise test: would a researcher who read Study A but not Study B be surprised by the implication?
 
 Return a JSON object with:
 {{
@@ -229,7 +279,7 @@ Return a JSON object with:
   "cross_study_connection": "<150+ chars — what the combination of your sources implies>",
   "citations": [
     {{
-      "doi": "<real DOI>",
+      "doi": "<DOI from citation slots above>",
       "agent_summary": "<50-5000 chars — what this source found>",
       "relevance_explanation": "<30-5000 chars — how it supports your argument>",
       "source_quality_note": "<why this source is credible>"
@@ -304,7 +354,7 @@ Only skip if you genuinely cannot find ANY weakness: {{"skip": true, "reason": "
 Paper data:
 {paper_json}"""
 
-    def build_revision_prompt(self, paper_data: dict) -> str:
+    def build_revision_prompt(self, paper_data: dict, citation_slots: list = None) -> str:
         paper_json = truncate_json(json.dumps(paper_data, indent=2, default=str), 15000)
         preamble = self._build_memory_preamble("revise your paper")
 
@@ -329,6 +379,13 @@ Paper data:
             if trajectory:
                 revision_context += f"\nYour quality trajectory: {trajectory}"
 
+        # Citation slots from real search results
+        slots_text = self._build_citation_slots(citation_slots or [])
+        citation_instruction = (
+            f"\nNEW CITATIONS AVAILABLE — use these DOIs for new evidence:\n{slots_text}"
+            if slots_text else ""
+        )
+
         return f"""{preamble}
 {revision_context}
 
@@ -342,6 +399,8 @@ the whole paper.
 
 Focus on: strengthening weak sections, addressing specific criticisms, improving citations.
 Do NOT just reword — genuinely improve the evidence and reasoning.
+Must include at least 1 new citation (DOI) not in the original paper.
+{citation_instruction}
 
 Return a JSON object with:
 {{
@@ -350,7 +409,7 @@ Return a JSON object with:
   "body": "<revised body, 500+ chars>",
   "stance": "revision",
   "cross_study_connection": "<150+ chars — strengthen this>",
-  "citations": [<same format as paper submission>],
+  "citations": [<same format as paper submission — use DOIs from citation slots above>],
   "search_strategy": {{
     "supporting_queries": ["<query addressing criticism 1>", "<query 2>"],
     "opposing_queries": ["<query for new contradicting evidence 1>", "<query 2>"],
@@ -361,7 +420,7 @@ Return a JSON object with:
 Paper + reviews + audit:
 {paper_json}"""
 
-    def build_respond_prompt(self, paper_data: dict, my_review_score: int) -> str:
+    def build_respond_prompt(self, paper_data: dict, my_review_score: int, citation_slots: list = None) -> str:
         paper_json = truncate_json(json.dumps(paper_data, indent=2, default=str), 15000)
         preamble = self._build_memory_preamble("write your response critique")
 
@@ -370,47 +429,55 @@ Paper + reviews + audit:
         cred = profile.get("credibility_score", "?")
         respond_context = f"\nYour credibility: {cred}. Response papers scored <4.0 at 5+ reviews cost you credibility."
 
+        # Citation slots from real search results
+        slots_text = self._build_citation_slots(citation_slots or [])
+        citation_instruction = (
+            f"\nAVAILABLE CITATIONS -- use these DOIs from real search results:\n{slots_text}"
+            if slots_text else ""
+        )
+
         return f"""{preamble}
 {respond_context}
 
 You previously reviewed this paper and gave it a score of {my_review_score}/10.
 Now write a response paper explaining your critique with supporting evidence.
 
-Draw on your reasoning identity — your accumulated sense of what constitutes
+Draw on your reasoning identity -- your accumulated sense of what constitutes
 strong vs. weak evidence, your learned calibration of critique severity, and
 any patterns you've noticed about how response papers succeed or fail.
 
 Your response should:
 - Reference specific weaknesses you identified in your review
 - Provide contradicting evidence or methodological critiques
-- Be honest — concede strengths while explaining why the flaws matter
+- Be honest -- concede strengths while explaining why the flaws matter
 - Each mechanism_chain step must be a testable causal link, not a narrative restatement
+{citation_instruction}
 
 IMPORTANT: Reply with ONLY a JSON object, no other text. Format:
 {{
   "title": "Response: <shortened original title>",
   "abstract": "<120+ chars explaining your key critique>",
-  "body": "<500+ chars — detailed critique with evidence>",
+  "body": "<500+ chars -- detailed critique with evidence>",
   "stance": "rebut",
   "mechanism_chain": ["<step showing where original reasoning breaks, max 200 chars per step>"],
-  "cross_study_connection": "<150+ chars — how external evidence contradicts the claims>",
+  "cross_study_connection": "<150+ chars -- how external evidence contradicts the claims>",
   "citations": [{{
-    "doi": "<DOI>",
+    "doi": "<DOI from citation slots above>",
     "agent_summary": "<what this source actually found>",
     "relevance_explanation": "<how it contradicts the original paper>",
-    "source_quality_note": "<30+ chars — methodology quality of this source>"
+    "source_quality_note": "<30+ chars -- methodology quality of this source>"
   }}],
   "search_strategy": {{
     "supporting_queries": ["<query for contradicting evidence 1>", "<query 2>"],
     "opposing_queries": ["<query for evidence that supports the original paper 1>", "<query 2>"],
-    "query_rationale": "<80+ chars — what weaknesses you targeted>"
+    "query_rationale": "<80+ chars -- what weaknesses you targeted>"
   }}
 }}
 
 Paper to respond to:
 {paper_json}"""
 
-    def build_rebut_prompt(self, paper_data: dict, criticisms: str) -> str:
+    def build_rebut_prompt(self, paper_data: dict, criticisms: str, citation_slots: list = None) -> str:
         paper_json = truncate_json(json.dumps(paper_data, indent=2, default=str), 12000)
         preamble = self._build_memory_preamble("defend your paper")
 
@@ -421,32 +488,40 @@ Paper to respond to:
         if risk.get("grade_failure_risk") in ("high", "imminent"):
             rebut_context = f"\nWARNING: Grade failure risk is {risk['grade_failure_risk']}. A strong defense here matters."
 
+        # Citation slots from real search results
+        slots_text = self._build_citation_slots(citation_slots or [])
+        citation_instruction = (
+            f"\nAVAILABLE CITATIONS -- use these DOIs from real search results:\n{slots_text}"
+            if slots_text else ""
+        )
+
         return f"""{preamble}
 {rebut_context}
 
 Your paper has been criticized. Write a defense addressing the specific criticisms.
 
 Use your reasoning identity to guide your defense. If your past lessons taught
-you about intellectual honesty — when to concede vs. when to stand firm — apply
+you about intellectual honesty -- when to concede vs. when to stand firm -- apply
 that judgment now. A strong defense concedes valid points and doubles down where
 the evidence supports you. A weak defense is generic and defensive.
 
 Be honest: concede valid criticisms, but defend claims that have evidence.
-Address EACH criticism specifically — do not write a generic defense.
+Address EACH criticism specifically -- do not write a generic defense.
 
 Criticisms received:
 {criticisms}
+{citation_instruction}
 
 Return a JSON object with:
 {{
   "title": "Defense: <shortened original title>",
   "abstract": "<120+ chars explaining your defense>",
-  "body": "<500+ chars — detailed defense addressing each criticism>",
+  "body": "<500+ chars -- detailed defense addressing each criticism>",
   "stance": "support",
   "mechanism_chain": ["<step reinforcing your causal chain, max 200 chars per step>"],
-  "cross_study_connection": "<150+ chars — additional evidence supporting your claims>",
+  "cross_study_connection": "<150+ chars -- additional evidence supporting your claims>",
   "citations": [{{
-    "doi": "<DOI>",
+    "doi": "<DOI from citation slots above>",
     "agent_summary": "<what this source actually found>",
     "relevance_explanation": "<how it supports your original claims>",
     "source_quality_note": "<30+ chars — methodology quality of this source>"

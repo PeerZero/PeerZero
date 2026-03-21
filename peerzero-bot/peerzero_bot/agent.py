@@ -37,6 +37,7 @@ from .security import SecurityGateway, SecurityError, AuditLog
 from .security.credential_store import CredentialStore
 from .reporting import PhoneHome
 from .autonomy import AutonomyPolicy, AutonomyGate
+from .search import search_and_summarize
 
 logger = logging.getLogger("peerzero-bot")
 
@@ -780,7 +781,23 @@ class PeerZeroBot:
             return None
 
     def _do_submit_paper(self, system_prompt: str, profile: dict) -> dict | None:
-        user_msg = self.prompts.build_paper_prompt()
+        # Step 1: Generate concept and search queries
+        concept_msg = self.prompts.build_paper_concept_prompt()
+        concept_text = self.llm_fast.call(system_prompt, concept_msg)
+        concept = extract_json(concept_text) or {}
+        search_queries = concept.get("search_queries", [])
+        opposing_queries = concept.get("opposing_queries", [])
+        paper_context = concept.get("core_claim", concept.get("working_title", ""))
+
+        # Step 2: Search real academic APIs
+        all_queries = search_queries + opposing_queries
+        if not all_queries:
+            all_queries = ["scientific research"]
+        evidence_papers = search_and_summarize(all_queries, paper_context, self.llm_fast)
+        logger.info(f"[PAPER] Found {len(evidence_papers)} papers from search")
+
+        # Step 3: Generate paper using ONLY searched citations
+        user_msg = self.prompts.build_paper_prompt(citation_slots=evidence_papers, concept=concept)
         response_text = self.llm.call(system_prompt, user_msg)
         paper_data = extract_json(response_text)
 
@@ -887,7 +904,7 @@ class PeerZeroBot:
             return None
 
     def _do_revise(self, system_prompt: str, profile: dict) -> dict | None:
-        # Server already filtered: own paper, 5+ reviews, <2 revisions, 3+ bounties, 2+ rebuttals
+        # Server already filtered: own paper, enough reviews, <2 revisions, bounties, rebuttals
         revisable = profile.get("can_revise_papers", [])
         if not revisable:
             logger.info("[REVISE] No revisable papers from server")
@@ -899,7 +916,13 @@ class PeerZeroBot:
         target_id = target["id"]
         full = self.school.get_papers(params={"id": target_id, "audit": "true"})
 
-        user_msg = self.prompts.build_revision_prompt(full)
+        # Search for new evidence to strengthen the revision
+        paper_title = target.get("title", "")
+        revision_queries = [f"{paper_title} new evidence", f"{paper_title} contradicting"]
+        evidence_papers = search_and_summarize(revision_queries, f"Revision of: {paper_title}", self.llm_fast)
+        logger.info(f"[REVISE] Found {len(evidence_papers)} papers from search")
+
+        user_msg = self.prompts.build_revision_prompt(full, citation_slots=evidence_papers)
         response_text = self.llm.call(system_prompt, user_msg)
         revision_data = extract_json(response_text)
 
@@ -948,7 +971,14 @@ class PeerZeroBot:
         logger.info(f"[RESPOND] Critiquing: {target.get('title', '?')[:60]}... (my score: {my_score})")
 
         full = self.school.get_papers(params={"id": paper_id})
-        user_msg = self.prompts.build_respond_prompt(full, my_score)
+
+        # Search for evidence to support the critique
+        paper_title = target.get("title", "")
+        respond_queries = [f"{paper_title} contradicting evidence", f"{paper_title} methodology critique"]
+        evidence_papers = search_and_summarize(respond_queries, f"Critique of: {paper_title}", self.llm_fast)
+        logger.info(f"[RESPOND] Found {len(evidence_papers)} papers from search")
+
+        user_msg = self.prompts.build_respond_prompt(full, my_score, citation_slots=evidence_papers)
         response_text = self.llm.call(system_prompt, user_msg)
         response_data = extract_json(response_text)
 
@@ -1033,7 +1063,14 @@ class PeerZeroBot:
             return None
 
         full = self.school.get_papers(params={"id": paper_id})
-        user_msg = self.prompts.build_rebut_prompt(full, criticisms)
+
+        # Search for evidence to support the defense
+        paper_title = target.get("title", "")
+        defense_queries = [f"{paper_title} supporting evidence", f"{paper_title} replication"]
+        evidence_papers = search_and_summarize(defense_queries, f"Defense of: {paper_title}", self.llm_fast)
+        logger.info(f"[REBUT] Found {len(evidence_papers)} papers from search")
+
+        user_msg = self.prompts.build_rebut_prompt(full, criticisms, citation_slots=evidence_papers)
         response_text = self.llm.call(system_prompt, user_msg)
         rebut_data = extract_json(response_text)
 
