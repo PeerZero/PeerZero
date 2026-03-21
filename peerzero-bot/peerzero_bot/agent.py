@@ -470,7 +470,6 @@ class PeerZeroBot:
         self._agent_card: dict = {}
         self._identity_refresh_interval: int = config.identity_refresh_interval
         self._last_identity_refresh: int = 0
-        self._consecutive_bounty_failures: int = 0
 
     # ═══════════════════════════════════════════════════════════════════════
     # STARTUP
@@ -605,12 +604,9 @@ class PeerZeroBot:
                     return
 
         # Step 4: Execute action — the productive work
-        # Override bounty after repeated failures so bots don't get stuck
-        if next_action == "file_bounty" and self._consecutive_bounty_failures >= 2:
-            logger.info(f"[SCHOOL] Overriding file_bounty to review ({self._consecutive_bounty_failures} consecutive failures)")
-            next_action = "review"
-            self._consecutive_bounty_failures = 0
-
+        # Trust the server. Do exactly what next_action says. If it fails,
+        # log it and move on — the server will assign a new action next cycle.
+        # No fallback cascade: the server already determined what's valid.
         result = None
         if next_action == "revise":
             result = self._do_revise(system_prompt, profile)
@@ -618,11 +614,6 @@ class PeerZeroBot:
             result = self._do_submit_paper(system_prompt, profile)
         elif next_action == "file_bounty":
             result = self._do_file_bounty(system_prompt, profile)
-            if result is not None:
-                self._consecutive_bounty_failures = 0
-            else:
-                self._consecutive_bounty_failures += 1
-                logger.info(f"[BOUNTY] Failed ({self._consecutive_bounty_failures} consecutive)")
         elif next_action == "respond":
             result = self._do_respond(system_prompt, profile)
         elif next_action == "rebut":
@@ -630,34 +621,10 @@ class PeerZeroBot:
         elif next_action == "review":
             result = self._do_review(system_prompt, profile)
         else:
-            logger.warning(f"[SCHOOL] Unknown action '{next_action}' — reviewing instead")
-            result = self._do_review(system_prompt, profile)
+            logger.warning(f"[SCHOOL] Unknown action '{next_action}' — skipping")
 
-        # Fallback: if primary action failed, cycle through other action types
-        # so the cycle isn't wasted on just memory/identity work.
         if result is None:
-            fallback_order = ["review", "submit_paper", "respond", "rebut", "file_bounty", "revise"]
-            # Remove the action we already tried
-            fallback_order = [a for a in fallback_order if a != next_action]
-            for fallback_action in fallback_order:
-                logger.info(f"[SCHOOL] {next_action} failed — trying {fallback_action}")
-                if fallback_action == "review":
-                    result = self._do_review(system_prompt, profile)
-                elif fallback_action == "submit_paper":
-                    result = self._do_submit_paper(system_prompt, profile)
-                elif fallback_action == "respond":
-                    result = self._do_respond(system_prompt, profile)
-                elif fallback_action == "rebut":
-                    result = self._do_rebut(system_prompt, profile)
-                elif fallback_action == "file_bounty":
-                    result = self._do_file_bounty(system_prompt, profile)
-                elif fallback_action == "revise":
-                    result = self._do_revise(system_prompt, profile)
-                if result is not None:
-                    logger.info(f"[SCHOOL] Fallback {fallback_action} succeeded")
-                    break
-            if result is None:
-                logger.warning("[SCHOOL] All action types failed — cycle produced no submission")
+            logger.info(f"[SCHOOL] {next_action} produced no result — server will reassign next cycle")
 
         # Step 5: Store exercises + process condensers (post-action)
         # Identity reflection already ran in Step 2.  Only condensers run here
