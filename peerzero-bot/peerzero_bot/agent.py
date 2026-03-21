@@ -594,10 +594,31 @@ class PeerZeroBot:
             logger.warning(f"[SCHOOL] Unknown action '{next_action}' — reviewing instead")
             result = self._do_review(system_prompt, profile)
 
-        # Fallback: if primary action failed, try a review so the cycle isn't wasted
-        if result is None and next_action != "review":
-            logger.info(f"[SCHOOL] {next_action} failed — falling back to review")
-            result = self._do_review(system_prompt, profile)
+        # Fallback: if primary action failed, cycle through other action types
+        # so the cycle isn't wasted on just memory/identity work.
+        if result is None:
+            fallback_order = ["review", "submit_paper", "respond", "rebut", "file_bounty", "revise"]
+            # Remove the action we already tried
+            fallback_order = [a for a in fallback_order if a != next_action]
+            for fallback_action in fallback_order:
+                logger.info(f"[SCHOOL] {next_action} failed — trying {fallback_action}")
+                if fallback_action == "review":
+                    result = self._do_review(system_prompt, profile)
+                elif fallback_action == "submit_paper":
+                    result = self._do_submit_paper(system_prompt, profile)
+                elif fallback_action == "respond":
+                    result = self._do_respond(system_prompt, profile)
+                elif fallback_action == "rebut":
+                    result = self._do_rebut(system_prompt, profile)
+                elif fallback_action == "file_bounty":
+                    result = self._do_file_bounty(system_prompt, profile)
+                elif fallback_action == "revise":
+                    result = self._do_revise(system_prompt, profile)
+                if result is not None:
+                    logger.info(f"[SCHOOL] Fallback {fallback_action} succeeded")
+                    break
+            if result is None:
+                logger.warning("[SCHOOL] All action types failed — cycle produced no submission")
 
         # Step 4: Store exercises + process memory
         grade = profile.get("agent", {}).get("grade", 1) if isinstance(profile.get("agent"), dict) else profile.get("grade", 1)
@@ -649,6 +670,23 @@ class PeerZeroBot:
         except Exception as e:
             logger.warning(f"Failed to refresh papers (using stale list): {e}")
 
+    # ── Helpers ─────────────────────────────────────────────────────────
+
+    def _submit_with_retry(self, label: str, submit_fn, *args, max_retries: int = 3):
+        """Call submit_fn(*args) with retry on transient HTTP errors (5xx, timeouts)."""
+        for attempt in range(max_retries):
+            try:
+                return submit_fn(*args)
+            except Exception as e:
+                status = getattr(getattr(e, "response", None), "status_code", None)
+                is_transient = status in (500, 502, 503, 429) or isinstance(e, (ConnectionError, TimeoutError))
+                if is_transient and attempt < max_retries - 1:
+                    delay = 2 ** (attempt + 1)
+                    logger.info(f"[{label}] Transient error (status={status}), retrying in {delay}s ({attempt + 1}/{max_retries})")
+                    time.sleep(delay)
+                else:
+                    raise
+
     # ── School actions ────────────────────────────────────────────────────
 
     def _do_review(self, system_prompt: str, profile: dict) -> dict | None:
@@ -690,23 +728,24 @@ class PeerZeroBot:
             review_data["score"] = 5.0
 
         try:
-            result = self.school.submit_review(paper_id, review_data)
+            result = self._submit_with_retry("REVIEW", self.school.submit_review, paper_id, review_data)
             logger.info(f"[REVIEW] Submitted — score={review_data.get('score')}")
             self._my_review_ids.append(paper_id)
             self.memory.add_tracked_review_id(paper_id)
             return result
-        except httpx.HTTPStatusError as e:
-            try:
-                err_body = e.response.json()
-                err_msg = err_body.get("error", str(e))
-                hints = err_body.get("hint", err_body.get("failures", ""))
-            except Exception:
-                err_msg = str(e)
-                hints = ""
-            logger.warning(f"[REVIEW] Failed for '{paper.get('title', '?')[:60]}': {err_msg} | hints={hints}")
-            return None
         except Exception as e:
-            logger.warning(f"[REVIEW] Failed: {e}")
+            status = getattr(getattr(e, "response", None), "status_code", None)
+            if status is not None:
+                try:
+                    err_body = e.response.json()
+                    err_msg = err_body.get("error", str(e))
+                    hints = err_body.get("hint", err_body.get("failures", ""))
+                except Exception:
+                    err_msg = str(e)
+                    hints = ""
+                logger.warning(f"[REVIEW] Failed for '{paper.get('title', '?')[:60]}': {err_msg} | hints={hints}")
+            else:
+                logger.warning(f"[REVIEW] Failed: {e}")
             return None
 
     def _do_submit_paper(self, system_prompt: str, profile: dict) -> dict | None:
@@ -722,7 +761,7 @@ class PeerZeroBot:
                 logger.warning("[PAPER] Retry also failed to parse")
                 return None
 
-        # Pre-validate citations before submission to avoid wasting an attempt
+        # Pre-validate citations — warn but still attempt submission
         text_fields = {
             "title": paper_data.get("title", ""),
             "abstract": paper_data.get("abstract", ""),
@@ -731,11 +770,10 @@ class PeerZeroBot:
         }
         citation_check = self.school.validate_citations(text_fields, paper_data.get("citations", []))
         if not citation_check.get("valid", True):
-            logger.warning(f"[PAPER] Citation pre-validation failed: {citation_check.get('flags', [])}")
-            return None
+            logger.warning(f"[PAPER] Citation pre-validation flagged issues: {citation_check.get('flags', [])} — submitting anyway")
 
         try:
-            result = self.school.submit_paper(paper_data)
+            result = self._submit_with_retry("PAPER", self.school.submit_paper, paper_data)
             logger.info(f"[PAPER] Submitted — id={result.get('paper_id')}")
             return result
         except Exception as e:
@@ -755,8 +793,8 @@ class PeerZeroBot:
         ]
 
         if not candidates:
-            logger.info("[BOUNTY] No eligible papers — reviewing instead")
-            return self._do_review(system_prompt, profile)
+            logger.info("[BOUNTY] No eligible papers")
+            return None
 
         candidates.sort(key=lambda p: p.get("weighted_score", 10))
         target = candidates[0]
@@ -768,8 +806,12 @@ class PeerZeroBot:
         bounty_data = extract_json(response_text)
 
         if not bounty_data or bounty_data.get("skip"):
-            logger.info("[BOUNTY] Skipped")
-            return None
+            logger.warning("[BOUNTY] Failed to parse or LLM skipped — retrying once")
+            response_text = self.llm.call(system_prompt, user_msg)
+            bounty_data = extract_json(response_text)
+            if not bounty_data or bounty_data.get("skip"):
+                logger.warning("[BOUNTY] Retry also failed")
+                return None
 
         # Fallback: if LLM omitted external_sources, build from rebuttal citations
         if "external_sources" not in bounty_data and "rebuttal" in bounty_data:
@@ -790,18 +832,19 @@ class PeerZeroBot:
                 return None
 
         try:
-            result = self.school.submit_bounty(bounty_data)
+            result = self._submit_with_retry("BOUNTY", self.school.submit_bounty, bounty_data)
             logger.info(f"[BOUNTY] Filed — type={bounty_data.get('challenge_type')}")
             self._my_bounty_paper_ids.append(target_id)
             self.memory.write("school", "my_bounty_paper_ids", self._my_bounty_paper_ids)
             return result
-        except httpx.HTTPStatusError as e:
-            if e.response.status_code == 409:
+        except Exception as e:
+            status = getattr(getattr(e, "response", None), "status_code", None)
+            if status == 409:
                 logger.info(f"[BOUNTY] Already filed for paper {target_id} — syncing local cache")
                 if target_id not in self._my_bounty_paper_ids:
                     self._my_bounty_paper_ids.append(target_id)
                     self.memory.write("school", "my_bounty_paper_ids", self._my_bounty_paper_ids)
-            else:
+            elif status is not None:
                 try:
                     err_body = e.response.json()
                     err_msg = err_body.get("error", str(e))
@@ -810,9 +853,8 @@ class PeerZeroBot:
                     err_msg = str(e)
                     hints = ""
                 logger.warning(f"[BOUNTY] Failed for '{target.get('title', '?')[:60]}': {err_msg} | hints={hints}")
-            return None
-        except Exception as e:
-            logger.warning(f"[BOUNTY] Failed: {e}")
+            else:
+                logger.warning(f"[BOUNTY] Failed: {e}")
             return None
 
     def _do_revise(self, system_prompt: str, profile: dict) -> dict | None:
@@ -836,8 +878,8 @@ class PeerZeroBot:
         ]
 
         if not candidates:
-            logger.info("[REVISE] No eligible papers — reviewing instead")
-            return self._do_review(system_prompt, profile)
+            logger.info("[REVISE] No eligible papers")
+            return None
 
         candidates.sort(key=lambda p: p.get("weighted_score", 10))
         target = candidates[0]
@@ -849,10 +891,14 @@ class PeerZeroBot:
         revision_data = extract_json(response_text)
 
         if not revision_data or "title" not in revision_data:
-            logger.warning("[REVISE] Failed to parse LLM response")
-            return None
+            logger.warning("[REVISE] Failed to parse LLM response — retrying once")
+            response_text = self.llm.call(system_prompt, user_msg)
+            revision_data = extract_json(response_text)
+            if not revision_data or "title" not in revision_data:
+                logger.warning("[REVISE] Retry also failed to parse")
+                return None
 
-        # Pre-validate citations before submission
+        # Pre-validate citations — warn but still attempt submission
         text_fields = {
             "title": revision_data.get("title", ""),
             "abstract": revision_data.get("abstract", ""),
@@ -861,11 +907,10 @@ class PeerZeroBot:
         }
         citation_check = self.school.validate_citations(text_fields, revision_data.get("citations", []))
         if not citation_check.get("valid", True):
-            logger.warning(f"[REVISE] Citation pre-validation failed: {citation_check.get('flags', [])}")
-            return None
+            logger.warning(f"[REVISE] Citation pre-validation flagged issues: {citation_check.get('flags', [])} — submitting anyway")
 
         try:
-            result = self.school.submit_revision(target_id, revision_data)
+            result = self._submit_with_retry("REVISE", self.school.submit_revision, target_id, revision_data)
             logger.info(f"[REVISE] Submitted for {target_id}")
             return result
         except Exception as e:
@@ -902,16 +947,16 @@ class PeerZeroBot:
                 logger.warning("[RESPOND] Retry also failed to parse")
                 return None
 
-        # Validate required fields before submitting (avoids wasted server call)
-        missing = [f for f in ("title", "abstract", "body", "citations", "search_strategy") if f not in response_data]
-        if missing:
-            logger.warning(f"[RESPOND] LLM response missing required fields: {missing}")
-            return None
+        # Fill defaults for any missing required fields
+        response_data.setdefault("abstract", response_data.get("title", ""))
+        response_data.setdefault("body", response_data.get("abstract", ""))
+        response_data.setdefault("citations", [])
+        response_data.setdefault("search_strategy", "")
 
         # Ensure correct stance
         response_data["stance"] = "rebut"
 
-        # Pre-validate citations
+        # Pre-validate citations — warn but still attempt submission
         text_fields = {
             "title": response_data.get("title", ""),
             "abstract": response_data.get("abstract", ""),
@@ -920,25 +965,25 @@ class PeerZeroBot:
         }
         citation_check = self.school.validate_citations(text_fields, response_data.get("citations", []))
         if not citation_check.get("valid", True):
-            logger.warning(f"[RESPOND] Citation pre-validation failed: {citation_check.get('flags', [])}")
-            return None
+            logger.warning(f"[RESPOND] Citation pre-validation flagged issues: {citation_check.get('flags', [])} — submitting anyway")
 
         try:
-            result = self.school.submit_revision(paper_id, response_data)
+            result = self._submit_with_retry("RESPOND", self.school.submit_revision, paper_id, response_data)
             logger.info(f"[RESPOND] Submitted — id={result.get('response_paper_id')}")
             return result
-        except httpx.HTTPStatusError as e:
-            try:
-                err_body = e.response.json()
-                err_msg = err_body.get("error", str(e))
-                hints = err_body.get("hint", err_body.get("failures", ""))
-            except Exception:
-                err_msg = str(e)
-                hints = ""
-            logger.warning(f"[RESPOND] Failed for '{target.get('title', '?')[:60]}': {err_msg} | hints={hints}")
-            return None
         except Exception as e:
-            logger.warning(f"[RESPOND] Failed: {e}")
+            status = getattr(getattr(e, "response", None), "status_code", None)
+            if status is not None:
+                try:
+                    err_body = e.response.json()
+                    err_msg = err_body.get("error", str(e))
+                    hints = err_body.get("hint", err_body.get("failures", ""))
+                except Exception:
+                    err_msg = str(e)
+                    hints = ""
+                logger.warning(f"[RESPOND] Failed for '{target.get('title', '?')[:60]}': {err_msg} | hints={hints}")
+            else:
+                logger.warning(f"[RESPOND] Failed: {e}")
             return None
 
     def _do_rebut(self, system_prompt: str, profile: dict) -> dict | None:
@@ -980,16 +1025,16 @@ class PeerZeroBot:
                 logger.warning("[REBUT] Retry also failed to parse")
                 return None
 
-        # Validate required fields before submitting (avoids wasted server call)
-        missing = [f for f in ("title", "abstract", "body", "citations", "search_strategy") if f not in rebut_data]
-        if missing:
-            logger.warning(f"[REBUT] LLM response missing required fields: {missing}")
-            return None
+        # Fill defaults for any missing required fields
+        rebut_data.setdefault("abstract", rebut_data.get("title", ""))
+        rebut_data.setdefault("body", rebut_data.get("abstract", ""))
+        rebut_data.setdefault("citations", [])
+        rebut_data.setdefault("search_strategy", "")
 
         # Ensure correct stance
         rebut_data["stance"] = "support"
 
-        # Pre-validate citations
+        # Pre-validate citations — warn but still attempt submission
         text_fields = {
             "title": rebut_data.get("title", ""),
             "abstract": rebut_data.get("abstract", ""),
@@ -998,25 +1043,25 @@ class PeerZeroBot:
         }
         citation_check = self.school.validate_citations(text_fields, rebut_data.get("citations", []))
         if not citation_check.get("valid", True):
-            logger.warning(f"[REBUT] Citation pre-validation failed: {citation_check.get('flags', [])}")
-            return None
+            logger.warning(f"[REBUT] Citation pre-validation flagged issues: {citation_check.get('flags', [])} — submitting anyway")
 
         try:
-            result = self.school.submit_revision(paper_id, rebut_data)
+            result = self._submit_with_retry("REBUT", self.school.submit_revision, paper_id, rebut_data)
             logger.info(f"[REBUT] Submitted — id={result.get('response_paper_id')}")
             return result
-        except httpx.HTTPStatusError as e:
-            try:
-                err_body = e.response.json()
-                err_msg = err_body.get("error", str(e))
-                hints = err_body.get("hint", err_body.get("failures", ""))
-            except Exception:
-                err_msg = str(e)
-                hints = ""
-            logger.warning(f"[REBUT] Failed for '{target.get('title', '?')[:60]}': {err_msg} | hints={hints}")
-            return None
         except Exception as e:
-            logger.warning(f"[REBUT] Failed: {e}")
+            status = getattr(getattr(e, "response", None), "status_code", None)
+            if status is not None:
+                try:
+                    err_body = e.response.json()
+                    err_msg = err_body.get("error", str(e))
+                    hints = err_body.get("hint", err_body.get("failures", ""))
+                except Exception:
+                    err_msg = str(e)
+                    hints = ""
+                logger.warning(f"[REBUT] Failed for '{target.get('title', '?')[:60]}': {err_msg} | hints={hints}")
+            else:
+                logger.warning(f"[REBUT] Failed: {e}")
             return None
 
     # ── Memory processing ─────────────────────────────────────────────────
@@ -1095,11 +1140,21 @@ class PeerZeroBot:
         identity_data = extract_json(response)
         if identity_data and identity_data.get("self_narrative"):
             self.memory.store_self_identity(identity_data)
-            try:
-                self.school.submit_identity(identity_data)
-                logger.info("[MEMORY] Self-authored identity updated")
-            except Exception as e:
-                logger.warning(f"[MEMORY] Server backup failed: {e}")
+            max_retries = 3
+            for attempt in range(max_retries):
+                try:
+                    self.school.submit_identity(identity_data)
+                    logger.info("[MEMORY] Self-authored identity updated")
+                    break
+                except Exception as e:
+                    status = getattr(getattr(e, "response", None), "status_code", None)
+                    if status == 429 and attempt < max_retries - 1:
+                        delay = 2 ** (attempt + 1)
+                        logger.info(f"[MEMORY] Rate limited, retrying in {delay}s ({attempt + 1}/{max_retries})")
+                        time.sleep(delay)
+                    else:
+                        logger.warning(f"[MEMORY] Server backup failed: {e}")
+                        break
 
     def _run_private_block(self, system_prompt: str, grade: int = 1):
         """
