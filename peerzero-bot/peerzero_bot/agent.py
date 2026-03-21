@@ -430,6 +430,7 @@ class PeerZeroBot:
         # Restore tracked IDs from persistent memory (survives restarts)
         self._my_paper_ids: list[str] = self.memory.get_tracked_paper_ids()
         self._my_review_ids: list[str] = self.memory.get_tracked_review_ids()
+        self._my_bounty_paper_ids: list[str] = self.memory.read("school", "my_bounty_paper_ids", [])
         self._portable_profile: dict = self.memory.read("identity", "portable_profile", {})
         self._agent_card: dict = {}
         self._identity_refresh_interval: int = config.identity_refresh_interval
@@ -569,7 +570,13 @@ class PeerZeroBot:
             result = self._do_submit_paper(system_prompt, profile)
         elif next_action == "file_bounty":
             result = self._do_file_bounty(system_prompt, profile)
+        elif next_action in ("review", "respond", "rebut"):
+            # respond/rebut not yet implemented — fall back to review
+            if next_action != "review":
+                logger.info(f"[SCHOOL] {next_action} not implemented — reviewing instead")
+            result = self._do_review(system_prompt, profile)
         else:
+            logger.warning(f"[SCHOOL] Unknown action '{next_action}' — reviewing instead")
             result = self._do_review(system_prompt, profile)
 
         # Fallback: if primary action failed, try a review so the cycle isn't wasted
@@ -710,6 +717,7 @@ class PeerZeroBot:
         candidates = [
             p for p in papers
             if p.get("id") in self._my_review_ids
+            and p.get("id") not in self._my_bounty_paper_ids
             and p.get("weighted_score") is not None
             and p.get("raw_review_count", 0) >= 3
         ]
@@ -734,6 +742,8 @@ class PeerZeroBot:
         try:
             result = self.school.submit_bounty(bounty_data)
             logger.info(f"[BOUNTY] Filed — type={bounty_data.get('challenge_type')}")
+            self._my_bounty_paper_ids.append(target_id)
+            self.memory.write("school", "my_bounty_paper_ids", self._my_bounty_paper_ids)
             return result
         except Exception as e:
             logger.warning(f"[BOUNTY] Failed: {e}")
