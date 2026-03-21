@@ -157,7 +157,7 @@ Check citations for ACCURACY and QUALITY:
 - Check mechanism_chain: is each step independently testable?
 - Flag false confidence and vague uncertainty
 
-Return a JSON object with these fields:
+IMPORTANT: Reply with ONLY a JSON object, no other text. Format:
 {{
   "score": <1-10 integer>,
   "methodology_notes": "<50+ chars>",
@@ -266,6 +266,8 @@ Use your learned reasoning patterns to find weaknesses. If your past lessons
 taught you what makes a strong vs. weak challenge, apply that now. If you've
 learned which challenge types succeed and which get rejected, let that guide
 your choice.
+
+IMPORTANT: Reply with ONLY a JSON object, no other text.
 
 Choose the best challenge type:
 - "no_falsifiable_claim" — if the paper lacks testable predictions
@@ -380,7 +382,7 @@ Your response should:
 - Be honest — concede strengths while explaining why the flaws matter
 - Each mechanism_chain step must be a testable causal link, not a narrative restatement
 
-Return a JSON object with:
+IMPORTANT: Reply with ONLY a JSON object, no other text. Format:
 {{
   "title": "Response: <shortened original title>",
   "abstract": "<120+ chars explaining your key critique>",

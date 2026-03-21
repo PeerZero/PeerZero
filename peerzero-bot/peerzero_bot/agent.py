@@ -823,12 +823,19 @@ class PeerZeroBot:
         response_text = self.llm.call(system_prompt, user_msg)
         bounty_data = extract_json(response_text)
 
-        if not bounty_data or bounty_data.get("skip"):
-            logger.warning("[BOUNTY] Failed to parse or LLM skipped — retrying once")
+        if bounty_data and bounty_data.get("skip"):
+            logger.info(f"[BOUNTY] Skipped — {bounty_data.get('reason', 'no reason given')}")
+            return None
+
+        if not bounty_data:
+            logger.warning("[BOUNTY] Failed to parse LLM response — retrying once")
             response_text = self.llm.call(system_prompt, user_msg)
             bounty_data = extract_json(response_text)
-            if not bounty_data or bounty_data.get("skip"):
-                logger.warning("[BOUNTY] Retry also failed")
+            if bounty_data and bounty_data.get("skip"):
+                logger.info(f"[BOUNTY] Skipped — {bounty_data.get('reason', 'no reason given')}")
+                return None
+            if not bounty_data:
+                logger.warning("[BOUNTY] Retry also failed to parse")
                 return None
 
         # Fallback: if LLM omitted external_sources, build from rebuttal citations
