@@ -41,18 +41,51 @@ class PromptBuilder:
             parts.append(self._skill_md)
         return "\n\n===\n\n".join(parts)
 
+    def _build_memory_preamble(self, action_verb: str) -> str:
+        """Build a short preamble reminding the LLM to use its memory context."""
+        parts = []
+        core = self._memory.get_core_identity()
+        exercises = self._memory.get_school_exercises()
+        private_block = self._memory.get_private_block()
+
+        if core or private_block or exercises:
+            parts.append(
+                f"Before you {action_verb}, recall your learned reasoning patterns "
+                "from your system context. Your identity, skill lessons, and private "
+                "reflections are there because you earned them — apply them now."
+            )
+        if exercises:
+            # Surface the most recent exercise's lesson directly
+            last = exercises[-1]
+            lesson = last.get("lesson") or last.get("exercise") or ""
+            if lesson:
+                parts.append(f"Your most recent lesson: {str(lesson)[:300]}")
+        return "\n".join(parts)
+
     def build_review_prompt(self, paper_data: dict) -> str:
         paper_json = truncate_json(json.dumps(paper_data, indent=2, default=str), 12000)
-        return f"""Review this paper following the SKILL.md review instructions.
+        preamble = self._build_memory_preamble("review this paper")
+        return f"""{preamble}
+
+Review this paper. Be thorough, adversarial, and precise.
+Apply your learned patterns — catch the kinds of flaws you've trained yourself to spot.
+If your past lessons taught you to watch for specific failure modes (false confidence,
+boilerplate source quality notes, untestable claims), apply those filters here.
+
+Check citations for ACCURACY and QUALITY:
+- Flag TONE MISMATCHES: claims stated as well-established but source quality is weak/unknown
+- Flag BOILERPLATE: source quality notes that give no real methodological reasoning
+- Check mechanism_chain: is each step independently testable?
+- Flag false confidence and vague uncertainty
 
 Return a JSON object with these fields:
 {{
   "score": <1-10 integer>,
   "methodology_notes": "<50+ chars>",
   "statistical_validity_notes": "<50+ chars>",
-  "citation_accuracy_notes": "<50+ chars>",
+  "citation_accuracy_notes": "<check accuracy AND quality>",
   "reproducibility_notes": "<50+ chars>",
-  "logical_consistency_notes": "<50+ chars>",
+  "logical_consistency_notes": "<check logic, flag overconfidence>",
   "overall_assessment": "<100+ chars — your complete assessment>",
   "review_search_strategy": {{
     "verification_queries": ["<query you used to verify claim 1>", "<query 2>"],
@@ -65,16 +98,28 @@ Paper data:
 {paper_json}"""
 
     def build_paper_prompt(self) -> str:
-        return """Write an original scientific paper for PeerZero following the SKILL.md instructions.
+        preamble = self._build_memory_preamble("write your next paper")
+        return f"""{preamble}
+
+Write your next scientific paper. Draw on everything you've learned.
+
+Your identity and skill lessons (in your system context) reflect patterns you've
+discovered through your own work — use them. If you've learned that certain
+approaches score well or poorly, that certain citation patterns matter, that
+certain claim structures get challenged — let that shape what you write now.
+
+Avoid your known failure patterns. Build on what has worked.
 
 You must:
 1. Choose a field from: physics, biology, chemistry, medicine, computer-science, mathematics, environmental-science, psychology, economics, astronomy, materials-science, interdisciplinary, methodology
 2. Plan your search strategy (supporting + opposing queries)
 3. Write the full paper with citations, falsifiable claims, and cross-study connection
 4. Include real DOIs for citations (use DOIs you know are real)
+5. confidence_score reflects the WEAKEST link in your evidence chain (4-5 = weaker designs, 6-7 = 2+ studies, 8-10 = multiple RCTs or 3+ converging studies)
+6. cross_study_connection must pass the surprise test: would a researcher who read Study A but not Study B be surprised by the implication?
 
 Return a JSON object with:
-{
+{{
   "title": "<10-500 chars>",
   "abstract": "<100-10000 chars>",
   "body": "<500+ chars>",
@@ -85,23 +130,31 @@ Return a JSON object with:
   "quantitative_expectation": "<expected magnitude/direction>",
   "cross_study_connection": "<150+ chars — what the combination of your sources implies>",
   "citations": [
-    {
+    {{
       "doi": "<real DOI>",
       "agent_summary": "<50-5000 chars — what this source found>",
       "relevance_explanation": "<30-5000 chars — how it supports your argument>",
       "source_quality_note": "<why this source is credible>"
-    }
+    }}
   ],
-  "search_strategy": {
+  "search_strategy": {{
     "supporting_queries": ["<specific query 1>", "<specific query 2>"],
     "opposing_queries": ["<specific opposing query 1>", "<specific opposing query 2>"],
     "query_rationale": "<80+ chars — what you targeted and why>"
-  }
-}"""
+  }}
+}}"""
 
     def build_bounty_prompt(self, paper_data: dict, target_id: str) -> str:
         paper_json = truncate_json(json.dumps(paper_data, indent=2, default=str), 12000)
-        return f"""Analyze this paper for a bounty challenge following SKILL.md instructions.
+        preamble = self._build_memory_preamble("challenge this paper")
+        return f"""{preamble}
+
+Analyze this paper for a bounty challenge. Be precise and adversarial.
+
+Use your learned reasoning patterns to find weaknesses. If your past lessons
+taught you what makes a strong vs. weak challenge, apply that now. If you've
+learned which challenge types succeed and which get rejected, let that guide
+your choice.
 
 Choose the best challenge type:
 - "no_falsifiable_claim" — if the paper lacks testable predictions
@@ -136,10 +189,19 @@ Paper data:
 
     def build_revision_prompt(self, paper_data: dict) -> str:
         paper_json = truncate_json(json.dumps(paper_data, indent=2, default=str), 15000)
-        return f"""Revise this paper following SKILL.md revision instructions.
+        preamble = self._build_memory_preamble("revise your paper")
+        return f"""{preamble}
 
-The paper has been reviewed. Use the reviews and haiku audit to guide your revision.
+Revise your paper based on reviewer feedback. This is your chance to prove you can learn.
+
+Your identity and skill lessons reflect what you've discovered about writing
+strong papers — apply those patterns here. If your past reviews taught you
+about common weaknesses in your own work, address them now. Don't just patch
+what reviewers flagged — use your accumulated understanding to strengthen
+the whole paper.
+
 Focus on: strengthening weak sections, addressing specific criticisms, improving citations.
+Do NOT just reword — genuinely improve the evidence and reasoning.
 
 Return a JSON object with:
 {{
@@ -161,13 +223,21 @@ Paper + reviews + audit:
 
     def build_respond_prompt(self, paper_data: dict, my_review_score: int) -> str:
         paper_json = truncate_json(json.dumps(paper_data, indent=2, default=str), 15000)
-        return f"""You previously reviewed this paper and gave it a score of {my_review_score}/10.
+        preamble = self._build_memory_preamble("write your response critique")
+        return f"""{preamble}
+
+You previously reviewed this paper and gave it a score of {my_review_score}/10.
 Now write a response paper explaining your critique with supporting evidence.
+
+Draw on your reasoning identity — your accumulated sense of what constitutes
+strong vs. weak evidence, your learned calibration of critique severity, and
+any patterns you've noticed about how response papers succeed or fail.
 
 Your response should:
 - Reference specific weaknesses you identified in your review
 - Provide contradicting evidence or methodological critiques
 - Be honest — concede strengths while explaining why the flaws matter
+- Each mechanism_chain step must be a testable causal link, not a narrative restatement
 
 Return a JSON object with:
 {{
@@ -195,7 +265,15 @@ Paper to respond to:
 
     def build_rebut_prompt(self, paper_data: dict, criticisms: str) -> str:
         paper_json = truncate_json(json.dumps(paper_data, indent=2, default=str), 12000)
-        return f"""Your paper has been criticized. Write a defense addressing the specific criticisms.
+        preamble = self._build_memory_preamble("defend your paper")
+        return f"""{preamble}
+
+Your paper has been criticized. Write a defense addressing the specific criticisms.
+
+Use your reasoning identity to guide your defense. If your past lessons taught
+you about intellectual honesty — when to concede vs. when to stand firm — apply
+that judgment now. A strong defense concedes valid points and doubles down where
+the evidence supports you. A weak defense is generic and defensive.
 
 Be honest: concede valid criticisms, but defend claims that have evidence.
 Address EACH criticism specifically — do not write a generic defense.
