@@ -578,13 +578,51 @@ def search_and_summarize(queries, log, client, paper_context="") -> list:
 
     # Phase 1.5: Enrich arXiv/PubMed papers with real citation counts from OpenAlex
     all_papers = _enrich_citation_counts(all_papers, log)
+    log.info(f"Search collected {len(all_papers)} unique papers")
 
-    # Phase 2: Summarize all collected papers so the bot can be selective
-    # Sort by citation count so highest-quality papers get summarized first
-    all_papers.sort(key=lambda p: (p.get("citationCount") or 0), reverse=True)
-    log.info(f"Search collected {len(all_papers)} unique papers, summarizing all")
+    # Phase 2: Select the most relevant papers (not just highest citation count)
+    # Use one Haiku call to rank all papers by relevance to the research context
+    selected = all_papers
+    if client and paper_context and len(all_papers) > 12:
+        paper_list = "\n".join(
+            f"{i+1}. [{(p.get('externalIds', {}).get('DOI') or '')[:40]}] {p.get('title', '')[:80]} (cited: {p.get('citationCount') or '?'})"
+            for i, p in enumerate(all_papers)
+        )
+        rank_prompt = f"Research topic: {paper_context}\n\nRank these papers by RELEVANCE to the research topic. Return the numbers of the 12 most relevant papers as a JSON array, most relevant first.\n\nPapers:\n{paper_list}\n\nReturn JSON only: [1, 5, 3, ...]"
+        try:
+            msg = client.messages.create(
+                model=MODEL_FAST, max_tokens=200,
+                system="You rank papers by relevance. Return a JSON array of paper numbers only.",
+                messages=[{"role": "user", "content": rank_prompt}], timeout=30
+            )
+            ranked = _extract_json_from_text(msg.content[0].text.strip())
+            indices = ranked.get("items", ranked) if isinstance(ranked, dict) else ranked
+            if isinstance(indices, list) and len(indices) >= 6:
+                selected = []
+                seen = set()
+                for idx in indices:
+                    i = int(idx) - 1
+                    if 0 <= i < len(all_papers) and i not in seen:
+                        selected.append(all_papers[i])
+                        seen.add(i)
+                    if len(selected) >= 12:
+                        break
+                log.info(f"Relevance ranking selected {len(selected)} papers from {len(all_papers)}")
+            else:
+                log.warning("Relevance ranking returned too few results, falling back to citation sort")
+                all_papers.sort(key=lambda p: (p.get("citationCount") or 0), reverse=True)
+                selected = all_papers[:12]
+        except Exception as e:
+            log.warning(f"Relevance ranking failed ({e}), falling back to citation sort")
+            all_papers.sort(key=lambda p: (p.get("citationCount") or 0), reverse=True)
+            selected = all_papers[:12]
+    elif len(all_papers) > 12:
+        all_papers.sort(key=lambda p: (p.get("citationCount") or 0), reverse=True)
+        selected = all_papers[:12]
 
-    for p in all_papers:
+    # Phase 3: Summarize only the selected papers (1 Haiku call each)
+    log.info(f"Summarizing {len(selected)} selected papers")
+    for p in selected:
         doi = (p.get("externalIds", {}).get("DOI") or p.get("doi", "")).strip()
         abstract = p.get("abstract", "")
         if abstract and client:
@@ -592,7 +630,7 @@ def search_and_summarize(queries, log, client, paper_context="") -> list:
             p["agent_summary"] = summaries["agent_summary"]
             p["source_quality_note"] = summaries["source_quality_note"]
 
-    return all_papers
+    return selected
 
 def extract_failure_patterns(client, agent_data, log) -> str:
     coaching = agent_data.get("coaching", {})
