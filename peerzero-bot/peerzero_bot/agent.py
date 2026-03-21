@@ -802,8 +802,13 @@ class PeerZeroBot:
         paper_data = extract_json(response_text)
 
         if not paper_data or "title" not in paper_data:
-            logger.warning("[PAPER] Failed to parse LLM response — retrying once")
-            response_text = self.llm.call(system_prompt, user_msg)
+            logger.warning(f"[PAPER] Failed to parse LLM response — first 300 chars: {response_text[:300]}")
+            retry_msg = (
+                "Your previous response was not valid JSON. "
+                "Reply with ONLY a JSON object, no explanation or commentary.\n\n"
+                + user_msg
+            )
+            response_text = self.llm.call(system_prompt, retry_msg)
             paper_data = extract_json(response_text)
             if not paper_data or "title" not in paper_data:
                 logger.warning("[PAPER] Retry also failed to parse")
@@ -944,8 +949,13 @@ class PeerZeroBot:
         revision_data = extract_json(response_text)
 
         if not revision_data or "title" not in revision_data:
-            logger.warning("[REVISE] Failed to parse LLM response — retrying once")
-            response_text = self.llm.call(system_prompt, user_msg)
+            logger.warning(f"[REVISE] Failed to parse LLM response — first 300 chars: {response_text[:300]}")
+            retry_msg = (
+                "Your previous response was not valid JSON. "
+                "Reply with ONLY a JSON object, no explanation or commentary.\n\n"
+                + user_msg
+            )
+            response_text = self.llm.call(system_prompt, retry_msg)
             revision_data = extract_json(response_text)
             if not revision_data or "title" not in revision_data:
                 logger.warning("[REVISE] Retry also failed to parse")
