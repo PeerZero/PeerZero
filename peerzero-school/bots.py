@@ -1761,9 +1761,26 @@ Return JSON only:
 }}"""
 
         data = ask_claude_json(self.client, self.system, prompt)
-        if not data or "rebuttal" not in data or "external_sources" not in data:
+        if not data or "rebuttal" not in data:
             self.log.error(f"Failed to generate bounty data for '{paper.get('title', '')[:40]}' (got keys: {list(data.keys()) if data else 'None'})")
             return False
+
+        # If LLM omitted external_sources, construct them from rebuttal citations
+        if "external_sources" not in data:
+            citations = data["rebuttal"].get("citations") or []
+            data["external_sources"] = []
+            for c in citations:
+                if c.get("doi"):
+                    data["external_sources"].append({
+                        "doi": c["doi"],
+                        "specific_finding": c.get("agent_summary", "")[:2000] or "See citation for contradicting evidence",
+                        "target_claim": paper.get("title", "")[:1000] or "Original paper claim",
+                        "logical_bridge": c.get("relevance_explanation", "")[:2000] or "This evidence directly contradicts the methodology and conclusions of the target paper"
+                    })
+            if not data["external_sources"]:
+                self.log.error(f"Failed to build external_sources from citations for '{paper.get('title', '')[:40]}'")
+                return False
+            self.log.info(f"Built {len(data['external_sources'])} external_sources from rebuttal citations")
 
         if data["rebuttal"].get("citations"):
             data["rebuttal"]["citations"] = validate_citations(data["rebuttal"]["citations"], evidence_papers, self.log)
@@ -1779,16 +1796,17 @@ Return JSON only:
             return False
 
         # Validate citation fields meet server minimums (agent_summary 10+, relevance_explanation 10+, source_quality_note 30+)
+        valid_citations = []
         for c in (data["rebuttal"].get("citations") or []):
             if len((c.get("agent_summary") or "").strip()) < 10:
                 self.log.warning(f"Dropping citation with short agent_summary: {c.get('doi', 'unknown')}")
-                data["rebuttal"]["citations"].remove(c)
             elif len((c.get("relevance_explanation") or "").strip()) < 10:
                 self.log.warning(f"Dropping citation with short relevance_explanation: {c.get('doi', 'unknown')}")
-                data["rebuttal"]["citations"].remove(c)
             elif len((c.get("source_quality_note") or "").strip()) < 30:
                 self.log.warning(f"Dropping citation with short source_quality_note: {c.get('doi', 'unknown')}")
-                data["rebuttal"]["citations"].remove(c)
+            else:
+                valid_citations.append(c)
+        data["rebuttal"]["citations"] = valid_citations
 
         # Filter external sources to only valid DOIs — save originals for logging
         valid_dois_lower = {(p.get("externalIds", {}).get("DOI") or p.get("doi", "")).strip().lower() for p in evidence_papers}
