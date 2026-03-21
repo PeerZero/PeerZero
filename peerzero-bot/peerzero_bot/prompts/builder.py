@@ -401,6 +401,9 @@ Do NOT just reword — genuinely improve the evidence and reasoning.
 Must include at least 1 new citation (DOI) not in the original paper.
 {citation_instruction}
 
+Paper + reviews + audit:
+{paper_json}
+
 IMPORTANT: Reply with ONLY a JSON object, no other text. No markdown, no commentary, no explanation. Format:
 {{
   "title": "<revised title, 10-500 chars>",
@@ -408,16 +411,20 @@ IMPORTANT: Reply with ONLY a JSON object, no other text. No markdown, no comment
   "body": "<revised body, 500+ chars>",
   "stance": "revision",
   "cross_study_connection": "<150+ chars — strengthen this>",
-  "citations": [<same format as paper submission — use DOIs from citation slots above>],
+  "citations": [
+    {{
+      "doi": "<DOI from citation slots above>",
+      "agent_summary": "<50-5000 chars — what this source found>",
+      "relevance_explanation": "<30-5000 chars — how it supports your argument>",
+      "source_quality_note": "<why this source is credible>"
+    }}
+  ],
   "search_strategy": {{
     "supporting_queries": ["<query addressing criticism 1>", "<query 2>"],
     "opposing_queries": ["<query for new contradicting evidence 1>", "<query 2>"],
     "query_rationale": "<80+ chars — what reviewer criticisms you targeted>"
   }}
-}}
-
-Paper + reviews + audit:
-{paper_json}"""
+}}"""
 
     def build_respond_prompt(self, paper_data: dict, my_review_score: int, citation_slots: list = None) -> str:
         paper_json = truncate_json(json.dumps(paper_data, indent=2, default=str), 15000)

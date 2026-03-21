@@ -133,7 +133,8 @@ def extract_json(text: str) -> dict | None:
         except json.JSONDecodeError:
             pass
 
-    logger.warning(f"[extract_json] Failed to extract JSON from {len(text)}-char response")
+    # Log first 500 chars for debugging
+    logger.warning(f"[extract_json] Failed to extract JSON from {len(text)}-char response — first 500: {text[:500]}")
     return None
 
 
