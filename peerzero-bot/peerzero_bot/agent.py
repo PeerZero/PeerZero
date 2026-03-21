@@ -789,21 +789,13 @@ class PeerZeroBot:
 
         full = self.school.get_papers(params={"id": paper_id})
         user_msg = self.prompts.build_review_prompt(full)
-        response_text = self.llm.call(system_prompt, user_msg)
-        review_data = extract_json(response_text)
+        review_keys = ["score", "overall_assessment", "methodology_score", "novelty_score",
+                       "reproducibility_score", "citation_quality_score", "search_strategy"]
+        review_data = self.llm.call_json(system_prompt, user_msg, json_keys=review_keys)
 
         if not review_data or "score" not in review_data:
-            logger.warning(f"[REVIEW] Failed to parse LLM response — first 300 chars: {response_text[:300]}")
-            retry_msg = (
-                "Your previous response was not valid JSON. "
-                "Reply with ONLY a JSON object, no explanation or commentary.\n\n"
-                + user_msg
-            )
-            response_text = self.llm.call(system_prompt, retry_msg)
-            review_data = extract_json(response_text)
-            if not review_data or "score" not in review_data:
-                logger.warning("[REVIEW] Retry also failed to parse")
-                return None
+            logger.warning("[REVIEW] Failed to get valid JSON from LLM")
+            return None
 
         # Clamp score to valid range (LLM sometimes returns 0.5 or 10.5)
         try:
@@ -896,28 +888,17 @@ class PeerZeroBot:
         full = self.school.get_papers(params={"id": target_id})
 
         user_msg = self.prompts.build_bounty_prompt(full, target_id)
-        response_text = self.llm.call(system_prompt, user_msg)
-        bounty_data = extract_json(response_text)
+        bounty_keys = ["action", "target_paper_id", "challenge_type", "skip", "reason",
+                       "challenged_doi", "quality_challenge_reason", "search_strategy"]
+        bounty_data = self.llm.call_json(system_prompt, user_msg, json_keys=bounty_keys)
 
         if bounty_data and bounty_data.get("skip"):
             logger.info(f"[BOUNTY] Skipped — {bounty_data.get('reason', 'no reason given')}")
             return None
 
         if not bounty_data:
-            logger.warning(f"[BOUNTY] Failed to parse LLM response — first 300 chars: {response_text[:300]}")
-            retry_msg = (
-                "Your previous response was not valid JSON. "
-                "Reply with ONLY a JSON object, no explanation or commentary.\n\n"
-                + user_msg
-            )
-            response_text = self.llm.call(system_prompt, retry_msg)
-            bounty_data = extract_json(response_text)
-            if bounty_data and bounty_data.get("skip"):
-                logger.info(f"[BOUNTY] Skipped — {bounty_data.get('reason', 'no reason given')}")
-                return None
-            if not bounty_data:
-                logger.warning("[BOUNTY] Retry also failed to parse")
-                return None
+            logger.warning("[BOUNTY] Failed to get valid JSON from LLM")
+            return None
 
         # Validate challenge_type — only structural and weak_source_quality are supported
         # (standard bounties require a response paper submission step we don't implement)
@@ -1129,16 +1110,13 @@ class PeerZeroBot:
         logger.info(f"[REBUT] Found {len(evidence_papers)} papers from search")
 
         user_msg = self.prompts.build_rebut_prompt(full, criticisms, citation_slots=evidence_papers)
-        response_text = self.llm.call(system_prompt, user_msg)
-        rebut_data = extract_json(response_text)
+        rebut_keys = ["title", "abstract", "body", "stance", "cross_study_connection",
+                      "mechanism_chain", "citations", "search_strategy"]
+        rebut_data = self.llm.call_json(system_prompt, user_msg, json_keys=rebut_keys)
 
         if not rebut_data or "title" not in rebut_data:
-            logger.warning("[REBUT] Failed to parse LLM response — retrying once")
-            response_text = self.llm.call(system_prompt, user_msg)
-            rebut_data = extract_json(response_text)
-            if not rebut_data or "title" not in rebut_data:
-                logger.warning("[REBUT] Retry also failed to parse")
-                return None
+            logger.warning("[REBUT] Failed to get valid JSON from LLM")
+            return None
 
         # Fill defaults for any missing required fields
         rebut_data.setdefault("abstract", rebut_data.get("title", ""))
@@ -1333,16 +1311,13 @@ class PeerZeroBot:
         paper_data = original.get("paper", original)
 
         user_msg = self.prompts.build_reaffirmation_prompt(paper_data, [])
-        response_text = self.llm.call(system_prompt, user_msg)
-        reaffirm_data = extract_json(response_text)
+        reaffirm_keys = ["title", "abstract", "body", "stance", "cross_study_connection",
+                         "citations", "search_strategy"]
+        reaffirm_data = self.llm.call_json(system_prompt, user_msg, json_keys=reaffirm_keys)
 
         if not reaffirm_data or "title" not in reaffirm_data:
-            logger.warning("[REAFFIRM] Failed to parse LLM response — retrying once")
-            response_text = self.llm.call(system_prompt, user_msg)
-            reaffirm_data = extract_json(response_text)
-            if not reaffirm_data or "title" not in reaffirm_data:
-                logger.warning("[REAFFIRM] Retry also failed")
-                return None
+            logger.warning("[REAFFIRM] Failed to get valid JSON from LLM")
+            return None
 
         reaffirm_data["stance"] = "reaffirmation"
         reaffirm_data.setdefault("citations", [])
@@ -1651,8 +1626,8 @@ class PeerZeroBot:
                     logger.warning(f"[{platform_name}] Blocked by autonomy: {decision.reason}")
                     return None
 
-            response_text = self.llm_fast.call(system_prompt, user_msg)
-            action_data = extract_json(response_text)
+            action_keys = ["action_type", "content", "reasoning"]
+            action_data = self.llm_fast.call_json(system_prompt, user_msg, json_keys=action_keys)
 
             if not action_data or not action_data.get("action_type"):
                 logger.warning(f"[{platform_name}] Failed to parse action from LLM")
