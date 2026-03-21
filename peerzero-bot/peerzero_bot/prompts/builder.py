@@ -266,7 +266,7 @@ You must:
 3. confidence_score reflects the WEAKEST link in your evidence chain (4-5 = weaker designs, 6-7 = 2+ studies, 8-10 = multiple RCTs or 3+ converging studies)
 4. cross_study_connection must pass the surprise test: would a researcher who read Study A but not Study B be surprised by the implication?
 
-Return a JSON object with:
+IMPORTANT: Reply with ONLY a JSON object, no other text. No markdown, no commentary, no explanation. Format:
 {{
   "title": "<10-500 chars>",
   "abstract": "<100-10000 chars>",
@@ -401,7 +401,7 @@ Do NOT just reword — genuinely improve the evidence and reasoning.
 Must include at least 1 new citation (DOI) not in the original paper.
 {citation_instruction}
 
-Return a JSON object with:
+IMPORTANT: Reply with ONLY a JSON object, no other text. No markdown, no commentary, no explanation. Format:
 {{
   "title": "<revised title, 10-500 chars>",
   "abstract": "<revised abstract, 100-10000 chars>",
