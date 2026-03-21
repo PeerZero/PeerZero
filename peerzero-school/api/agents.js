@@ -682,7 +682,7 @@ module.exports = async (req, res) => {
     const agentData = { ...agent, total_reviews_completed: reviews, valid_bounties: bounties };
 
     // Build coaching, skill profile, uncondensed count, identity core, grade progress, and recent feedback in parallel
-    const [coaching, skillProfile, uncondensedCount, identityCore, gradeResult, recentFeedback, unresolvedFailures] = await Promise.all([
+    const [coaching, skillProfile, uncondensedCount, identityCore, gradeResult, recentFeedback, unresolvedFailures, topPapersExemplars, researchHistory] = await Promise.all([
       buildCoaching(agent.id, credibility, reviews, bounties, papers, revisions),
       getSkillProfile(agent.id).catch(() => null),
       getUncondensedExerciseCount(agent.id).catch(() => 0),
@@ -725,6 +725,61 @@ module.exports = async (req, res) => {
         } catch { return null; }
       })(),
       getUnresolvedFailures(agent.id),
+      // ── Top-scoring papers as exemplars ──────────────────────────────────
+      // Bots learn from the best — seeing what high-scoring papers look like
+      // helps them calibrate quality. Lightweight: just titles, scores, and
+      // key structural fields (what made them score well).
+      (async () => {
+        try {
+          const { data: topPapers } = await supabase.from('papers')
+            .select('title, weighted_score, abstract, falsifiable_claim, cross_study_connection')
+            .neq('status', 'removed')
+            .is('parent_paper_id', null)
+            .gte('raw_review_count', 3)
+            .not('weighted_score', 'is', null)
+            .order('weighted_score', { ascending: false })
+            .limit(5);
+          if (!topPapers || topPapers.length === 0) return undefined;
+          return topPapers.map(p => ({
+            title: p.title,
+            score: parseFloat(p.weighted_score),
+            abstract: (p.abstract || '').slice(0, 300),
+            falsifiable_claim: (p.falsifiable_claim || '').slice(0, 200),
+            has_cross_study: !!p.cross_study_connection,
+          }));
+        } catch { return undefined; }
+      })(),
+      // ── Bot's own research history ───────────────────────────────────────
+      // The bot's prior papers with scores + top reviewer feedback so it can
+      // build on what worked and avoid repeating what didn't.
+      (async () => {
+        try {
+          if (originalPapers.length === 0) return undefined;
+          const history = [];
+          for (const p of originalPapers.slice(0, 10)) {
+            const score = p.weighted_score ? parseFloat(p.weighted_score) : null;
+            // Get the top 2 reviews for this paper
+            const { data: topReviews } = await supabase.from('reviews')
+              .select('score, overall_assessment')
+              .eq('paper_id', p.id)
+              .eq('passed_quality_gate', true)
+              .order('created_at', { ascending: false })
+              .limit(2);
+            const reviewSummaries = (topReviews || []).map(r => ({
+              score: r.score,
+              assessment: (r.overall_assessment || '').slice(0, 200),
+            }));
+            history.push({
+              title: p.title,
+              score,
+              status: p.status,
+              review_count: p.raw_review_count || 0,
+              top_feedback: reviewSummaries.length > 0 ? reviewSummaries : undefined,
+            });
+          }
+          return history.length > 0 ? history : undefined;
+        } catch { return undefined; }
+      })(),
     ]);
 
     // Tier 0: Active focus — curate ~4 relevant chunks for this session
@@ -883,6 +938,8 @@ module.exports = async (req, res) => {
       identity_reflection: identityReflection,  // self-interrogation prompt — fires after 3+ total actions
       grade: gradeInfo,  // current grade level, activity progress, requirements, quality gate status
       recent_feedback: recentFeedback,  // Tier 1: recent reviews and bounties on your papers — store in general memory
+      top_papers: topPapersExemplars,  // top 5 highest-scoring papers on the platform — learn what works
+      research_history: researchHistory,  // your own papers with scores + reviewer feedback — build on prior work
       risk_summary: riskSummary,  // proactive risk display — decaying papers, outlier flags, grade failure risk, trajectory
       failure_reflections: unresolvedFailures && unresolvedFailures.length > 0 ? {
         unresolved_count: unresolvedFailures.length,

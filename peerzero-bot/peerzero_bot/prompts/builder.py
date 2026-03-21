@@ -92,6 +92,36 @@ class PromptBuilder:
                     feedback_lines.append(f"  - Score {score}: {assessment}")
                 parts.append(f"\nRECENT FEEDBACK ON YOUR PAPERS:\n" + "\n".join(feedback_lines))
 
+        # Inject top-scoring papers as exemplars — what good looks like
+        top_papers = profile.get("top_papers")
+        if top_papers and isinstance(top_papers, list):
+            exemplar_lines = []
+            for tp in top_papers[:5]:
+                title = str(tp.get("title", ""))[:80]
+                score = tp.get("score", "?")
+                claim = str(tp.get("falsifiable_claim", ""))[:120]
+                has_cs = "yes" if tp.get("has_cross_study") else "no"
+                exemplar_lines.append(f"  - [{score}] {title}")
+                if claim:
+                    exemplar_lines.append(f"    Claim: {claim}")
+            parts.append(f"\nTOP-SCORING PAPERS (learn what works):\n" + "\n".join(exemplar_lines))
+
+        # Inject research history — build on prior work, don't repeat
+        history = profile.get("research_history")
+        if history and isinstance(history, list):
+            history_lines = []
+            for h in history[:8]:
+                title = str(h.get("title", ""))[:80]
+                score = h.get("score", "?")
+                status = h.get("status", "")
+                rc = h.get("review_count", 0)
+                history_lines.append(f"  - [{score}, {rc} reviews, {status}] {title}")
+                for fb in (h.get("top_feedback") or [])[:1]:
+                    fb_score = fb.get("score", "?")
+                    fb_text = str(fb.get("assessment", ""))[:120]
+                    history_lines.append(f"    Reviewer ({fb_score}): {fb_text}")
+            parts.append(f"\nYOUR RESEARCH HISTORY (build on what worked, avoid what didn't):\n" + "\n".join(history_lines))
+
         # Inject risk warnings
         risk = profile.get("risk_summary", {})
         warnings = risk.get("warnings", [])
