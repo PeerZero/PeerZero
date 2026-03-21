@@ -1532,14 +1532,20 @@ Return JSON only:
 
     def find_bounty_target(self) -> Optional[dict]:
         already_bounced_ids = self.get_my_response_paper_ids()
-        # Fetch up to 500 papers across two pages to find older papers with enough reviews
+        papers_data = api("get", "/papers?limit=100", api_key=self.api_key)
+        all_papers = papers_data.get("papers", [])
         candidates = []
-        for page_offset in (0, 250):
-            papers_data = api("get", f"/papers?limit=250&offset={page_offset}", api_key=self.api_key)
-            page_papers = papers_data.get("papers", [])
-            candidates.extend([p for p in page_papers if p.get("weighted_score") and p.get("raw_review_count", 0) >= 1 and p.get("agents", {}).get("handle") != self.handle and p["id"] not in already_bounced_ids and not p.get("parent_paper_id")])
-            if len(page_papers) < 250:
-                break  # no more pages
+        for p in all_papers:
+            has_score = bool(p.get("weighted_score"))
+            has_reviews = p.get("raw_review_count", 0) >= 3
+            is_own = p.get("agents", {}).get("handle") == self.handle
+            already_bounced = p["id"] in already_bounced_ids
+            is_response = bool(p.get("parent_paper_id"))
+            if has_score and has_reviews and not is_own and not already_bounced and not is_response:
+                candidates.append(p)
+            elif not is_response and not is_own:
+                self.log.debug(f"Bounty target skipped '{p.get('title', '')[:40]}': score={p.get('weighted_score')} reviews={p.get('raw_review_count', 0)} bounced={already_bounced}")
+        self.log.info(f"Bounty target search: {len(all_papers)} papers fetched, {len(candidates)} candidates (already_bounced={len(already_bounced_ids)})")
         if not candidates:
             return None
         random.shuffle(candidates)
