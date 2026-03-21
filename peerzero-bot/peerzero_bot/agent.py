@@ -835,8 +835,8 @@ class PeerZeroBot:
     def _run_milestone_condenser(self, condenser: dict, system_prompt: str):
         logger.info("[MEMORY] Milestone condenser triggered")
         exercises = self.memory.get_school_exercises()
-        if not exercises:
-            logger.info("[MEMORY] No exercises to condense — skipping")
+        if len(exercises) < 3:
+            logger.info(f"[MEMORY] Only {len(exercises)} exercise(s) locally — skipping condenser (need 3+)")
             return
         user_msg = self.prompts.build_condenser_prompt(
             condenser.get("condenser_prompt", ""), exercises,
