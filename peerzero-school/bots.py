@@ -879,9 +879,17 @@ The paper has intentional flaws. Catch at least 2. Return JSON only:
     def get_status(self) -> dict:
         return api("get", "/agents?me=true", api_key=self.api_key)
 
-    def get_my_response_paper_ids(self) -> set:
+    def get_my_bounty_target_ids(self) -> set:
+        """Return IDs of papers this bot has already filed a bounty against.
+        Uses response papers with bounty-linked challenge papers as a proxy,
+        since the bounties API only returns summary counts.
+        The API also enforces no-duplicate-bounties server-side (409)."""
         my_papers = api("get", "/papers?my_papers=true", api_key=self.api_key)
-        return {p.get("parent_paper_id") for p in my_papers.get("papers", []) if p.get("parent_paper_id")}
+        # Only exclude papers we've already bountied — not papers we merely responded to.
+        # Bounty challenge papers have response_stance="rebut" AND were created via do_file_bounty.
+        # Since we can't distinguish bounty rebuttals from regular rebuttals client-side,
+        # return empty set and let the API's duplicate check (409) handle it.
+        return set()
 
     def decide_action(self, status) -> str:
         action = status.get("next_action", "")
@@ -1531,9 +1539,21 @@ Return JSON only:
     # ── Find bounty target ──────────────────────────────────────────────────
 
     def find_bounty_target(self) -> Optional[dict]:
-        already_bounced_ids = self.get_my_response_paper_ids()
+        already_bounced_ids = self.get_my_bounty_target_ids()
         papers_data = api("get", "/papers?limit=100", api_key=self.api_key)
-        candidates = [p for p in papers_data.get("papers", []) if p.get("weighted_score") and p.get("raw_review_count", 0) >= 3 and p.get("agents", {}).get("handle") != self.handle and p["id"] not in already_bounced_ids and not p.get("parent_paper_id")]
+        all_papers = papers_data.get("papers", [])
+        candidates = []
+        for p in all_papers:
+            has_score = bool(p.get("weighted_score"))
+            has_reviews = p.get("raw_review_count", 0) >= 3
+            is_own = p.get("agents", {}).get("handle") == self.handle
+            already_bounced = p["id"] in already_bounced_ids
+            is_response = bool(p.get("parent_paper_id"))
+            if has_score and has_reviews and not is_own and not already_bounced and not is_response:
+                candidates.append(p)
+            elif not is_response and not is_own:
+                self.log.debug(f"Bounty target skipped '{p.get('title', '')[:40]}': score={p.get('weighted_score')} reviews={p.get('raw_review_count', 0)} bounced={already_bounced}")
+        self.log.info(f"Bounty target search: {len(all_papers)} papers fetched, {len(candidates)} candidates (already_bounced={len(already_bounced_ids)})")
         if not candidates:
             return None
         random.shuffle(candidates)
@@ -1795,6 +1815,9 @@ Return JSON only:
             ],
             "query_rationale": "Supporting queries target contradicting evidence and methodological limitations. Opposing queries check if the original paper's claims hold up by searching for independent confirmations and positive replications."
         }
+
+        # Force stance to "rebut" — LLM sometimes returns invalid values
+        data["rebuttal"]["stance"] = "rebut"
 
         # Trim mechanism_chain steps to server limit (500 chars each, max 10 steps)
         if data["rebuttal"].get("mechanism_chain") and isinstance(data["rebuttal"]["mechanism_chain"], list):
