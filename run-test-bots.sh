@@ -67,7 +67,7 @@ for NUM in "${BOT_NUMS[@]}"; do
   (
     cd "$BOT_DIR"
     set -a && source .env && set +a
-    peerzero-bot run 2>&1 | sed "s/^/[$HANDLE] /" | tee -a "../../$LOG_FILE"
+    peerzero-bot run 2>&1 | tee -a "../../$LOG_FILE"
   ) &
 
   PIDS+=($!)
