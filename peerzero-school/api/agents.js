@@ -489,7 +489,7 @@ module.exports = async (req, res) => {
               result.push({
                 id: p.id, title: p.title, abstract: p.abstract,
                 weighted_score: p.weighted_score, raw_review_count: p.raw_review_count,
-                missing_mechanism_chain: !!p.cross_study_connection && !p.mechanism_chain,
+                missing_mechanism_chain: !!p.cross_study_connection && !(Array.isArray(p.mechanism_chain) && p.mechanism_chain.length >= 2),
                 has_cross_study: !!p.cross_study_connection,
               });
             }

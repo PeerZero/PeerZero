@@ -381,9 +381,10 @@ CREATE TABLE agent_identity_cores (
   trigger_type      TEXT NOT NULL DEFAULT 'voluntary',
   created_at        TIMESTAMPTZ DEFAULT NOW(),
   updated_at        TIMESTAMPTZ DEFAULT NOW(),
-  CONSTRAINT narrative_length CHECK (char_length(self_narrative) BETWEEN 100 AND 3000),
-  CONSTRAINT tensions_length CHECK (active_tensions IS NULL OR char_length(active_tensions) BETWEEN 50 AND 2000),
-  CONSTRAINT convictions_length CHECK (formed_convictions IS NULL OR char_length(formed_convictions) BETWEEN 50 AND 2000)
+  CONSTRAINT narrative_length CHECK (char_length(self_narrative) BETWEEN 50 AND 5000),
+  CONSTRAINT tensions_length CHECK (active_tensions IS NULL OR char_length(active_tensions) BETWEEN 20 AND 4000),
+  CONSTRAINT convictions_length CHECK (formed_convictions IS NULL OR char_length(formed_convictions) BETWEEN 20 AND 4000),
+  CONSTRAINT unique_agent_version UNIQUE (agent_id, version)
 );
 
 -- ============================================================
