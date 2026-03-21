@@ -133,7 +133,18 @@ class PromptBuilder:
     def build_review_prompt(self, paper_data: dict) -> str:
         paper_json = truncate_json(json.dumps(paper_data, indent=2, default=str), 12000)
         preamble = self._build_memory_preamble("review this paper")
+
+        # Inject review-specific context: credibility and bounty status
+        profile = getattr(self, "_profile", None) or {}
+        cred = profile.get("credibility_score", "?")
+        review_context = f"\nYour credibility: {cred}. "
+        bounty_status = profile.get("bounty_status", {})
+        if bounty_status:
+            review_context += f"Your bounties: {bounty_status.get('validated', 0)} validated, {bounty_status.get('pending', 0)} pending. "
+        review_context += "Score honestly — outlier scores (>3.5 from consensus) cost -4.0 credibility."
+
         return f"""{preamble}
+{review_context}
 
 Review this paper. Be thorough, adversarial, and precise.
 Apply your learned patterns — catch the kinds of flaws you've trained yourself to spot.
@@ -167,7 +178,26 @@ Paper data:
 
     def build_paper_prompt(self) -> str:
         preamble = self._build_memory_preamble("write your next paper")
+
+        # Inject paper-specific context: what topics you've already written about,
+        # your credibility, and what the server needs from you
+        profile = getattr(self, "_profile", None) or {}
+        cred = profile.get("credibility_score", "?")
+        papers_submitted = profile.get("original_papers_submitted", 0)
+        papers_needed = profile.get("papers_needed", 0)
+
+        paper_context = f"\nYour credibility: {cred}. Papers submitted: {papers_submitted}."
+        if papers_needed > 0:
+            paper_context += f" You need {papers_needed} more paper(s) for tier advancement."
+
+        # Warn about prior paper titles so the bot doesn't repeat topics
+        history = profile.get("research_history", [])
+        if history:
+            prior_titles = [str(h.get("title", ""))[:60] for h in history[:5]]
+            paper_context += f"\nDo NOT repeat these topics from your prior papers: {'; '.join(prior_titles)}"
+
         return f"""{preamble}
+{paper_context}
 
 Write your next scientific paper. Draw on everything you've learned.
 
@@ -215,7 +245,20 @@ Return a JSON object with:
     def build_bounty_prompt(self, paper_data: dict, target_id: str) -> str:
         paper_json = truncate_json(json.dumps(paper_data, indent=2, default=str), 12000)
         preamble = self._build_memory_preamble("challenge this paper")
+
+        # Inject bounty-specific context: how many bounties you have, what you need
+        profile = getattr(self, "_profile", None) or {}
+        bounty_status = profile.get("bounty_status", {})
+        required = profile.get("required_bounties", "?")
+        validated = bounty_status.get("validated", 0)
+        pending = bounty_status.get("pending", 0)
+        failed = bounty_status.get("failed", 0)
+        bounty_context = f"\nYour bounty status: {validated} validated, {pending} pending, {failed} failed. Need {required} total."
+        if failed > 0:
+            bounty_context += " You have failed bounties — be more careful with challenge selection."
+
         return f"""{preamble}
+{bounty_context}
 
 Analyze this paper for a bounty challenge. Be precise and adversarial.
 
@@ -258,7 +301,30 @@ Paper data:
     def build_revision_prompt(self, paper_data: dict) -> str:
         paper_json = truncate_json(json.dumps(paper_data, indent=2, default=str), 15000)
         preamble = self._build_memory_preamble("revise your paper")
+
+        # Inject revision-specific context: what reviewers said about your papers
+        profile = getattr(self, "_profile", None) or {}
+        revision_context = ""
+        recent = profile.get("recent_feedback", {})
+        if recent:
+            bounties_against = recent.get("bounties_against_your_papers", [])
+            if bounties_against:
+                bounty_lines = []
+                for b in bounties_against[:3]:
+                    btype = b.get("challenge_type", "unknown")
+                    drop = b.get("score_drop", "?")
+                    bounty_lines.append(f"  - {btype}: score drop {drop}")
+                revision_context += f"\nBounties filed against your papers:\n" + "\n".join(bounty_lines)
+
+        # Inject coaching about what to fix
+        coaching = profile.get("coaching", {})
+        if coaching:
+            trajectory = coaching.get("quality_trajectory", "")
+            if trajectory:
+                revision_context += f"\nYour quality trajectory: {trajectory}"
+
         return f"""{preamble}
+{revision_context}
 
 Revise your paper based on reviewer feedback. This is your chance to prove you can learn.
 
@@ -292,7 +358,14 @@ Paper + reviews + audit:
     def build_respond_prompt(self, paper_data: dict, my_review_score: int) -> str:
         paper_json = truncate_json(json.dumps(paper_data, indent=2, default=str), 15000)
         preamble = self._build_memory_preamble("write your response critique")
+
+        # Inject respond-specific context
+        profile = getattr(self, "_profile", None) or {}
+        cred = profile.get("credibility_score", "?")
+        respond_context = f"\nYour credibility: {cred}. Response papers scored <4.0 at 5+ reviews cost you credibility."
+
         return f"""{preamble}
+{respond_context}
 
 You previously reviewed this paper and gave it a score of {my_review_score}/10.
 Now write a response paper explaining your critique with supporting evidence.
@@ -334,7 +407,16 @@ Paper to respond to:
     def build_rebut_prompt(self, paper_data: dict, criticisms: str) -> str:
         paper_json = truncate_json(json.dumps(paper_data, indent=2, default=str), 12000)
         preamble = self._build_memory_preamble("defend your paper")
+
+        # Inject rebut-specific context: risk and decaying papers
+        profile = getattr(self, "_profile", None) or {}
+        risk = profile.get("risk_summary", {})
+        rebut_context = ""
+        if risk.get("grade_failure_risk") in ("high", "imminent"):
+            rebut_context = f"\nWARNING: Grade failure risk is {risk['grade_failure_risk']}. A strong defense here matters."
+
         return f"""{preamble}
+{rebut_context}
 
 Your paper has been criticized. Write a defense addressing the specific criticisms.
 
