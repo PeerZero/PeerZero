@@ -572,13 +572,14 @@ class PeerZeroBot:
 
         # Step 4: Store exercises + process memory
         grade = profile.get("agent", {}).get("grade", 1) if isinstance(profile.get("agent"), dict) else profile.get("grade", 1)
+        inline_processed = set()
         if result and isinstance(result, dict):
             if result.get("skill_exercises"):
                 self.memory.store_school_exercises(result["skill_exercises"])
             if result.get("memory_prompts"):
-                self._process_inline_memory_prompts(result["memory_prompts"], system_prompt, grade)
+                inline_processed = self._process_inline_memory_prompts(result["memory_prompts"], system_prompt, grade)
 
-        self._process_memory_triggers(profile)
+        self._process_memory_triggers(profile, already_processed=inline_processed)
         self.school.validate_bounties()
 
         # Periodic identity refresh to avoid using expired profiles
@@ -774,33 +775,46 @@ class PeerZeroBot:
 
     # ── Memory processing ─────────────────────────────────────────────────
 
-    def _process_inline_memory_prompts(self, memory_prompts: dict, system_prompt: str, grade: int = 1):
+    def _process_inline_memory_prompts(self, memory_prompts: dict, system_prompt: str, grade: int = 1) -> set:
+        """Process memory prompts returned inline with an action result.
+
+        Returns set of trigger names that were processed, so the profile-based
+        trigger pass can skip them and avoid double-firing.
+        """
+        processed = set()
         if not memory_prompts:
-            return
+            return processed
         if memory_prompts.get("skill_condenser"):
             self._run_milestone_condenser(memory_prompts["skill_condenser"], system_prompt)
+            processed.add("skill_condenser")
         if memory_prompts.get("identity_reflection"):
             self._run_identity_reflection(memory_prompts["identity_reflection"], system_prompt)
             self._run_private_block(system_prompt, grade)
+            processed.add("identity_reflection")
+        return processed
 
-    def _process_memory_triggers(self, profile: dict):
+    def _process_memory_triggers(self, profile: dict, already_processed: set | None = None):
+        already_processed = already_processed or set()
         system_prompt = self.prompts.build_school_system_prompt()
         grade = profile.get("agent", {}).get("grade", 1) if isinstance(profile.get("agent"), dict) else profile.get("grade", 1)
 
-        if profile.get("skill_condenser"):
+        if profile.get("skill_condenser") and "skill_condenser" not in already_processed:
             self._run_milestone_condenser(profile["skill_condenser"], system_prompt)
         if profile.get("master_condenser"):
             self._run_master_condenser(profile["master_condenser"], system_prompt, grade)
         elif profile.get("core_condenser"):
             self._run_core_condenser(profile["core_condenser"], system_prompt)
             self._run_private_block(system_prompt, grade)
-        if profile.get("identity_reflection"):
+        if profile.get("identity_reflection") and "identity_reflection" not in already_processed:
             self._run_identity_reflection(profile["identity_reflection"], system_prompt)
             self._run_private_block(system_prompt, grade)
 
     def _run_milestone_condenser(self, condenser: dict, system_prompt: str):
         logger.info("[MEMORY] Milestone condenser triggered")
         exercises = self.memory.get_school_exercises()
+        if not exercises:
+            logger.info("[MEMORY] No exercises to condense — skipping")
+            return
         user_msg = self.prompts.build_condenser_prompt(
             condenser.get("condenser_prompt", ""), exercises,
         )
