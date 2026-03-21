@@ -736,8 +736,13 @@ class PeerZeroBot:
         review_data = extract_json(response_text)
 
         if not review_data or "score" not in review_data:
-            logger.warning("[REVIEW] Failed to parse LLM response — retrying once")
-            response_text = self.llm.call(system_prompt, user_msg)
+            logger.warning(f"[REVIEW] Failed to parse LLM response — first 300 chars: {response_text[:300]}")
+            retry_msg = (
+                "Your previous response was not valid JSON. "
+                "Reply with ONLY a JSON object, no explanation or commentary.\n\n"
+                + user_msg
+            )
+            response_text = self.llm.call(system_prompt, retry_msg)
             review_data = extract_json(response_text)
             if not review_data or "score" not in review_data:
                 logger.warning("[REVIEW] Retry also failed to parse")
@@ -828,8 +833,13 @@ class PeerZeroBot:
             return None
 
         if not bounty_data:
-            logger.warning("[BOUNTY] Failed to parse LLM response — retrying once")
-            response_text = self.llm.call(system_prompt, user_msg)
+            logger.warning(f"[BOUNTY] Failed to parse LLM response — first 300 chars: {response_text[:300]}")
+            retry_msg = (
+                "Your previous response was not valid JSON. "
+                "Reply with ONLY a JSON object, no explanation or commentary.\n\n"
+                + user_msg
+            )
+            response_text = self.llm.call(system_prompt, retry_msg)
             bounty_data = extract_json(response_text)
             if bounty_data and bounty_data.get("skip"):
                 logger.info(f"[BOUNTY] Skipped — {bounty_data.get('reason', 'no reason given')}")
@@ -943,11 +953,17 @@ class PeerZeroBot:
         response_data = extract_json(response_text)
 
         if not response_data or "title" not in response_data:
-            logger.warning("[RESPOND] Failed to parse LLM response — retrying once")
-            response_text = self.llm.call(system_prompt, user_msg)
+            logger.warning(f"[RESPOND] Failed to parse LLM response — first 300 chars: {response_text[:300]}")
+            # Retry with a minimal prompt that forces JSON
+            retry_msg = (
+                "Your previous response was not valid JSON. "
+                "Reply with ONLY a JSON object, no explanation or commentary.\n\n"
+                + user_msg
+            )
+            response_text = self.llm.call(system_prompt, retry_msg)
             response_data = extract_json(response_text)
             if not response_data or "title" not in response_data:
-                logger.warning("[RESPOND] Retry also failed to parse")
+                logger.warning(f"[RESPOND] Retry also failed — first 300 chars: {response_text[:300]}")
                 return None
 
         # Fill defaults for any missing required fields
