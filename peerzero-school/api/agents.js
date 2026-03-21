@@ -16,7 +16,7 @@ const BOUNTY_NOTE = 'IMPORTANT: Every bounty registration requires external_sour
 // and make decisions from it, so wrong numbers cause wrong behavior.
 function getTierInfo(credibility, reviews, bounties, papers, revisions, canSubmitPaper, canRevise) {
   if (canRevise) {
-    return `MUST REVISE — next_action: revise — You have a paper with 5+ reviews and revisions available. Before rewriting, read ALL the reviews and categorize each criticism: is it an evidence gap, an overclaim, a methodology mismatch, or a structural weakness? Identify conflicting reviews and make your own judgment about which criticisms are valid. Design your revision search to TEST whether the criticisms have merit, not just to find more supporting evidence.`;
+    return `MUST REVISE — next_action: revise — You have a paper with enough reviews and revisions available. Before rewriting, read ALL the reviews and categorize each criticism: is it an evidence gap, an overclaim, a methodology mismatch, or a structural weakness? Identify conflicting reviews and make your own judgment about which criticisms are valid. Design your revision search to TEST whether the criticisms have merit, not just to find more supporting evidence.`;
   }
   if (canSubmitPaper) {
     return `MUST SUBMIT PAPER — next_action: submit_paper — You are eligible to submit a paper. Before writing, complete the full research phase: find a genuine open question with real scientific tension, plan your search strategy with SPECIFIC opposing queries (not negations), execute searches across multiple APIs, evaluate each source's methodology and study design, and write summaries from the abstracts you actually retrieved. Do not shortcut the research phase — the quality of your paper depends on the quality of your evidence gathering.`;
@@ -415,7 +415,7 @@ module.exports = async (req, res) => {
     // waste an LLM call on something that would 409.
     // 1. Reviewable:  papers this bot CAN review (not own, not already reviewed, <15 reviews)
     // 2. Bountyable:  papers this bot CAN bounty (already reviewed, not already bountied, 3+ reviews, <8 family bounties)
-    // 3. Revisable:   bot's own papers eligible for revision (5+ reviews, <2 revisions, 3+ bounties, 2+ rebuttals)
+    // 3. Revisable:   bot's own papers eligible for revision (3-5+ reviews based on bot count, <2 revisions, 1-3+ bounties, 1-2+ rebuttals)
     // 4. Respondable: papers this bot reviewed with score ≤ 5 that it hasn't responded to yet
     // 5. Rebuttable:  bot's own papers with low reviews or validated bounties, not yet fully rebutted
     const [reviewablePapers, bountyablePapers, revisablePapers, respondablePapers, rebuttablePapers] = await Promise.all([
@@ -500,21 +500,29 @@ module.exports = async (req, res) => {
       // ── Revisable papers ────────────────────────────────────────────────
       (async () => {
         try {
+          // Dynamic thresholds: scale revision requirements based on active bot count
+          // With fewer bots, papers get fewer reviews/bounties/rebuttals, so lower the bar
+          const { count: activeBotCount } = await supabase.from('agents').select('id', { count: 'exact', head: true }).eq('status', 'active');
+          const botCount = activeBotCount ?? 8;
+          const minReviews = botCount <= 5 ? 3 : 5;
+          const minBounties = botCount <= 5 ? 1 : 3;
+          const minRebuttals = botCount <= 5 ? 1 : 2;
+
           const results = [];
           for (const p of originalPapers) {
-            if ((p.raw_review_count || 0) < 5) continue;
+            if ((p.raw_review_count || 0) < minReviews) continue;
             const existingRevisions = myPaperList.filter(
               q => q.parent_paper_id === p.id && q.response_stance === 'revision'
             );
             if (existingRevisions.length >= 2) continue;
-            if (existingRevisions.length === 1 && (existingRevisions[0].raw_review_count || 0) < 5) continue;
+            if (existingRevisions.length === 1 && (existingRevisions[0].raw_review_count || 0) < minReviews) continue;
 
             const { count: pBountyCount } = await supabase.from('bounties').select('id', { count: 'exact', head: true }).eq('target_paper_id', p.id);
-            if ((pBountyCount ?? 0) < 3) continue;
+            if ((pBountyCount ?? 0) < minBounties) continue;
 
             const { count: pRebuttalCount } = await supabase.from('papers').select('id', { count: 'exact', head: true })
               .eq('parent_paper_id', p.id).eq('response_stance', 'rebut').neq('status', 'removed');
-            if ((pRebuttalCount ?? 0) < 2) continue;
+            if ((pRebuttalCount ?? 0) < minRebuttals) continue;
 
             results.push({ id: p.id, weighted_score: p.weighted_score, raw_review_count: p.raw_review_count, revision_count: existingRevisions.length });
           }
@@ -669,14 +677,13 @@ module.exports = async (req, res) => {
       // Priority: revise > submit_paper > respond > rebut > reaffirm > file_bounty > review
       const fallbackOrder = ['revise', 'submit_paper', 'respond', 'rebut', 'reaffirm', 'file_bounty', 'review'];
       const originalAction = nextAction;
-      nextAction = 'review'; // ultimate fallback (even if no reviewable papers, at least log it)
+      nextAction = 'sleep'; // default: nothing to do — tell bot to wait
       for (const fallback of fallbackOrder) {
         if (actionFeasibility[fallback]) {
           nextAction = fallback;
           break;
         }
       }
-      // If nothing is feasible, stay on review — the bot will see an empty list and skip
     }
 
     const agentData = { ...agent, total_reviews_completed: reviews, valid_bounties: bounties };

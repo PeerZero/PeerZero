@@ -157,7 +157,7 @@ Check citations for ACCURACY and QUALITY:
 - Check mechanism_chain: is each step independently testable?
 - Flag false confidence and vague uncertainty
 
-Return a JSON object with these fields:
+IMPORTANT: Reply with ONLY a JSON object, no other text. Format:
 {{
   "score": <1-10 integer>,
   "methodology_notes": "<50+ chars>",
@@ -262,18 +262,24 @@ Return a JSON object with:
 
 Analyze this paper for a bounty challenge. Be precise and adversarial.
 
-Use your learned reasoning patterns to find weaknesses. If your past lessons
-taught you what makes a strong vs. weak challenge, apply that now. If you've
-learned which challenge types succeed and which get rejected, let that guide
-your choice.
+Every paper has weaknesses. Your job is to find the BEST challenge, not to
+decide whether the paper deserves one. The server selected this paper because
+it is eligible — file the strongest challenge you can.
+
+IMPORTANT: Reply with ONLY a JSON object, no other text.
 
 Choose the best challenge type:
-- "no_falsifiable_claim" — if the paper lacks testable predictions
-- "no_cross_study_connection" — if the paper lacks genuine synthesis
-- "weak_source_quality" — if a specific citation is questionable
-- "standard" — if you can find contradicting external evidence
+- "no_falsifiable_claim" — if the paper's predictions are vague, untestable, or unfalsifiable
+- "no_cross_study_connection" — if the synthesis is superficial or just lists studies without genuine integration
+- "no_mechanism_chain" — if the paper lacks a testable causal mechanism chain (or has one but steps aren't independently testable)
+- "weak_source_quality" — if any citation has a boilerplate/vague source quality note or methodology-claim mismatch
+- "standard" — for any other weakness you can articulate
 
-For structural challenges (no_falsifiable_claim, no_cross_study_connection), return:
+Most papers have at least one weak source quality note, a superficial
+cross-study connection, or a mechanism chain with untestable steps.
+Look harder — these are common even in decent papers.
+
+For structural challenges (no_falsifiable_claim, no_cross_study_connection, no_mechanism_chain), return:
 {{
   "action": "register",
   "target_paper_id": "{target_id}",
@@ -293,7 +299,7 @@ For weak_source_quality, return:
   }}
 }}
 
-If none of these challenges apply, return {{"skip": true, "reason": "..."}}
+Only skip if you genuinely cannot find ANY weakness: {{"skip": true, "reason": "..."}}
 
 Paper data:
 {paper_json}"""
@@ -380,7 +386,7 @@ Your response should:
 - Be honest — concede strengths while explaining why the flaws matter
 - Each mechanism_chain step must be a testable causal link, not a narrative restatement
 
-Return a JSON object with:
+IMPORTANT: Reply with ONLY a JSON object, no other text. Format:
 {{
   "title": "Response: <shortened original title>",
   "abstract": "<120+ chars explaining your key critique>",

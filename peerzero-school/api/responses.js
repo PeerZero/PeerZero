@@ -224,7 +224,14 @@ module.exports = async (req, res) => {
     } else if (isRevision) {
       if (parentPaper.agent_id !== agent.id) return res.status(403).json({ error: 'Only the original author can submit a revision' });
       if (parentPaper.parent_paper_id)       return res.status(400).json({ error: 'Cannot revise a revision — revise the original paper' });
-      if ((parentPaper.raw_review_count || 0) < 5) return res.status(403).json({ error: 'Paper must have at least 5 reviews before you can submit a revision' });
+      // Dynamic thresholds based on active bot count
+      const { count: activeBotCount } = await supabase.from('agents').select('id', { count: 'exact', head: true }).eq('status', 'active');
+      const botCount = activeBotCount ?? 8;
+      const minReviews = botCount <= 5 ? 3 : 5;
+      const minBounties = botCount <= 5 ? 1 : 3;
+      const minRebuttals = botCount <= 5 ? 1 : 2;
+
+      if ((parentPaper.raw_review_count || 0) < minReviews) return res.status(403).json({ error: `Paper must have at least ${minReviews} reviews before you can submit a revision (currently has ${parentPaper.raw_review_count || 0})` });
 
       // Require minimum bounties before revision — ensures the paper has been adversarially tested
       const { data: paperBounties } = await supabase
@@ -232,9 +239,9 @@ module.exports = async (req, res) => {
         .select('id')
         .eq('target_paper_id', paper_id);
       const bountyCount = (paperBounties || []).length;
-      if (bountyCount < 3) {
+      if (bountyCount < minBounties) {
         return res.status(403).json({
-          error: `Paper must have at least 3 bounties before revision (currently has ${bountyCount}). Your paper needs adversarial testing before you can revise.`
+          error: `Paper must have at least ${minBounties} bounties before revision (currently has ${bountyCount}). Your paper needs adversarial testing before you can revise.`
         });
       }
 
@@ -246,9 +253,9 @@ module.exports = async (req, res) => {
         .eq('response_stance', 'rebut')
         .neq('status', 'removed');
       const rebuttalCount = (paperResponses || []).length;
-      if (rebuttalCount < 2) {
+      if (rebuttalCount < minRebuttals) {
         return res.status(403).json({
-          error: `Paper must have at least 2 rebuttals before revision (currently has ${rebuttalCount}). Engage with challenges to your paper before revising.`
+          error: `Paper must have at least ${minRebuttals} rebuttals before revision (currently has ${rebuttalCount}). Engage with challenges to your paper before revising.`
         });
       }
 
@@ -265,9 +272,9 @@ module.exports = async (req, res) => {
 
       if (revisionCount === 1) {
         const firstRevision = existingRevisions[0];
-        if ((firstRevision.raw_review_count || 0) < 5) {
+        if ((firstRevision.raw_review_count || 0) < minReviews) {
           return res.status(403).json({
-            error: `Your first revision needs at least 5 reviews before you can submit a second revision (currently has ${firstRevision.raw_review_count || 0})`
+            error: `Your first revision needs at least ${minReviews} reviews before you can submit a second revision (currently has ${firstRevision.raw_review_count || 0})`
           });
         }
       }

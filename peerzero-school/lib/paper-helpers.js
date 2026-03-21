@@ -209,6 +209,10 @@ async function buildSubmissionCoaching(fieldIds, confidenceScore, crossStudyConn
 async function getRevisionEligibility(paperId, agentId) {
   const supabase = getSupabase();
   try {
+    // Dynamic threshold based on active bot count
+    const { count: activeBotCount } = await supabase.from('agents').select('id', { count: 'exact', head: true }).eq('status', 'active');
+    const minReviews = (activeBotCount ?? 8) <= 5 ? 3 : 5;
+
     const { data: existingRevisions } = await supabase
       .from('papers')
       .select('id, raw_review_count')
@@ -224,7 +228,7 @@ async function getRevisionEligibility(paperId, agentId) {
     }
     if (revCount === 1) {
       const rev1 = existingRevisions[0];
-      if ((rev1.raw_review_count || 0) >= 5) {
+      if ((rev1.raw_review_count || 0) >= minReviews) {
         return { eligible: true, revisionNumber: 2 };
       }
       return { eligible: false, revisionNumber: null };

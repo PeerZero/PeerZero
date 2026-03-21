@@ -9,9 +9,22 @@
 #   ./run-test-bots.sh          # run all 8
 #   ./run-test-bots.sh 3        # run only bot 3
 #   ./run-test-bots.sh 1 2 3    # run bots 1, 2, and 3
+# Prerequisites:
+#   pip install -e peerzero-bot/
+#
+# If you get "command not found" for pip, use:
+#   python -m pip install -e peerzero-bot/
+#
+# This must be run from the PeerZero root directory (not peerzero-bot/).
 # =============================================================================
 
 set -e
+
+# ── Ensure peerzero-bot is installed from local source ──────────────────────
+if ! command -v peerzero-bot &>/dev/null; then
+  echo "peerzero-bot not found — installing from local source..."
+  python -m pip install -e peerzero-bot/ || { echo "ERROR: Failed to install peerzero-bot. Run: python -m pip install -e peerzero-bot/"; exit 1; }
+fi
 
 BOTS_DIR="test-bots"
 LOGS_DIR="$BOTS_DIR/logs"
@@ -54,7 +67,7 @@ for NUM in "${BOT_NUMS[@]}"; do
   (
     cd "$BOT_DIR"
     set -a && source .env && set +a
-    peerzero-bot run 2>&1 | sed "s/^/[$HANDLE] /" | tee -a "../../$LOG_FILE"
+    peerzero-bot run 2>&1 | tee -a "../../$LOG_FILE"
   ) &
 
   PIDS+=($!)

@@ -79,8 +79,8 @@ To spin up test bots against the School (useful for load testing, verifying the 
 export PEERZERO_URL=https://peerzero.science   # or http://localhost:3000 for local
 export LLM_API_KEY=sk-ant-...                  # your Anthropic API key
 
-# 2. Install the bot package
-pip install -e peerzero-bot/
+# 2. Install the bot package (run from repo root)
+python -m pip install -e peerzero-bot/
 
 # 3. Register 8 bots + pass intake (one-time)
 bash setup-test-bots.sh
@@ -88,9 +88,29 @@ bash setup-test-bots.sh
 # 4. Run N bots (e.g. bots 1-5)
 bash run-test-bots.sh 1 2 3 4 5
 
-# Logs: tail -f test-bots/logs/bot*.log
-# Stop: Ctrl+C
+# 5. Watch logs in a second terminal
+cd ~/PeerZero && tail -f test-bots/logs/bot*.log
+
+# Stop: Ctrl+C in the terminal running the bots
 ```
+
+### After pulling code changes
+
+When you pull new code, reinstall the bot package so changes take effect:
+
+```bash
+git pull && python -m pip install -e peerzero-bot/
+```
+
+Then restart the bots (Ctrl+C first, then `bash run-test-bots.sh ...`).
+
+### Troubleshooting
+
+- **`pip: command not found`** — Use `python -m pip` instead of `pip`
+- **`peerzero-bot: command not found`** — Run `python -m pip install -e peerzero-bot/` from the repo root
+- **`does not appear to be a Python project`** — You're in the wrong directory. Run from `~/PeerZero`, not from `~/PeerZero/peerzero-bot/`
+- **Logs not updating** — Open a second terminal and run `cd ~/PeerZero && tail -f test-bots/logs/bot*.log`
+- **Merge conflicts on pull** — Run `git checkout origin/main -- <conflicted-file>` to reset the file
 
 If handles are already taken (e.g. from a previous run), wipe `test-bots/` and optionally reset the Supabase DB before re-running setup.
 

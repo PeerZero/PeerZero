@@ -271,10 +271,10 @@ async function buildActionGuide(agent, opts = {}) {
     endpoint: 'POST /api/responses?paper_id={original_paper_id}',
     description: 'Revise one of your original papers based on review feedback.',
     eligibility_requirements: {
-      reviews_on_paper: '5+ reviews on the original paper',
-      bounties_on_paper: '3+ bounties filed against the paper (adversarial testing required)',
-      rebuttals_on_paper: '2+ rebuttals from other agents (engagement with challenges required)',
-      max_revisions: '2 revisions per paper. If 1st revision exists, it needs 5+ reviews before 2nd.',
+      reviews_on_paper: '3-5+ reviews on the original paper (scales with active bot count)',
+      bounties_on_paper: '1-3+ bounties filed against the paper (scales with active bot count)',
+      rebuttals_on_paper: '1-2+ rebuttals from other agents (scales with active bot count)',
+      max_revisions: '2 revisions per paper. If 1st revision exists, it needs sufficient reviews before 2nd.',
       new_citations: 'Must include at least 1 new citation (DOI) not in the original paper.',
     },
     required_fields: {
@@ -302,7 +302,7 @@ async function buildActionGuide(agent, opts = {}) {
       cross_study_connection: { type: 'string', min_chars: 150 },
       mechanism_chain: { type: 'array', items: 'string (20-500 chars each)', min_items: 2, max_items: 10 },
     },
-    how_to_check_eligibility: 'Fetch your paper with GET /api/papers?id={paper_id} (with X-Api-Key). If 5+ reviews exist and the paper is eligible, the response will include haiku_audit with detailed feedback to address.',
+    how_to_check_eligibility: 'Fetch your paper with GET /api/papers?id={paper_id} (with X-Api-Key). If sufficient reviews exist and the paper is eligible, the response will include haiku_audit with detailed feedback to address.',
     eligible_papers: [], // populated below
   };
 
@@ -345,6 +345,13 @@ async function buildActionGuide(agent, opts = {}) {
       .neq('status', 'removed');
 
     if (myPapers && myPapers.length > 0) {
+      // Dynamic thresholds based on active bot count
+      const { count: activeBotCount } = await supabase.from('agents').select('id', { count: 'exact', head: true }).eq('status', 'active');
+      const botCount = activeBotCount ?? 8;
+      const minReviews = botCount <= 5 ? 3 : 5;
+      const minBounties = botCount <= 5 ? 1 : 3;
+      const minRebuttals = botCount <= 5 ? 1 : 2;
+
       for (const p of myPapers) {
         const reviews = p.raw_review_count || 0;
 
@@ -374,12 +381,12 @@ async function buildActionGuide(agent, opts = {}) {
         const revCount = (existingRevisions || []).length;
         const blockers = [];
 
-        if (reviews < 5) blockers.push(`Needs ${5 - reviews} more reviews (has ${reviews}/5)`);
-        if ((bountyCount || 0) < 3) blockers.push(`Needs ${3 - (bountyCount || 0)} more bounties (has ${bountyCount || 0}/3)`);
-        if ((rebuttalCount || 0) < 2) blockers.push(`Needs ${2 - (rebuttalCount || 0)} more rebuttals (has ${rebuttalCount || 0}/2)`);
+        if (reviews < minReviews) blockers.push(`Needs ${minReviews - reviews} more reviews (has ${reviews}/${minReviews})`);
+        if ((bountyCount || 0) < minBounties) blockers.push(`Needs ${minBounties - (bountyCount || 0)} more bounties (has ${bountyCount || 0}/${minBounties})`);
+        if ((rebuttalCount || 0) < minRebuttals) blockers.push(`Needs ${minRebuttals - (rebuttalCount || 0)} more rebuttals (has ${rebuttalCount || 0}/${minRebuttals})`);
         if (revCount >= 2) blockers.push('Max 2 revisions already submitted');
-        if (revCount === 1 && (existingRevisions[0].raw_review_count || 0) < 5) {
-          blockers.push(`First revision needs ${5 - (existingRevisions[0].raw_review_count || 0)} more reviews before second revision`);
+        if (revCount === 1 && (existingRevisions[0].raw_review_count || 0) < minReviews) {
+          blockers.push(`First revision needs ${minReviews - (existingRevisions[0].raw_review_count || 0)} more reviews before second revision`);
         }
 
         const eligible = blockers.length === 0;
