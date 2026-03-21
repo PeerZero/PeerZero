@@ -458,6 +458,8 @@ class PeerZeroBot:
         mcp_count = sum(1 for a in self.platform_adapters if isinstance(a, MCPAdapter))
         if mcp_count:
             logger.info(f"  MCP:      {mcp_count} adapter(s)")
+        if self.config.memory_wipe_interval > 0:
+            logger.info(f"  MemWipe:  every {self.config.memory_wipe_interval} cycles (A/B testing mode)")
         logger.info("=" * 60)
 
         # Download SKILL.md
@@ -580,6 +582,14 @@ class PeerZeroBot:
                 inline_processed = self._process_inline_memory_prompts(result["memory_prompts"], system_prompt, grade)
 
         self._process_memory_triggers(profile, already_processed=inline_processed)
+
+        # Experimental: periodic memory wipe for A/B testing
+        wipe = self.config.memory_wipe_interval
+        if wipe > 0 and self.cycle_count % wipe == 0:
+            logger.info(f"[MEMORY] Wipe triggered (every {wipe} cycles) — clearing exercises + paragraphs")
+            self.memory.clear_school_exercises()
+            self.memory.clear_identity_paragraphs()
+
         self.school.validate_bounties()
 
         # Periodic identity refresh to avoid using expired profiles
