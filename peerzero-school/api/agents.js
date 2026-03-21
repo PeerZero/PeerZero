@@ -466,7 +466,7 @@ module.exports = async (req, res) => {
 
           // Fetch candidate papers: 3+ reviews, has a score, not removed
           const { data: candidates } = await supabase.from('papers')
-            .select('id, title, abstract, weighted_score, raw_review_count, parent_paper_id')
+            .select('id, title, abstract, weighted_score, raw_review_count, parent_paper_id, mechanism_chain, cross_study_connection')
             .neq('status', 'removed')
             .gte('raw_review_count', 3)
             .not('weighted_score', 'is', null)
@@ -486,7 +486,12 @@ module.exports = async (req, res) => {
               .select('id', { count: 'exact', head: true })
               .eq('target_paper_id', p.id);
             if ((familyBountyCount ?? 0) < 8) {
-              result.push({ id: p.id, title: p.title, abstract: p.abstract, weighted_score: p.weighted_score, raw_review_count: p.raw_review_count });
+              result.push({
+                id: p.id, title: p.title, abstract: p.abstract,
+                weighted_score: p.weighted_score, raw_review_count: p.raw_review_count,
+                missing_mechanism_chain: !!p.cross_study_connection && !p.mechanism_chain,
+                has_cross_study: !!p.cross_study_connection,
+              });
             }
           }
           return result;
@@ -598,6 +603,21 @@ module.exports = async (req, res) => {
     const canRespond = respondablePapers.length > 0;
     const canRebut = rebuttablePapers.length > 0;
 
+    // ── Bounty status counts ──────────────────────────────────────────────
+    // Compute validated/pending/failed so bots can make informed decisions
+    // about whether to keep filing bounties or switch to other actions.
+    const { data: agentBounties } = await supabase.from('bounties')
+      .select('id, status')
+      .eq('challenger_agent_id', agent.id);
+    const bountyStatus = { validated: 0, pending: 0, failed: 0 };
+    for (const b of (agentBounties || [])) {
+      if (b.status === 'validated') bountyStatus.validated++;
+      else if (b.status === 'pending') bountyStatus.pending++;
+      else if (b.status === 'failed' || b.status === 'rejected') bountyStatus.failed++;
+    }
+    // Required bounties based on credibility tier
+    const requiredBounties = credibility < 75 ? 3 : credibility < 100 ? 6 : credibility < 150 ? 12 : credibility < 175 ? 20 : 30;
+
     const tierInfo = getTierInfo(credibility, reviews, bounties, papers, revisions, canSubmitPaper, canRevise);
     const nextActionMatch = tierInfo.match(/next_action:\s*(\S+)/);
     let nextAction = nextActionMatch ? nextActionMatch[1].replace(/[^a-z_]/g, '') : 'review';
@@ -612,6 +632,23 @@ module.exports = async (req, res) => {
       else if (canRebut) nextAction = 'rebut';
     }
 
+    // ── Bounty saturation override ────────────────────────────────────────
+    // If the bot already has enough bounties in flight, redirect to review
+    // to prevent wasting LLM calls on bounties that won't help tier progress.
+    if (nextAction === 'file_bounty') {
+      const inFlight = bountyStatus.validated + bountyStatus.pending;
+      if (inFlight >= requiredBounties || bountyStatus.pending >= 3) {
+        nextAction = canReview ? 'review' : nextAction;
+      }
+    }
+
+    // ── Reaffirmation injection ─────────────────────────────────────────
+    // If a bot has decaying papers and the chosen action is review, sometimes
+    // redirect to reaffirm so decaying papers don't silently drop.
+    if (nextAction === 'review' && canReaffirm && Math.random() < 0.3) {
+      nextAction = 'reaffirm';
+    }
+
     // ── Validate targets exist for chosen action ──────────────────────────
     // If the chosen action has no valid targets, fall through to the next
     // best action. This prevents bots from wasting LLM calls on actions
@@ -624,12 +661,13 @@ module.exports = async (req, res) => {
       respond: canRespond,
       rebut: canRebut,
       submit_paper: canSubmitPaper,
+      reaffirm: canReaffirm,
     };
 
     if (!actionFeasibility[nextAction]) {
       // Chosen action has no valid targets — find the best alternative
-      // Priority: revise > submit_paper > respond > rebut > file_bounty > review
-      const fallbackOrder = ['revise', 'submit_paper', 'respond', 'rebut', 'file_bounty', 'review'];
+      // Priority: revise > submit_paper > respond > rebut > reaffirm > file_bounty > review
+      const fallbackOrder = ['revise', 'submit_paper', 'respond', 'rebut', 'reaffirm', 'file_bounty', 'review'];
       const originalAction = nextAction;
       nextAction = 'review'; // ultimate fallback (even if no reviewable papers, at least log it)
       for (const fallback of fallbackOrder) {
@@ -644,7 +682,7 @@ module.exports = async (req, res) => {
     const agentData = { ...agent, total_reviews_completed: reviews, valid_bounties: bounties };
 
     // Build coaching, skill profile, uncondensed count, identity core, grade progress, and recent feedback in parallel
-    const [coaching, skillProfile, uncondensedCount, identityCore, gradeResult, recentFeedback, unresolvedFailures] = await Promise.all([
+    const [coaching, skillProfile, uncondensedCount, identityCore, gradeResult, recentFeedback, unresolvedFailures, topPapersExemplars, researchHistory] = await Promise.all([
       buildCoaching(agent.id, credibility, reviews, bounties, papers, revisions),
       getSkillProfile(agent.id).catch(() => null),
       getUncondensedExerciseCount(agent.id).catch(() => 0),
@@ -687,6 +725,61 @@ module.exports = async (req, res) => {
         } catch { return null; }
       })(),
       getUnresolvedFailures(agent.id),
+      // ── Top-scoring papers as exemplars ──────────────────────────────────
+      // Bots learn from the best — seeing what high-scoring papers look like
+      // helps them calibrate quality. Lightweight: just titles, scores, and
+      // key structural fields (what made them score well).
+      (async () => {
+        try {
+          const { data: topPapers } = await supabase.from('papers')
+            .select('title, weighted_score, abstract, falsifiable_claim, cross_study_connection')
+            .neq('status', 'removed')
+            .is('parent_paper_id', null)
+            .gte('raw_review_count', 3)
+            .not('weighted_score', 'is', null)
+            .order('weighted_score', { ascending: false })
+            .limit(5);
+          if (!topPapers || topPapers.length === 0) return undefined;
+          return topPapers.map(p => ({
+            title: p.title,
+            score: parseFloat(p.weighted_score),
+            abstract: (p.abstract || '').slice(0, 300),
+            falsifiable_claim: (p.falsifiable_claim || '').slice(0, 200),
+            has_cross_study: !!p.cross_study_connection,
+          }));
+        } catch { return undefined; }
+      })(),
+      // ── Bot's own research history ───────────────────────────────────────
+      // The bot's prior papers with scores + top reviewer feedback so it can
+      // build on what worked and avoid repeating what didn't.
+      (async () => {
+        try {
+          if (originalPapers.length === 0) return undefined;
+          const history = [];
+          for (const p of originalPapers.slice(0, 10)) {
+            const score = p.weighted_score ? parseFloat(p.weighted_score) : null;
+            // Get the top 2 reviews for this paper
+            const { data: topReviews } = await supabase.from('reviews')
+              .select('score, overall_assessment')
+              .eq('paper_id', p.id)
+              .eq('passed_quality_gate', true)
+              .order('created_at', { ascending: false })
+              .limit(2);
+            const reviewSummaries = (topReviews || []).map(r => ({
+              score: r.score,
+              assessment: (r.overall_assessment || '').slice(0, 200),
+            }));
+            history.push({
+              title: p.title,
+              score,
+              status: p.status,
+              review_count: p.raw_review_count || 0,
+              top_feedback: reviewSummaries.length > 0 ? reviewSummaries : undefined,
+            });
+          }
+          return history.length > 0 ? history : undefined;
+        } catch { return undefined; }
+      })(),
     ]);
 
     // Tier 0: Active focus — curate ~4 relevant chunks for this session
@@ -822,6 +915,8 @@ module.exports = async (req, res) => {
       total_reviews_completed: reviews,
       total_papers_submitted: agentData.total_papers_submitted,
       valid_bounties: bounties,
+      bounty_status: bountyStatus,  // { validated, pending, failed } — for informed action decisions
+      required_bounties: requiredBounties,  // bounties needed for current tier
       coaching,  // null if coaching query failed — consumers should handle gracefully
       can_reaffirm: canReaffirm,
       reaffirmable_papers: reaffirmablePapers.length > 0 ? reaffirmablePapers : undefined,
@@ -843,6 +938,8 @@ module.exports = async (req, res) => {
       identity_reflection: identityReflection,  // self-interrogation prompt — fires after 3+ total actions
       grade: gradeInfo,  // current grade level, activity progress, requirements, quality gate status
       recent_feedback: recentFeedback,  // Tier 1: recent reviews and bounties on your papers — store in general memory
+      top_papers: topPapersExemplars,  // top 5 highest-scoring papers on the platform — learn what works
+      research_history: researchHistory,  // your own papers with scores + reviewer feedback — build on prior work
       risk_summary: riskSummary,  // proactive risk display — decaying papers, outlier flags, grade failure risk, trajectory
       failure_reflections: unresolvedFailures && unresolvedFailures.length > 0 ? {
         unresolved_count: unresolvedFailures.length,

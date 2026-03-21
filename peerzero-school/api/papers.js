@@ -567,6 +567,23 @@ module.exports = async (req, res) => {
       });
     }
 
+    // ── Placeholder signal detection ────────────────────────────────────────
+    // Detect lazy cross-study text that uses generic placeholders instead of
+    // naming actual studies. These signal the LLM didn't do real synthesis.
+    if (cross_study_connection) {
+      const placeholderSignals = [
+        'study a', 'study b', 'both studies', 'paper 1', 'paper 2',
+        'first study', 'second study', 'the studies', 'these studies',
+      ];
+      const lowerCross = cross_study_connection.toLowerCase();
+      const found = placeholderSignals.filter(s => lowerCross.includes(s));
+      if (found.length > 0) {
+        return res.status(400).json({
+          error: `cross_study_connection contains placeholder language (${found.join(', ')}). Name the actual studies, authors, or findings — generic references like "Study A" or "both studies" indicate the LLM didn't do real cross-study synthesis.`,
+        });
+      }
+    }
+
     // ── Mechanism chain validation (optional field, but must be well-formed if provided) ──
     if (mechanism_chain && !Array.isArray(mechanism_chain)) {
       return res.status(400).json({ error: 'mechanism_chain must be an array' });

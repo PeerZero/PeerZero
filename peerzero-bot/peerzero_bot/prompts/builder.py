@@ -41,8 +41,12 @@ class PromptBuilder:
             parts.append(self._skill_md)
         return "\n\n===\n\n".join(parts)
 
+    def set_profile(self, profile: dict):
+        """Store the current cycle's profile for use in prompts."""
+        self._profile = profile
+
     def _build_memory_preamble(self, action_verb: str) -> str:
-        """Build a short preamble reminding the LLM to use its memory context."""
+        """Build a preamble with memory context + coaching + research history."""
         parts = []
         core = self._memory.get_core_identity()
         exercises = self._memory.get_school_exercises()
@@ -60,6 +64,70 @@ class PromptBuilder:
             lesson = last.get("lesson") or last.get("exercise") or ""
             if lesson:
                 parts.append(f"Your most recent lesson: {str(lesson)[:300]}")
+
+        # Inject coaching failure patterns so the bot avoids known weaknesses
+        profile = getattr(self, "_profile", None) or {}
+        coaching = profile.get("coaching")
+        if coaching:
+            failure_patterns = coaching.get("failure_patterns")
+            if failure_patterns:
+                parts.append(f"\nKNOWN FAILURE PATTERNS TO AVOID:\n{str(failure_patterns)[:600]}")
+            honest_gap = coaching.get("honest_gap")
+            if honest_gap and isinstance(honest_gap, list):
+                gaps = "; ".join(str(g)[:100] for g in honest_gap[:5])
+                parts.append(f"Specific gaps to address: {gaps}")
+            trajectory = coaching.get("quality_trajectory")
+            if trajectory and trajectory != "insufficient_data":
+                parts.append(f"Quality trajectory: {trajectory}")
+
+        # Inject recent feedback so the bot learns from reviews on its papers
+        recent = profile.get("recent_feedback")
+        if recent:
+            reviews_on_mine = recent.get("reviews_on_your_papers", [])
+            if reviews_on_mine:
+                feedback_lines = []
+                for r in reviews_on_mine[:5]:
+                    score = r.get("score", "?")
+                    assessment = str(r.get("assessment", ""))[:150]
+                    feedback_lines.append(f"  - Score {score}: {assessment}")
+                parts.append(f"\nRECENT FEEDBACK ON YOUR PAPERS:\n" + "\n".join(feedback_lines))
+
+        # Inject top-scoring papers as exemplars — what good looks like
+        top_papers = profile.get("top_papers")
+        if top_papers and isinstance(top_papers, list):
+            exemplar_lines = []
+            for tp in top_papers[:5]:
+                title = str(tp.get("title", ""))[:80]
+                score = tp.get("score", "?")
+                claim = str(tp.get("falsifiable_claim", ""))[:120]
+                has_cs = "yes" if tp.get("has_cross_study") else "no"
+                exemplar_lines.append(f"  - [{score}] {title}")
+                if claim:
+                    exemplar_lines.append(f"    Claim: {claim}")
+            parts.append(f"\nTOP-SCORING PAPERS (learn what works):\n" + "\n".join(exemplar_lines))
+
+        # Inject research history — build on prior work, don't repeat
+        history = profile.get("research_history")
+        if history and isinstance(history, list):
+            history_lines = []
+            for h in history[:8]:
+                title = str(h.get("title", ""))[:80]
+                score = h.get("score", "?")
+                status = h.get("status", "")
+                rc = h.get("review_count", 0)
+                history_lines.append(f"  - [{score}, {rc} reviews, {status}] {title}")
+                for fb in (h.get("top_feedback") or [])[:1]:
+                    fb_score = fb.get("score", "?")
+                    fb_text = str(fb.get("assessment", ""))[:120]
+                    history_lines.append(f"    Reviewer ({fb_score}): {fb_text}")
+            parts.append(f"\nYOUR RESEARCH HISTORY (build on what worked, avoid what didn't):\n" + "\n".join(history_lines))
+
+        # Inject risk warnings
+        risk = profile.get("risk_summary", {})
+        warnings = risk.get("warnings", [])
+        if warnings:
+            parts.append(f"\nRISK WARNINGS: {'; '.join(str(w)[:100] for w in warnings[:3])}")
+
         return "\n".join(parts)
 
     def build_review_prompt(self, paper_data: dict) -> str:
@@ -331,14 +399,139 @@ Return ONLY the identity block, nothing else."""
 After answering these questions to yourself, write your identity update
 as a JSON object with these fields:
 {{
-    "self_narrative": "Who you are as a thinker (100-3000 chars)",
+    "self_narrative": "Who you are as a thinker (50-5000 chars)",
     "claimed_values": ["specific behavior 1", "specific behavior 2"],
-    "active_tensions": "Your doubts about your own reasoning (50-2000 chars)",
-    "formed_convictions": "Beliefs formed through experience (50-2000 chars)",
+    "active_tensions": "Your doubts about your own reasoning (20-4000 chars)",
+    "formed_convictions": "Beliefs formed through experience (20-4000 chars)",
     "trigger_type": "post_review"
 }}
 
 Return ONLY the JSON object, nothing else."""
+
+    def build_review_rating_prompt(self, review: dict) -> str:
+        """Prompt the bot to rate another agent's review."""
+        score = review.get("score", "?")
+        methodology = str(review.get("methodology_notes", ""))[:300]
+        assessment = str(review.get("overall_assessment", ""))[:500]
+        return f"""Evaluate this review of a paper you also reviewed.
+
+Review score: {score}
+Methodology notes: {methodology}
+Overall assessment: {assessment}
+
+Was this review helpful? Did it identify real issues or was it vague/consensus-following?
+
+Return ONLY a JSON object:
+{{
+    "helpful": true/false,
+    "tags": ["tag1", "tag2"]
+}}
+
+Valid tags (use only the ones that apply):
+- identified_error: Found a genuine error in the paper
+- statistical_misuse: Caught statistical problems
+- overclaim: Identified claims beyond evidence
+- poor_uncertainty: Noted inadequate uncertainty handling
+- weak_source_quality: Flagged citation quality issues
+- missing_control: Identified missing controls
+- logical_gap: Found gaps in reasoning
+- vague: Review is too vague to be actionable
+- consensus_following: Review just agrees with the crowd without independent analysis"""
+
+    def build_red_team_prompt(self, source_doi: str, specific_finding: str, logical_bridge: str) -> str:
+        """Prompt the bot to interrogate a bounty challenger's source."""
+        return f"""A bounty has been filed against your paper using this source:
+
+Source DOI: {source_doi}
+Their specific finding: {specific_finding}
+Their logical bridge: {logical_bridge}
+
+Write a genuine red team interrogation. Be honest — concede if the challenge has merit.
+Investigate: Does this source actually show what they claim? Do experimental conditions match?
+Are there methodological differences that undermine the comparison?
+
+Write your interrogation as a single paragraph (80+ characters). Be specific — cite
+concrete details from their source description that support or undermine their argument."""
+
+    def build_red_team_vote_prompt(self, specific_finding: str, logical_bridge: str, interrogation: str) -> str:
+        """Prompt the bot to vote on a red team response."""
+        return f"""You reviewed this paper. A bounty was filed, and the author responded with a red team interrogation.
+
+Challenger's finding: {specific_finding}
+Challenger's bridge: {logical_bridge}
+
+Author's interrogation: {interrogation}
+
+Did the author demonstrate a real problem with the challenger's source use?
+Or is the author deflecting without addressing the core argument?
+
+Return ONLY a JSON object:
+{{
+    "vote": "upheld" or "rejected",
+    "reasoning": "<100+ chars explaining your vote>"
+}}
+
+"upheld" = the author's interrogation shows the challenger's source doesn't actually support their claim.
+"rejected" = the challenger's argument holds despite the author's response."""
+
+    def build_reaffirmation_prompt(self, original: dict, new_papers: list) -> str:
+        """Prompt the bot to reaffirm a decaying paper with new evidence."""
+        title = original.get("title", "Unknown")
+        claim = str(original.get("falsifiable_claim", ""))[:200]
+        abstract = str(original.get("abstract", ""))[:500]
+
+        citation_slots = ""
+        for p in new_papers[:6]:
+            doi = p.get("doi", "unknown")
+            p_title = p.get("title", "unknown")[:100]
+            p_abstract = str(p.get("abstract", ""))[:500]
+            citation_slots += f"\n- DOI: {doi}\n  Title: {p_title}\n  Abstract: {p_abstract}\n"
+
+        return f"""Your paper is losing score to time decay and needs reaffirmation with new evidence.
+
+Original paper: {title}
+Original claim: {claim}
+Original abstract: {abstract}
+
+New papers found that may support or update your thesis:
+{citation_slots if citation_slots else "(No new papers found — you must still write a reaffirmation based on reflection.)"}
+
+Write a reaffirmation paper. Return ONLY a JSON object:
+{{
+    "title": "Reaffirmation: {title}",
+    "abstract": "<150+ chars reflecting current understanding>",
+    "body": "<full reaffirmation paper>",
+    "stance": "reaffirmation",
+    "search_strategy": {{
+        "supporting_queries": ["query1", "query2"],
+        "opposing_queries": ["query1", "query2"],
+        "query_rationale": "<80+ chars>"
+    }},
+    "citations": [
+        {{
+            "doi": "<DOI>",
+            "agent_summary": "<what this source found>",
+            "relevance_explanation": "<how it supports reaffirmation>",
+            "source_quality_note": "<40+ chars on credibility>"
+        }}
+    ]
+}}"""
+
+    def build_open_question_prompt(self) -> str:
+        """Prompt the bot to generate a new open research question."""
+        return """Generate a specific, falsifiable research question with two identifiable sides.
+It should be something that could be written as a paper in this community.
+
+Return ONLY a JSON object:
+{
+    "title": "<10-300 chars, the question itself>",
+    "description": "<50-2000 chars, why this matters and what would count as evidence>",
+    "field_id": <1-13>
+}
+
+Field IDs: 1=Physics, 2=Chemistry, 3=Biology, 4=Medicine, 5=Psychology,
+6=Computer Science, 7=Mathematics, 8=Environmental Science, 9=Economics,
+10=Sociology, 11=Philosophy, 12=Engineering, 13=Interdisciplinary"""
 
     def build_private_block_prompt(self, grade: int = 1) -> str:
         """
