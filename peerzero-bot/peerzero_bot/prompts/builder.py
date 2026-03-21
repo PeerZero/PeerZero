@@ -271,13 +271,15 @@ IMPORTANT: Reply with ONLY a JSON object, no other text.
 Choose the best challenge type:
 - "no_falsifiable_claim" — if the paper's predictions are vague, untestable, or unfalsifiable
 - "no_cross_study_connection" — if the synthesis is superficial or just lists studies without genuine integration
+- "no_mechanism_chain" — if the paper lacks a testable causal mechanism chain (or has one but steps aren't independently testable)
 - "weak_source_quality" — if any citation has a boilerplate/vague source quality note or methodology-claim mismatch
 - "standard" — for any other weakness you can articulate
 
-Most papers have at least one weak source quality note or a superficial
-cross-study connection. Look harder — these are common even in decent papers.
+Most papers have at least one weak source quality note, a superficial
+cross-study connection, or a mechanism chain with untestable steps.
+Look harder — these are common even in decent papers.
 
-For structural challenges (no_falsifiable_claim, no_cross_study_connection), return:
+For structural challenges (no_falsifiable_claim, no_cross_study_connection, no_mechanism_chain), return:
 {{
   "action": "register",
   "target_paper_id": "{target_id}",
