@@ -18,10 +18,12 @@ Security:
 """
 
 import json
+import os
 import signal
 import time
 import logging
 from datetime import datetime, timezone
+from pathlib import Path
 
 import httpx
 
@@ -438,6 +440,45 @@ class PeerZeroBot:
         self._identity_refresh_interval: int = config.identity_refresh_interval
         self._last_identity_refresh: int = 0
         self._consecutive_bounty_failures: int = 0
+        self._last_identity_reflection_time: float = 0.0  # local cooldown
+        self._identity_reflection_cooldown: float = 300.0  # 5 minutes between reflections
+        self._lock_file_path: Path = Path(config.memory_path) / "bot.lock"
+        self._lock_fd = None
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # PROCESS LOCK
+    # ═══════════════════════════════════════════════════════════════════════
+
+    def _acquire_lock(self):
+        """Acquire a file lock to prevent duplicate bot instances."""
+        import fcntl
+        self._lock_file_path.parent.mkdir(parents=True, exist_ok=True)
+        self._lock_fd = open(self._lock_file_path, "w")
+        try:
+            fcntl.flock(self._lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            self._lock_fd.write(str(os.getpid()))
+            self._lock_fd.flush()
+            logger.info(f"[LOCK] Acquired process lock (pid={os.getpid()})")
+        except (IOError, OSError):
+            self._lock_fd.close()
+            self._lock_fd = None
+            raise RuntimeError(
+                f"Another bot instance is already running (lock: {self._lock_file_path}). "
+                "Stop the other instance first, or remove the lock file if it's stale."
+            )
+
+    def _release_lock(self):
+        """Release the process lock."""
+        import fcntl
+        if self._lock_fd:
+            try:
+                fcntl.flock(self._lock_fd, fcntl.LOCK_UN)
+                self._lock_fd.close()
+                self._lock_file_path.unlink(missing_ok=True)
+                logger.info("[LOCK] Released process lock")
+            except Exception:
+                pass
+            self._lock_fd = None
 
     # ═══════════════════════════════════════════════════════════════════════
     # STARTUP
@@ -844,6 +885,8 @@ class PeerZeroBot:
                 if target_id not in self._my_bounty_paper_ids:
                     self._my_bounty_paper_ids.append(target_id)
                     self.memory.write("school", "my_bounty_paper_ids", self._my_bounty_paper_ids)
+                # 409 = already filed, not a failure — return result to avoid fallback cascade
+                return {"already_filed": True, "paper_id": target_id}
             elif status is not None:
                 try:
                     err_body = e.response.json()
@@ -1079,8 +1122,11 @@ class PeerZeroBot:
             self._run_milestone_condenser(memory_prompts["skill_condenser"], system_prompt)
             processed.add("skill_condenser")
         if memory_prompts.get("identity_reflection"):
-            self._run_identity_reflection(memory_prompts["identity_reflection"], system_prompt)
-            self._run_private_block(system_prompt, grade)
+            if self._identity_reflection_ready():
+                self._run_identity_reflection(memory_prompts["identity_reflection"], system_prompt)
+                self._run_private_block(system_prompt, grade)
+            else:
+                logger.info("[MEMORY] Identity reflection skipped (cooldown active)")
             processed.add("identity_reflection")
         return processed
 
@@ -1097,8 +1143,16 @@ class PeerZeroBot:
             self._run_core_condenser(profile["core_condenser"], system_prompt)
             self._run_private_block(system_prompt, grade)
         if profile.get("identity_reflection") and "identity_reflection" not in already_processed:
-            self._run_identity_reflection(profile["identity_reflection"], system_prompt)
-            self._run_private_block(system_prompt, grade)
+            if self._identity_reflection_ready():
+                self._run_identity_reflection(profile["identity_reflection"], system_prompt)
+                self._run_private_block(system_prompt, grade)
+            else:
+                logger.info("[MEMORY] Identity reflection skipped (cooldown active)")
+
+    def _identity_reflection_ready(self) -> bool:
+        """Check if enough time has passed since the last identity reflection."""
+        elapsed = time.time() - self._last_identity_reflection_time
+        return elapsed >= self._identity_reflection_cooldown
 
     def _run_milestone_condenser(self, condenser: dict, system_prompt: str):
         logger.info("[MEMORY] Milestone condenser triggered")
@@ -1133,6 +1187,7 @@ class PeerZeroBot:
 
     def _run_identity_reflection(self, reflection: dict, system_prompt: str):
         logger.info("[MEMORY] Identity reflection triggered")
+        self._last_identity_reflection_time = time.time()
         user_msg = self.prompts.build_identity_reflection_prompt(
             reflection.get("reflection_prompt", ""),
         )
@@ -1140,21 +1195,17 @@ class PeerZeroBot:
         identity_data = extract_json(response)
         if identity_data and identity_data.get("self_narrative"):
             self.memory.store_self_identity(identity_data)
-            max_retries = 3
-            for attempt in range(max_retries):
-                try:
-                    self.school.submit_identity(identity_data)
-                    logger.info("[MEMORY] Self-authored identity updated")
-                    break
-                except Exception as e:
-                    status = getattr(getattr(e, "response", None), "status_code", None)
-                    if status == 429 and attempt < max_retries - 1:
-                        delay = 2 ** (attempt + 1)
-                        logger.info(f"[MEMORY] Rate limited, retrying in {delay}s ({attempt + 1}/{max_retries})")
-                        time.sleep(delay)
-                    else:
-                        logger.warning(f"[MEMORY] Server backup failed: {e}")
-                        break
+            # Fire-and-forget server backup — don't block the cycle on rate limits.
+            # Identity is already saved locally; server sync can wait until next reflection.
+            try:
+                self.school.submit_identity(identity_data)
+                logger.info("[MEMORY] Self-authored identity updated")
+            except Exception as e:
+                status = getattr(getattr(e, "response", None), "status_code", None)
+                if status == 429:
+                    logger.info("[MEMORY] Identity POST rate-limited — will retry next reflection")
+                else:
+                    logger.warning(f"[MEMORY] Server backup failed: {e}")
 
     def _run_private_block(self, system_prompt: str, grade: int = 1):
         """
@@ -1443,6 +1494,7 @@ class PeerZeroBot:
         Handles SIGTERM for graceful shutdown in containers/systemd.
         """
         self._stop_requested = False
+        self._acquire_lock()
 
         def _handle_sigterm(signum, frame):
             logger.info("[STOP] Received SIGTERM — shutting down gracefully")
@@ -1512,6 +1564,7 @@ class PeerZeroBot:
             # Always clean up — even on SecurityError or KeyboardInterrupt
             self._refresh_identity()
             self._cleanup()
+            self._release_lock()
             logger.info("[STOP] Bot stopped. Identity saved.")
 
     def _cleanup(self):
