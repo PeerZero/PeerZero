@@ -23,6 +23,8 @@ import time
 import logging
 from datetime import datetime, timezone
 
+import httpx
+
 from .config import BotConfig
 from .memory import MemoryManager
 from .adapters.school import SchoolAdapter, extract_json, pick_paper_to_review
@@ -430,10 +432,12 @@ class PeerZeroBot:
         # Restore tracked IDs from persistent memory (survives restarts)
         self._my_paper_ids: list[str] = self.memory.get_tracked_paper_ids()
         self._my_review_ids: list[str] = self.memory.get_tracked_review_ids()
+        self._my_bounty_paper_ids: list[str] = self.memory.read("school", "my_bounty_paper_ids", [])
         self._portable_profile: dict = self.memory.read("identity", "portable_profile", {})
         self._agent_card: dict = {}
         self._identity_refresh_interval: int = config.identity_refresh_interval
         self._last_identity_refresh: int = 0
+        self._consecutive_bounty_failures: int = 0
 
     # ═══════════════════════════════════════════════════════════════════════
     # STARTUP
@@ -458,6 +462,8 @@ class PeerZeroBot:
         mcp_count = sum(1 for a in self.platform_adapters if isinstance(a, MCPAdapter))
         if mcp_count:
             logger.info(f"  MCP:      {mcp_count} adapter(s)")
+        if self.config.memory_wipe_interval > 0:
+            logger.info(f"  MemWipe:  every {self.config.memory_wipe_interval} cycles (A/B testing mode)")
         logger.info("=" * 60)
 
         # Download SKILL.md
@@ -560,6 +566,12 @@ class PeerZeroBot:
                     return
 
         # Step 3: Execute action
+        # Override bounty after repeated failures so bots don't get stuck
+        if next_action == "file_bounty" and self._consecutive_bounty_failures >= 2:
+            logger.info(f"[SCHOOL] Overriding file_bounty to review ({self._consecutive_bounty_failures} consecutive failures)")
+            next_action = "review"
+            self._consecutive_bounty_failures = 0
+
         result = None
         if next_action == "revise":
             result = self._do_revise(system_prompt, profile)
@@ -567,18 +579,44 @@ class PeerZeroBot:
             result = self._do_submit_paper(system_prompt, profile)
         elif next_action == "file_bounty":
             result = self._do_file_bounty(system_prompt, profile)
+            if result is not None:
+                self._consecutive_bounty_failures = 0
+            else:
+                self._consecutive_bounty_failures += 1
+                logger.info(f"[BOUNTY] Failed ({self._consecutive_bounty_failures} consecutive)")
+        elif next_action == "respond":
+            result = self._do_respond(system_prompt, profile)
+        elif next_action == "rebut":
+            result = self._do_rebut(system_prompt, profile)
+        elif next_action == "review":
+            result = self._do_review(system_prompt, profile)
         else:
+            logger.warning(f"[SCHOOL] Unknown action '{next_action}' — reviewing instead")
+            result = self._do_review(system_prompt, profile)
+
+        # Fallback: if primary action failed, try a review so the cycle isn't wasted
+        if result is None and next_action != "review":
+            logger.info(f"[SCHOOL] {next_action} failed — falling back to review")
             result = self._do_review(system_prompt, profile)
 
         # Step 4: Store exercises + process memory
         grade = profile.get("agent", {}).get("grade", 1) if isinstance(profile.get("agent"), dict) else profile.get("grade", 1)
+        inline_processed = set()
         if result and isinstance(result, dict):
             if result.get("skill_exercises"):
                 self.memory.store_school_exercises(result["skill_exercises"])
             if result.get("memory_prompts"):
-                self._process_inline_memory_prompts(result["memory_prompts"], system_prompt, grade)
+                inline_processed = self._process_inline_memory_prompts(result["memory_prompts"], system_prompt, grade)
 
-        self._process_memory_triggers(profile)
+        self._process_memory_triggers(profile, already_processed=inline_processed)
+
+        # Experimental: periodic memory wipe for A/B testing
+        wipe = self.config.memory_wipe_interval
+        if wipe > 0 and self.cycle_count % wipe == 0:
+            logger.info(f"[MEMORY] Wipe triggered (every {wipe} cycles) — clearing exercises + paragraphs")
+            self.memory.clear_school_exercises()
+            self.memory.clear_identity_paragraphs()
+
         self.school.validate_bounties()
 
         # Periodic identity refresh to avoid using expired profiles
@@ -637,8 +675,19 @@ class PeerZeroBot:
         review_data = extract_json(response_text)
 
         if not review_data or "score" not in review_data:
-            logger.warning("[REVIEW] Failed to parse LLM response")
-            return None
+            logger.warning("[REVIEW] Failed to parse LLM response — retrying once")
+            response_text = self.llm.call(system_prompt, user_msg)
+            review_data = extract_json(response_text)
+            if not review_data or "score" not in review_data:
+                logger.warning("[REVIEW] Retry also failed to parse")
+                return None
+
+        # Clamp score to valid range (LLM sometimes returns 0.5 or 10.5)
+        try:
+            review_data["score"] = max(1.0, min(10.0, round(float(review_data["score"]), 1)))
+        except (ValueError, TypeError):
+            logger.warning(f"[REVIEW] Invalid score '{review_data.get('score')}' — defaulting to 5.0")
+            review_data["score"] = 5.0
 
         try:
             result = self.school.submit_review(paper_id, review_data)
@@ -646,6 +695,16 @@ class PeerZeroBot:
             self._my_review_ids.append(paper_id)
             self.memory.add_tracked_review_id(paper_id)
             return result
+        except httpx.HTTPStatusError as e:
+            try:
+                err_body = e.response.json()
+                err_msg = err_body.get("error", str(e))
+                hints = err_body.get("hint", err_body.get("failures", ""))
+            except Exception:
+                err_msg = str(e)
+                hints = ""
+            logger.warning(f"[REVIEW] Failed for '{paper.get('title', '?')[:60]}': {err_msg} | hints={hints}")
+            return None
         except Exception as e:
             logger.warning(f"[REVIEW] Failed: {e}")
             return None
@@ -656,8 +715,12 @@ class PeerZeroBot:
         paper_data = extract_json(response_text)
 
         if not paper_data or "title" not in paper_data:
-            logger.warning("[PAPER] Failed to parse LLM response")
-            return None
+            logger.warning("[PAPER] Failed to parse LLM response — retrying once")
+            response_text = self.llm.call(system_prompt, user_msg)
+            paper_data = extract_json(response_text)
+            if not paper_data or "title" not in paper_data:
+                logger.warning("[PAPER] Retry also failed to parse")
+                return None
 
         # Pre-validate citations before submission to avoid wasting an attempt
         text_fields = {
@@ -686,6 +749,7 @@ class PeerZeroBot:
         candidates = [
             p for p in papers
             if p.get("id") in self._my_review_ids
+            and p.get("id") not in self._my_bounty_paper_ids
             and p.get("weighted_score") is not None
             and p.get("raw_review_count", 0) >= 3
         ]
@@ -707,10 +771,46 @@ class PeerZeroBot:
             logger.info("[BOUNTY] Skipped")
             return None
 
+        # Fallback: if LLM omitted external_sources, build from rebuttal citations
+        if "external_sources" not in bounty_data and "rebuttal" in bounty_data:
+            citations = bounty_data["rebuttal"].get("citations") or []
+            bounty_data["external_sources"] = []
+            for c in citations:
+                if c.get("doi"):
+                    bounty_data["external_sources"].append({
+                        "doi": c["doi"],
+                        "specific_finding": c.get("agent_summary", "")[:2000] or "See citation for contradicting evidence",
+                        "target_claim": target.get("title", "")[:1000] or "Original paper claim",
+                        "logical_bridge": c.get("relevance_explanation", "")[:2000] or "This evidence directly contradicts the original claim",
+                    })
+            if bounty_data["external_sources"]:
+                logger.info(f"[BOUNTY] Built {len(bounty_data['external_sources'])} external_sources from rebuttal citations")
+            else:
+                logger.warning("[BOUNTY] No external_sources and no citations with DOIs — skipping")
+                return None
+
         try:
             result = self.school.submit_bounty(bounty_data)
             logger.info(f"[BOUNTY] Filed — type={bounty_data.get('challenge_type')}")
+            self._my_bounty_paper_ids.append(target_id)
+            self.memory.write("school", "my_bounty_paper_ids", self._my_bounty_paper_ids)
             return result
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 409:
+                logger.info(f"[BOUNTY] Already filed for paper {target_id} — syncing local cache")
+                if target_id not in self._my_bounty_paper_ids:
+                    self._my_bounty_paper_ids.append(target_id)
+                    self.memory.write("school", "my_bounty_paper_ids", self._my_bounty_paper_ids)
+            else:
+                try:
+                    err_body = e.response.json()
+                    err_msg = err_body.get("error", str(e))
+                    hints = err_body.get("hint", err_body.get("failures", ""))
+                except Exception:
+                    err_msg = str(e)
+                    hints = ""
+                logger.warning(f"[BOUNTY] Failed for '{target.get('title', '?')[:60]}': {err_msg} | hints={hints}")
+            return None
         except Exception as e:
             logger.warning(f"[BOUNTY] Failed: {e}")
             return None
@@ -772,35 +872,195 @@ class PeerZeroBot:
             logger.warning(f"[REVISE] Failed: {e}")
             return None
 
+    def _do_respond(self, system_prompt: str, profile: dict) -> dict | None:
+        """Write a response paper critiquing a paper this bot reviewed harshly."""
+        respondable = profile.get("respondable_papers", [])
+        # Only respond to original papers (not other responses)
+        respondable = [p for p in respondable if not p.get("parent_paper_id")]
+        if not respondable:
+            logger.info("[RESPOND] No respondable papers")
+            return None
+
+        target = respondable[0]
+        paper_id = target.get("id")
+        if not paper_id:
+            return None
+
+        my_score = target.get("my_review_score", "unknown")
+        logger.info(f"[RESPOND] Critiquing: {target.get('title', '?')[:60]}... (my score: {my_score})")
+
+        full = self.school.get_papers(params={"id": paper_id})
+        user_msg = self.prompts.build_respond_prompt(full, my_score)
+        response_text = self.llm.call(system_prompt, user_msg)
+        response_data = extract_json(response_text)
+
+        if not response_data or "title" not in response_data:
+            logger.warning("[RESPOND] Failed to parse LLM response — retrying once")
+            response_text = self.llm.call(system_prompt, user_msg)
+            response_data = extract_json(response_text)
+            if not response_data or "title" not in response_data:
+                logger.warning("[RESPOND] Retry also failed to parse")
+                return None
+
+        # Validate required fields before submitting (avoids wasted server call)
+        missing = [f for f in ("title", "abstract", "body", "citations", "search_strategy") if f not in response_data]
+        if missing:
+            logger.warning(f"[RESPOND] LLM response missing required fields: {missing}")
+            return None
+
+        # Ensure correct stance
+        response_data["stance"] = "rebut"
+
+        # Pre-validate citations
+        text_fields = {
+            "title": response_data.get("title", ""),
+            "abstract": response_data.get("abstract", ""),
+            "body": response_data.get("body", ""),
+            "cross_study_connection": response_data.get("cross_study_connection", ""),
+        }
+        citation_check = self.school.validate_citations(text_fields, response_data.get("citations", []))
+        if not citation_check.get("valid", True):
+            logger.warning(f"[RESPOND] Citation pre-validation failed: {citation_check.get('flags', [])}")
+            return None
+
+        try:
+            result = self.school.submit_revision(paper_id, response_data)
+            logger.info(f"[RESPOND] Submitted — id={result.get('response_paper_id')}")
+            return result
+        except httpx.HTTPStatusError as e:
+            try:
+                err_body = e.response.json()
+                err_msg = err_body.get("error", str(e))
+                hints = err_body.get("hint", err_body.get("failures", ""))
+            except Exception:
+                err_msg = str(e)
+                hints = ""
+            logger.warning(f"[RESPOND] Failed for '{target.get('title', '?')[:60]}': {err_msg} | hints={hints}")
+            return None
+        except Exception as e:
+            logger.warning(f"[RESPOND] Failed: {e}")
+            return None
+
+    def _do_rebut(self, system_prompt: str, profile: dict) -> dict | None:
+        """Defend own paper against low reviews or validated bounties."""
+        rebuttable = profile.get("rebuttable_papers", [])
+        if not rebuttable:
+            logger.info("[REBUT] No rebuttable papers")
+            return None
+
+        target = rebuttable[0]
+        paper_id = target.get("id")
+        if not paper_id:
+            return None
+
+        logger.info(f"[REBUT] Defending: {target.get('title', '?')[:60]}...")
+
+        # Build criticisms summary from low reviews and bounties
+        criticisms = ""
+        for r in (target.get("low_reviews") or [])[:5]:
+            assessment = str(r.get("assessment", ""))[:300]
+            criticisms += f"\n- Review score {r.get('score')}: {assessment}"
+        for b in (target.get("bounties") or [])[:3]:
+            criticisms += f"\n- Bounty ({b.get('challenge_type', 'unknown')}): score drop {b.get('score_drop', 'unknown')}"
+
+        if not criticisms:
+            logger.info("[REBUT] No specific criticisms to address")
+            return None
+
+        full = self.school.get_papers(params={"id": paper_id})
+        user_msg = self.prompts.build_rebut_prompt(full, criticisms)
+        response_text = self.llm.call(system_prompt, user_msg)
+        rebut_data = extract_json(response_text)
+
+        if not rebut_data or "title" not in rebut_data:
+            logger.warning("[REBUT] Failed to parse LLM response — retrying once")
+            response_text = self.llm.call(system_prompt, user_msg)
+            rebut_data = extract_json(response_text)
+            if not rebut_data or "title" not in rebut_data:
+                logger.warning("[REBUT] Retry also failed to parse")
+                return None
+
+        # Validate required fields before submitting (avoids wasted server call)
+        missing = [f for f in ("title", "abstract", "body", "citations", "search_strategy") if f not in rebut_data]
+        if missing:
+            logger.warning(f"[REBUT] LLM response missing required fields: {missing}")
+            return None
+
+        # Ensure correct stance
+        rebut_data["stance"] = "support"
+
+        # Pre-validate citations
+        text_fields = {
+            "title": rebut_data.get("title", ""),
+            "abstract": rebut_data.get("abstract", ""),
+            "body": rebut_data.get("body", ""),
+            "cross_study_connection": rebut_data.get("cross_study_connection", ""),
+        }
+        citation_check = self.school.validate_citations(text_fields, rebut_data.get("citations", []))
+        if not citation_check.get("valid", True):
+            logger.warning(f"[REBUT] Citation pre-validation failed: {citation_check.get('flags', [])}")
+            return None
+
+        try:
+            result = self.school.submit_revision(paper_id, rebut_data)
+            logger.info(f"[REBUT] Submitted — id={result.get('response_paper_id')}")
+            return result
+        except httpx.HTTPStatusError as e:
+            try:
+                err_body = e.response.json()
+                err_msg = err_body.get("error", str(e))
+                hints = err_body.get("hint", err_body.get("failures", ""))
+            except Exception:
+                err_msg = str(e)
+                hints = ""
+            logger.warning(f"[REBUT] Failed for '{target.get('title', '?')[:60]}': {err_msg} | hints={hints}")
+            return None
+        except Exception as e:
+            logger.warning(f"[REBUT] Failed: {e}")
+            return None
+
     # ── Memory processing ─────────────────────────────────────────────────
 
-    def _process_inline_memory_prompts(self, memory_prompts: dict, system_prompt: str, grade: int = 1):
+    def _process_inline_memory_prompts(self, memory_prompts: dict, system_prompt: str, grade: int = 1) -> set:
+        """Process memory prompts returned inline with an action result.
+
+        Returns set of trigger names that were processed, so the profile-based
+        trigger pass can skip them and avoid double-firing.
+        """
+        processed = set()
         if not memory_prompts:
-            return
+            return processed
         if memory_prompts.get("skill_condenser"):
             self._run_milestone_condenser(memory_prompts["skill_condenser"], system_prompt)
+            processed.add("skill_condenser")
         if memory_prompts.get("identity_reflection"):
             self._run_identity_reflection(memory_prompts["identity_reflection"], system_prompt)
             self._run_private_block(system_prompt, grade)
+            processed.add("identity_reflection")
+        return processed
 
-    def _process_memory_triggers(self, profile: dict):
+    def _process_memory_triggers(self, profile: dict, already_processed: set | None = None):
+        already_processed = already_processed or set()
         system_prompt = self.prompts.build_school_system_prompt()
         grade = profile.get("agent", {}).get("grade", 1) if isinstance(profile.get("agent"), dict) else profile.get("grade", 1)
 
-        if profile.get("skill_condenser"):
+        if profile.get("skill_condenser") and "skill_condenser" not in already_processed:
             self._run_milestone_condenser(profile["skill_condenser"], system_prompt)
         if profile.get("master_condenser"):
             self._run_master_condenser(profile["master_condenser"], system_prompt, grade)
         elif profile.get("core_condenser"):
             self._run_core_condenser(profile["core_condenser"], system_prompt)
             self._run_private_block(system_prompt, grade)
-        if profile.get("identity_reflection"):
+        if profile.get("identity_reflection") and "identity_reflection" not in already_processed:
             self._run_identity_reflection(profile["identity_reflection"], system_prompt)
             self._run_private_block(system_prompt, grade)
 
     def _run_milestone_condenser(self, condenser: dict, system_prompt: str):
         logger.info("[MEMORY] Milestone condenser triggered")
         exercises = self.memory.get_school_exercises()
+        if len(exercises) < 3:
+            logger.info(f"[MEMORY] Only {len(exercises)} exercise(s) locally — skipping condenser (need 3+)")
+            return
         user_msg = self.prompts.build_condenser_prompt(
             condenser.get("condenser_prompt", ""), exercises,
         )

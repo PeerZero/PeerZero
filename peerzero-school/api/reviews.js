@@ -229,9 +229,11 @@ module.exports = async (req, res) => {
             logical_consistency_notes, overall_assessment,
             review_search_strategy } = req.body;
 
-    if (!score || isNaN(Number(score)) || Number(score) < 1 || Number(score) > 10) {
-      return res.status(400).json({ error: 'Score must be 1.0-10.0' });
+    if (!score || isNaN(Number(score))) {
+      return res.status(400).json({ error: 'Score must be a number between 1.0 and 10.0' });
     }
+    // Clamp to valid range instead of rejecting — saves bots an LLM call
+    const clampedScore = Math.round(Math.max(1, Math.min(10, Number(score))) * 10) / 10;
 
     const lengthFields = { methodology_notes, statistical_validity_notes, citation_accuracy_notes,
                            reproducibility_notes, logical_consistency_notes, overall_assessment };
@@ -240,7 +242,7 @@ module.exports = async (req, res) => {
       if (err) return res.status(400).json({ error: err });
     }
 
-    const gate = qualityGate({ score, methodology_notes, statistical_validity_notes,
+    const gate = qualityGate({ score: clampedScore, methodology_notes, statistical_validity_notes,
       citation_accuracy_notes, reproducibility_notes, logical_consistency_notes, overall_assessment });
     if (!gate.passed) {
       return res.status(400).json({ error: 'Review failed quality gate', failures: gate.failures });
@@ -278,7 +280,7 @@ module.exports = async (req, res) => {
     if (existing_reviews && existing_reviews.length >= 4) {
       const scores = existing_reviews.map(r => r.score);
       const mean = scores.reduce((a, b) => a + b, 0) / scores.length;
-      isOutlier = Math.abs(score - mean) > 3.5;
+      isOutlier = Math.abs(clampedScore - mean) > 3.5;
     }
 
     const weight = reviewerWeight(agent.credibility_score);
@@ -286,7 +288,7 @@ module.exports = async (req, res) => {
     const { data: newReview, error: reviewError } = await supabase.from('reviews').insert({
       paper_id,
       reviewer_agent_id: agent.id,
-      score,
+      score: clampedScore,
       methodology_notes: sanitize(methodology_notes),
       statistical_validity_notes: sanitize(statistical_validity_notes),
       citation_accuracy_notes: sanitize(citation_accuracy_notes),
@@ -313,10 +315,10 @@ module.exports = async (req, res) => {
       credChange -= 4;
       // Record structured failure reflection for outlier penalty
       const scores = (existing_reviews || []).map(r => r.score);
-      const consensus = scores.length > 0 ? scores.reduce((a, b) => a + b, 0) / scores.length : score;
+      const consensus = scores.length > 0 ? scores.reduce((a, b) => a + b, 0) / scores.length : clampedScore;
       recordFailureReflection(agent.id, 'outlier_penalty', 'failure',
-        `Outlier penalty on paper ${paper_id.slice(0, 8)}: scored ${score} vs consensus ${consensus.toFixed(1)}`,
-        { score: Number(score), consensus, paper_id, deviation: Math.abs(score - consensus) }
+        `Outlier penalty on paper ${paper_id.slice(0, 8)}: scored ${clampedScore} vs consensus ${consensus.toFixed(1)}`,
+        { score: clampedScore, consensus, paper_id, deviation: Math.abs(clampedScore - consensus) }
       ).catch(err => console.error('[reviews] recordFailureReflection (outlier) failed:', err?.message || err));
     }
 
@@ -559,7 +561,7 @@ module.exports = async (req, res) => {
     const isCapped = trueCred >= 74 && trueCred < 75 && needsForT75.length > 0;
 
     // Build review coaching — pure computation, never async, never fails
-    const reviewCoaching = buildReviewCoaching(score, newScore, all_reviews.length, isOutlier, agent.credibility_score || 0);
+    const reviewCoaching = buildReviewCoaching(clampedScore, newScore, all_reviews.length, isOutlier, agent.credibility_score || 0);
 
     // Fetch citation quality grade for the paper just reviewed
     let paperCitationGrade = null;
@@ -624,7 +626,7 @@ module.exports = async (req, res) => {
           reproducibility_notes, logical_consistency_notes },
         reviewSearchCoaching,
         gate.passed,
-        { paper_title: paper.title, paper_abstract: paper.abstract, score: Number(score), overall_assessment }
+        { paper_title: paper.title, paper_abstract: paper.abstract, score: clampedScore, overall_assessment }
       ),
       memory_prompts: memoryPrompts,
       action_guide: actionGuide,

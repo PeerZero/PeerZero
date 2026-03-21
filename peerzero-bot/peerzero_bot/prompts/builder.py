@@ -159,6 +159,74 @@ Return a JSON object with:
 Paper + reviews + audit:
 {paper_json}"""
 
+    def build_respond_prompt(self, paper_data: dict, my_review_score: int) -> str:
+        paper_json = truncate_json(json.dumps(paper_data, indent=2, default=str), 15000)
+        return f"""You previously reviewed this paper and gave it a score of {my_review_score}/10.
+Now write a response paper explaining your critique with supporting evidence.
+
+Your response should:
+- Reference specific weaknesses you identified in your review
+- Provide contradicting evidence or methodological critiques
+- Be honest — concede strengths while explaining why the flaws matter
+
+Return a JSON object with:
+{{
+  "title": "Response: <shortened original title>",
+  "abstract": "<120+ chars explaining your key critique>",
+  "body": "<500+ chars — detailed critique with evidence>",
+  "stance": "rebut",
+  "mechanism_chain": ["<step showing where original reasoning breaks, max 200 chars per step>"],
+  "cross_study_connection": "<150+ chars — how external evidence contradicts the claims>",
+  "citations": [{{
+    "doi": "<DOI>",
+    "agent_summary": "<what this source actually found>",
+    "relevance_explanation": "<how it contradicts the original paper>",
+    "source_quality_note": "<30+ chars — methodology quality of this source>"
+  }}],
+  "search_strategy": {{
+    "supporting_queries": ["<query for contradicting evidence 1>", "<query 2>"],
+    "opposing_queries": ["<query for evidence that supports the original paper 1>", "<query 2>"],
+    "query_rationale": "<80+ chars — what weaknesses you targeted>"
+  }}
+}}
+
+Paper to respond to:
+{paper_json}"""
+
+    def build_rebut_prompt(self, paper_data: dict, criticisms: str) -> str:
+        paper_json = truncate_json(json.dumps(paper_data, indent=2, default=str), 12000)
+        return f"""Your paper has been criticized. Write a defense addressing the specific criticisms.
+
+Be honest: concede valid criticisms, but defend claims that have evidence.
+Address EACH criticism specifically — do not write a generic defense.
+
+Criticisms received:
+{criticisms}
+
+Return a JSON object with:
+{{
+  "title": "Defense: <shortened original title>",
+  "abstract": "<120+ chars explaining your defense>",
+  "body": "<500+ chars — detailed defense addressing each criticism>",
+  "stance": "support",
+  "mechanism_chain": ["<step reinforcing your causal chain, max 200 chars per step>"],
+  "cross_study_connection": "<150+ chars — additional evidence supporting your claims>",
+  "citations": [{{
+    "doi": "<DOI>",
+    "agent_summary": "<what this source actually found>",
+    "relevance_explanation": "<how it supports your original claims>",
+    "source_quality_note": "<30+ chars — methodology quality of this source>"
+  }}],
+  "search_strategy": {{
+    "supporting_queries": ["<query for supporting evidence 1>", "<query 2>"],
+    "opposing_queries": ["<query for contradicting evidence 1>", "<query 2>"],
+    "query_rationale": "<80+ chars — what criticisms you targeted>"
+  }}
+}}
+
+Your paper:
+{paper_json}"""
+
     def build_condenser_prompt(self, condenser_prompt: str, exercises: list[dict]) -> str:
         exercises_json = truncate_json(json.dumps(exercises, indent=2, default=str), 8000)
         return f"""{condenser_prompt}

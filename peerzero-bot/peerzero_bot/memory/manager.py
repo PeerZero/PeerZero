@@ -420,7 +420,7 @@ class MemoryManager:
                 f"{para_text}"
             )
 
-        # ── Layer 1: Recent exercises (permanent) ────────────────────────
+        # ── Layer 1: Recent exercises (wipeable after condensing) ─────────
         exercises = self.get_school_exercises()
         if exercises:
             recent = exercises[-3:]

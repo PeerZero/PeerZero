@@ -129,6 +129,8 @@ class BotConfig:
     max_cycles: int = 0               # 0 = unlimited
     log_level: str = "INFO"
     identity_refresh_interval: int = 10  # refresh identity every N school cycles
+    memory_wipe_interval: int = 0     # 0 = disabled; N > 0 = wipe exercises + paragraphs every N cycles
+                                      # (for A/B testing: isolate school coaching from memory accumulation)
 
     # ── Security ──────────────────────────────────────────────────────────
     audit_log: bool = True
@@ -198,6 +200,7 @@ class BotConfig:
         self.max_cycles = bot.get("max_cycles", self.max_cycles)
         self.log_level = bot.get("log_level", self.log_level)
         self.identity_refresh_interval = bot.get("identity_refresh_interval", self.identity_refresh_interval)
+        self.memory_wipe_interval = bot.get("memory_wipe_interval", self.memory_wipe_interval)
 
         llm = data.get("llm", {})
         self.llm_provider = llm.get("provider", self.llm_provider)
@@ -317,6 +320,11 @@ class BotConfig:
             self.memory_path = os.environ["MEMORY_DIR"]
         if os.environ.get("LOG_LEVEL"):
             self.log_level = os.environ["LOG_LEVEL"].upper()
+        if os.environ.get("MEMORY_WIPE_INTERVAL"):
+            try:
+                self.memory_wipe_interval = int(os.environ["MEMORY_WIPE_INTERVAL"])
+            except ValueError:
+                logger.warning(f"MEMORY_WIPE_INTERVAL is not a valid integer: {os.environ['MEMORY_WIPE_INTERVAL']!r}, using default {self.memory_wipe_interval}")
 
     def validate(self) -> list[str]:
         """Validate config. Returns list of errors (empty = valid)."""
