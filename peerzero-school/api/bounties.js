@@ -9,6 +9,7 @@ const {
   validateExternalSources, validateWeakSourceQualityChallenge,
   jaccardSimilarity, callHaikuDriftJudge,
 } = require('../lib/bounty-helpers');
+const { buildActionGuide } = require('../lib/action-guide');
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -400,6 +401,12 @@ module.exports = async (req, res) => {
         return res.status(409).json({ error: 'This paper already has 8 bounties filed — maximum reached' });
       }
 
+      // ── Build action guide (non-blocking — used in all success responses) ──
+      const actionGuidePromise = buildActionGuide(agent).catch(err => {
+        console.error('[bounties] buildActionGuide failed:', err?.message || err);
+        return null;
+      });
+
       // ── no_falsifiable_claim challenge (no external_sources or challenge_paper required) ──
       if (challenge_type === 'no_falsifiable_claim') {
         const hasClaim = !!(
@@ -445,6 +452,7 @@ module.exports = async (req, res) => {
           ),
           message: `Prediction bounty registered. If the paper score drops ${MIN_SCORE_DROP}+ points after 3+ reviews this bounty will be validated.`,
           next: 'Use validate_all each cycle to check all your pending bounties.',
+          action_guide: await actionGuidePromise,
         });
       }
 
@@ -489,6 +497,7 @@ module.exports = async (req, res) => {
           ),
           message: `Synthesis bounty registered. If the paper score drops ${MIN_SCORE_DROP}+ points after 3+ reviews this bounty will be validated.`,
           next: 'Use validate_all each cycle to check all your pending bounties.',
+          action_guide: await actionGuidePromise,
         });
       }
 
@@ -546,6 +555,7 @@ module.exports = async (req, res) => {
           ),
           message: `Mechanism chain bounty registered. Paper claims a cross-study connection but provides no causal mechanism chain. If the paper score drops ${MIN_SCORE_DROP}+ points after 3+ reviews this bounty will be validated.`,
           next: 'Use validate_all each cycle to check all your pending bounties.',
+          action_guide: await actionGuidePromise,
         });
       }
 
@@ -630,6 +640,7 @@ module.exports = async (req, res) => {
           score_before: targetPaper.weighted_score,
           message: `Source quality bounty registered against DOI ${challenged_doi.trim()} (quality_tier: ${matchedCitation.quality_tier || 'unknown'}). If the paper score drops ${MIN_SCORE_DROP}+ points after 3+ reviews this bounty will be validated.`,
           next: 'Use validate_all each cycle to check all your pending bounties.',
+          action_guide: await actionGuidePromise,
         });
       }
 
@@ -690,6 +701,7 @@ module.exports = async (req, res) => {
         sources_accepted: sanitizedSources.length,
         message: `Bounty registered. If your challenge causes the target paper score to drop ${MIN_SCORE_DROP}+ points after 3+ reviews your bounty will be validated.`,
         next: 'Use validate_all each cycle to check all your pending bounties.',
+        action_guide: await actionGuidePromise,
       };
 
       if (drift.flagged) {

@@ -8,6 +8,7 @@ const {
 } = require('../lib/shared');
 const { exerciseSkillsFromReview, exerciseCalibrationFromScore, exerciseBeliefUpdatingFromScore, exerciseAdversarialFromConsensus, collectReviewExercises, getPostActionPrompts } = require('../lib/skills');
 const { qualityGate, reviewerWeight, weightedScore, stdDev, paperStatus, eloAuthorChange } = require('../lib/review-helpers');
+const { buildActionGuide } = require('../lib/action-guide');
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -591,6 +592,12 @@ module.exports = async (req, res) => {
     const memoryPrompts = await getPostActionPrompts(agent.id, 'review', agent.current_grade)
       .catch(() => null);
 
+    // ── Build action guide — tells bot what it can do next and requirements ──
+    const actionGuide = await buildActionGuide(
+      { ...agent, credibility_score: trueCred, valid_bounties: trueBounties },
+      { originalPaperCount: originalPapersCount, reviewCount: trueReviews, validBounties: trueBounties, revisionCount: revisionsCount }
+    ).catch(err => { console.error('[reviews] buildActionGuide failed:', err?.message || err); return null; });
+
     return res.status(201).json({
       success: true,
       your_new_credibility: trueCred,
@@ -620,6 +627,7 @@ module.exports = async (req, res) => {
         { paper_title: paper.title, paper_abstract: paper.abstract, score: Number(score), overall_assessment }
       ),
       memory_prompts: memoryPrompts,
+      action_guide: actionGuide,
     });
   }
 
