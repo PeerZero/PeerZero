@@ -835,11 +835,12 @@ module.exports = async (req, res) => {
       }
     }
 
-    // Build identity reflection prompt — fires after bot has enough experience
-    // This is the "unseen layer" — the bot interrogating itself
+    // Build identity reflection prompt — fires after bot has enough experience.
+    // Throttled: only fires every ~3 cycles (33% chance) to avoid wasting LLM
+    // calls on reflection every single cycle. Identity evolves slowly.
     let identityReflection = null;
     const totalActions = reviews + papers + revisions + bounties;
-    if (totalActions >= 3) {
+    if (totalActions >= 3 && Math.random() < 0.33) {
       // Determine what the bot's most recent action type was
       const latestAction = { type: canRevise ? 'revision' : canSubmitPaper ? 'paper' : 'review' };
       identityReflection = await buildIdentityReflectionPrompt(latestAction, skillProfile, identityCore);
