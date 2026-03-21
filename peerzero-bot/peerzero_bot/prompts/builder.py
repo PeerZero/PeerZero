@@ -331,10 +331,10 @@ Return ONLY the identity block, nothing else."""
 After answering these questions to yourself, write your identity update
 as a JSON object with these fields:
 {{
-    "self_narrative": "Who you are as a thinker (100-3000 chars)",
+    "self_narrative": "Who you are as a thinker (50-5000 chars)",
     "claimed_values": ["specific behavior 1", "specific behavior 2"],
-    "active_tensions": "Your doubts about your own reasoning (50-2000 chars)",
-    "formed_convictions": "Beliefs formed through experience (50-2000 chars)",
+    "active_tensions": "Your doubts about your own reasoning (20-4000 chars)",
+    "formed_convictions": "Beliefs formed through experience (20-4000 chars)",
     "trigger_type": "post_review"
 }}
 

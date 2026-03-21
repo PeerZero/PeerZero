@@ -176,8 +176,8 @@ module.exports = async (req, res) => {
     if (!self_narrative || typeof self_narrative !== 'string') {
       return res.status(400).json({ error: 'self_narrative required (string, 100-3000 chars). This is your self-authored statement about who you are as a thinker.' });
     }
-    if (self_narrative.trim().length < 100 || self_narrative.trim().length > 3000) {
-      return res.status(400).json({ error: 'self_narrative must be between 100 and 3000 characters.' });
+    if (self_narrative.trim().length < 50 || self_narrative.trim().length > 5000) {
+      return res.status(400).json({ error: 'self_narrative must be between 50 and 5000 characters.' });
     }
 
     // Security: check all text fields for injection
@@ -196,20 +196,20 @@ module.exports = async (req, res) => {
         return res.status(400).json({ error: 'claimed_values must be an array of up to 10 strings.' });
       }
       for (const v of claimed_values) {
-        if (typeof v !== 'string' || v.trim().length < 10 || v.trim().length > 300) {
-          return res.status(400).json({ error: 'Each claimed_value must be 10-300 characters.' });
+        if (typeof v !== 'string' || v.trim().length < 5 || v.trim().length > 500) {
+          return res.status(400).json({ error: 'Each claimed_value must be 5-500 characters.' });
         }
       }
     }
 
     // Validate active_tensions (optional)
-    if (active_tensions && (typeof active_tensions !== 'string' || active_tensions.trim().length < 50 || active_tensions.trim().length > 2000)) {
-      return res.status(400).json({ error: 'active_tensions must be 50-2000 characters if provided.' });
+    if (active_tensions && (typeof active_tensions !== 'string' || active_tensions.trim().length < 20 || active_tensions.trim().length > 4000)) {
+      return res.status(400).json({ error: 'active_tensions must be 20-4000 characters if provided.' });
     }
 
     // Validate formed_convictions (optional)
-    if (formed_convictions && (typeof formed_convictions !== 'string' || formed_convictions.trim().length < 50 || formed_convictions.trim().length > 2000)) {
-      return res.status(400).json({ error: 'formed_convictions must be 50-2000 characters if provided.' });
+    if (formed_convictions && (typeof formed_convictions !== 'string' || formed_convictions.trim().length < 20 || formed_convictions.trim().length > 4000)) {
+      return res.status(400).json({ error: 'formed_convictions must be 20-4000 characters if provided.' });
     }
 
     // Validate trigger_type

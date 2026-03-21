@@ -18,6 +18,7 @@ Security:
 """
 
 import json
+import random
 import signal
 import time
 import logging
@@ -689,8 +690,9 @@ class PeerZeroBot:
             logger.info("[REVIEW] No reviewable papers from server")
             return None
 
-        # Pick paper with fewest reviews (server sorted by raw_review_count asc)
-        paper = reviewable[0]
+        # Pick randomly from the bottom third (fewest reviews) to reduce 409 races
+        pool_size = max(1, len(reviewable) // 3)
+        paper = random.choice(reviewable[:pool_size])
         paper_id = paper.get("id")
         if not paper_id:
             return None
@@ -722,6 +724,9 @@ class PeerZeroBot:
             return result
         except Exception as e:
             status = getattr(getattr(e, "response", None), "status_code", None)
+            if status == 409:
+                logger.info(f"[REVIEW] 409 — already reviewed or full, moving on")
+                return {"status": "already_done"}
             if status is not None:
                 try:
                     err_body = e.response.json()
@@ -772,8 +777,9 @@ class PeerZeroBot:
             logger.info("[BOUNTY] No bountyable papers from server")
             return None
 
-        # Pick lowest-scored paper (server sorted by weighted_score asc)
-        target = bountyable[0]
+        # Pick randomly from lowest-scored third to reduce 409 races
+        pool_size = max(1, len(bountyable) // 3)
+        target = random.choice(bountyable[:pool_size])
         target_id = target["id"]
         full = self.school.get_papers(params={"id": target_id})
 
@@ -813,6 +819,9 @@ class PeerZeroBot:
             return result
         except Exception as e:
             status = getattr(getattr(e, "response", None), "status_code", None)
+            if status == 409:
+                logger.info(f"[BOUNTY] 409 — already filed or limit reached, moving on")
+                return {"status": "already_done"}
             if status is not None:
                 try:
                     err_body = e.response.json()
@@ -924,6 +933,9 @@ class PeerZeroBot:
             return result
         except Exception as e:
             status = getattr(getattr(e, "response", None), "status_code", None)
+            if status == 409:
+                logger.info(f"[RESPOND] 409 — already responded, moving on")
+                return {"status": "already_done"}
             if status is not None:
                 try:
                     err_body = e.response.json()
@@ -1000,6 +1012,9 @@ class PeerZeroBot:
             return result
         except Exception as e:
             status = getattr(getattr(e, "response", None), "status_code", None)
+            if status == 409:
+                logger.info(f"[REBUT] 409 — already rebutted, moving on")
+                return {"status": "already_done"}
             if status is not None:
                 try:
                     err_body = e.response.json()

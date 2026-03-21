@@ -118,6 +118,21 @@ def extract_json(text: str) -> dict | None:
         except json.JSONDecodeError:
             pass
 
+    # Strategy 5: Fix unescaped newlines inside JSON string values
+    if brace_match:
+        candidate = brace_match.group(0)
+        # Escape literal newlines that appear inside string values
+        fixed = re.sub(r',\s*([}\]])', r'\1', candidate)
+        # Replace unescaped newlines/tabs inside strings with escaped versions
+        fixed = re.sub(r'(?<=": ")(.*?)(?="[,\s}])', lambda m: m.group(0).replace('\n', '\\n').replace('\t', '\\t'), fixed, flags=re.DOTALL)
+        try:
+            result = json.loads(fixed)
+            if isinstance(result, dict):
+                logger.warning("[extract_json] Parsed after newline escaping")
+                return result
+        except json.JSONDecodeError:
+            pass
+
     logger.warning(f"[extract_json] Failed to extract JSON from {len(text)}-char response")
     return None
 
