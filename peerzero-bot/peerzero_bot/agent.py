@@ -18,12 +18,10 @@ Security:
 """
 
 import json
-import os
 import signal
 import time
 import logging
 from datetime import datetime, timezone
-from pathlib import Path
 
 import httpx
 
@@ -473,43 +471,6 @@ class PeerZeroBot:
         self._identity_refresh_interval: int = config.identity_refresh_interval
         self._last_identity_refresh: int = 0
         self._consecutive_bounty_failures: int = 0
-        self._lock_file_path: Path = Path(config.memory_path) / "bot.lock"
-        self._lock_fd = None
-
-    # ═══════════════════════════════════════════════════════════════════════
-    # PROCESS LOCK
-    # ═══════════════════════════════════════════════════════════════════════
-
-    def _acquire_lock(self):
-        """Acquire a file lock to prevent duplicate bot instances."""
-        import fcntl
-        self._lock_file_path.parent.mkdir(parents=True, exist_ok=True)
-        self._lock_fd = open(self._lock_file_path, "w")
-        try:
-            fcntl.flock(self._lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-            self._lock_fd.write(str(os.getpid()))
-            self._lock_fd.flush()
-            logger.info(f"[LOCK] Acquired process lock (pid={os.getpid()})")
-        except (IOError, OSError):
-            self._lock_fd.close()
-            self._lock_fd = None
-            raise RuntimeError(
-                f"Another bot instance is already running (lock: {self._lock_file_path}). "
-                "Stop the other instance first, or remove the lock file if it's stale."
-            )
-
-    def _release_lock(self):
-        """Release the process lock."""
-        import fcntl
-        if self._lock_fd:
-            try:
-                fcntl.flock(self._lock_fd, fcntl.LOCK_UN)
-                self._lock_fd.close()
-                self._lock_file_path.unlink(missing_ok=True)
-                logger.info("[LOCK] Released process lock")
-            except Exception:
-                pass
-            self._lock_fd = None
 
     # ═══════════════════════════════════════════════════════════════════════
     # STARTUP
@@ -813,7 +774,13 @@ class PeerZeroBot:
             return result
         except Exception as e:
             status = getattr(getattr(e, "response", None), "status_code", None)
-            if status is not None:
+            if status == 409:
+                logger.info(f"[REVIEW] Already reviewed paper {paper_id} — syncing local cache")
+                if paper_id not in self._my_review_ids:
+                    self._my_review_ids.append(paper_id)
+                    self.memory.add_tracked_review_id(paper_id)
+                return {"already_reviewed": True, "paper_id": paper_id}
+            elif status is not None:
                 try:
                     err_body = e.response.json()
                     err_msg = err_body.get("error", str(e))
@@ -1053,7 +1020,10 @@ class PeerZeroBot:
             return result
         except Exception as e:
             status = getattr(getattr(e, "response", None), "status_code", None)
-            if status is not None:
+            if status == 409:
+                logger.info(f"[RESPOND] Already responded to paper {paper_id}")
+                return {"already_responded": True, "paper_id": paper_id}
+            elif status is not None:
                 try:
                     err_body = e.response.json()
                     err_msg = err_body.get("error", str(e))
@@ -1131,7 +1101,10 @@ class PeerZeroBot:
             return result
         except Exception as e:
             status = getattr(getattr(e, "response", None), "status_code", None)
-            if status is not None:
+            if status == 409:
+                logger.info(f"[REBUT] Already rebutted paper {paper_id}")
+                return {"already_rebutted": True, "paper_id": paper_id}
+            elif status is not None:
                 try:
                     err_body = e.response.json()
                     err_msg = err_body.get("error", str(e))
@@ -1535,7 +1508,6 @@ class PeerZeroBot:
         Handles SIGTERM for graceful shutdown in containers/systemd.
         """
         self._stop_requested = False
-        self._acquire_lock()
 
         def _handle_sigterm(signum, frame):
             logger.info("[STOP] Received SIGTERM — shutting down gracefully")
@@ -1605,7 +1577,6 @@ class PeerZeroBot:
             # Always clean up — even on SecurityError or KeyboardInterrupt
             self._refresh_identity()
             self._cleanup()
-            self._release_lock()
             logger.info("[STOP] Bot stopped. Identity saved.")
 
     def _cleanup(self):
