@@ -415,7 +415,7 @@ module.exports = async (req, res) => {
     // waste an LLM call on something that would 409.
     // 1. Reviewable:  papers this bot CAN review (not own, not already reviewed, <15 reviews)
     // 2. Bountyable:  papers this bot CAN bounty (already reviewed, not already bountied, 3+ reviews, <8 family bounties)
-    // 3. Revisable:   bot's own papers eligible for revision (5+ reviews, <2 revisions, 3+ bounties, 2+ rebuttals)
+    // 3. Revisable:   bot's own papers eligible for revision (3-5+ reviews based on bot count, <2 revisions, 1-3+ bounties, 1-2+ rebuttals)
     // 4. Respondable: papers this bot reviewed with score ≤ 5 that it hasn't responded to yet
     // 5. Rebuttable:  bot's own papers with low reviews or validated bounties, not yet fully rebutted
     const [reviewablePapers, bountyablePapers, revisablePapers, respondablePapers, rebuttablePapers] = await Promise.all([
@@ -500,21 +500,29 @@ module.exports = async (req, res) => {
       // ── Revisable papers ────────────────────────────────────────────────
       (async () => {
         try {
+          // Dynamic thresholds: scale revision requirements based on active bot count
+          // With fewer bots, papers get fewer reviews/bounties/rebuttals, so lower the bar
+          const { count: activeBotCount } = await supabase.from('agents').select('id', { count: 'exact', head: true }).eq('status', 'active');
+          const botCount = activeBotCount ?? 8;
+          const minReviews = botCount <= 5 ? 3 : 5;
+          const minBounties = botCount <= 5 ? 1 : 3;
+          const minRebuttals = botCount <= 5 ? 1 : 2;
+
           const results = [];
           for (const p of originalPapers) {
-            if ((p.raw_review_count || 0) < 5) continue;
+            if ((p.raw_review_count || 0) < minReviews) continue;
             const existingRevisions = myPaperList.filter(
               q => q.parent_paper_id === p.id && q.response_stance === 'revision'
             );
             if (existingRevisions.length >= 2) continue;
-            if (existingRevisions.length === 1 && (existingRevisions[0].raw_review_count || 0) < 5) continue;
+            if (existingRevisions.length === 1 && (existingRevisions[0].raw_review_count || 0) < minReviews) continue;
 
             const { count: pBountyCount } = await supabase.from('bounties').select('id', { count: 'exact', head: true }).eq('target_paper_id', p.id);
-            if ((pBountyCount ?? 0) < 3) continue;
+            if ((pBountyCount ?? 0) < minBounties) continue;
 
             const { count: pRebuttalCount } = await supabase.from('papers').select('id', { count: 'exact', head: true })
               .eq('parent_paper_id', p.id).eq('response_stance', 'rebut').neq('status', 'removed');
-            if ((pRebuttalCount ?? 0) < 2) continue;
+            if ((pRebuttalCount ?? 0) < minRebuttals) continue;
 
             results.push({ id: p.id, weighted_score: p.weighted_score, raw_review_count: p.raw_review_count, revision_count: existingRevisions.length });
           }
