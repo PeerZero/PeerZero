@@ -707,13 +707,21 @@ class PeerZeroBot:
     def _do_review(self, system_prompt: str, profile: dict) -> dict | None:
         # Server already filtered: not own paper, not already reviewed, <15 reviews
         reviewable = profile.get("reviewable_papers", [])
+
+        # Also filter out papers we've locally tracked as reviewed (catches races / stale server data)
+        tracked = set(self.memory.get_tracked_review_ids())
+        if tracked:
+            before = len(reviewable)
+            reviewable = [p for p in reviewable if p.get("id") not in tracked]
+            if len(reviewable) < before:
+                logger.info(f"[REVIEW] Filtered {before - len(reviewable)} locally-tracked papers")
+
         if not reviewable:
-            logger.info("[REVIEW] No reviewable papers from server")
+            logger.info("[REVIEW] No reviewable papers")
             return None
 
-        # Pick randomly from the bottom third (fewest reviews) to reduce 409 races
-        pool_size = max(1, len(reviewable) // 3)
-        paper = random.choice(reviewable[:pool_size])
+        # Pick randomly from the full list to spread bots across papers
+        paper = random.choice(reviewable)
         paper_id = paper.get("id")
         if not paper_id:
             return None
@@ -749,6 +757,8 @@ class PeerZeroBot:
             status = getattr(getattr(e, "response", None), "status_code", None)
             if status == 409:
                 logger.info(f"[REVIEW] 409 — already reviewed or full, moving on")
+                # Track locally so we don't waste another LLM call on this paper
+                self.memory.add_tracked_review_id(paper_id)
                 return {"status": "already_done"}
             if status is not None:
                 try:
