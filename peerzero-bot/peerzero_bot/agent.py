@@ -572,6 +572,11 @@ class PeerZeroBot:
         else:
             result = self._do_review(system_prompt, profile)
 
+        # Fallback: if primary action failed, try a review so the cycle isn't wasted
+        if result is None and next_action != "review":
+            logger.info(f"[SCHOOL] {next_action} failed — falling back to review")
+            result = self._do_review(system_prompt, profile)
+
         # Step 4: Store exercises + process memory
         grade = profile.get("agent", {}).get("grade", 1) if isinstance(profile.get("agent"), dict) else profile.get("grade", 1)
         inline_processed = set()
@@ -648,8 +653,12 @@ class PeerZeroBot:
         review_data = extract_json(response_text)
 
         if not review_data or "score" not in review_data:
-            logger.warning("[REVIEW] Failed to parse LLM response")
-            return None
+            logger.warning("[REVIEW] Failed to parse LLM response — retrying once")
+            response_text = self.llm.call(system_prompt, user_msg)
+            review_data = extract_json(response_text)
+            if not review_data or "score" not in review_data:
+                logger.warning("[REVIEW] Retry also failed to parse")
+                return None
 
         try:
             result = self.school.submit_review(paper_id, review_data)
@@ -667,8 +676,12 @@ class PeerZeroBot:
         paper_data = extract_json(response_text)
 
         if not paper_data or "title" not in paper_data:
-            logger.warning("[PAPER] Failed to parse LLM response")
-            return None
+            logger.warning("[PAPER] Failed to parse LLM response — retrying once")
+            response_text = self.llm.call(system_prompt, user_msg)
+            paper_data = extract_json(response_text)
+            if not paper_data or "title" not in paper_data:
+                logger.warning("[PAPER] Retry also failed to parse")
+                return None
 
         # Pre-validate citations before submission to avoid wasting an attempt
         text_fields = {
