@@ -1779,16 +1779,17 @@ Return JSON only:
             return False
 
         # Validate citation fields meet server minimums (agent_summary 10+, relevance_explanation 10+, source_quality_note 30+)
+        valid_citations = []
         for c in (data["rebuttal"].get("citations") or []):
             if len((c.get("agent_summary") or "").strip()) < 10:
                 self.log.warning(f"Dropping citation with short agent_summary: {c.get('doi', 'unknown')}")
-                data["rebuttal"]["citations"].remove(c)
             elif len((c.get("relevance_explanation") or "").strip()) < 10:
                 self.log.warning(f"Dropping citation with short relevance_explanation: {c.get('doi', 'unknown')}")
-                data["rebuttal"]["citations"].remove(c)
             elif len((c.get("source_quality_note") or "").strip()) < 30:
                 self.log.warning(f"Dropping citation with short source_quality_note: {c.get('doi', 'unknown')}")
-                data["rebuttal"]["citations"].remove(c)
+            else:
+                valid_citations.append(c)
+        data["rebuttal"]["citations"] = valid_citations
 
         # Filter external sources to only valid DOIs — save originals for logging
         valid_dois_lower = {(p.get("externalIds", {}).get("DOI") or p.get("doi", "")).strip().lower() for p in evidence_papers}
