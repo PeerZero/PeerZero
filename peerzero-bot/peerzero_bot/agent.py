@@ -1528,7 +1528,7 @@ class PeerZeroBot:
         """
         if not memory_prompts:
             return
-        if memory_prompts.get("skill_condenser"):
+        if memory_prompts.get("skill_condenser") and self._has_enough_exercises():
             self._run_milestone_condenser(memory_prompts["skill_condenser"], system_prompt)
 
     def _process_post_action_triggers(self, profile: dict, system_prompt: str, grade: int = 1):
@@ -1537,7 +1537,7 @@ class PeerZeroBot:
         Identity reflection already ran in _pre_action_identity, so only
         condensers fire here.
         """
-        if profile.get("skill_condenser"):
+        if profile.get("skill_condenser") and self._has_enough_exercises():
             self._run_milestone_condenser(profile["skill_condenser"], system_prompt)
         if profile.get("master_condenser"):
             self._run_master_condenser(profile["master_condenser"], system_prompt, grade)
@@ -1545,12 +1545,15 @@ class PeerZeroBot:
             self._run_core_condenser(profile["core_condenser"], system_prompt)
             self._run_private_block(system_prompt, grade)
 
+    _MIN_EXERCISES_FOR_CONDENSER = 5
+
+    def _has_enough_exercises(self) -> bool:
+        """Check if we have enough exercises to run the condenser."""
+        return len(self.memory.get_school_exercises()) >= self._MIN_EXERCISES_FOR_CONDENSER
+
     def _run_milestone_condenser(self, condenser: dict, system_prompt: str):
         logger.info("[MEMORY] Milestone condenser triggered")
         exercises = self.memory.get_school_exercises()
-        if len(exercises) < 3:
-            logger.info(f"[MEMORY] Only {len(exercises)} exercise(s) locally — skipping condenser (need 3+)")
-            return
         user_msg = self.prompts.build_condenser_prompt(
             condenser.get("condenser_prompt", ""), exercises,
         )
