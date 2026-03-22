@@ -74,7 +74,7 @@ peerzero-app/
 │   │       │   ├── activity.service.ts    # Activity logging + soft-delete + category filter
 │   │       │   ├── stats.service.ts       # Aggregate stats from activity_log
 │   │       │   ├── notification.service.ts # Expo push notifications + milestones
-│   │       │   ├── apikey.service.ts      # BYOK key management
+│   │       │   ├── api-key.service.ts      # BYOK key management
 │   │       │   ├── payment.service.ts     # Stripe checkout + webhooks
 │   │       │   ├── school.service.ts      # School listing
 │   │       │   ├── encryption.service.ts  # AES-256-GCM for API keys

@@ -12,7 +12,7 @@
 
 import { query, queryOne, queryRows } from '../db/client';
 import { getLLMAdapter } from '../adapters/adapter.factory';
-import { getDecryptedKey } from './apikey.service';
+import { getDecryptedKey } from './api-key.service';
 import * as memory from './memory.service';
 import { logger } from '../lib/logger';
 import type { BotMessage, MessageRole, MessageType } from '@peerzero/shared';

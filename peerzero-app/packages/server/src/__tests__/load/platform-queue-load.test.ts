@@ -45,7 +45,7 @@ vi.mock('../../adapters/adapter.factory', () => ({
   getLLMAdapter: () => mockLLMAdapter,
 }));
 
-vi.mock('../../services/apikey.service', () => ({
+vi.mock('../../services/api-key.service', () => ({
   getDecryptedKey: vi.fn().mockResolvedValue('test-llm-key'),
 }));
 

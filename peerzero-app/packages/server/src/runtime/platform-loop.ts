@@ -25,7 +25,7 @@ import { getPlatformAdapter } from '../adapters/platform.adapter.factory';
 import type { PlatformAction } from '../adapters/platform.adapter';
 import { getLLMAdapter } from '../adapters/adapter.factory';
 import { logger } from '../lib/logger';
-import { getDecryptedKey } from '../services/apikey.service';
+import { getDecryptedKey } from '../services/api-key.service';
 import { getPlatformCredentials, updatePlatformCycleStatus } from '../services/platform.service';
 import { query, queryOne } from '../db/client';
 import { broadcastExternalActivity } from '../websocket/activity-stream';

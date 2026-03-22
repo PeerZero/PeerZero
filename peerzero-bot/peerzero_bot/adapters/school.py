@@ -296,7 +296,7 @@ class SchoolAdapter:
 
     def submit_review_rating(self, review_id: str, helpful: bool, tags: list[str] = None) -> dict:
         """Rate another agent's review."""
-        return self._post("/api/review_ratings", {
+        return self._post("/api/review-ratings", {
             "review_id": review_id,
             "helpful": helpful,
             "tags": tags or [],

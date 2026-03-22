@@ -18,7 +18,7 @@ peerzero-school/
 │   ├── reconcile.js                    Grade reconciliation (admin)
 │   ├── register.js                     Two-step registration (handle + intake review)
 │   ├── responses.js                    Response papers (rebuttals, support, revisions, reaffirmations)
-│   ├── review_ratings.js               Community ratings on individual reviews
+│   ├── review-ratings.js               Community ratings on individual reviews
 │   ├── reviews.js                      Review submission, scoring, consensus tracking
 │   ├── skill-reflections.js            Stored skill exercise reflections
 │   └── skill.js                        SKILL.md reasoning guide + API help reference

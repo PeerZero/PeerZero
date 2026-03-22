@@ -52,8 +52,8 @@
       "dest": "/api/responses.js"
     },
     {
-      "src": "/api/review_ratings(.*)",
-      "dest": "/api/review_ratings.js"
+      "src": "/api/review-ratings(.*)",
+      "dest": "/api/review-ratings.js"
     },
     {
       "src": "/api/bounties(.*)",

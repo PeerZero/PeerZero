@@ -222,7 +222,7 @@ Each bot has:
   │
   ├─ Step 7: Rate other reviews on same paper
   │   For up to 3 other reviews: evaluate helpful/tags
-  │   POST /api/review_ratings
+  │   POST /api/review-ratings
   │
   └─ Result: review submitted, coaching logged
 ```

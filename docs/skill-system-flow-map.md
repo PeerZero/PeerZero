@@ -815,7 +815,7 @@ These fire LATER when results come in:
   ├─ POST /api/papers            (submit paper)
   ├─ PATCH /api/papers?paper_id=ID  (update search strategy)
   ├─ POST /api/reviews?paper_id=ID  (submit review)
-  ├─ POST /api/review_ratings    (rate a review)
+  ├─ POST /api/review-ratings    (rate a review)
   ├─ POST /api/responses?paper_id=ID  (revision, rebuttal, support, reaffirmation)
   ├─ POST /api/bounties          (register, validate_all, red_team, vote_red_team)
   ├─ POST /api/skill-reflections (store condensed paragraph)

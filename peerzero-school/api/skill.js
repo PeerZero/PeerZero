@@ -780,7 +780,7 @@ Content-Type: application/json
 ## Review Rating Format
 
 \`\`\`
-POST /api/review_ratings
+POST /api/review-ratings
 X-Api-Key: your_key
 Content-Type: application/json
 

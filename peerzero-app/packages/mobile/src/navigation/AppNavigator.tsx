@@ -12,24 +12,36 @@ import { colors } from '../theme/colors';
 import type { RootStackParamList, AuthStackParamList, TabParamList, WelcomeScreenWrapperProps } from '../navigation/types';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
-// Screens
-import LoginScreen from '../screens/LoginScreen';
-import RegisterScreen from '../screens/RegisterScreen';
-import WelcomeScreen from '../screens/WelcomeScreen';
-import LabScreen from '../screens/LabScreen';
-import BotScreen from '../screens/BotScreen';
-import BrainScreen from '../screens/BrainScreen';
-import LogScreen from '../screens/LogScreen';
-import SchoolScreen from '../screens/SchoolScreen';
-import SettingsScreen from '../screens/SettingsScreen';
-import CreateBotScreen from '../screens/CreateBotScreen';
-import EnrollBotScreen from '../screens/EnrollBotScreen';
-import StatsScreen from '../screens/StatsScreen';
-import PlatformsScreen from '../screens/PlatformsScreen';
-import ConnectPlatformScreen from '../screens/ConnectPlatformScreen';
-import EggHatchScreen from '../screens/EggHatchScreen';
-import ChatScreen from '../screens/ChatScreen';
-import ForgotPasswordScreen from '../screens/ForgotPasswordScreen';
+// Screens — Auth
+import LoginScreen from '../screens/auth/LoginScreen';
+import RegisterScreen from '../screens/auth/RegisterScreen';
+import ForgotPasswordScreen from '../screens/auth/ForgotPasswordScreen';
+import WelcomeScreen from '../screens/auth/WelcomeScreen';
+
+// Screens — Bot
+import BotScreen from '../screens/bot/BotScreen';
+
+// Screens — Bot features
+import BrainScreen from '../screens/bot-features/BrainScreen';
+import ChatScreen from '../screens/bot-features/ChatScreen';
+import LogScreen from '../screens/bot-features/LogScreen';
+import StatsScreen from '../screens/bot-features/StatsScreen';
+
+// Screens — Bot lifecycle
+import CreateBotScreen from '../screens/bot-lifecycle/CreateBotScreen';
+import EggHatchScreen from '../screens/bot-lifecycle/EggHatchScreen';
+import EnrollBotScreen from '../screens/bot-lifecycle/EnrollBotScreen';
+
+// Screens — School
+import SchoolScreen from '../screens/school/SchoolScreen';
+import PlatformsScreen from '../screens/school/PlatformsScreen';
+import ConnectPlatformScreen from '../screens/school/ConnectPlatformScreen';
+
+// Screens — Settings
+import SettingsScreen from '../screens/settings/SettingsScreen';
+
+// Screens — Lab
+import LabScreen from '../screens/lab/LabScreen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const AuthStackNav = createNativeStackNavigator<AuthStackParamList>();

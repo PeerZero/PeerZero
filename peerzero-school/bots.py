@@ -1097,7 +1097,7 @@ Return JSON only:
                 rating = ask_claude_json(self.client, self.system, eval_prompt, max_tokens=200, model=MODEL_FAST)
                 if rating and "helpful" in rating:
                     rating["review_id"] = review_id
-                    result = api("post", "/review_ratings", api_key=self.api_key, json=rating)
+                    result = api("post", "/review-ratings", api_key=self.api_key, json=rating)
                     if result.get("success"):
                         self.log.info(f"Rated review {review_id}: helpful={rating['helpful']}, tags={rating.get('tags', [])}")
             except Exception as e:
