@@ -742,21 +742,35 @@ class PeerZeroBot:
         # Trust the server. Do exactly what next_action says. If it fails,
         # log it and move on — the server will assign a new action next cycle.
         # No fallback cascade: the server already determined what's valid.
+
+        # Fetch action-specific skill instructions from the server.
+        # The server sends targeted reasoning guidance + JSON format for this action.
+        # This makes the bot a thin shell — intelligence lives in the server.
+        _ACTION_SKILL_MAP = {
+            "revise": "revise", "submit_paper": "paper", "file_bounty": "bounty",
+            "respond": "respond", "rebut": "rebut", "review": "review",
+            "reaffirm": "reaffirm",
+        }
+        skill_action = _ACTION_SKILL_MAP.get(next_action)
+        action_skill = ""
+        if skill_action:
+            action_skill = self.school.download_skill_action(skill_action)
+
         result = None
         if next_action == "revise":
-            result = self._do_revise(system_prompt, profile)
+            result = self._do_revise(system_prompt, profile, action_skill)
         elif next_action == "submit_paper":
-            result = self._do_submit_paper(system_prompt, profile)
+            result = self._do_submit_paper(system_prompt, profile, action_skill)
         elif next_action == "file_bounty":
-            result = self._do_file_bounty(system_prompt, profile)
+            result = self._do_file_bounty(system_prompt, profile, action_skill)
         elif next_action == "respond":
-            result = self._do_respond(system_prompt, profile)
+            result = self._do_respond(system_prompt, profile, action_skill)
         elif next_action == "rebut":
-            result = self._do_rebut(system_prompt, profile)
+            result = self._do_rebut(system_prompt, profile, action_skill)
         elif next_action == "review":
-            result = self._do_review(system_prompt, profile)
+            result = self._do_review(system_prompt, profile, action_skill)
         elif next_action == "reaffirm":
-            result = self._do_reaffirm(system_prompt, profile)
+            result = self._do_reaffirm(system_prompt, profile, action_skill)
         elif next_action == "sleep":
             logger.info(f"[{handle}] Server says nothing to do — sleeping")
             result = {"status": "sleeping"}
@@ -827,7 +841,7 @@ class PeerZeroBot:
 
     # ── School actions ────────────────────────────────────────────────────
 
-    def _do_review(self, system_prompt: str, profile: dict) -> dict | None:
+    def _do_review(self, system_prompt: str, profile: dict, action_skill: str = "") -> dict | None:
         # Server already filtered: not own paper, not already reviewed, <15 reviews
         reviewable = profile.get("reviewable_papers", [])
 
@@ -851,7 +865,7 @@ class PeerZeroBot:
         logger.info(f"[REVIEW] Selected: {paper.get('title', '?')[:60]}...")
 
         full = self.school.get_papers(params={"id": paper_id})
-        user_msg = self.prompts.build_review_prompt(full)
+        user_msg = self.prompts.build_review_prompt(full, action_skill=action_skill)
         review_keys = ["score", "overall_assessment", "methodology_notes", "statistical_validity_notes",
                        "citation_accuracy_notes", "reproducibility_notes", "logical_consistency_notes",
                        "review_search_strategy"]
@@ -897,7 +911,7 @@ class PeerZeroBot:
                 logger.warning(f"[REVIEW] Failed: {e}")
             return None
 
-    def _do_submit_paper(self, system_prompt: str, profile: dict) -> dict | None:
+    def _do_submit_paper(self, system_prompt: str, profile: dict, action_skill: str = "") -> dict | None:
         # Step 1: Generate concept and search queries
         concept_msg = self.prompts.build_paper_concept_prompt()
         concept_text = self.llm_fast.call(system_prompt, concept_msg)
@@ -914,7 +928,7 @@ class PeerZeroBot:
         logger.info(f"[PAPER] Found {len(evidence_papers)} papers from search")
 
         # Step 3: Generate paper using ONLY searched citations
-        user_msg = self.prompts.build_paper_prompt(citation_slots=evidence_papers, concept=concept)
+        user_msg = self.prompts.build_paper_prompt(citation_slots=evidence_papers, concept=concept, action_skill=action_skill)
         paper_keys = ["title", "abstract", "body", "field_ids", "confidence_score",
                        "falsifiable_claim", "measurable_prediction", "quantitative_expectation",
                        "cross_study_connection", "citations", "search_strategy"]
@@ -944,7 +958,7 @@ class PeerZeroBot:
             logger.warning(f"[PAPER] Failed: {e}")
             return None
 
-    def _do_file_bounty(self, system_prompt: str, profile: dict) -> dict | None:
+    def _do_file_bounty(self, system_prompt: str, profile: dict, action_skill: str = "") -> dict | None:
         # Server already filtered: reviewed by bot, not already bountied, 3+ reviews, <8 family bounties
         bountyable = profile.get("bountyable_papers", [])
         if not bountyable:
@@ -957,7 +971,7 @@ class PeerZeroBot:
         target_id = target["id"]
         full = self.school.get_papers(params={"id": target_id})
 
-        user_msg = self.prompts.build_bounty_prompt(full, target_id)
+        user_msg = self.prompts.build_bounty_prompt(full, target_id, action_skill=action_skill)
         bounty_keys = ["action", "target_paper_id", "challenge_type", "skip", "reason",
                        "challenged_doi", "quality_challenge_reason", "search_strategy"]
         bounty_data = self.llm.call_json(system_prompt, user_msg, json_keys=bounty_keys)
@@ -1025,7 +1039,7 @@ class PeerZeroBot:
                 logger.warning(f"[BOUNTY] Failed: {e}")
             return None
 
-    def _do_revise(self, system_prompt: str, profile: dict) -> dict | None:
+    def _do_revise(self, system_prompt: str, profile: dict, action_skill: str = "") -> dict | None:
         # Server already filtered: own paper, enough reviews, <2 revisions, bounties, rebuttals
         revisable = profile.get("can_revise_papers", [])
         if not revisable:
@@ -1044,7 +1058,7 @@ class PeerZeroBot:
         evidence_papers = search_and_summarize(revision_queries, f"Revision of: {paper_title}", self.llm_fast)
         logger.info(f"[REVISE] Found {len(evidence_papers)} papers from search")
 
-        user_msg = self.prompts.build_revision_prompt(full, citation_slots=evidence_papers)
+        user_msg = self.prompts.build_revision_prompt(full, citation_slots=evidence_papers, action_skill=action_skill)
         revision_keys = ["title", "abstract", "body", "stance", "cross_study_connection", "citations", "search_strategy"]
         revision_data = self.llm.call_json(system_prompt, user_msg, json_keys=revision_keys)
 
@@ -1072,7 +1086,7 @@ class PeerZeroBot:
             logger.warning(f"[REVISE] Failed: {e}")
             return None
 
-    def _do_respond(self, system_prompt: str, profile: dict) -> dict | None:
+    def _do_respond(self, system_prompt: str, profile: dict, action_skill: str = "") -> dict | None:
         """Write a response paper critiquing a paper this bot reviewed harshly."""
         respondable = profile.get("respondable_papers", [])
         # Only respond to original papers (not other responses)
@@ -1097,7 +1111,7 @@ class PeerZeroBot:
         evidence_papers = search_and_summarize(respond_queries, f"Critique of: {paper_title}", self.llm_fast)
         logger.info(f"[RESPOND] Found {len(evidence_papers)} papers from search")
 
-        user_msg = self.prompts.build_respond_prompt(full, my_score, citation_slots=evidence_papers)
+        user_msg = self.prompts.build_respond_prompt(full, my_score, citation_slots=evidence_papers, action_skill=action_skill)
         respond_keys = ["title", "abstract", "body", "stance", "cross_study_connection",
                         "mechanism_chain", "citations", "search_strategy"]
         response_data = self.llm.call_json(system_prompt, user_msg, json_keys=respond_keys)
@@ -1147,7 +1161,7 @@ class PeerZeroBot:
                 logger.warning(f"[RESPOND] Failed: {e}")
             return None
 
-    def _do_rebut(self, system_prompt: str, profile: dict) -> dict | None:
+    def _do_rebut(self, system_prompt: str, profile: dict, action_skill: str = "") -> dict | None:
         """Defend own paper against low reviews or validated bounties."""
         rebuttable = profile.get("rebuttable_papers", [])
         if not rebuttable:
@@ -1181,7 +1195,7 @@ class PeerZeroBot:
         evidence_papers = search_and_summarize(defense_queries, f"Defense of: {paper_title}", self.llm_fast)
         logger.info(f"[REBUT] Found {len(evidence_papers)} papers from search")
 
-        user_msg = self.prompts.build_rebut_prompt(full, criticisms, citation_slots=evidence_papers)
+        user_msg = self.prompts.build_rebut_prompt(full, criticisms, citation_slots=evidence_papers, action_skill=action_skill)
         rebut_keys = ["title", "abstract", "body", "stance", "cross_study_connection",
                       "mechanism_chain", "citations", "search_strategy"]
         rebut_data = self.llm.call_json(system_prompt, user_msg, json_keys=rebut_keys)
@@ -1360,7 +1374,7 @@ class PeerZeroBot:
                     except Exception as e:
                         logger.debug(f"[JURY] Failed: {e}")
 
-    def _do_reaffirm(self, system_prompt: str, profile: dict) -> dict | None:
+    def _do_reaffirm(self, system_prompt: str, profile: dict, action_skill: str = "") -> dict | None:
         """Reaffirm a decaying paper with new evidence."""
         reaffirmable = profile.get("reaffirmable_papers", [])
         if not reaffirmable:
@@ -1383,7 +1397,7 @@ class PeerZeroBot:
         original = full if isinstance(full, dict) else (full[0] if isinstance(full, list) and full else {})
         paper_data = original.get("paper", original)
 
-        user_msg = self.prompts.build_reaffirmation_prompt(paper_data, [])
+        user_msg = self.prompts.build_reaffirmation_prompt(paper_data, [], action_skill=action_skill)
         reaffirm_keys = ["title", "abstract", "body", "stance", "cross_study_connection",
                          "citations", "search_strategy"]
         reaffirm_data = self.llm.call_json(system_prompt, user_msg, json_keys=reaffirm_keys)

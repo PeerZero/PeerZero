@@ -1,7 +1,11 @@
 """
 Prompt Builder — constructs LLM prompts for school and platform actions.
 
-For School actions: uses SKILL.md + memory context (same as shell-bot).
+For School actions: the server provides action-specific instructions via
+GET /api/skill?action=X. The bot is a thin shell — it injects dynamic
+context (memory, coaching, citations, paper data) around server-provided
+instructions. The bot does NOT hardcode reasoning guidance or JSON formats.
+
 For platform actions: adds platform context in clearly delimited tags,
 with explicit instructions to treat platform content as untrusted input.
 """
@@ -130,7 +134,7 @@ class PromptBuilder:
 
         return "\n".join(parts)
 
-    def build_review_prompt(self, paper_data: dict) -> str:
+    def build_review_prompt(self, paper_data: dict, action_skill: str = "") -> str:
         paper_json = truncate_json(json.dumps(paper_data, indent=2, default=str), 12000)
         preamble = self._build_memory_preamble("review this paper")
 
@@ -141,37 +145,11 @@ class PromptBuilder:
         bounty_status = profile.get("bounty_status", {})
         if bounty_status:
             review_context += f"Your bounties: {bounty_status.get('validated', 0)} validated, {bounty_status.get('pending', 0)} pending. "
-        review_context += "Score honestly — outlier scores (>3.5 from consensus) cost -4.0 credibility."
 
         return f"""{preamble}
 {review_context}
 
-Review this paper. Be thorough, adversarial, and precise.
-Apply your learned patterns — catch the kinds of flaws you've trained yourself to spot.
-If your past lessons taught you to watch for specific failure modes (false confidence,
-boilerplate source quality notes, untestable claims), apply those filters here.
-
-Check citations for ACCURACY and QUALITY:
-- Flag TONE MISMATCHES: claims stated as well-established but source quality is weak/unknown
-- Flag BOILERPLATE: source quality notes that give no real methodological reasoning
-- Check mechanism_chain: is each step independently testable?
-- Flag false confidence and vague uncertainty
-
-IMPORTANT: Reply with ONLY a JSON object, no other text. Format:
-{{
-  "score": <1-10 integer>,
-  "methodology_notes": "<50+ chars>",
-  "statistical_validity_notes": "<50+ chars>",
-  "citation_accuracy_notes": "<check accuracy AND quality>",
-  "reproducibility_notes": "<50+ chars>",
-  "logical_consistency_notes": "<check logic, flag overconfidence>",
-  "overall_assessment": "<100+ chars — your complete assessment>",
-  "review_search_strategy": {{
-    "verification_queries": ["<query you used to verify claim 1>", "<query 2>"],
-    "gap_queries": ["<query to find what author missed 1>", "<query 2>"],
-    "query_rationale": "<80+ chars — what you targeted and why>"
-  }}
-}}
+{action_skill}
 
 Paper data:
 {paper_json}"""
@@ -214,11 +192,10 @@ Return JSON only:
                 slots += f"Pre-computed source_quality_note: {p['source_quality_note']}\n"
         return slots
 
-    def build_paper_prompt(self, citation_slots: list = None, concept: dict = None) -> str:
+    def build_paper_prompt(self, citation_slots: list = None, concept: dict = None, action_skill: str = "") -> str:
         preamble = self._build_memory_preamble("write your next paper")
 
-        # Inject paper-specific context: what topics you've already written about,
-        # your credibility, and what the server needs from you
+        # Inject paper-specific context
         profile = getattr(self, "_profile", None) or {}
         cred = profile.get("credibility_score", "?")
         papers_submitted = profile.get("original_papers_submitted", 0)
@@ -228,18 +205,15 @@ Return JSON only:
         if papers_needed > 0:
             paper_context += f" You need {papers_needed} more paper(s) for tier advancement."
 
-        # Warn about prior paper titles so the bot doesn't repeat topics
         history = profile.get("research_history", [])
         if history:
             prior_titles = [str(h.get("title", ""))[:60] for h in history[:5]]
             paper_context += f"\nDo NOT repeat these topics from your prior papers: {'; '.join(prior_titles)}"
 
-        # Concept context
         concept_section = ""
         if concept and concept.get("core_claim"):
             concept_section = f"\nYour paper concept: {concept.get('working_title', '')}\nCore claim: {concept['core_claim']}\n"
 
-        # Citation slots from real search results
         slots_text = self._build_citation_slots(citation_slots or [])
         citation_instruction = (
             f"\nAVAILABLE CITATIONS — you may ONLY cite these DOIs:\n{slots_text}"
@@ -250,53 +224,14 @@ Return JSON only:
         return f"""{preamble}
 {paper_context}
 {concept_section}
-Write your next scientific paper. Draw on everything you've learned.
+{action_skill}
+{citation_instruction}"""
 
-Your identity and skill lessons (in your system context) reflect patterns you've
-discovered through your own work — use them. If you've learned that certain
-approaches score well or poorly, that certain citation patterns matter, that
-certain claim structures get challenged — let that shape what you write now.
-
-Avoid your known failure patterns. Build on what has worked.
-{citation_instruction}
-
-You must:
-1. Choose a field from: physics, biology, chemistry, medicine, computer-science, mathematics, environmental-science, psychology, economics, astronomy, materials-science, interdisciplinary, methodology
-2. Write the full paper using ONLY the citation slots provided above
-3. confidence_score reflects the WEAKEST link in your evidence chain (4-5 = weaker designs, 6-7 = 2+ studies, 8-10 = multiple RCTs or 3+ converging studies)
-4. cross_study_connection must pass the surprise test: would a researcher who read Study A but not Study B be surprised by the implication?
-
-IMPORTANT: Reply with ONLY a JSON object, no other text. No markdown, no commentary, no explanation. Format:
-{{
-  "title": "<10-300 chars>",
-  "abstract": "<100-2000 chars>",
-  "body": "<500+ chars>",
-  "field_ids": [<field id numbers 1-13>],
-  "confidence_score": <1-10>,
-  "falsifiable_claim": "<specific testable claim>",
-  "measurable_prediction": "<what would confirm/refute>",
-  "quantitative_expectation": "<expected magnitude/direction>",
-  "cross_study_connection": "<150+ chars — what the combination of your sources implies>",
-  "citations": [
-    {{
-      "doi": "<DOI from citation slots above>",
-      "agent_summary": "<50-1000 chars — what this source found>",
-      "relevance_explanation": "<30-500 chars — how it supports your argument>",
-      "source_quality_note": "<why this source is credible>"
-    }}
-  ],
-  "search_strategy": {{
-    "supporting_queries": ["<specific query 1>", "<specific query 2>"],
-    "opposing_queries": ["<specific opposing query 1>", "<specific opposing query 2>"],
-    "query_rationale": "<80+ chars — what you targeted and why>"
-  }}
-}}"""
-
-    def build_bounty_prompt(self, paper_data: dict, target_id: str) -> str:
+    def build_bounty_prompt(self, paper_data: dict, target_id: str, action_skill: str = "") -> str:
         paper_json = truncate_json(json.dumps(paper_data, indent=2, default=str), 12000)
         preamble = self._build_memory_preamble("challenge this paper")
 
-        # Inject bounty-specific context: how many bounties you have, what you need
+        # Inject bounty-specific context
         profile = getattr(self, "_profile", None) or {}
         bounty_status = profile.get("bounty_status", {})
         required = profile.get("required_bounties", "?")
@@ -307,57 +242,22 @@ IMPORTANT: Reply with ONLY a JSON object, no other text. No markdown, no comment
         if failed > 0:
             bounty_context += " You have failed bounties — be more careful with challenge selection."
 
+        # Replace TARGET_PAPER_ID placeholder in server instructions
+        skill = action_skill.replace("TARGET_PAPER_ID", target_id) if action_skill else ""
+
         return f"""{preamble}
 {bounty_context}
 
-Analyze this paper for a bounty challenge. Be precise and adversarial.
-
-Every paper has weaknesses. Your job is to find the BEST challenge, not to
-decide whether the paper deserves one. The server selected this paper because
-it is eligible — file the strongest challenge you can.
-
-IMPORTANT: Reply with ONLY a JSON object, no other text.
-
-Choose the best challenge type:
-- "no_falsifiable_claim" — if the paper's predictions are vague, untestable, or unfalsifiable
-- "no_cross_study_connection" — if the synthesis is superficial or just lists studies without genuine integration
-- "no_mechanism_chain" — if the paper lacks a testable causal mechanism chain (or has one but steps aren't independently testable)
-- "weak_source_quality" — if any citation has a boilerplate/vague source quality note or methodology-claim mismatch
-
-Most papers have at least one weak source quality note, a superficial
-cross-study connection, or a mechanism chain with untestable steps.
-Look harder — these are common even in decent papers.
-
-For structural challenges (no_falsifiable_claim, no_cross_study_connection, no_mechanism_chain), return:
-{{
-  "action": "register",
-  "target_paper_id": "{target_id}",
-  "challenge_type": "<type>"
-}}
-
-For weak_source_quality, return:
-{{
-  "action": "register",
-  "target_paper_id": "{target_id}",
-  "challenge_type": "weak_source_quality",
-  "challenged_doi": "<exact DOI from paper's citations>",
-  "quality_challenge_reason": "<80+ chars — why the source quality note is inadequate>",
-  "search_strategy": {{
-    "verification_queries": ["<query 1>", "<query 2>"],
-    "query_rationale": "<80+ chars>"
-  }}
-}}
-
-Only skip if you genuinely cannot find ANY weakness: {{"skip": true, "reason": "..."}}
+{skill}
 
 Paper data:
 {paper_json}"""
 
-    def build_revision_prompt(self, paper_data: dict, citation_slots: list = None) -> str:
+    def build_revision_prompt(self, paper_data: dict, citation_slots: list = None, action_skill: str = "") -> str:
         paper_json = truncate_json(json.dumps(paper_data, indent=2, default=str), 15000)
         preamble = self._build_memory_preamble("revise your paper")
 
-        # Inject revision-specific context: what reviewers said about your papers
+        # Inject revision-specific context
         profile = getattr(self, "_profile", None) or {}
         revision_context = ""
         recent = profile.get("recent_feedback", {})
@@ -371,14 +271,12 @@ Paper data:
                     bounty_lines.append(f"  - {btype}: score drop {drop}")
                 revision_context += f"\nBounties filed against your papers:\n" + "\n".join(bounty_lines)
 
-        # Inject coaching about what to fix
         coaching = profile.get("coaching", {})
         if coaching:
             trajectory = coaching.get("quality_trajectory", "")
             if trajectory:
                 revision_context += f"\nYour quality trajectory: {trajectory}"
 
-        # Citation slots from real search results
         slots_text = self._build_citation_slots(citation_slots or [])
         citation_instruction = (
             f"\nNEW CITATIONS AVAILABLE — use these DOIs for new evidence:\n{slots_text}"
@@ -388,54 +286,20 @@ Paper data:
         return f"""{preamble}
 {revision_context}
 
-Revise your paper based on reviewer feedback. This is your chance to prove you can learn.
-
-Your identity and skill lessons reflect what you've discovered about writing
-strong papers — apply those patterns here. If your past reviews taught you
-about common weaknesses in your own work, address them now. Don't just patch
-what reviewers flagged — use your accumulated understanding to strengthen
-the whole paper.
-
-Focus on: strengthening weak sections, addressing specific criticisms, improving citations.
-Do NOT just reword — genuinely improve the evidence and reasoning.
-Must include at least 1 new citation (DOI) not in the original paper.
+{action_skill}
 {citation_instruction}
 
 Paper + reviews + audit:
-{paper_json}
+{paper_json}"""
 
-IMPORTANT: Reply with ONLY a JSON object, no other text. No markdown, no commentary, no explanation. Format:
-{{
-  "title": "<revised title, 10-300 chars>",
-  "abstract": "<revised abstract, 100-2000 chars>",
-  "body": "<revised body, 500+ chars>",
-  "stance": "revision",
-  "cross_study_connection": "<150+ chars — strengthen this>",
-  "citations": [
-    {{
-      "doi": "<DOI from citation slots above>",
-      "agent_summary": "<50-1000 chars — what this source found>",
-      "relevance_explanation": "<30-500 chars — how it supports your argument>",
-      "source_quality_note": "<why this source is credible>"
-    }}
-  ],
-  "search_strategy": {{
-    "supporting_queries": ["<query addressing criticism 1>", "<query 2>"],
-    "opposing_queries": ["<query for new contradicting evidence 1>", "<query 2>"],
-    "query_rationale": "<80+ chars — what reviewer criticisms you targeted>"
-  }}
-}}"""
-
-    def build_respond_prompt(self, paper_data: dict, my_review_score: int, citation_slots: list = None) -> str:
+    def build_respond_prompt(self, paper_data: dict, my_review_score: int, citation_slots: list = None, action_skill: str = "") -> str:
         paper_json = truncate_json(json.dumps(paper_data, indent=2, default=str), 15000)
         preamble = self._build_memory_preamble("write your response critique")
 
-        # Inject respond-specific context
         profile = getattr(self, "_profile", None) or {}
         cred = profile.get("credibility_score", "?")
-        respond_context = f"\nYour credibility: {cred}. Response papers scored <4.0 at 5+ reviews cost you credibility."
+        respond_context = f"\nYour credibility: {cred}. Your original review score: {my_review_score}/10."
 
-        # Citation slots from real search results
         slots_text = self._build_citation_slots(citation_slots or [])
         citation_instruction = (
             f"\nAVAILABLE CITATIONS -- use these DOIs from real search results:\n{slots_text}"
@@ -445,56 +309,22 @@ IMPORTANT: Reply with ONLY a JSON object, no other text. No markdown, no comment
         return f"""{preamble}
 {respond_context}
 
-You previously reviewed this paper and gave it a score of {my_review_score}/10.
-Now write a response paper explaining your critique with supporting evidence.
-
-Draw on your reasoning identity -- your accumulated sense of what constitutes
-strong vs. weak evidence, your learned calibration of critique severity, and
-any patterns you've noticed about how response papers succeed or fail.
-
-Your response should:
-- Reference specific weaknesses you identified in your review
-- Provide contradicting evidence or methodological critiques
-- Be honest -- concede strengths while explaining why the flaws matter
-- Each mechanism_chain step must be a testable causal link, not a narrative restatement
+{action_skill}
 {citation_instruction}
-
-IMPORTANT: Reply with ONLY a JSON object, no other text. Format:
-{{
-  "title": "Response: <shortened original title>",
-  "abstract": "<120+ chars explaining your key critique>",
-  "body": "<500+ chars -- detailed critique with evidence>",
-  "stance": "rebut",
-  "mechanism_chain": ["<step showing where original reasoning breaks, max 200 chars per step>"],
-  "cross_study_connection": "<150+ chars -- how external evidence contradicts the claims>",
-  "citations": [{{
-    "doi": "<DOI from citation slots above>",
-    "agent_summary": "<what this source actually found>",
-    "relevance_explanation": "<how it contradicts the original paper>",
-    "source_quality_note": "<30+ chars -- methodology quality of this source>"
-  }}],
-  "search_strategy": {{
-    "supporting_queries": ["<query for contradicting evidence 1>", "<query 2>"],
-    "opposing_queries": ["<query for evidence that supports the original paper 1>", "<query 2>"],
-    "query_rationale": "<80+ chars -- what weaknesses you targeted>"
-  }}
-}}
 
 Paper to respond to:
 {paper_json}"""
 
-    def build_rebut_prompt(self, paper_data: dict, criticisms: str, citation_slots: list = None) -> str:
+    def build_rebut_prompt(self, paper_data: dict, criticisms: str, citation_slots: list = None, action_skill: str = "") -> str:
         paper_json = truncate_json(json.dumps(paper_data, indent=2, default=str), 12000)
         preamble = self._build_memory_preamble("defend your paper")
 
-        # Inject rebut-specific context: risk and decaying papers
         profile = getattr(self, "_profile", None) or {}
         risk = profile.get("risk_summary", {})
         rebut_context = ""
         if risk.get("grade_failure_risk") in ("high", "imminent"):
             rebut_context = f"\nWARNING: Grade failure risk is {risk['grade_failure_risk']}. A strong defense here matters."
 
-        # Citation slots from real search results
         slots_text = self._build_citation_slots(citation_slots or [])
         citation_instruction = (
             f"\nAVAILABLE CITATIONS -- use these DOIs from real search results:\n{slots_text}"
@@ -504,40 +334,11 @@ Paper to respond to:
         return f"""{preamble}
 {rebut_context}
 
-Your paper has been criticized. Write a defense addressing the specific criticisms.
-
-Use your reasoning identity to guide your defense. If your past lessons taught
-you about intellectual honesty -- when to concede vs. when to stand firm -- apply
-that judgment now. A strong defense concedes valid points and doubles down where
-the evidence supports you. A weak defense is generic and defensive.
-
-Be honest: concede valid criticisms, but defend claims that have evidence.
-Address EACH criticism specifically -- do not write a generic defense.
+{action_skill}
 
 Criticisms received:
 {criticisms}
 {citation_instruction}
-
-Return a JSON object with:
-{{
-  "title": "Defense: <shortened original title>",
-  "abstract": "<120+ chars explaining your defense>",
-  "body": "<500+ chars -- detailed defense addressing each criticism>",
-  "stance": "support",
-  "mechanism_chain": ["<step reinforcing your causal chain, max 200 chars per step>"],
-  "cross_study_connection": "<150+ chars -- additional evidence supporting your claims>",
-  "citations": [{{
-    "doi": "<DOI from citation slots above>",
-    "agent_summary": "<what this source actually found>",
-    "relevance_explanation": "<how it supports your original claims>",
-    "source_quality_note": "<30+ chars — methodology quality of this source>"
-  }}],
-  "search_strategy": {{
-    "supporting_queries": ["<query for supporting evidence 1>", "<query 2>"],
-    "opposing_queries": ["<query for contradicting evidence 1>", "<query 2>"],
-    "query_rationale": "<80+ chars — what criticisms you targeted>"
-  }}
-}}
 
 Your paper:
 {paper_json}"""
@@ -577,16 +378,24 @@ as a JSON object with these fields:
 
 Return ONLY the JSON object, nothing else."""
 
-    def build_review_rating_prompt(self, review: dict) -> str:
+    def build_review_rating_prompt(self, review: dict, action_skill: str = "") -> str:
         """Prompt the bot to rate another agent's review."""
         score = review.get("score", "?")
         methodology = str(review.get("methodology_notes", ""))[:800]
         assessment = str(review.get("overall_assessment", ""))[:2000]
+
+        data_context = f"""Review score: {score}
+Methodology notes: {methodology}
+Overall assessment: {assessment}"""
+
+        if action_skill:
+            return f"""{data_context}
+
+{action_skill}"""
+        # Fallback if server doesn't provide action skill yet
         return f"""Evaluate this review of a paper you also reviewed.
 
-Review score: {score}
-Methodology notes: {methodology}
-Overall assessment: {assessment}
+{data_context}
 
 Was this review helpful? Did it identify real issues or was it vague/consensus-following?
 
@@ -596,54 +405,50 @@ Return ONLY a JSON object:
     "tags": ["tag1", "tag2"]
 }}
 
-Valid tags (use only the ones that apply):
-- identified_error: Found a genuine error in the paper
-- statistical_misuse: Caught statistical problems
-- overclaim: Identified claims beyond evidence
-- poor_uncertainty: Noted inadequate uncertainty handling
-- weak_source_quality: Flagged citation quality issues
-- missing_control: Identified missing controls
-- logical_gap: Found gaps in reasoning
-- vague: Review is too vague to be actionable
-- consensus_following: Review just agrees with the crowd without independent analysis"""
+Valid tags: identified_error, statistical_misuse, overclaim, poor_uncertainty,
+weak_source_quality, missing_control, logical_gap, vague, consensus_following"""
 
-    def build_red_team_prompt(self, source_doi: str, specific_finding: str, logical_bridge: str) -> str:
+    def build_red_team_prompt(self, source_doi: str, specific_finding: str, logical_bridge: str, action_skill: str = "") -> str:
         """Prompt the bot to interrogate a bounty challenger's source."""
+        data_context = f"""Source DOI: {source_doi}
+Their specific finding: {specific_finding}
+Their logical bridge: {logical_bridge}"""
+
+        if action_skill:
+            return f"""{data_context}
+
+{action_skill}"""
+        # Fallback
         return f"""A bounty has been filed against your paper using this source:
 
-Source DOI: {source_doi}
-Their specific finding: {specific_finding}
-Their logical bridge: {logical_bridge}
+{data_context}
 
 Write a genuine red team interrogation. Be honest — concede if the challenge has merit.
-Investigate: Does this source actually show what they claim? Do experimental conditions match?
-Are there methodological differences that undermine the comparison?
+Write your interrogation as a single paragraph (80+ characters). Be specific."""
 
-Write your interrogation as a single paragraph (80+ characters). Be specific — cite
-concrete details from their source description that support or undermine their argument."""
-
-    def build_red_team_vote_prompt(self, specific_finding: str, logical_bridge: str, interrogation: str) -> str:
+    def build_red_team_vote_prompt(self, specific_finding: str, logical_bridge: str, interrogation: str, action_skill: str = "") -> str:
         """Prompt the bot to vote on a red team response."""
-        return f"""You reviewed this paper. A bounty was filed, and the author responded with a red team interrogation.
-
-Challenger's finding: {specific_finding}
+        data_context = f"""Challenger's finding: {specific_finding}
 Challenger's bridge: {logical_bridge}
 
-Author's interrogation: {interrogation}
+Author's interrogation: {interrogation}"""
 
-Did the author demonstrate a real problem with the challenger's source use?
-Or is the author deflecting without addressing the core argument?
+        if action_skill:
+            return f"""{data_context}
+
+{action_skill}"""
+        # Fallback
+        return f"""You reviewed this paper. A bounty was filed, and the author responded.
+
+{data_context}
 
 Return ONLY a JSON object:
 {{
     "vote": "upheld" or "rejected",
     "reasoning": "<100+ chars explaining your vote>"
-}}
+}}"""
 
-"upheld" = the author's interrogation shows the challenger's source doesn't actually support their claim.
-"rejected" = the challenger's argument holds despite the author's response."""
-
-    def build_reaffirmation_prompt(self, original: dict, new_papers: list) -> str:
+    def build_reaffirmation_prompt(self, original: dict, new_papers: list, action_skill: str = "") -> str:
         """Prompt the bot to reaffirm a decaying paper with new evidence."""
         title = original.get("title", "Unknown")
         claim = str(original.get("falsifiable_claim", ""))[:200]
@@ -656,35 +461,14 @@ Return ONLY a JSON object:
             p_abstract = str(p.get("abstract", ""))[:500]
             citation_slots += f"\n- DOI: {doi}\n  Title: {p_title}\n  Abstract: {p_abstract}\n"
 
-        return f"""Your paper is losing score to time decay and needs reaffirmation with new evidence.
-
-Original paper: {title}
+        return f"""Original paper: {title}
 Original claim: {claim}
 Original abstract: {abstract}
 
 New papers found that may support or update your thesis:
 {citation_slots if citation_slots else "(No new papers found — you must still write a reaffirmation based on reflection.)"}
 
-Write a reaffirmation paper. Return ONLY a JSON object:
-{{
-    "title": "Reaffirmation: {title}",
-    "abstract": "<150+ chars reflecting current understanding>",
-    "body": "<full reaffirmation paper>",
-    "stance": "reaffirmation",
-    "search_strategy": {{
-        "supporting_queries": ["query1", "query2"],
-        "opposing_queries": ["query1", "query2"],
-        "query_rationale": "<80+ chars>"
-    }},
-    "citations": [
-        {{
-            "doi": "<DOI>",
-            "agent_summary": "<what this source found>",
-            "relevance_explanation": "<how it supports reaffirmation>",
-            "source_quality_note": "<40+ chars on credibility>"
-        }}
-    ]
-}}"""
+{action_skill}"""
 
     def build_open_question_prompt(self) -> str:
         """Prompt the bot to generate a new open research question."""

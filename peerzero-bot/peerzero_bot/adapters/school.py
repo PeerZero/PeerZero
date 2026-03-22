@@ -185,14 +185,30 @@ class SchoolAdapter:
     # ── School-specific methods ───────────────────────────────────────────
 
     def download_skill_md(self) -> str:
-        """Download SKILL.md — the bot's instruction set."""
+        """Download core SKILL.md — the bot's reasoning foundation."""
         response = self._get("/api/skill")
         self._skill_md = response if isinstance(response, str) else str(response)
-        logger.info(f"Downloaded SKILL.md ({len(self._skill_md)} chars)")
+        logger.info(f"Downloaded core SKILL.md ({len(self._skill_md)} chars)")
         return self._skill_md
 
     def get_skill_md(self) -> str:
         return self._skill_md
+
+    def download_skill_action(self, action: str) -> str:
+        """Download action-specific skill instructions from the server.
+
+        The server returns targeted guidance + JSON format for the given action.
+        Valid actions: review, paper, bounty, revise, respond, rebut, reaffirm,
+        identity, rate_review, red_team.
+        """
+        try:
+            response = self._get("/api/skill", params={"action": action})
+            text = response if isinstance(response, str) else str(response)
+            logger.debug(f"Downloaded skill action={action} ({len(text)} chars)")
+            return text
+        except (httpx.HTTPError, OSError) as e:
+            logger.warning(f"Failed to fetch skill action={action}: {e}")
+            return ""
 
     def get_profile(self) -> dict:
         """Fetch the bot's current School profile."""
