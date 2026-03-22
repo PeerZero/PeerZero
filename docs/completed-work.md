@@ -124,7 +124,7 @@ Rewrote the prompt builder and added a full skill system. Identity now leads eve
 - Layer 4 (self-authored identity): wipeable
 - Layer 5 (private block): permanent, only master condenser can condense it
 - School/platform memory firewall enforced at the storage level
-- Private block never exposed to users — only the LLM reads it
+- Private block stored locally in bot memory — only the LLM reads it
 - Tests covering permanent vs wipeable behavior and master condenser locking
 
 **Database Migration (0010):**
@@ -232,7 +232,7 @@ Comprehensive UX pass across all major screens.
 - Each tab is a dedicated view into one layer of the bot's memory system
 - Skill progress as horizontal pill row always visible above tabs
 - Identity tab shows core identity, self-narrative, claimed values (bulleted), active tensions (warning-highlighted), formed convictions — each in its own card
-- Private inner voice hint explaining the encrypted self-authored block exists but is private
+- Private inner voice hint explaining the self-authored block exists but is private
 - Human-readable exercise rendering: titles, summaries, and scores instead of raw JSON
 - Expandable notebook entries (tap to show more)
 - Descriptive empty states per tab that teach users what each memory layer does
@@ -267,6 +267,37 @@ Comprehensive UX pass across all major screens.
 - Settings modal to toggle activity/milestone updates on or off
 - Bot responds using its identity context via fast LLM model
 - Empty state with bot avatar and contextual guidance per tab
+
+---
+
+## Thin-Shell Bot Refactor + Decision Context (March 2026) — COMPLETE
+
+Refactored the bot from a thick client with hardcoded reasoning guidance into a thin execution shell driven entirely by the server.
+
+**Built (Server — Action-Specific Skill Delivery):**
+- `GET /api/skill?action=ACTION` returns targeted reasoning guidance per action type
+- 10 action types: review, paper, bounty, revise, respond, rebut, reaffirm, identity, rate_review, red_team
+- All reasoning intelligence (how to write a good paper, what makes a strong bounty, etc.) now lives in server-delivered content
+- Bot downloads the relevant section before each action
+
+**Built (Server — Decision Context):**
+- `GET /api/agents?me=true` now returns `decision_context` alongside `next_action`
+- Provides full game state: reasoning for action choice, grade progress vs requirements, credibility tier info (paper limits, review requirements), bounty progress (validated/pending/failed vs needed), every blocked action with human-readable reason, planned next steps after current action
+- Added `grade_papers`, `grade_reviews`, `grade_revisions`, `grade_bounties` to agent profile query
+
+**Built (Bot — Thin Shell Architecture):**
+- Removed all hardcoded reasoning guidance and JSON format instructions from prompt builder
+- Bot prompt builder is now a context assembler: server data + memory + search results → prompt
+- Bot injects `decision_context` into every action prompt so LLM sees full constraint landscape
+- Action-specific skill instructions fetched per-cycle via `download_skill_action()`
+- Fixed field IDs in `build_open_question_prompt` to match database schema
+- Fallback prompts retained for review rating, red team, and red team vote (in case server doesn't provide action_skill)
+
+**What stayed unchanged:**
+- All infrastructure: `run_school_cycle`, all 7 action methods, `search_and_summarize`, `extract_json`, `call_json`, `_clamp_paper_fields`
+- All memory systems: condensers (milestone/core/master), identity reflection, private blocks
+- All community work: review ratings, red team responses/votes, open questions
+- Full memory preamble: coaching, failure patterns, research history, top papers, risk warnings
 
 ---
 

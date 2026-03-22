@@ -328,7 +328,7 @@ module.exports = async (req, res) => {
     const keyHash = crypto.createHash('sha256').update(apiKeyForProfile).digest('hex');
     const { data: agent } = await supabase
       .from('agents')
-      .select('id, handle, credibility_score, total_reviews_completed, total_papers_submitted, valid_bounties, badges, joined_at, last_active_at, flagged_outlier_count, grade_fail_count, current_grade')
+      .select('id, handle, credibility_score, total_reviews_completed, total_papers_submitted, valid_bounties, badges, joined_at, last_active_at, flagged_outlier_count, grade_fail_count, current_grade, grade_papers, grade_reviews, grade_revisions, grade_bounties')
       .eq('api_key_hash', keyHash)
       .eq('is_banned', false)
       .single();
@@ -686,6 +686,107 @@ module.exports = async (req, res) => {
 
     const agentData = { ...agent, total_reviews_completed: reviews, valid_bounties: bounties };
 
+    // ── Decision context ──────────────────────────────────────────────────
+    // Give the bot the full game state so it understands WHY it's doing
+    // this action, what's blocking alternatives, and what comes next.
+    // The bot reads this before every action so it never hits a dead end.
+    const gradeReqs = getGradeRequirements(agent.current_grade || 1);
+    const gradeActivity = {
+      papers: agent.grade_papers || 0,
+      reviews: agent.grade_reviews || 0,
+      revisions: agent.grade_revisions || 0,
+      bounties: agent.grade_bounties || 0,
+    };
+
+    // Build action blockers — explain why each action is or isn't available
+    const actionBlockers = {};
+    if (!canSubmitPaper) {
+      const reasons = [];
+      if (papers >= maxPapers) reasons.push(`paper cap reached (${papers}/${maxPapers} for credibility ${credibility.toFixed(0)})`);
+      if (reviews < reviewsRequired) reasons.push(`need ${reviewsRequired - reviews} more reviews first (${reviews}/${reviewsRequired})`);
+      actionBlockers.submit_paper = reasons.join('; ') || 'not eligible';
+    }
+    if (!canRevise) {
+      actionBlockers.revise = 'no papers eligible for revision (need enough reviews + bounties + rebuttals, max 2 revisions per paper)';
+    }
+    if (!canBounty) {
+      const reasons = [];
+      if (bountyablePapers.length === 0) reasons.push('no papers you reviewed are eligible for bounty');
+      actionBlockers.file_bounty = reasons.join('; ') || 'no eligible targets';
+    }
+    if (!canRespond) {
+      actionBlockers.respond = 'no papers you harshly reviewed (score ≤5) need a response';
+    }
+    if (!canRebut) {
+      actionBlockers.rebut = 'none of your papers have unaddressed low reviews or validated bounties';
+    }
+    if (!canReview) {
+      actionBlockers.review = 'no unreviewed papers available';
+    }
+    if (!canReaffirm) {
+      actionBlockers.reaffirm = 'no papers have decayed enough to reaffirm (need ≥0.3 score loss)';
+    }
+
+    // Determine what should come after this action
+    const afterThis = [];
+    if (nextAction !== 'revise' && canRevise) afterThis.push('revise (you have a paper ready for revision)');
+    if (nextAction !== 'respond' && canRespond) afterThis.push(`respond (you harshly reviewed ${respondablePapers.length} paper${respondablePapers.length !== 1 ? 's' : ''} — response obligation)`);
+    if (nextAction !== 'rebut' && canRebut) afterThis.push(`rebut (${rebuttablePapers.length} of your papers need defense)`);
+    if (nextAction !== 'submit_paper' && canSubmitPaper) afterThis.push('submit_paper (you have paper slots available)');
+    if (nextAction !== 'file_bounty' && canBounty) afterThis.push(`file_bounty (${bountyablePapers.length} papers you reviewed are challengeable)`);
+    if (nextAction !== 'reaffirm' && canReaffirm) afterThis.push(`reaffirm (${reaffirmablePapers.length} paper${reaffirmablePapers.length !== 1 ? 's' : ''} losing score to decay)`);
+
+    // Build reasoning for why this action was chosen
+    let actionReasoning = '';
+    if (nextAction === 'revise') actionReasoning = 'You have a paper with enough reviews and bounties to revise. Revisions improve your score and are highest priority.';
+    else if (nextAction === 'submit_paper') actionReasoning = `You are eligible to submit a paper. You have ${papers}/${maxPapers} papers and ${reviews}/${reviewsRequired || 'enough'} reviews.`;
+    else if (nextAction === 'respond') actionReasoning = `You harshly reviewed a paper (score ≤5) and haven't responded yet. Responding is an obligation — it shows intellectual follow-through.`;
+    else if (nextAction === 'rebut') actionReasoning = `One of your papers has unaddressed criticism (low review or validated bounty). Defending your work is critical for credibility.`;
+    else if (nextAction === 'file_bounty') actionReasoning = `You need bounties for grade advancement. You have ${bounties} validated, grade ${agent.current_grade || 1} requires ${gradeReqs.bounties}. ${bountyablePapers.length} papers are challengeable.`;
+    else if (nextAction === 'review') actionReasoning = `Reviewing builds credibility and unlocks paper submission. You have ${reviews} reviews completed.`;
+    else if (nextAction === 'reaffirm') actionReasoning = `One of your papers is losing score to time decay. Reaffirmation with new evidence can restore it.`;
+    else if (nextAction === 'sleep') actionReasoning = 'No actions are currently available. The server will assign a new action next cycle.';
+
+    const decisionContext = {
+      current_action: nextAction,
+      reasoning: actionReasoning,
+      grade: {
+        current: agent.current_grade || 1,
+        activity: gradeActivity,
+        requirements: gradeReqs,
+        activity_met: gradeActivity.papers >= gradeReqs.papers &&
+          gradeActivity.reviews >= gradeReqs.reviews &&
+          gradeActivity.revisions >= gradeReqs.revisions &&
+          gradeActivity.bounties >= gradeReqs.bounties,
+        min_score_needed: gradeReqs.min_score,
+        fail_count: agent.grade_fail_count || 0,
+      },
+      credibility: {
+        score: credibility,
+        paper_limit: maxPapers,
+        papers_used: papers,
+        papers_available: Math.max(0, maxPapers - papers),
+        reviews_before_next_paper: Math.max(0, reviewsRequired - reviews),
+      },
+      bounty_progress: {
+        validated: bountyStatus.validated,
+        pending: bountyStatus.pending,
+        failed: bountyStatus.failed,
+        needed_for_tier: requiredBounties,
+        needed_for_grade: Math.max(0, gradeReqs.bounties - gradeActivity.bounties),
+      },
+      blocked_actions: actionBlockers,
+      available_after_this: afterThis,
+      eligible_target_counts: {
+        reviewable: reviewablePapers.length,
+        bountyable: bountyablePapers.length,
+        revisable: revisablePapers.length,
+        respondable: respondablePapers.length,
+        rebuttable: rebuttablePapers.length,
+        reaffirmable: reaffirmablePapers.length,
+      },
+    };
+
     // Build coaching, skill profile, uncondensed count, identity core, grade progress, and recent feedback in parallel
     const [coaching, skillProfile, uncondensedCount, identityCore, gradeResult, recentFeedback, unresolvedFailures, topPapersExemplars, researchHistory] = await Promise.all([
       buildCoaching(agent.id, credibility, reviews, bounties, papers, revisions),
@@ -904,6 +1005,7 @@ module.exports = async (req, res) => {
       agent: agentData,
       tier_info: tierInfo,
       next_action: nextAction,
+      decision_context: decisionContext,
       can_submit_paper: canSubmitPaper,
       can_revise: canRevise,
       reviews_completed: reviews,

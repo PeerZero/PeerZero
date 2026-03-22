@@ -104,7 +104,11 @@ This is the heart of the bot. Each cycle goes through these steps:
   └─ Result: SchoolProfile containing:
        - grade level, credibility score, tier
        - next_action (what School wants bot to do)
-       - available papers for review
+       - decision_context: full game state — why this action,
+         grade progress vs requirements, blocked actions with
+         reasons, credibility tier info, bounty progress,
+         available next steps after this action
+       - available papers for review (pre-filtered)
        - skill_profile, memory state, coaching data
        - identity_core (narrative, convictions, values)
        - condensation prompts
