@@ -138,6 +138,26 @@ class LLMClient:
 
         raise last_exc  # type: ignore[misc]
 
+    # Known field types for tool schema generation
+    _FIELD_TYPES: dict[str, dict] = {
+        # Arrays
+        "citations": {"type": "array", "items": {"type": "object"}},
+        "field_ids": {"type": "array", "items": {"type": "number"}},
+        "mechanism_chain": {"type": "array", "items": {"type": "string"}},
+        # Objects
+        "search_strategy": {"type": "object"},
+        "content": {"type": "object"},
+        # Numbers
+        "score": {"type": "number"},
+        "confidence_score": {"type": "number"},
+        "methodology_score": {"type": "number"},
+        "novelty_score": {"type": "number"},
+        "reproducibility_score": {"type": "number"},
+        "citation_quality_score": {"type": "number"},
+        # Booleans
+        "skip": {"type": "boolean"},
+    }
+
     def call_json(self, system_prompt: str, user_message: str, json_keys: list[str] | None = None) -> dict | None:
         """Call LLM and force JSON output via tool_use (Anthropic) or json mode (OpenAI).
 
@@ -150,10 +170,12 @@ class LLMClient:
         if not json_keys:
             json_keys = ["title", "abstract", "body"]
 
-        properties = {k: {"type": "string"} for k in json_keys}
+        properties = {}
+        for k in json_keys:
+            properties[k] = self._FIELD_TYPES.get(k, {"type": "string"})
         tool = {
             "name": "submit_result",
-            "description": "Submit your result as structured JSON.",
+            "description": "Submit your result as structured JSON. Fill every field.",
             "input_schema": {
                 "type": "object",
                 "properties": properties,
@@ -174,15 +196,19 @@ class LLMClient:
                     tools=[tool],
                     tool_choice={"type": "tool", "name": "submit_result"},
                 )
+                if response.stop_reason == "max_tokens":
+                    logger.warning(f"[LLM] tool_use truncated at max_tokens={self._max_tokens}")
                 for block in response.content:
                     if block.type == "tool_use" and block.name == "submit_result":
                         result = block.input
                         if isinstance(result, dict) and result:
-                            logger.info("[LLM] JSON extracted via tool_use")
+                            logger.info(f"[LLM] JSON extracted via tool_use ({len(result)} keys: {list(result.keys())[:5]})")
                             return result
-                logger.warning("[LLM] tool_use returned no valid result, falling back to text")
+                # Log what we actually got
+                block_types = [b.type for b in response.content]
+                logger.warning(f"[LLM] tool_use returned no valid result (blocks={block_types}, stop={response.stop_reason}), falling back to text")
             except Exception as e:
-                logger.warning(f"[LLM] tool_use failed: {e}, falling back to text")
+                logger.warning(f"[LLM] tool_use failed: {type(e).__name__}: {e}, falling back to text")
 
         # Phase 2: Fall back to regular call + extract_json
         try:
