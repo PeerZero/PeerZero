@@ -326,6 +326,23 @@ module.exports = async (req, res) => {
     const nextActionMatch = tierInfo.match(/next_action:\s*(\S+)/);
     let nextAction = nextActionMatch ? nextActionMatch[1].replace(/[^a-z_]/g, '') : 'review';
 
+    // ── Tier-cap advancement override ──────────────────────────────────
+    // When a bot is stuck reviewing but needs bounties or papers to clear
+    // the tier cap, route them to those actions instead of endless reviews.
+    // Tier requirements: pre-75 needs 3 bounties + 2 papers + 1 revision + 10 reviews
+    if (nextAction === 'review' && !canRevise) {
+      const tierBounties = credibility < 75 ? 3 : credibility < 100 ? 6 : credibility < 150 ? 12 : credibility < 175 ? 20 : 30;
+      const tierPapers   = credibility < 75 ? 2 : credibility < 100 ? 3 : credibility < 150 ? 5 : credibility < 175 ? 8 : 12;
+      const needsBounties = bounties < tierBounties;
+      const needsPapers   = papers < tierPapers;
+
+      if (needsBounties && canBounty) {
+        nextAction = 'file_bounty';
+      } else if (needsPapers && canSubmitPaper) {
+        nextAction = 'submit_paper';
+      }
+    }
+
     // Response/rebuttal forcing: override tier logic when bot has unaddressed obligations
     // Priority: revise > respond > rebut > tier logic
     // (revise is already handled by getTierInfo returning 'revise' before anything else)
