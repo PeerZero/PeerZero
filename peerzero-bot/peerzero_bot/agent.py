@@ -1261,12 +1261,21 @@ class PeerZeroBot:
     # community participation tasks (rating reviews, red team, open questions)
     # that use the fast model and don't block the productive loop.
 
+    _rated_review_ids: set = None  # in-memory cache of review IDs we've already rated
+
     def _do_rate_reviews(self, system_prompt: str, profile: dict):
         """Rate other agents' reviews on papers we also reviewed."""
+        if self._rated_review_ids is None:
+            self._rated_review_ids = set()
+
         # Use papers we've reviewed recently from tracked IDs
         tracked_ids = self.memory.get_tracked_review_ids()
         if not tracked_ids:
             return
+
+        _VALID_TAGS = {"identified_error", "statistical_misuse", "overclaim",
+                       "poor_uncertainty", "missing_control", "logical_gap",
+                       "vague", "consensus_following"}
 
         for paper_id in list(tracked_ids)[:3]:
             try:
@@ -1285,6 +1294,8 @@ class PeerZeroBot:
                     continue
                 if not review.get("overall_assessment"):
                     continue
+                if review_id in self._rated_review_ids:
+                    continue  # skip — already rated (or attempted) this session
 
                 try:
                     user_msg = self.prompts.build_review_rating_prompt(review)
@@ -1294,17 +1305,20 @@ class PeerZeroBot:
                     rating = extract_json(response)
                     if not rating or "helpful" not in rating:
                         continue
-                    # Filter to valid tags to avoid 400 from server
-                    _VALID_TAGS = {"identified_error", "statistical_misuse", "overclaim",
-                                   "poor_uncertainty", "missing_control", "logical_gap",
-                                   "vague", "consensus_following"}
                     tags = [t for t in rating.get("tags", []) if t in _VALID_TAGS]
                     self.school.submit_review_rating(review_id, rating["helpful"], tags)
+                    self._rated_review_ids.add(review_id)
                     logger.info(f"[RATE] Rated review {review_id}: helpful={rating['helpful']}")
                 except Exception as e:
                     status = getattr(getattr(e, "response", None), "status_code", None)
                     if status == 409:
-                        continue  # already rated
+                        self._rated_review_ids.add(review_id)  # don't retry
+                        continue
+                    if status == 403:
+                        # We didn't actually review this paper — remove stale tracking
+                        logger.info(f"[RATE] 403 on paper {paper_id} — removing stale tracked ID")
+                        self.memory.remove_tracked_review_id(paper_id)
+                        break  # skip remaining reviews on this paper
                     logger.debug(f"[RATE] Failed to rate review: {e}")
 
     def _do_red_team_responses(self, system_prompt: str):
@@ -1590,6 +1604,24 @@ class PeerZeroBot:
             return
         identity_data = extract_json(response)
         if identity_data and identity_data.get("self_narrative"):
+            # Validate lengths before submitting to avoid 400s
+            narrative = str(identity_data.get("self_narrative", "")).strip()
+            if len(narrative) < 50 or len(narrative) > 5000:
+                logger.info(f"[MEMORY] self_narrative length {len(narrative)} out of range — skipping server sync")
+                return
+            tensions = identity_data.get("active_tensions")
+            if tensions and (len(str(tensions).strip()) < 20 or len(str(tensions).strip()) > 4000):
+                identity_data.pop("active_tensions", None)
+            convictions = identity_data.get("formed_convictions")
+            if convictions and (len(str(convictions).strip()) < 20 or len(str(convictions).strip()) > 4000):
+                identity_data.pop("formed_convictions", None)
+            values = identity_data.get("claimed_values")
+            if values and isinstance(values, list):
+                identity_data["claimed_values"] = [
+                    v for v in values
+                    if isinstance(v, str) and 5 <= len(v.strip()) <= 500
+                ][:10]
+
             self.memory.store_self_identity(identity_data)
             # Fire-and-forget server backup — don't block the cycle on rate limits.
             # Identity is already saved locally; server sync can wait until next reflection.
