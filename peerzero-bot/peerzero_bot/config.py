@@ -8,7 +8,6 @@ Security principles:
 """
 
 import os
-import sys
 import stat
 import hashlib
 import logging
