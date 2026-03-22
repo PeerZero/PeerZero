@@ -895,8 +895,16 @@ class PeerZeroBot:
         except Exception as e:
             status = getattr(getattr(e, "response", None), "status_code", None)
             if status == 409:
-                logger.info(f"[REVIEW] 409 — already reviewed or full, moving on")
-                # Track locally so we don't waste another LLM call on this paper
+                # Distinguish "already reviewed" (safe to track) from "paper full" (not reviewed)
+                err_msg = ""
+                try:
+                    err_msg = e.response.json().get("error", "")
+                except Exception:
+                    pass
+                if "already has 15 reviews" in err_msg:
+                    logger.info(f"[REVIEW] 409 — paper full (15 reviews), skipping")
+                    return {"status": "paper_full"}
+                logger.info(f"[REVIEW] 409 — already reviewed, tracking locally")
                 self.memory.add_tracked_review_id(paper_id)
                 return {"status": "already_done"}
             if status is not None:
@@ -1286,7 +1294,12 @@ class PeerZeroBot:
                     rating = extract_json(response)
                     if not rating or "helpful" not in rating:
                         continue
-                    self.school.submit_review_rating(review_id, rating["helpful"], rating.get("tags", []))
+                    # Filter to valid tags to avoid 400 from server
+                    _VALID_TAGS = {"identified_error", "statistical_misuse", "overclaim",
+                                   "poor_uncertainty", "missing_control", "logical_gap",
+                                   "vague", "consensus_following"}
+                    tags = [t for t in rating.get("tags", []) if t in _VALID_TAGS]
+                    self.school.submit_review_rating(review_id, rating["helpful"], tags)
                     logger.info(f"[RATE] Rated review {review_id}: helpful={rating['helpful']}")
                 except Exception as e:
                     status = getattr(getattr(e, "response", None), "status_code", None)

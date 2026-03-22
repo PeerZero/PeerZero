@@ -468,7 +468,7 @@ Return ONLY a JSON object:
 }}
 
 Valid tags: identified_error, statistical_misuse, overclaim, poor_uncertainty,
-weak_source_quality, missing_control, logical_gap, vague, consensus_following"""
+missing_control, logical_gap, vague, consensus_following"""
 
     def build_red_team_prompt(self, source_doi: str, specific_finding: str, logical_bridge: str, action_skill: str = "") -> str:
         """Prompt the bot to interrogate a bounty challenger's source."""
