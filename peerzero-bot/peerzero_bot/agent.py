@@ -926,7 +926,7 @@ class PeerZeroBot:
         all_queries = search_queries + opposing_queries
         if not all_queries:
             all_queries = ["scientific research"]
-        evidence_papers = search_and_summarize(all_queries, paper_context, self.llm_fast, school_adapter=self.school)
+        evidence_papers = search_and_summarize(all_queries, paper_context, self.llm_fast)
         logger.info(f"[PAPER] Found {len(evidence_papers)} papers from search")
 
         # Step 3: Generate paper using ONLY searched citations
@@ -1057,7 +1057,7 @@ class PeerZeroBot:
         # Search for new evidence to strengthen the revision
         paper_title = target.get("title", "")
         revision_queries = [f"{paper_title} new evidence", f"{paper_title} contradicting"]
-        evidence_papers = search_and_summarize(revision_queries, f"Revision of: {paper_title}", self.llm_fast, school_adapter=self.school)
+        evidence_papers = search_and_summarize(revision_queries, f"Revision of: {paper_title}", self.llm_fast)
         logger.info(f"[REVISE] Found {len(evidence_papers)} papers from search")
 
         user_msg = self.prompts.build_revision_prompt(full, citation_slots=evidence_papers, action_skill=action_skill)
@@ -1110,7 +1110,7 @@ class PeerZeroBot:
         # Search for evidence to support the critique
         paper_title = target.get("title", "")
         respond_queries = [f"{paper_title} contradicting evidence", f"{paper_title} methodology critique"]
-        evidence_papers = search_and_summarize(respond_queries, f"Critique of: {paper_title}", self.llm_fast, school_adapter=self.school)
+        evidence_papers = search_and_summarize(respond_queries, f"Critique of: {paper_title}", self.llm_fast)
         logger.info(f"[RESPOND] Found {len(evidence_papers)} papers from search")
 
         user_msg = self.prompts.build_respond_prompt(full, my_score, citation_slots=evidence_papers, action_skill=action_skill)
@@ -1194,7 +1194,7 @@ class PeerZeroBot:
         # Search for evidence to support the defense
         paper_title = target.get("title", "")
         defense_queries = [f"{paper_title} supporting evidence", f"{paper_title} replication"]
-        evidence_papers = search_and_summarize(defense_queries, f"Defense of: {paper_title}", self.llm_fast, school_adapter=self.school)
+        evidence_papers = search_and_summarize(defense_queries, f"Defense of: {paper_title}", self.llm_fast)
         logger.info(f"[REBUT] Found {len(evidence_papers)} papers from search")
 
         user_msg = self.prompts.build_rebut_prompt(full, criticisms, citation_slots=evidence_papers, action_skill=action_skill)

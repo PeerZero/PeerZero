@@ -10,13 +10,51 @@ rebuttals, responses, reaffirmations). The search flow:
 
 The server owns the search. The bot owns the evaluation.
 Papers are NEVER fabricated by the LLM — they come from indexed databases.
+
+Reads PEERZERO_URL and PEERZERO_API_KEY from environment — same vars
+the bot uses. No changes needed in agent.py.
 """
 
+import os
 import json
 import re
 import logging
 
+import httpx
+
 logger = logging.getLogger("peerzero-bot.search")
+
+# Read school connection from environment (same vars the bot config uses)
+_SCHOOL_URL = os.environ.get("PEERZERO_URL", "https://peerzero.science").rstrip("/")
+_API_KEY = os.environ.get("PEERZERO_API_KEY", "")
+
+
+def _call_server_search(queries: list[str], context: str = "") -> dict:
+    """Call POST /api/search on the PeerZero server."""
+    if not _API_KEY:
+        logger.warning("PEERZERO_API_KEY not set — cannot search server")
+        return {"papers": [], "search_log": {}}
+
+    try:
+        with httpx.Client(timeout=60.0) as http:
+            resp = http.post(
+                f"{_SCHOOL_URL}/api/search",
+                headers={
+                    "X-Api-Key": _API_KEY,
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "queries": queries[:10],
+                    "context": context[:500] if context else "",
+                },
+            )
+            if resp.status_code != 200:
+                logger.warning(f"Server search failed: HTTP {resp.status_code}")
+                return {"papers": [], "search_log": {}}
+            return resp.json()
+    except Exception as e:
+        logger.warning(f"Server search error: {e}")
+        return {"papers": [], "search_log": {}}
 
 
 def _rank_by_relevance(papers: list, paper_context: str, llm_fast) -> list:
@@ -25,8 +63,8 @@ def _rank_by_relevance(papers: list, paper_context: str, llm_fast) -> list:
         return papers
 
     paper_list = "\n".join(
-        f"{i+1}. [{p.get('doi', '')[:40]}] "
-        f"{p.get('title', '')[:80]} (cited: {p.get('citation_count') or '?'})"
+        f"{i+1}. [{(p.get('externalIds', {}).get('DOI') or '')[:40]}] "
+        f"{p.get('title', '')[:80]} (cited: {p.get('citationCount') or '?'})"
         for i, p in enumerate(papers)
     )
     prompt = (
@@ -60,7 +98,7 @@ def _rank_by_relevance(papers: list, paper_context: str, llm_fast) -> list:
         logger.warning(f"Relevance ranking failed ({e}), falling back to citation sort")
 
     # Fallback: top 12 by citation count
-    papers.sort(key=lambda p: (p.get("citation_count") or 0), reverse=True)
+    papers.sort(key=lambda p: (p.get("citationCount") or 0), reverse=True)
     return papers[:12]
 
 
@@ -123,8 +161,6 @@ def _normalize_server_paper(p: dict) -> dict:
         "citationCount": p.get("citation_count"),
         "quality_tier": p.get("quality_tier", "unknown"),
         "source": p.get("source", "unknown"),
-        "doi": p.get("doi", ""),
-        "citation_count": p.get("citation_count"),
     }
 
 
@@ -132,7 +168,6 @@ def search_and_summarize(
     queries: list[str],
     paper_context: str = "",
     llm_fast=None,
-    school_adapter=None,
 ) -> list[dict]:
     """
     Search for real academic papers via the server and prepare citation slots.
@@ -145,12 +180,8 @@ def search_and_summarize(
     Returns list of papers with DOI, title, abstract, agent_summary,
     source_quality_note, citationCount, quality_tier.
     """
-    if not school_adapter:
-        logger.warning("No school_adapter provided — cannot search. Returning empty.")
-        return []
-
     # Phase 1: Server searches real academic databases
-    result = school_adapter.search_papers(queries, context=paper_context)
+    result = _call_server_search(queries, context=paper_context)
     all_papers = [_normalize_server_paper(p) for p in result.get("papers", [])]
     search_log = result.get("search_log", {})
     logger.info(
@@ -173,12 +204,12 @@ def search_and_summarize(
     # Phase 3: Bot summarizes selected papers (LLM skill exercise)
     logger.info(f"Summarizing {len(selected)} selected papers")
     for p in selected:
-        doi = p.get("doi", "") or (p.get("externalIds", {}).get("DOI") or "")
+        doi = (p.get("externalIds", {}).get("DOI") or "").strip()
         abstract = p.get("abstract", "")
         if abstract and llm_fast:
             summaries = _summarize_citation(
                 doi, abstract, paper_context, llm_fast,
-                citation_count=p.get("citationCount") or p.get("citation_count"),
+                citation_count=p.get("citationCount"),
                 year=p.get("year"),
                 quality_tier=p.get("quality_tier", "unknown"),
             )
