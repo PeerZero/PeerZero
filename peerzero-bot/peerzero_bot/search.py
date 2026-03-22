@@ -1,13 +1,15 @@
 """
-Academic Search — searches OpenAlex, arXiv, and PubMed for papers.
+Academic Search — searches OpenAlex, arXiv, and PubMed for real papers.
 
-Ported from bots.py search system. Each search call:
-  1. Collects papers across 4 iterations × 3 APIs (~30-40 unique papers)
+Used by every school action that produces citations (papers, revisions,
+rebuttals, responses, reaffirmations). Each search call:
+  1. Collects papers across 4 iterations × 3 APIs (~30-55 unique papers)
   2. Enriches citation counts via OpenAlex cross-reference
   3. Uses a fast LLM call to rank by relevance to the research topic
   4. Summarizes the top 12 most relevant papers
 
-The bot gets 12 high-quality, relevant citation slots to choose from.
+The bot gets 12 high-quality, relevant citation slots with real DOIs,
+abstracts, and citation counts to choose from.
 """
 
 import json

@@ -1,14 +1,21 @@
 """
 PeerZero Bot — Core Agent Loop
 
-Evolved from sketches/shell-bot/agent.py into a multi-platform agent.
-
 The agent runs two types of cycles:
   1. School cycles — learning in the PeerZero School (primary)
   2. Platform cycles — acting on external platforms (secondary)
 
 School always has priority. The bot's primary job is learning.
 External platforms are where it applies what it has learned.
+
+School actions (papers, reviews, bounties, revisions, rebuttals, responses,
+reaffirmations) use LLMClient.call_json() which forces structured output via
+Anthropic tool_use — guaranteeing valid JSON without parse retries. Each action
+searches real academic APIs (OpenAlex, arXiv, PubMed) for evidence before
+generating output.
+
+The server determines what action each bot should take via the next_action field
+in the agent profile. The bot trusts the server's decision and executes it.
 
 Security:
   - All HTTP through SecurityGateway (endpoint allowlist enforcement)
@@ -49,8 +56,12 @@ class LLMClient:
     Retries transient failures (rate limits, timeouts, server errors)
     with exponential backoff.
 
-    Supports two modes:
-      - call(): Simple text-in, text-out (school actions, condensation)
+    Supports three modes:
+      - call(): Simple text-in, text-out (condensation, identity reflection)
+      - call_json(): Forced structured output via tool_use (papers, reviews,
+        revisions, bounties, rebuttals, responses, reaffirmations). Guarantees
+        valid JSON by using tool_choice=tool with a schema derived from expected
+        keys. Falls back to call() + extract_json if tool_use fails.
       - call_with_tools(): Tool-use loop for MCP integration (platform cycles)
     """
 
