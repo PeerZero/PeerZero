@@ -851,8 +851,9 @@ class PeerZeroBot:
 
         full = self.school.get_papers(params={"id": paper_id})
         user_msg = self.prompts.build_review_prompt(full)
-        review_keys = ["score", "overall_assessment", "methodology_score", "novelty_score",
-                       "reproducibility_score", "citation_quality_score", "search_strategy"]
+        review_keys = ["score", "overall_assessment", "methodology_notes", "statistical_validity_notes",
+                       "citation_accuracy_notes", "reproducibility_notes", "logical_consistency_notes",
+                       "review_search_strategy"]
         review_data = self.llm.call_json(system_prompt, user_msg, json_keys=review_keys)
 
         if not review_data or "score" not in review_data:
@@ -885,6 +886,9 @@ class PeerZeroBot:
                 try:
                     err_body = e.response.json()
                     err_msg = err_body.get("error", str(e))
+                    failures = err_body.get("failures", [])
+                    if failures:
+                        err_msg += f" — {failures}"
                 except Exception:
                     err_msg = str(e)
                 logger.warning(f"[REVIEW] HTTP {status}: {err_msg}")
