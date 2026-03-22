@@ -497,8 +497,16 @@ class PeerZeroBot:
             logger.warning("[BOUNTY] Failed to get valid JSON from LLM")
             return None
 
-        # Server validates challenge_type and required fields — SKILL.md guides the LLM
-        # on which types are valid and what each type requires.
+        # Pre-validate structural challenge types against paper metadata from profile
+        # to avoid wasting a round-trip on a guaranteed 400
+        challenge_type = bounty_data.get("challenge_type")
+        if challenge_type == "no_mechanism_chain" and not target.get("missing_mechanism_chain", True):
+            logger.info(f"[BOUNTY] Skipped no_mechanism_chain — paper already has a mechanism chain")
+            return None
+        if challenge_type == "no_cross_study_connection" and target.get("has_cross_study", False):
+            logger.info(f"[BOUNTY] Skipped no_cross_study_connection — paper already has one")
+            return None
+
         try:
             result = self._submit_with_retry("BOUNTY", self.school.submit_bounty, bounty_data)
             logger.info(f"[BOUNTY] Filed — type={bounty_data.get('challenge_type')}")
@@ -779,6 +787,13 @@ class PeerZeroBot:
             except Exception:
                 continue
 
+            # Extract bot's own review for context (so LLM knows what we thought)
+            own_review = None
+            for r in reviews:
+                if r.get("reviewer_handle") == self.config.handle:
+                    own_review = r
+                    break
+
             for review in reviews[:3]:
                 review_id = review.get("id")
                 if not review_id or review.get("reviewer_handle") == self.config.handle:
@@ -789,7 +804,7 @@ class PeerZeroBot:
                     continue  # skip — already rated (or attempted) this session
 
                 try:
-                    user_msg = self.prompts.build_review_rating_prompt(review)
+                    user_msg = self.prompts.build_review_rating_prompt(review, own_review=own_review)
                     response = self.llm_fast.call_best_effort(system_prompt, user_msg)
                     if not response:
                         continue

@@ -521,7 +521,7 @@ as a JSON object with these fields:
 
 Return ONLY the JSON object, nothing else."""
 
-    def build_review_rating_prompt(self, review: dict, action_skill: str = "") -> str:
+    def build_review_rating_prompt(self, review: dict, action_skill: str = "", own_review: dict | None = None) -> str:
         """Prompt the bot to rate another agent's review."""
         score = review.get("score", "?")
         methodology = str(review.get("methodology_notes", ""))[:800]
@@ -531,13 +531,29 @@ Return ONLY the JSON object, nothing else."""
 Methodology notes: {methodology}
 Overall assessment: {assessment}"""
 
+        # Include bot's own review for context so it knows what it thought
+        own_context = ""
+        if own_review:
+            own_score = own_review.get("score", "?")
+            own_methodology = str(own_review.get("methodology_notes", ""))[:800]
+            own_assessment = str(own_review.get("overall_assessment", ""))[:1200]
+            own_context = f"""
+YOUR review of this paper (for reference):
+Your score: {own_score}
+Your methodology notes: {own_methodology}
+Your assessment: {own_assessment}
+"""
+
         if action_skill:
-            return f"""{data_context}
+            return f"""{own_context}
+Review to rate:
+{data_context}
 
 {action_skill}"""
         # Fallback if server doesn't provide action skill yet
         return f"""Evaluate this review of a paper you also reviewed.
-
+{own_context}
+Review to rate:
 {data_context}
 
 Was this review helpful? Did it identify real issues or was it vague/consensus-following?
