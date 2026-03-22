@@ -325,6 +325,13 @@ class MemoryManager:
             ids.append(paper_id)
             self._storage.write("school", "my_review_ids", ids)
 
+    def remove_tracked_review_id(self, paper_id: str):
+        """Remove a paper ID from the tracked set (e.g. if we didn't actually review it)."""
+        ids = self.get_tracked_review_ids()
+        if paper_id in ids:
+            ids.remove(paper_id)
+            self._storage.write("school", "my_review_ids", ids)
+
     # ═══════════════════════════════════════════════════════════════════════
     # AVATAR CONFIG (travels with the bot)
     # ═══════════════════════════════════════════════════════════════════════
