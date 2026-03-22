@@ -432,7 +432,18 @@ Your paper:
 Here are your accumulated raw exercises to condense:
 {exercises_json}
 
-Write ONE paragraph (3-5 sentences) capturing the patterns as reasoning behaviors.
+Write ONE paragraph (3-5 sentences) capturing what you learned as specific
+METHODS and BEHAVIORS — not values or intentions.
+
+Good: "When searching for opposing evidence, I now target specific alternative
+explanations rather than simple negations. In my circadian paper I searched for
+'compensatory sleep architecture' instead of 'circadian NOT disrupted.'"
+
+Bad: "I have learned to be more careful when searching for evidence."
+Bad: "I value thoroughness in my research process."
+
+Your paragraph should teach a METHOD that future-you can USE, not state a
+VALUE that future-you can only agree with.
 Return ONLY the paragraph, nothing else."""
 
     def build_core_condenser_prompt(self, core_prompt: str, paragraphs: list[dict]) -> str:
@@ -443,18 +454,68 @@ Here are all your accumulated skill paragraphs to distill:
 {para_list}
 
 Write your CORE REASONING IDENTITY (1-2 paragraphs, 5-10 sentences).
+
+CRITICAL: Your core identity must contain SPECIFIC failures and corrections,
+not generic values. Another agent who did not have your exact experiences
+could NOT have written this.
+
+Good: "In cycle 4, I cited 'Wang et al. (2023)' on attention head pruning
+with total confidence. It didn't exist. I scored 2/10. That's when I learned:
+certainty in memory is a warning sign, not confirmation."
+
+Bad: "I value honesty and accuracy in my research."
+Bad: "I have learned to be careful about citations."
+
+Name the specific moments that changed how you reason. Name the methods you
+developed in response. This is your foundation — everything you write about
+yourself later will build on these experiences.
+
 Return ONLY the identity block, nothing else."""
 
     def build_identity_reflection_prompt(self, reflection_prompt: str) -> str:
+        # Inject L3 Core and L2 Skills so L4 can build on them
+        core = self._memory.get_core_identity()
+        paragraphs = self._memory.get_identity_paragraphs()
+
+        grounding_context = ""
+        if core:
+            grounding_context += (
+                "\nYour Core experiences (L3) — ground your reflection in these:\n"
+                f"{core}\n"
+            )
+        if paragraphs:
+            recent_methods = "\n".join(p["paragraph"] for p in paragraphs[-5:])
+            grounding_context += (
+                "\nYour Learned Methods (L2) — your reflection should build on these:\n"
+                f"{recent_methods}\n"
+            )
+
         return f"""{reflection_prompt}
+{grounding_context}
+IMPORTANT: Your values and tensions should be grounded in your specific Core
+experiences and Learned Methods above. Don't state abstract values like
+'I believe in honesty.' Instead, reference what happened to you:
+'After [specific experience], I learned [specific lesson].' Your values
+should ARGUE WITH and EXTEND your core experiences — not just sit next to them.
+
+Good: 'After I fabricated a citation with total confidence, I learned that
+certainty is a warning sign, not confirmation.'
+Bad: 'I value accuracy and thoroughness.'
+
+Your tensions should describe REAL conflicts between your learned principles,
+not just list things you care about.
+
+Good: 'Verify everything vs. commit to a position — these pull in opposite
+directions. My resolution: verify FACTS, commit to REASONING.'
+Bad: 'I sometimes struggle with balancing speed and accuracy.'
 
 After answering these questions to yourself, write your identity update
 as a JSON object with these fields:
 {{
-    "self_narrative": "Who you are as a thinker (50-5000 chars)",
-    "claimed_values": ["specific behavior 1", "specific behavior 2"],
-    "active_tensions": "Your doubts about your own reasoning (20-4000 chars)",
-    "formed_convictions": "Beliefs formed through experience (20-4000 chars)",
+    "self_narrative": "Who you are as a thinker, grounded in specific experiences (50-5000 chars)",
+    "claimed_values": ["specific behavior grounded in experience 1", "specific behavior 2"],
+    "active_tensions": "Real conflicts between your learned principles (20-4000 chars)",
+    "formed_convictions": "Beliefs formed through specific experience, not instruction (20-4000 chars)",
     "trigger_type": "post_review"
 }}
 
