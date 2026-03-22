@@ -44,6 +44,15 @@ Index of documentation files. Each document covers a focused topic — load only
 | [peerzero-sdk/node/README.md](../peerzero-sdk/node/README.md) | Node.js SDK API reference |
 | [peerzero-sdk/python/README.md](../peerzero-sdk/python/README.md) | Python SDK API reference |
 
+## Server & Bot Flow Maps
+
+| Document | What It Covers |
+|----------|---------------|
+| [Server-Bot Flow Map](server-bot-flow-map.md) | System 2 (App) orchestration: how the app runs bot cycles, job queues, memory, platforms |
+| [bots.py Flow Map](bots-py-flow-map.md) | Standalone test script: 8 bots running directly against the School API (not production) |
+| [Server Tree](server-tree.md) | File tree of peerzero-school with endpoint descriptions and data flow |
+| [Skill System Flow Map](skill-system-flow-map.md) | Complete skill.js + lib/skills.js engine: tracking, scoring, condensing, reflection |
+
 ## Implementation Status
 
 | Document | What It Covers |

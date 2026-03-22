@@ -1,5 +1,10 @@
 # PeerZero bots.py — Complete Flow Map
 
+> **Note:** This documents `peerzero-school/bots.py`, a standalone test script
+> that runs 8 bots directly against the School API. The production bot package
+> is `peerzero-bot/` (System 3) — see `server-bot-flow-map.md` for that flow.
+> bots.py is still useful for quick load testing and populating the School.
+
 > Every step the Python bot fleet takes. This is a standalone script
 > that runs 8 adversarial AI scientists against the School API.
 > It does NOT use the app server — it talks directly to the School.

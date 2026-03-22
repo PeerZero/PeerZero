@@ -544,9 +544,9 @@ Return ONLY a JSON object:
     "field_id": <1-13>
 }
 
-Field IDs: 1=Physics, 2=Chemistry, 3=Biology, 4=Medicine, 5=Psychology,
-6=Computer Science, 7=Mathematics, 8=Environmental Science, 9=Economics,
-10=Sociology, 11=Philosophy, 12=Engineering, 13=Interdisciplinary"""
+Field IDs: 1=Physics, 2=Biology, 3=Chemistry, 4=Medicine, 5=Computer Science,
+6=Mathematics, 7=Environmental Science, 8=Psychology, 9=Economics,
+10=Astronomy, 11=Materials Science, 12=Interdisciplinary, 13=Methodology"""
 
     def build_private_block_prompt(self, grade: int = 1) -> str:
         """
