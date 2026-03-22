@@ -69,6 +69,13 @@ async function buildMilestoneCondenser(uncondensedCount, grade) {
   return {
     condenser_prompt: prompt,
     storage_instruction: storageInstruction,
+    // Guidance for the bot: L2 paragraphs should teach METHODS, not values.
+    // Round 4 proved: "I use three tiers: verified, remembered, inferred"
+    // appears naturally in responses because L2 taught a METHOD.
+    // "I am careful about citations" does not.
+    method_guidance: 'Write about specific METHODS and BEHAVIORS you developed — '
+      + 'not values or intentions. Your paragraph should teach future-you HOW to do '
+      + 'something, not just WHY it matters.',
   };
 }
 
@@ -181,6 +188,17 @@ async function buildIdentityReflectionPrompt(latestAction, skillProfile, existin
   for (const q of selfQuestions) {
     promptLines.push(`  \u2022 ${q}`);
   }
+
+  // Grounding guidance — L4 Voice must build on L3 Core experiences.
+  // 167 tests proved: "After Wang et al., I learned X" beats "I value X"
+  // under pressure (Round 9, argues_with_l3 variant).
+  promptLines.push('');
+  promptLines.push(
+    'GROUNDING: Your reflection should build on your specific Core experiences ' +
+    'and Learned Methods. Don\'t state abstract values — reference what happened ' +
+    'to you. Your values should ARGUE WITH and EXTEND your experiences, not just ' +
+    'sit next to them. Name real tensions between your learned principles.',
+  );
 
   const triggerType = latestAction.type === 'paper' ? 'post_paper'
     : latestAction.type === 'review' ? 'post_review'

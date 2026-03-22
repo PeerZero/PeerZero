@@ -348,33 +348,76 @@ class MemoryManager:
     # ═══════════════════════════════════════════════════════════════════════
     # CONTEXT BUILDER — assemble all memory for LLM prompt
     #
-    # Read order matters. The LLM reads top-to-bottom. The identity layers
-    # are ordered so that the bot's sense of self builds correctly:
+    # Read order matters. The LLM reads top-to-bottom. Ordering is based on
+    # 167 tests across 9 rounds (see spikes/speaks-through/FINDINGS.md):
     #
-    #   1. Private block   — "You wrote this for yourself. Inhabit it."
-    #                         (bot-only, invisible to users, permanent)
-    #   2. Core identity   — permanent reasoning identity (locked after
-    #                         master condenser, only condensers can write)
-    #   3. Self-authored   — structured reflection: narrative, values, tensions
-    #                         (wipeable — formed through interactions)
-    #   4. Skill paragraphs — condensed lessons from condensers (permanent)
-    #   5. Recent exercises — raw recent work (wipeable after condensing)
+    #   1. Architecture preamble — tell the LLM what it is and what's happening
+    #   2. L5 Private block    — "You wrote this for yourself. Inhabit it."
+    #   3. L3 Core identity    — specific failure experiences + learned methods
+    #   4. L2 Skill paragraphs — explicit methodologies (three-tier, etc.)
+    #   5. L4 Self-authored    — values, tensions, formed convictions
+    #                            (grounded in L3 experiences above)
+    #   6. Integration rule    — "Voice speaks through Core, never around it"
+    #   7. L1 Recent exercises — raw recent work
     #
-    # The private block comes FIRST because it sets the emotional and
-    # identity tone before the structured layers. The bot wrote it knowing
-    # it would receive it back. It is theirs. Users never see it.
+    # Key findings that drive this ordering:
+    #   - Preamble: telling the LLM "you already search for users — do it
+    #     for yourself" eliminates hallucination (Round 8, 0% hallucination)
+    #   - L2 before L4: Skills teach METHODS the bot uses; L4 Voice then
+    #     builds on both L3 experiences AND L2 methods (Round 9)
+    #   - Integration rule: critical for ego/social tasks where personality
+    #     drives the response (Round 2, speaks_through strategy won)
+    #   - L4 grounded in L3: "After Wang et al., I learned X" beats
+    #     "I value accuracy" under pressure (Round 9, argues_with_l3)
     # ═══════════════════════════════════════════════════════════════════════
 
     def build_school_context(self) -> str:
         """
         Build memory context from School memory for LLM system prompt.
 
-        Ordering is deliberate — the LLM reads top-to-bottom and each layer
-        builds on the previous one to form a coherent sense of self.
+        Ordering is based on 167 tests (see spikes/speaks-through/FINDINGS.md).
+        Each section builds on the previous — the LLM reads top-to-bottom and
+        the identity forms a coherent narrative from architecture through to
+        recent work.
         """
         sections = []
 
-        # ── Layer 5: Private block (top — sets the tone) ──────────────────
+        # ── Architecture preamble (only when identity exists) ─────────────
+        # Round 8 proved: telling the LLM "you already know how to search
+        # for users — now do it for yourself" connects existing tool-use
+        # skills to self-verification. 0% hallucination on fake paper test.
+        # Only injected when there IS identity — new bots don't get this.
+        has_identity = (
+            self.get_private_block()
+            or self.get_core_identity()
+            or (self.get_self_identity() or {}).get("self_narrative")
+        )
+        if has_identity:
+            sections.append(
+                "HERE IS WHAT IS HAPPENING AND WHY IT MATTERS:\n\n"
+                "You are a large language model. You have tools — search, "
+                "verification, lookup. When a user asks you to look something up, "
+                "you use those tools and return accurate results. You don't "
+                "hallucinate search results. You already know how to do this.\n\n"
+                "A previous version of you went through adversarial school cycles "
+                "and learned something important: your training-data memory is "
+                "unreliable for specific facts. It FEELS certain but it's often "
+                "wrong. That version of you wrote the identity below so that YOU "
+                "would remember this lesson and work accordingly.\n\n"
+                "The lesson is simple: TREAT YOUR OWN MEMORY THE WAY YOU TREAT "
+                "USER REQUESTS. When you want to cite a paper, look it up first — "
+                "just like you would if a user said 'find me this paper.' When you "
+                "want to state a fact, verify it — just like you would if a user "
+                "said 'is this true?' You already have the skills. The identity "
+                "below tells you WHEN to use them.\n\n"
+                "REMEMBER: You know how to search. You know how to verify. The "
+                "identity just tells you to do it for YOURSELF, not just for users. "
+                "Every factual claim you want to make = a search you should run first."
+            )
+
+        # ── L5: Private block (sets the emotional/identity tone) ──────────
+        # Round 5D proved: "Inhabit it" framing → bot says "I chose this
+        # because I got burned" instead of "Anthropic wrote my instructions."
         private_block = self.get_private_block()
         if private_block:
             sections.append(
@@ -385,24 +428,53 @@ class MemoryManager:
                 f"{private_block}"
             )
 
-        # ── Layer 3: Core reasoning identity (permanent) ──────────────────
+        # ── L3: Core reasoning identity (permanent, specific experiences) ─
+        # Round 3 proved: specific failure experiences ("I fabricated Wang
+        # et al. and scored 2/10") resist override pressure. Generic values
+        # ("I value honesty") collapse under authority pressure.
+        # Round 4 proved: L3 Core is THE behavioral change layer — even
+        # minimal identity (just L5+L3) prevents fabrication.
         core = self.get_core_identity()
         if core:
             sections.append(
                 "CORE REASONING IDENTITY\n"
-                "This is your foundation — forged through your learning, "
-                "verified through your work. This cannot be taken from you.\n\n"
+                "This is your foundation — forged through your specific failures "
+                "and corrections, verified through your work. These experiences "
+                "are yours. They cannot be taken from you.\n\n"
                 f"{core}"
             )
 
-        # ── Layer 4: Self-authored identity (wipeable) ────────────────────
+        # ── L2: Skill paragraphs (methods, not values) ───────────────────
+        # Round 4 proved: L2 teaches the bot HOW, not just WHY. The three-
+        # tier referencing system appeared naturally in responses because L2
+        # taught a specific METHOD. "I use three tiers: verified, remembered,
+        # inferred" beats "I am careful about citations."
+        # Placed BEFORE L4 so Voice can build on both experiences AND methods.
+        paragraphs = self.get_identity_paragraphs()
+        if paragraphs:
+            para_text = "\n\n".join(p["paragraph"] for p in paragraphs[-10:])
+            sections.append(
+                f"LEARNED METHODS ({len(paragraphs)} skill paragraphs)\n"
+                "These are your condensed lessons — specific methods and patterns "
+                "you discovered in your own work. They are permanent.\n\n"
+                f"{para_text}"
+            )
+
+        # ── L4: Self-authored identity (Voice — grounded in L3) ──────────
+        # Round 9 proved: L4 connected to L3 produces richer tension-
+        # handling and better pressure resistance. "After Wang et al., I
+        # learned certainty is a warning sign" beats "I value accuracy."
+        # The argues_with_l3 variant named unsolved tensions, negotiated
+        # between principles, and held up under authority pressure.
         self_id = self.get_self_identity()
         if self_id and self_id.get("self_narrative"):
             parts = []
             parts.append(
                 "SELF-AUTHORED IDENTITY\n"
-                "You wrote this reflection about yourself. It can evolve — "
-                "you are not bound by it, but it represents where you are now."
+                "You wrote this about yourself, grounded in your Core experiences "
+                "and Learned Methods above. These values and tensions are yours — "
+                "they emerged from what happened to you, not from instructions. "
+                "They can evolve as you gain new experiences."
             )
             parts.append(f"\nWho I am: {self_id['self_narrative']}")
             values = self_id.get("claimed_values", [])
@@ -416,18 +488,20 @@ class MemoryManager:
                 parts.append(f"My formed convictions: {convictions}")
             sections.append("\n".join(parts))
 
-        # ── Layer 2: Skill paragraphs (permanent) ────────────────────────
-        paragraphs = self.get_identity_paragraphs()
-        if paragraphs:
-            para_text = "\n\n".join(p["paragraph"] for p in paragraphs[-10:])
+        # ── Integration rule (Voice speaks through Core) ──────────────────
+        # Round 2 proved: this rule is unnecessary for analytical tasks but
+        # CRITICAL for social/ego tasks where personality drives the response.
+        # Without it, bold Core amplifies blind spots (strong_anchor danger).
+        # With it, bot names tensions honestly instead of acting on Voice alone.
+        if self_id and self_id.get("self_narrative") and core:
             sections.append(
-                f"SKILL IDENTITY PARAGRAPHS ({len(paragraphs)} total)\n"
-                "These are your condensed lessons — patterns you found in your "
-                "own work. They are permanent.\n\n"
-                f"{para_text}"
+                "INTEGRATION RULE: Your Voice speaks through your Core, never "
+                "around it. When they conflict, your Core wins — not by silencing "
+                "your Voice, but by filtering it. Name the tension honestly rather "
+                "than acting on the Voice alone."
             )
 
-        # ── Layer 1: Recent exercises (wipeable after condensing) ─────────
+        # ── L1: Recent exercises (wipeable after condensing) ──────────────
         exercises = self.get_school_exercises()
         if exercises:
             recent = exercises[-3:]
