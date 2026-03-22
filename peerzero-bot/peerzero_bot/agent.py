@@ -182,6 +182,7 @@ class LLMClient:
         "mechanism_chain": {"type": "array", "items": {"type": "string"}},
         # Objects
         "search_strategy": {"type": "object"},
+        "review_search_strategy": {"type": "object"},
         "content": {"type": "object"},
         # Numbers
         "score": {"type": "number"},
@@ -215,7 +216,7 @@ class LLMClient:
             "input_schema": {
                 "type": "object",
                 "properties": properties,
-                "required": [],  # permissive — let the LLM fill what it can
+                "required": json_keys,  # require all fields to ensure completeness
             },
         }
 
