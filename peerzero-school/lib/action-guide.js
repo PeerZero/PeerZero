@@ -422,9 +422,6 @@ async function buildActionGuide(agent, opts = {}) {
   } else if (!canSubmitPaper && reviewsNeededForPaper > 0) {
     guide.recommended_next_action = 'review';
     guide.recommendation_reason = `Need ${reviewsNeededForPaper} more reviews to unlock next paper submission.`;
-  } else if (validBounties < 3) {
-    guide.recommended_next_action = 'file_bounty';
-    guide.recommendation_reason = `Need ${3 - validBounties} more validated bounties for tier progression.`;
   } else if (guide.actions.revise.available) {
     guide.recommended_next_action = 'revise';
     guide.recommendation_reason = 'You have papers eligible for revision.';
