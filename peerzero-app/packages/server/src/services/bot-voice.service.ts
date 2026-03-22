@@ -11,7 +11,7 @@
 // =============================================================================
 
 import { getLLMAdapter } from '../adapters/adapter.factory';
-import { getDecryptedKey } from './apikey.service';
+import { getDecryptedKey } from './api-key.service';
 import * as memory from './memory.service';
 import { query, queryOne } from '../db/client';
 import { logger } from '../lib/logger';

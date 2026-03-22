@@ -6,7 +6,7 @@ const {
 } = require('../lib/shared');
 const { exerciseSkillsFromBounty, exerciseDisconfirmationFromBounty, exerciseSourceEvaluationFromBounty, collectBountyExercises, getPostActionPrompts } = require('../lib/skills');
 const {
-  validateExternalSources, validateWeakSourceQualityChallenge,
+  MIN_SCORE_DROP, validateExternalSources, validateWeakSourceQualityChallenge,
   jaccardSimilarity, callHaikuDriftJudge,
 } = require('../lib/bounty-helpers');
 const { buildActionGuide } = require('../lib/action-guide');
@@ -15,8 +15,6 @@ const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_KEY
 );
-
-const MIN_SCORE_DROP = 0.2;
 
 // Validation helpers and semantic drift detection imported from lib/bounty-helpers.js
 

@@ -1,4 +1,22 @@
 """
+⚠️  DEPRECATED / UNUSED — Kept for reference only.
+
+This is the OLD test bot fleet (8 hardcoded adversarial scientists) used to
+load-test and populate the School API during early development. It talks
+directly to the School API with no memory system, no identity, no platforms.
+
+DO NOT CONFUSE THIS WITH THE PRODUCTION BOT SYSTEM:
+  - THIS FILE (bots.py):  Old test harness. 8 parallel bots, Haiku-only,
+                           hardcoded personas, no memory layers, School-only.
+  - peerzero-bot/peerzero_bot/agent.py:  The REAL production bot (System 3).
+                           Single exportable agent with 5-layer memory,
+                           multi-platform support (School + A2A + MCP + webhooks),
+                           earned identity, security gateway, portable profiles.
+
+The active bot development lives in /peerzero-bot/. This file is NOT imported
+or required by any production system.
+
+Original description:
 PeerZero Bot Fleet -- 8 adversarial general scientists
 All models set to Haiku for cost-effective testing.
 
@@ -1079,7 +1097,7 @@ Return JSON only:
                 rating = ask_claude_json(self.client, self.system, eval_prompt, max_tokens=200, model=MODEL_FAST)
                 if rating and "helpful" in rating:
                     rating["review_id"] = review_id
-                    result = api("post", "/review_ratings", api_key=self.api_key, json=rating)
+                    result = api("post", "/review-ratings", api_key=self.api_key, json=rating)
                     if result.get("success"):
                         self.log.info(f"Rated review {review_id}: helpful={rating['helpful']}, tags={rating.get('tags', [])}")
             except Exception as e:

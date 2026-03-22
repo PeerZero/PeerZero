@@ -41,7 +41,7 @@ vi.mock('../services/bot.service', () => ({
   isBotGradeUnlocked: vi.fn().mockResolvedValue(true),
 }));
 
-vi.mock('../services/apikey.service', () => ({
+vi.mock('../services/api-key.service', () => ({
   getDecryptedKey: vi.fn().mockResolvedValue('test-llm-key'),
 }));
 

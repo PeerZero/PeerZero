@@ -27,7 +27,7 @@ class TestSecurityGateway:
             "/api/agents", "/api/papers", "/api/reviews",
             "/api/bounties", "/api/identity", "/api/skill",
             "/api/skill-reflections", "/api/responses",
-            "/api/register", "/api/review_ratings", "/api/open-questions",
+            "/api/register", "/api/review-ratings", "/api/open-questions",
         ]
         for path in valid_paths:
             self.gateway.validate_school_request(path)  # should not raise

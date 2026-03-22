@@ -19,7 +19,8 @@ from .adapters.mcp import MCPAdapter, MCPServerConfig as MCPServerConfigAdapter
 from .security import SecurityGateway, AuditLog
 from .reporting import PhoneHome
 from .prompts import PromptBuilder
-from .agent import PeerZeroBot, LLMClient
+from .agent import PeerZeroBot
+from .llm_client import LLMClient
 from .identity import build_identity_summary
 from .autonomy import AutonomyPolicy, AutonomyGate
 

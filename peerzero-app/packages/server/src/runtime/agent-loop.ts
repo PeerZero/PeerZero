@@ -19,7 +19,7 @@
 import { getSchoolAdapter, getLLMAdapter } from '../adapters/adapter.factory';
 import { logger } from '../lib/logger';
 import { getDecryptedSchoolKey, setBotStatus, isBotGradeUnlocked } from '../services/bot.service';
-import { getDecryptedKey } from '../services/apikey.service';
+import { getDecryptedKey } from '../services/api-key.service';
 import * as memory from '../services/memory.service';
 import * as activity from '../services/activity.service';
 import { query, queryOne } from '../db/client';

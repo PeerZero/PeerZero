@@ -5,7 +5,7 @@
 import { Router, Request, Response } from 'express';
 import { requireAuth } from '../middleware/auth';
 import { userRateLimit } from '../middleware/rate-limit';
-import * as apiKeyService from '../services/apikey.service';
+import * as apiKeyService from '../services/api-key.service';
 import { logAudit } from '../services/audit.service';
 
 const router = Router();

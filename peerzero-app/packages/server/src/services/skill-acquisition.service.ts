@@ -32,7 +32,7 @@
 // =============================================================================
 
 import { getLLMAdapter } from '../adapters/adapter.factory';
-import { getDecryptedKey } from './apikey.service';
+import { getDecryptedKey } from './api-key.service';
 import { createSkill } from './skill-engine.service';
 import { queryOne } from '../db/client';
 import { logger } from '../lib/logger';

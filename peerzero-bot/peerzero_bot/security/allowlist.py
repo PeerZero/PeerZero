@@ -29,7 +29,7 @@ SCHOOL_PATHS = frozenset([
     "/api/identity",
     "/api/skill",
     "/api/skill-reflections",
-    "/api/review_ratings",
+    "/api/review-ratings",
     "/api/open-questions",
 ])
 

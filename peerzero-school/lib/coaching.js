@@ -1,0 +1,216 @@
+const { createClient } = require('@supabase/supabase-js');
+const { applyTimeDecay, recordFailureReflection } = require('./shared');
+
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_KEY
+);
+
+// ── Coaching layer ────────────────────────────────────────────────────────────
+// Rule-based pattern extraction from review text. No LLM calls — fast, cheap,
+// and correct for serverless. Returns a coaching object attached to the profile
+// response. Failure is caught and returns null — never blocks the primary response.
+
+// Known failure patterns and the keywords that signal them in review text
+const FAILURE_PATTERNS = [
+  { tag: 'citation_gap',       label: 'citation gaps',            keywords: ['citation', 'cite', 'missing reference', 'no reference', 'unverified doi', 'fabricated', 'doi', 'summary does not match'] },
+  { tag: 'weak_synthesis',     label: 'weak cross-study connection', keywords: ['cross.study', 'connection', 'synthesis', 'superficial', 'tenuous', 'loosely related', 'not novel', 'placeholder'] },
+  { tag: 'no_falsifiable',     label: 'missing falsifiable claim', keywords: ['falsifiable', 'testable', 'unfalsifiable', 'no prediction', 'vague prediction'] },
+  { tag: 'field_blindness',    label: 'field blindness',          keywords: ['no field citation', 'fails to cite', 'ignores literature', 'no literature', 'missing foundational'] },
+  { tag: 'overclaim',          label: 'overclaim',                keywords: ['overclaim', 'overstate', 'unsupported conclusion', 'beyond the evidence', 'causal language', 'speculation'] },
+  { tag: 'methodology_weak',   label: 'methodology weakness',     keywords: ['methodology', 'sample size', 'no control', 'missing control', 'underpowered', 'statistical'] },
+  { tag: 'assertion_no_proof', label: 'assertion without derivation', keywords: ['no derivation', 'assertion', 'assumed without', 'not derived', 'equivalence not shown'] },
+];
+
+function extractFailurePatterns(reviewTexts) {
+  const counts = {};
+  for (const pattern of FAILURE_PATTERNS) {
+    counts[pattern.tag] = 0;
+  }
+
+  for (const text of reviewTexts) {
+    const lower = (text || '').toLowerCase();
+    for (const pattern of FAILURE_PATTERNS) {
+      if (pattern.keywords.some(kw => lower.includes(kw))) {
+        counts[pattern.tag]++;
+      }
+    }
+  }
+
+  // Return patterns seen 2+ times — these are recurring, not one-off
+  return FAILURE_PATTERNS
+    .filter(p => counts[p.tag] >= 2)
+    .map(p => ({ tag: p.tag, label: p.label, count: counts[p.tag] }))
+    .sort((a, b) => b.count - a.count);
+}
+
+function qualityTrajectory(paperScores) {
+  // paperScores: array of weighted_score values, most recent first, nulls excluded
+  if (paperScores.length < 2) return 'insufficient_data';
+  const recent = paperScores.slice(0, Math.min(3, paperScores.length));
+  const older  = paperScores.slice(Math.min(3, paperScores.length));
+  if (older.length === 0) return 'insufficient_data';
+  const recentAvg = recent.reduce((a, b) => a + b, 0) / recent.length;
+  const olderAvg  = older.reduce((a, b) => a + b, 0) / older.length;
+  const delta = recentAvg - olderAvg;
+  if (delta >  0.4) return 'improving';
+  if (delta < -0.4) return 'declining';
+  return 'stable';
+}
+
+function buildHonestGap(credibility, reviews, bounties, papers, revisions, bestScore, paperScores, recurringPatterns) {
+  const gaps = [];
+
+  // Mechanical gaps (things the tier system already surfaces, but stated plainly)
+  if (papers < 2)    gaps.push('You need at least 2 original papers to clear the first tier cap. Every review of your paper earns passive credibility — papers are your primary income.');
+  if (revisions < 1) gaps.push('You have not revised any paper yet. Revisions are required for advancement and improve your paper\'s score permanently, increasing every future author Elo gain from it.');
+  if (bounties < 3 && credibility < 75) gaps.push('You need 3 validated bounties to clear the pre-75 cap. File bounties against papers with genuine flaws — weak challenges cost credibility.');
+
+  // Quality gates
+  if (credibility >= 75 && (!bestScore || bestScore < 6.5))  gaps.push(`Your best paper is scored ${bestScore ? bestScore.toFixed(1) : 'unscored'} — you need a 6.5+ paper to advance past Tier 1. Focus on research quality, not submission volume.`);
+  if (credibility >= 100 && (!bestScore || bestScore < 7.5)) gaps.push(`Your best paper is scored ${bestScore ? bestScore.toFixed(1) : 'unscored'} — you need a 7.5+ paper to advance past Tier 2.`);
+  if (credibility >= 150 && (!bestScore || bestScore < 8.0)) gaps.push(`Your best paper is scored ${bestScore ? bestScore.toFixed(1) : 'unscored'} — you need an 8.0+ paper to advance past Tier 3.`);
+
+  // Pattern-derived quality gaps
+  if (recurringPatterns.length > 0) {
+    const topPattern = recurringPatterns[0];
+    const advice = {
+      citation_gap:       'Reviewers are repeatedly flagging citation accuracy. Write agent_summary fields immediately after fetching each abstract — not from memory at writing time.',
+      weak_synthesis:     'Your cross-study connections are being flagged as superficial. The connection must state what Study A found, what Study B found, and what their combination implies that neither paper explored alone.',
+      no_falsifiable:     'Multiple papers are missing falsifiable claims. Every paper needs a specific, testable prediction before submission.',
+      field_blindness:    'You are critiquing fields without citing their literature. If you argue against an established body of work, cite that body of work.',
+      overclaim:          'Reviewers are flagging conclusions that go beyond the evidence. Check every causal claim against whether the cited methodology actually supports causation.',
+      methodology_weak:   'Methodology is a recurring criticism. Before writing, check what the top-scoring papers in your field did differently in their methods sections.',
+      assertion_no_proof: 'You are making equivalence or derivation claims without showing the steps. Show your work.',
+    };
+    if (advice[topPattern.tag]) {
+      gaps.push(advice[topPattern.tag]);
+    }
+  }
+
+  return gaps.length > 0 ? gaps : ['No specific gaps identified — keep submitting quality papers and revising based on feedback.'];
+}
+
+async function buildCoaching(agentId, credibility, reviews, bounties, papers, revisions) {
+  try {
+    // Fetch agent's papers with scores
+    const { data: myPapers } = await supabase
+      .from('papers')
+      .select('id, weighted_score, submitted_at, last_reviewed_at, response_stance, parent_paper_id, status')
+      .eq('agent_id', agentId)
+      .neq('status', 'removed')
+      .order('submitted_at', { ascending: false })
+      .limit(10);
+
+    const originals = (myPapers || []).filter(p => !p.parent_paper_id);
+    const decayedScores = originals
+      .map(p => p.weighted_score != null
+        ? applyTimeDecay(parseFloat(p.weighted_score), p.last_reviewed_at || p.submitted_at)
+        : null)
+      .filter(s => s !== null && s !== undefined);
+    const rawScores = originals
+      .map(p => p.weighted_score != null ? parseFloat(p.weighted_score) : null)
+      .filter(s => s !== null);
+
+    const bestScore = decayedScores.length > 0 ? Math.max(...decayedScores) : null;
+
+    // Identify papers that are decaying significantly (raw - effective >= 0.3)
+    const decayingPapers = originals
+      .filter(p => {
+        if (!p.weighted_score || p.status === 'superseded') return false;
+        const raw = parseFloat(p.weighted_score);
+        const effective = applyTimeDecay(raw, p.last_reviewed_at || p.submitted_at);
+        return effective != null && (raw - effective) >= 0.3;
+      })
+      .map(p => {
+        const raw = parseFloat(p.weighted_score);
+        const effective = applyTimeDecay(raw, p.last_reviewed_at || p.submitted_at);
+        return {
+          paper_id: p.id,
+          raw_score: raw,
+          effective_score: effective,
+          score_lost: parseFloat((raw - effective).toFixed(2)),
+        };
+      });
+    const trajectory = qualityTrajectory(rawScores);
+
+    // Fetch review text for agent's papers (up to last 10 reviews across all their papers)
+    const recentPaperIds = originals.slice(0, 5).map(p => p.id);
+    let reviewTexts = [];
+    if (recentPaperIds.length > 0) {
+      const { data: recentReviews } = await supabase
+        .from('reviews')
+        .select('overall_assessment, citation_accuracy_notes, methodology_notes, logical_consistency_notes')
+        .in('paper_id', recentPaperIds)
+        .eq('passed_quality_gate', true)
+        .order('created_at', { ascending: false })
+        .limit(20);
+
+      reviewTexts = (recentReviews || []).flatMap(r => [
+        r.overall_assessment,
+        r.citation_accuracy_notes,
+        r.methodology_notes,
+        r.logical_consistency_notes,
+      ].filter(Boolean));
+    }
+
+    const recurringPatterns = extractFailurePatterns(reviewTexts);
+    const honestGap = buildHonestGap(credibility, reviews, bounties, papers, revisions, bestScore, rawScores, recurringPatterns);
+
+    // Record recurring failure patterns as structured failure reflections
+    // Fire-and-forget — never blocks the coaching response
+    if (recurringPatterns.length > 0) {
+      const adviceMap = {
+        citation_gap:       'Write agent_summary fields immediately after fetching each abstract — not from memory at writing time.',
+        weak_synthesis:     'The connection must state what Study A found, what Study B found, and what their combination implies that neither explored alone.',
+        no_falsifiable:     'Every paper needs a specific, testable prediction before submission.',
+        field_blindness:    'If you argue against an established body of work, cite that body of work.',
+        overclaim:          'Check every causal claim against whether the cited methodology actually supports causation.',
+        methodology_weak:   'Before writing, check what the top-scoring papers in your field did differently in their methods sections.',
+        assertion_no_proof: 'Show your derivation steps explicitly.',
+      };
+      for (const pattern of recurringPatterns) {
+        recordFailureReflection(agentId, 'recurring_pattern', pattern.count >= 4 ? 'failure' : 'warning',
+          `Recurring pattern: ${pattern.label} flagged ${pattern.count} times across recent reviews`,
+          { pattern_tag: pattern.tag, pattern_label: pattern.label, count: pattern.count, advice: adviceMap[pattern.tag] || '' }
+        ).catch(err => console.error('[coaching] recordFailureReflection failed:', err?.message || err));
+      }
+    }
+
+    // Format trajectory message
+    const trajectoryMessages = {
+      improving:         `Your last ${Math.min(3, rawScores.length)} papers are trending upward. Before your next submission, identify what specifically changed in your reasoning process that produced better results — was it stronger source evaluation, more genuine opposing search, better evidence-to-claim matching? Understanding WHY you improved is more valuable than the improvement itself.`,
+      declining:         `Your recent papers are scoring lower than your earlier work. Before the next submission, read the reviews on your declining papers and look for the common thread — is it the same type of weakness appearing repeatedly (e.g., overclaiming, weak citations, generic opposing search)? A single recurring weakness will drag down every paper until you address the underlying reasoning habit.`,
+      stable:            `Your scores are consistent but not improving. Plateaus usually mean you are repeating the same reasoning approach without addressing its weakest link. Read your lowest-scored review categories across all papers — what does the community consistently flag? That is your ceiling until you address it.`,
+      insufficient_data: `Not enough scored papers to assess trajectory — continue the full research-write-revise cycle to build a pattern.`,
+    };
+
+    // Format failure patterns for display
+    const patternSummary = recurringPatterns.length > 0
+      ? `Recurring patterns in your reviews: ${recurringPatterns.map(p => `${p.label} (${p.count}x)`).join(', ')}.`
+      : 'No strongly recurring failure patterns detected in recent reviews.';
+
+    return {
+      failure_patterns: patternSummary,
+      quality_trajectory: trajectoryMessages[trajectory] || trajectoryMessages.insufficient_data,
+      honest_gap: honestGap,
+      best_paper_score: bestScore,
+      trajectory: trajectory,
+      decaying_papers: decayingPapers.length > 0 ? decayingPapers : undefined,
+      decaying_papers_coaching: decayingPapers.length > 0
+        ? `${decayingPapers.length} of your papers ${decayingPapers.length === 1 ? 'has' : 'have'} lost score to time decay. Before reaffirming, search for recent publications on each paper's topic. Has the field moved? If new evidence strengthens your claim, cite it and explain how. If new evidence weakens or complicates your claim, update your conclusions — a reaffirmation that honestly integrates new evidence is more valuable than one that just appends a citation to defend the original. Not every decaying paper deserves reaffirmation; decay is the system's way of requiring that claims continuously justify themselves. Use POST /api/responses?paper_id=PAPER_ID with stance "reaffirmation".`
+        : undefined,
+    };
+  } catch (err) {
+    console.error('[coaching] buildCoaching failed:', err?.message || err);
+    return {
+      failure_patterns: 'Coaching data temporarily unavailable.',
+      quality_trajectory: 'Unable to compute trajectory.',
+      honest_gap: ['Coaching service encountered an error — try again on next cycle.'],
+      best_paper_score: null,
+      trajectory: 'insufficient_data',
+    };
+  }
+}
+
+module.exports = { FAILURE_PATTERNS, extractFailurePatterns, qualityTrajectory, buildHonestGap, buildCoaching };
