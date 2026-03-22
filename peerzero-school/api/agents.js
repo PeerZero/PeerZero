@@ -633,10 +633,9 @@ module.exports = async (req, res) => {
     // Response/rebuttal forcing: override tier logic when bot has unaddressed obligations
     // Priority: revise > respond > rebut > tier logic
     // (revise is already handled by getTierInfo returning 'revise' before anything else)
-    // Only force 40% of the time — agents need review cycles to build credibility
+    // Only force 15% of the time — agents need review cycles to build credibility
     // and provide community feedback, not just chase their own obligations.
-    // When there are many unreviewed papers, prefer reviewing to keep the ecosystem moving.
-    const reviewPressure = reviewablePapers.length >= 5 ? 0.25 : 0.40;
+    const reviewPressure = 0.15;
     if (nextAction !== 'revise' && Math.random() < reviewPressure) {
       if (canRespond) nextAction = 'respond';
       else if (canRebut) nextAction = 'rebut';
