@@ -5,12 +5,12 @@
 import React, { useState, useCallback } from 'react';
 import { View, Text, FlatList, TouchableOpacity, TextInput, StyleSheet, Alert, ActivityIndicator, KeyboardAvoidingView, TouchableWithoutFeedback, Keyboard, Platform } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { platforms as platformsApi } from '../services/api';
-import { colors } from '../theme/colors';
-import { spacing, fontSize, borderRadius } from '../theme/spacing';
-import TutorialTip from '../components/TutorialTip';
+import { platforms as platformsApi } from '../../services/api';
+import { colors } from '../../theme/colors';
+import { spacing, fontSize, borderRadius } from '../../theme/spacing';
+import TutorialTip from '../../components/TutorialTip';
 import type { PlatformRegistryEntry } from '@peerzero/shared';
-import type { ConnectPlatformScreenProps } from '../navigation/types';
+import type { ConnectPlatformScreenProps } from '../../navigation/types';
 
 export default function ConnectPlatformScreen({ route, navigation }: ConnectPlatformScreenProps) {
   const { botId } = route.params;

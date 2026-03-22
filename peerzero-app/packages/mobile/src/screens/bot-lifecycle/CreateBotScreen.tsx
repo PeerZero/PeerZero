@@ -5,15 +5,15 @@
 import React, { useState, useCallback } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Alert, ActivityIndicator, Platform, KeyboardAvoidingView, Switch } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { bots as botsApi, apiKeys as keysApi } from '../services/api';
-import { colors } from '../theme/colors';
-import { spacing, fontSize, borderRadius } from '../theme/spacing';
+import { bots as botsApi, apiKeys as keysApi } from '../../services/api';
+import { colors } from '../../theme/colors';
+import { spacing, fontSize, borderRadius } from '../../theme/spacing';
 import { AVATAR_COLOR_PRESETS, SUPPORTED_MODELS, SPECIES_PRESETS } from '@peerzero/shared';
 import type { ApiKeyInfo } from '@peerzero/shared';
-import BotAvatar from '../components/BotAvatar';
-import TutorialTip from '../components/TutorialTip';
+import BotAvatar from '../../components/BotAvatar';
+import TutorialTip from '../../components/TutorialTip';
 import * as Haptics from 'expo-haptics';
-import type { CreateBotScreenProps } from '../navigation/types';
+import type { CreateBotScreenProps } from '../../navigation/types';
 
 const MAX_NAME_LENGTH = 50;
 

@@ -9,11 +9,11 @@ import {
   Platform, ActivityIndicator,
 } from 'react-native';
 import type { TextInput as TextInputType } from 'react-native';
-import { useAuth } from '../hooks/useAuth';
-import { colors } from '../theme/colors';
-import { spacing, fontSize, borderRadius } from '../theme/spacing';
-import PeerZeroLogo from '../components/PeerZeroLogo';
-import type { LoginScreenProps } from '../navigation/types';
+import { useAuth } from '../../hooks/useAuth';
+import { colors } from '../../theme/colors';
+import { spacing, fontSize, borderRadius } from '../../theme/spacing';
+import PeerZeroLogo from '../../components/PeerZeroLogo';
+import type { LoginScreenProps } from '../../navigation/types';
 
 export default function LoginScreen({ navigation }: LoginScreenProps) {
   const { login } = useAuth();

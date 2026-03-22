@@ -13,13 +13,13 @@ import React, { useState, useCallback } from 'react';
 import { View, Text, ScrollView, StyleSheet, ActivityIndicator, Dimensions } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import Svg, { Rect, Circle, Line, Polyline, Text as SvgText } from 'react-native-svg';
-import { bots as botsApi } from '../services/api';
-import { colors } from '../theme/colors';
-import { spacing, fontSize, borderRadius } from '../theme/spacing';
-import TutorialTip from '../components/TutorialTip';
+import { bots as botsApi } from '../../services/api';
+import { colors } from '../../theme/colors';
+import { spacing, fontSize, borderRadius } from '../../theme/spacing';
+import TutorialTip from '../../components/TutorialTip';
 import { SKILL_DISPLAY_NAMES } from '@peerzero/shared';
 import type { BotStats } from '@peerzero/shared';
-import type { StatsScreenProps } from '../navigation/types';
+import type { StatsScreenProps } from '../../navigation/types';
 
 const CHART_WIDTH = Dimensions.get('window').width - spacing.xl * 2;
 const CHART_HEIGHT = 160;

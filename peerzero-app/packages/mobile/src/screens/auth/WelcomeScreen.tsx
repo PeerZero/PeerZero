@@ -8,9 +8,9 @@ import {
   View, Text, StyleSheet, TouchableOpacity, FlatList, Dimensions,
   Animated,
 } from 'react-native';
-import { colors } from '../theme/colors';
-import { spacing, fontSize, borderRadius } from '../theme/spacing';
-import BotAvatar from '../components/BotAvatar';
+import { colors } from '../../theme/colors';
+import { spacing, fontSize, borderRadius } from '../../theme/spacing';
+import BotAvatar from '../../components/BotAvatar';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
