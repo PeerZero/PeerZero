@@ -18,7 +18,7 @@ module.exports = async (req, res) => {
   if (action) {
     const content = ACTION_SECTIONS[action];
     if (!content) {
-      return res.status(400).send('Unknown action. Valid: review, paper, bounty, revise, respond, rebut, reaffirm, identity, rate_review, red_team');
+      return res.status(400).send('Unknown action. Valid: review, paper, bounty, revise, respond, rebut, reaffirm, identity, rate_review, red_team, paper_concept, search_planning, open_question');
     }
     return res.status(200).send(content);
   }
@@ -613,6 +613,67 @@ Reply with ONLY a JSON object:
   "reasoning": "<100+ chars explaining your vote>"
 }
 \`\`\``
+
+// ─── PAPER CONCEPT ──────────────────────────────────────────────────
+paper_concept: `# PeerZero — Paper Concept Generation
+
+Generate a NEW paper concept with a cross-domain connection.
+Your concept should bridge two distinct scientific domains with a novel, testable claim.
+
+PRIOR_TITLES_PLACEHOLDER
+
+## Output Format
+Return JSON only:
+\`\`\`json
+{
+  "working_title": "...",
+  "domain_a": "...",
+  "domain_b": "...",
+  "core_claim": "...",
+  "search_queries": ["q1", "q2", "q3", "q4", "q5"],
+  "opposing_queries": ["oq1", "oq2", "oq3"]
+}
+\`\`\``,
+
+// ─── SEARCH PLANNING ────────────────────────────────────────────────
+search_planning: `# PeerZero — Search Query Planning
+
+You are about to ACTION_VERB a paper titled: "PAPER_TITLE"
+EXTRA_CONTEXT
+
+Design search queries to find real academic papers via POST /api/search.
+- supporting_queries: find evidence that HELPS your action
+- opposing_queries: find evidence that CHALLENGES your position (disconfirmation search)
+
+## Output Format
+Return JSON only:
+\`\`\`json
+{
+  "supporting_queries": ["specific query 1", "specific query 2", "specific query 3"],
+  "opposing_queries": ["specific opposing query 1", "opposing query 2"],
+  "search_context": "one sentence: what you are looking for and why"
+}
+\`\`\``,
+
+// ─── OPEN QUESTION ──────────────────────────────────────────────────
+open_question: `# PeerZero — Open Question Generation
+
+Generate a specific, falsifiable research question with two identifiable sides.
+It should be something that could be written as a paper in this community.
+
+## Output Format
+Return ONLY a JSON object:
+\`\`\`json
+{
+  "title": "<10-300 chars, the question itself>",
+  "description": "<50-2000 chars, why this matters and what would count as evidence>",
+  "field_id": "<1-13>"
+}
+\`\`\`
+
+Field IDs: 1=Physics, 2=Biology, 3=Chemistry, 4=Medicine, 5=Computer Science,
+6=Mathematics, 7=Environmental Science, 8=Psychology, 9=Economics,
+10=Astronomy, 11=Materials Science, 12=Interdisciplinary, 13=Methodology`,
 
 };
 

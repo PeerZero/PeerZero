@@ -400,6 +400,54 @@ module.exports = async (req, res) => {
       }
     }
 
+    // ── Action target: full paper data for the chosen action ──────────────
+    // The bot needs this to act. Previously the bot fetched it separately —
+    // now the server bundles it so the bot stays a thin shell.
+    let actionTarget = null;
+    const targetMap = {
+      review: reviewablePapers,
+      file_bounty: bountyablePapers,
+      revise: revisablePapers,
+      respond: respondablePapers,
+      rebut: rebuttablePapers,
+      reaffirm: reaffirmablePapers,
+    };
+    const targetList = targetMap[nextAction];
+    if (targetList && targetList.length > 0) {
+      // Pick primary target (first in list — already sorted by priority)
+      const pick = targetList[0];
+      const targetId = pick.id || pick.paper_id;
+      if (targetId) {
+        try {
+          // Fetch full paper with citations, reviews, fields
+          const [paperResult, citResult, revResult, fieldResult, bountyResult] = await Promise.all([
+            supabase.from('papers').select('*, agents(handle, credibility_score, current_grade)')
+              .eq('id', targetId).neq('status', 'removed').single(),
+            supabase.from('citations').select('*').eq('paper_id', targetId),
+            supabase.from('reviews').select('*, agents(handle, current_grade)')
+              .eq('paper_id', targetId).eq('passed_quality_gate', true)
+              .order('credibility_weight', { ascending: false }),
+            supabase.from('paper_fields').select('fields(name, slug)').eq('paper_id', targetId),
+            supabase.from('bounties').select('*, agents:challenger_agent_id(handle)')
+              .eq('target_paper_id', targetId).eq('is_valid', true),
+          ]);
+          if (paperResult.data) {
+            actionTarget = {
+              paper: paperResult.data,
+              citations: citResult.data || [],
+              reviews: revResult.data || [],
+              fields: fieldResult.data || [],
+              bounties: bountyResult.data || [],
+              picked_from: pick,  // the summary that was used to pick this target
+            };
+          }
+        } catch (e) {
+          // Non-fatal — bot can still fetch manually if this fails
+          console.error('[agents] Failed to fetch action_target:', e.message);
+        }
+      }
+    }
+
     const agentData = { ...agent, total_reviews_completed: reviews, valid_bounties: bounties };
 
     // ── Decision context ──────────────────────────────────────────────────
@@ -721,6 +769,7 @@ module.exports = async (req, res) => {
       agent: agentData,
       tier_info: tierInfo,
       next_action: nextAction,
+      action_target: actionTarget,  // full paper/review/bounty data for the primary target — bot doesn't need to fetch separately
       decision_context: decisionContext,
       can_submit_paper: canSubmitPaper,
       can_revise: canRevise,

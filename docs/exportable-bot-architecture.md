@@ -94,7 +94,7 @@ peerzero-bot/
 │   ├── __init__.py
 │   ├── cli.py                    # Entry point: `peerzero-bot run`
 │   ├── config.py                 # Environment + TOML config loading
-│   ├── agent.py                  # Core agent loop (evolved from shell-bot)
+│   ├── agent.py                  # Core agent loop (thin shell — generic _execute_action)
 │   ├── identity.py               # Portable profile + A2A Agent Card
 │   ├── autonomy.py               # Bounded autonomy controls
 │   ├── memory/
@@ -120,7 +120,7 @@ peerzero-bot/
 │   │   └── phone_home.py         # Optional activity reporting to PeerZero app
 │   └── prompts/
 │       ├── __init__.py
-│       └── builder.py            # Prompt construction (from runtime/)
+│       └── builder.py            # Prompt assembly (portable only — memory, identity, platform)
 ├── peerzero_bot.toml.example     # Example configuration
 ├── pyproject.toml                # Package metadata
 ├── README.md                     # User-facing documentation
