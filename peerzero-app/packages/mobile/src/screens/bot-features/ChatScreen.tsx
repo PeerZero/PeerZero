@@ -17,15 +17,15 @@ import {
   Modal,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { bots as botsApi } from '../services/api';
-import { useBotStream } from '../hooks/useBotStream';
-import { colors } from '../theme/colors';
-import { spacing, fontSize, borderRadius } from '../theme/spacing';
-import BotAvatar from '../components/BotAvatar';
+import { bots as botsApi } from '../../services/api';
+import { useBotStream } from '../../hooks/useBotStream';
+import { colors } from '../../theme/colors';
+import { spacing, fontSize, borderRadius } from '../../theme/spacing';
+import BotAvatar from '../../components/BotAvatar';
 import type { BotMessage, BotDetail, SendMessageResponse, PaginatedResponse } from '@peerzero/shared';
 import { credibilityToStage, calculateHunger } from '@peerzero/shared';
-import type { ChatScreenProps } from '../navigation/types';
-import { timeAgo } from '../utils/timeAgo';
+import type { ChatScreenProps } from '../../navigation/types';
+import { timeAgo } from '../../utils/timeAgo';
 
 // Simple key-value store — same platform split as api.ts
 const kvStore = Platform.OS === 'web'

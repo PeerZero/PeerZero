@@ -8,10 +8,10 @@ import {
   TouchableWithoutFeedback, Keyboard, KeyboardAvoidingView, ScrollView,
   Platform, ActivityIndicator,
 } from 'react-native';
-import { colors } from '../theme/colors';
-import { spacing, fontSize, borderRadius } from '../theme/spacing';
-import { auth } from '../services/api';
-import type { ForgotPasswordScreenProps } from '../navigation/types';
+import { colors } from '../../theme/colors';
+import { spacing, fontSize, borderRadius } from '../../theme/spacing';
+import { auth } from '../../services/api';
+import type { ForgotPasswordScreenProps } from '../../navigation/types';
 
 export default function ForgotPasswordScreen({ navigation }: ForgotPasswordScreenProps) {
   const [step, setStep] = useState<1 | 2>(1);

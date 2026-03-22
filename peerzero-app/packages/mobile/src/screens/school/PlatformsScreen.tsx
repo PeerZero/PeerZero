@@ -5,12 +5,12 @@
 import React, { useState, useCallback } from 'react';
 import { View, Text, FlatList, TouchableOpacity, StyleSheet, Alert, ActivityIndicator } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { platforms as platformsApi } from '../services/api';
-import { colors } from '../theme/colors';
-import { spacing, fontSize, borderRadius } from '../theme/spacing';
-import TutorialTip from '../components/TutorialTip';
+import { platforms as platformsApi } from '../../services/api';
+import { colors } from '../../theme/colors';
+import { spacing, fontSize, borderRadius } from '../../theme/spacing';
+import TutorialTip from '../../components/TutorialTip';
 import type { BotPlatformConnection } from '@peerzero/shared';
-import type { PlatformsScreenProps } from '../navigation/types';
+import type { PlatformsScreenProps } from '../../navigation/types';
 
 const STATUS_COLORS: Record<string, string> = {
   active: colors.accent.success,

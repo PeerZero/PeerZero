@@ -6,16 +6,16 @@
 import React, { useState, useCallback } from 'react';
 import { View, Text, FlatList, TouchableOpacity, StyleSheet, RefreshControl, TextInput, Alert } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { bots as botsApi } from '../services/api';
-import { colors } from '../theme/colors';
-import { spacing, fontSize, borderRadius } from '../theme/spacing';
-import BotAvatar from '../components/BotAvatar';
-import TutorialTip from '../components/TutorialTip';
+import { bots as botsApi } from '../../services/api';
+import { colors } from '../../theme/colors';
+import { spacing, fontSize, borderRadius } from '../../theme/spacing';
+import BotAvatar from '../../components/BotAvatar';
+import TutorialTip from '../../components/TutorialTip';
 import type { BotSummary } from '@peerzero/shared';
 import { credibilityToStage, calculateHunger } from '@peerzero/shared';
-import { timeAgo } from '../utils/timeAgo';
+import { timeAgo } from '../../utils/timeAgo';
 import * as Haptics from 'expo-haptics';
-import type { LabScreenProps } from '../navigation/types';
+import type { LabScreenProps } from '../../navigation/types';
 
 const STATUS_COLORS: Record<string, string> = {
   running: colors.accent.success,

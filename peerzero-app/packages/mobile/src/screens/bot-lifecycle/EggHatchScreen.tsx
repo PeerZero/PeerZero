@@ -12,13 +12,13 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Animated, Easing, ActivityIndicator } from 'react-native';
 import Svg, { Ellipse, Path, G, Defs, RadialGradient, Stop, Circle } from 'react-native-svg';
-import { colors } from '../theme/colors';
-import { spacing, fontSize, borderRadius } from '../theme/spacing';
-import { bots as botsApi } from '../services/api';
+import { colors } from '../../theme/colors';
+import { spacing, fontSize, borderRadius } from '../../theme/spacing';
+import { bots as botsApi } from '../../services/api';
 import * as Haptics from 'expo-haptics';
-import BotAvatar from '../components/BotAvatar';
+import BotAvatar from '../../components/BotAvatar';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import type { RootStackParamList } from '../navigation/types';
+import type { RootStackParamList } from '../../navigation/types';
 
 type EggHatchScreenProps = NativeStackScreenProps<RootStackParamList, 'EggHatch'>;
 

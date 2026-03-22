@@ -15,12 +15,12 @@
 import React, { useState, useCallback } from 'react';
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, FlatList } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { bots as botsApi, skills as skillsApi } from '../services/api';
-import { colors } from '../theme/colors';
-import { spacing, fontSize, borderRadius } from '../theme/spacing';
-import TutorialTip from '../components/TutorialTip';
+import { bots as botsApi, skills as skillsApi } from '../../services/api';
+import { colors } from '../../theme/colors';
+import { spacing, fontSize, borderRadius } from '../../theme/spacing';
+import TutorialTip from '../../components/TutorialTip';
 import type { MemorySnapshot, MemoryExercise, SkillSnapshot } from '@peerzero/shared';
-import type { BrainScreenProps } from '../navigation/types';
+import type { BrainScreenProps } from '../../navigation/types';
 
 type MemoryTab = 'focus' | 'notebook' | 'lessons' | 'identity';
 

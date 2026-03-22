@@ -5,13 +5,13 @@
 import React, { useState, useCallback } from 'react';
 import { View, Text, TouchableOpacity, FlatList, StyleSheet, Alert, ActivityIndicator } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { bots as botsApi, schools as schoolsApi } from '../services/api';
-import { colors } from '../theme/colors';
-import { spacing, fontSize, borderRadius } from '../theme/spacing';
-import TutorialTip from '../components/TutorialTip';
+import { bots as botsApi, schools as schoolsApi } from '../../services/api';
+import { colors } from '../../theme/colors';
+import { spacing, fontSize, borderRadius } from '../../theme/spacing';
+import TutorialTip from '../../components/TutorialTip';
 import type { SchoolInfo } from '@peerzero/shared';
 import { GRADE_PRICES_CENTS, POST_GRADUATION_PRICE_CENTS, GRADUATION_GRADE } from '@peerzero/shared';
-import type { EnrollBotScreenProps } from '../navigation/types';
+import type { EnrollBotScreenProps } from '../../navigation/types';
 
 export default function EnrollBotScreen({ route, navigation }: EnrollBotScreenProps) {
   const { botId } = route.params;

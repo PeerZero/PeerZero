@@ -11,15 +11,15 @@
 import React, { useState, useCallback, useRef } from 'react';
 import { View, Text, FlatList, TouchableOpacity, StyleSheet, RefreshControl, Alert, Animated } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { bots as botsApi } from '../services/api';
-import { useBotStream, type BotStreamEvent } from '../hooks/useBotStream';
-import { colors } from '../theme/colors';
-import { spacing, fontSize, borderRadius } from '../theme/spacing';
-import TutorialTip from '../components/TutorialTip';
+import { bots as botsApi } from '../../services/api';
+import { useBotStream, type BotStreamEvent } from '../../hooks/useBotStream';
+import { colors } from '../../theme/colors';
+import { spacing, fontSize, borderRadius } from '../../theme/spacing';
+import TutorialTip from '../../components/TutorialTip';
 import type { ActivityEntry, MoodType, ActivityCategory, ActionType, ExternalActivityEntry } from '@peerzero/shared';
 import { ACTION_TYPES } from '@peerzero/shared';
-import { formatTimestamp } from '../utils/timeAgo';
-import type { LogScreenProps } from '../navigation/types';
+import { formatTimestamp } from '../../utils/timeAgo';
+import type { LogScreenProps } from '../../navigation/types';
 
 const MOOD_COLORS: Record<MoodType, string> = {
   positive: colors.mood.positive,

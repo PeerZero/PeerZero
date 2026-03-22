@@ -5,14 +5,14 @@
 import React, { useState, useCallback } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Alert, TextInput, Switch, ScrollView, Platform, Linking, KeyboardAvoidingView } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { useAuth } from '../hooks/useAuth';
-import { apiKeys as keysApi, notifications as notifApi, auth as authApi, widgets as widgetsApi, bots as botsApi } from '../services/api';
-import { colors } from '../theme/colors';
-import { spacing, fontSize, borderRadius } from '../theme/spacing';
-import TutorialTip from '../components/TutorialTip';
-import { useToast } from '../components/Toast';
+import { useAuth } from '../../hooks/useAuth';
+import { apiKeys as keysApi, notifications as notifApi, auth as authApi, widgets as widgetsApi, bots as botsApi } from '../../services/api';
+import { colors } from '../../theme/colors';
+import { spacing, fontSize, borderRadius } from '../../theme/spacing';
+import TutorialTip from '../../components/TutorialTip';
+import { useToast } from '../../components/Toast';
 import * as Haptics from 'expo-haptics';
-import { useTutorial } from '../hooks/useTutorial';
+import { useTutorial } from '../../hooks/useTutorial';
 import { NOTIFICATION_TYPES, NOTIFICATION_LABELS, DEFAULT_NOTIFICATION_PREFS } from '@peerzero/shared';
 import type { ApiKeyInfo, BotSummary } from '@peerzero/shared';
 

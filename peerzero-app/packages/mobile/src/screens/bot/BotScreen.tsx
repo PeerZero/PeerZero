@@ -7,22 +7,22 @@ import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert, ActivityIndicator, Switch, Share, RefreshControl } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import Slider from '@react-native-community/slider';
-import { bots as botsApi, payments as paymentsApi } from '../services/api';
-import { useBotStream } from '../hooks/useBotStream';
-import { colors } from '../theme/colors';
-import { spacing, fontSize, borderRadius } from '../theme/spacing';
-import BotAvatar from '../components/BotAvatar';
-import BotDialogue from '../components/BotDialogue';
-import SkeletonLoader from '../components/SkeletonLoader';
-import TutorialTip from '../components/TutorialTip';
-import MilestoneModal from '../components/MilestoneModal';
-import type { MilestoneType } from '../components/MilestoneModal';
+import { bots as botsApi, payments as paymentsApi } from '../../services/api';
+import { useBotStream } from '../../hooks/useBotStream';
+import { colors } from '../../theme/colors';
+import { spacing, fontSize, borderRadius } from '../../theme/spacing';
+import BotAvatar from '../../components/BotAvatar';
+import BotDialogue from '../../components/BotDialogue';
+import SkeletonLoader from '../../components/SkeletonLoader';
+import TutorialTip from '../../components/TutorialTip';
+import MilestoneModal from '../../components/MilestoneModal';
+import type { MilestoneType } from '../../components/MilestoneModal';
 import * as WebBrowser from 'expo-web-browser';
 import * as Haptics from 'expo-haptics';
 import type { BotDetail } from '@peerzero/shared';
 import { credibilityToStage, calculateHunger, getGradePriceDisplay, GRADUATION_GRADE, getGradePriceCents, GRADE_PRICES_CENTS } from '@peerzero/shared';
-import type { BotScreenProps } from '../navigation/types';
-import { timeAgo } from '../utils/timeAgo';
+import type { BotScreenProps } from '../../navigation/types';
+import { timeAgo } from '../../utils/timeAgo';
 
 // Logarithmic scale helpers for 1s–86400s range
 // Slider value 0–1 maps to seconds via exponential curve
