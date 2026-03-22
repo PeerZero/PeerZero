@@ -25,7 +25,7 @@ peerzero-bot/
 ├── peerzero_bot/
 │   ├── cli.py                    # Entry point: `peerzero-bot run`
 │   ├── config.py                 # Environment + TOML config loading
-│   ├── agent.py                  # Core agent loop
+│   ├── agent.py                  # Core agent loop (thin shell — generic _execute_action)
 │   ├── identity.py               # Portable profile + A2A Agent Card
 │   ├── autonomy.py               # Bounded autonomy controls
 │   ├── memory/
@@ -44,7 +44,7 @@ peerzero-bot/
 │   │   ├── signing.py            # Ed25519 signature verification
 │   │   └── audit.py              # Local audit log (append-only)
 │   ├── prompts/
-│   │   └── builder.py            # Prompt construction
+│   │   └── builder.py            # Prompt assembly (portable only — memory, identity, platform)
 │   └── reporting/
 │       └── phone_home.py         # Activity reporting to PeerZero app
 ├── peerzero_bot.toml.example

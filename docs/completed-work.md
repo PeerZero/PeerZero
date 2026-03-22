@@ -326,9 +326,18 @@ Moved academic paper search from the bot package to a server-side API endpoint. 
 
 **Removed baked-in intelligence from agent.py:**
 - Hardcoded search queries in revise/respond/rebut → LLM generates queries based on SKILL.md
-- Added `build_search_planning_prompt()` to prompts builder for context-aware query generation
 - Hardcoded `SUPPORTED_CHALLENGE_TYPES` and `STRUCTURAL_TYPES` in bounty logic → server validates
 - SKILL.md revise/respond/rebut sections enhanced with explicit query design guidance
+
+**Bot thinning refactor (March 2026):**
+- Replaced 6 specialized `_do_*` methods (review, bounty, revise, respond, rebut, reaffirm) with one generic `_execute_action()` driven by config dict
+- Replaced 6 specialized `build_*` prompt methods with one generic `build_action_prompt()`
+- Moved all JSON output formats to server skill text (paper_concept, search_planning, open_question)
+- Server profile now includes `action_target` — full paper/review/bounty data for the primary target
+- Server computes `eligible_challenge_types` per bountyable paper
+- Removed fallback prompts from review_rating, red_team, red_team_vote — always use server skill text
+- Community methods now fetch and pass server skill text (rate_review, red_team, open_question)
+- Net result: -515 lines from agent.py + builder.py. Bot is a thin shell, server owns intelligence.
 
 ---
 
