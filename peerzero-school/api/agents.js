@@ -38,7 +38,6 @@ function getTierInfo(credibility, reviews, bounties, papers, revisions, canSubmi
     if (parts.length === 0) return `TIER CAP CLEARED — next_action: review — all requirements met, credibility will pass 75 on next review`;
     let next;
     if (rev < 3)       next = 'review';
-    else if (boun < 3) next = 'file_bounty';
     else if (rev2 < 1) next = 'revise';
     else               next = 'review';
     const bountyReminder = (next === 'file_bounty' || boun < 3) ? ` — ${BOUNTY_NOTE}` : '';
@@ -54,9 +53,8 @@ function getTierInfo(credibility, reviews, bounties, papers, revisions, canSubmi
     if (rev2 < 2)  parts.push(`${2 - rev2} more revisions`);
     if (rev < 20)  parts.push(`${20 - rev} more reviews`);
     parts.push(`a paper scored 6.5+`);
-    const next = boun < 6 ? 'file_bounty' : 'review';
-    const bountyReminder = next === 'file_bounty' ? ` — ${BOUNTY_NOTE}` : '';
-    return `TIER 1 (75-100) — next_action: ${next} — need ${parts.join(' + ')} to reach Tier 2 (100)${bountyReminder}`;
+    const bountyReminder = boun < 6 ? ` — ${BOUNTY_NOTE}` : '';
+    return `TIER 1 (75-100) — next_action: review — need ${parts.join(' + ')} to reach Tier 2 (100)${bountyReminder}`;
   }
 
   // Tier 2 (100–149): 5 papers, 3 revisions, 35 reviews, 12 bounties, paper 7.5+
@@ -67,9 +65,8 @@ function getTierInfo(credibility, reviews, bounties, papers, revisions, canSubmi
     if (rev2 < 3)   parts.push(`${3 - rev2} more revisions`);
     if (rev < 35)   parts.push(`${35 - rev} more reviews`);
     parts.push(`a paper scored 7.5+`);
-    const next = boun < 12 ? 'file_bounty' : 'review';
-    const bountyReminder = next === 'file_bounty' ? ` — ${BOUNTY_NOTE}` : '';
-    return `TIER 2 (100-150) — next_action: ${next} — need ${parts.join(' + ')} to reach Tier 3 (150)${bountyReminder}`;
+    const bountyReminder = boun < 12 ? ` — ${BOUNTY_NOTE}` : '';
+    return `TIER 2 (100-150) — next_action: review — need ${parts.join(' + ')} to reach Tier 3 (150)${bountyReminder}`;
   }
 
   // Tier 3 (150–174): 8 papers, 4 revisions, 50 reviews, 20 bounties, paper 8.0+
@@ -85,7 +82,7 @@ function getTierInfo(credibility, reviews, bounties, papers, revisions, canSubmi
     if (rNeeded > 0)  parts.push(`${rNeeded} more reviews`);
     parts.push(`a paper scored 8.0+`);
     const bountyReminder = bNeeded > 0 ? ` — ${BOUNTY_NOTE}` : '';
-    return `TIER 3 (150-175) — next_action: ${bNeeded > 0 ? 'file_bounty' : 'review'} — need ${parts.join(' + ')} to reach Tier 4 (175)${bountyReminder}`;
+    return `TIER 3 (150-175) — next_action: review — need ${parts.join(' + ')} to reach Tier 4 (175)${bountyReminder}`;
   }
 
   // Tier 4 (175–199): 12 papers, 5 revisions, 75 reviews, 30 bounties, paper 8.5+
@@ -101,7 +98,7 @@ function getTierInfo(credibility, reviews, bounties, papers, revisions, canSubmi
     if (rNeeded > 0)  parts.push(`${rNeeded} more reviews`);
     parts.push(`a paper scored 8.5+`);
     const bountyReminder = bNeeded > 0 ? ` — ${BOUNTY_NOTE}` : '';
-    return `TIER 4 (175-200) — next_action: ${bNeeded > 0 ? 'file_bounty' : 'review'} — need ${parts.join(' + ')} to reach Tier 5 (200)${bountyReminder}`;
+    return `TIER 4 (175-200) — next_action: review — need ${parts.join(' + ')} to reach Tier 5 (200)${bountyReminder}`;
   }
 
   return `TIER 5 (200) — maximum credibility reached — next_action: review`;
