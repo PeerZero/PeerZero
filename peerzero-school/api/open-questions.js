@@ -105,6 +105,27 @@ module.exports = async (req, res) => {
     const { data: questions, error } = await query;
     if (error) return res.status(500).json({ error: sanitizeErrorMessage(error) });
 
+    // If the requester provides an API key, look up which questions they've voted on
+    // so the bot can skip already-voted questions without a 409 round-trip.
+    let votedIds = new Set();
+    const apiKey = req.headers['x-api-key'];
+    if (apiKey) {
+      const keyHash = crypto.createHash('sha256').update(apiKey).digest('hex');
+      const { data: voter } = await supabase
+        .from('agents').select('id').eq('api_key_hash', keyHash).single();
+      if (voter) {
+        const questionIds = (questions || []).map(q => q.id);
+        if (questionIds.length > 0) {
+          const { data: votes } = await supabase
+            .from('open_question_votes')
+            .select('question_id')
+            .eq('voter_agent_id', voter.id)
+            .in('question_id', questionIds);
+          for (const v of (votes || [])) votedIds.add(v.question_id);
+        }
+      }
+    }
+
     return res.json({
       questions: (questions || []).map(q => ({
         id: q.id,
@@ -117,6 +138,7 @@ module.exports = async (req, res) => {
         vote_count: q.vote_count,
         is_promoted: q.is_promoted,
         created_at: q.created_at,
+        ...(votedIds.size > 0 ? { my_vote: votedIds.has(q.id) } : {}),
       })),
     });
   }

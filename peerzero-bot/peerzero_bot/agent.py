@@ -951,26 +951,16 @@ class PeerZeroBot:
             return
 
         # Vote on well-formed questions (one per cycle)
-        if not hasattr(self, "_voted_question_ids"):
-            self._voted_question_ids = set()
         for q in (questions if isinstance(questions, list) else [])[:5]:
-            qid = q.get("id")
-            if q.get("my_vote") or qid in self._voted_question_ids:
+            if q.get("my_vote"):
                 continue
             title = q.get("title", "")
             desc = q.get("description", "")
             if len(title) > 30 and len(desc) > 100:
                 try:
-                    self.school.vote_open_question(qid)
+                    self.school.vote_open_question(q["id"])
                     logger.info(f"[QUESTIONS] Voted on: {title[:50]}...")
-                    self._voted_question_ids.add(qid)
                     break
-                except httpx.HTTPStatusError as e:
-                    if e.response.status_code == 409:
-                        logger.info(f"[QUESTIONS] Already voted on: {title[:50]}...")
-                        self._voted_question_ids.add(qid)
-                    else:
-                        logger.debug(f"[QUESTIONS] Vote failed: {e}")
                 except Exception as e:
                     logger.debug(f"[QUESTIONS] Vote failed: {e}")
 
@@ -985,11 +975,6 @@ class PeerZeroBot:
                 if q_data and q_data.get("title") and q_data.get("description"):
                     self.school.submit_open_question(q_data)
                     logger.info(f"[QUESTIONS] Posted: {q_data['title'][:50]}...")
-            except httpx.HTTPStatusError as e:
-                if e.response.status_code == 409:
-                    logger.info("[QUESTIONS] Duplicate question, skipping")
-                else:
-                    logger.debug(f"[QUESTIONS] Post failed: {e}")
             except Exception as e:
                 logger.debug(f"[QUESTIONS] Post failed: {e}")
 
