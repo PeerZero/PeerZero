@@ -994,41 +994,8 @@ class PeerZeroBot:
             logger.warning("[BOUNTY] Failed to get valid JSON from LLM")
             return None
 
-        # Validate challenge_type — only structural and weak_source_quality are supported
-        # (standard bounties require a response paper submission step we don't implement)
-        SUPPORTED_CHALLENGE_TYPES = {
-            "no_falsifiable_claim", "no_cross_study_connection",
-            "no_mechanism_chain", "weak_source_quality",
-        }
-        challenge_type = bounty_data.get("challenge_type", "")
-        if challenge_type not in SUPPORTED_CHALLENGE_TYPES:
-            logger.info(f"[BOUNTY] Unsupported challenge_type '{challenge_type}' — skipping (need structural or weak_source_quality)")
-            return None
-
-        # Structural challenges don't need external_sources or rebuttal — strip them
-        STRUCTURAL_TYPES = {"no_falsifiable_claim", "no_cross_study_connection", "no_mechanism_chain"}
-        if challenge_type in STRUCTURAL_TYPES:
-            bounty_data.pop("external_sources", None)
-            bounty_data.pop("rebuttal", None)
-        else:
-            # Fallback: if LLM omitted external_sources, build from rebuttal citations
-            if "external_sources" not in bounty_data and "rebuttal" in bounty_data:
-                citations = bounty_data["rebuttal"].get("citations") or []
-                bounty_data["external_sources"] = []
-                for c in citations:
-                    if c.get("doi"):
-                        bounty_data["external_sources"].append({
-                            "doi": c["doi"],
-                            "specific_finding": c.get("agent_summary", "")[:2000] or "See citation for contradicting evidence",
-                            "target_claim": target.get("title", "")[:1000] or "Original paper claim",
-                            "logical_bridge": c.get("relevance_explanation", "")[:2000] or "This evidence directly contradicts the original claim",
-                        })
-                if bounty_data["external_sources"]:
-                    logger.info(f"[BOUNTY] Built {len(bounty_data['external_sources'])} external_sources from rebuttal citations")
-                else:
-                    logger.warning("[BOUNTY] No external_sources and no citations with DOIs — skipping")
-                    return None
-
+        # Server validates challenge_type and required fields — SKILL.md guides the LLM
+        # on which types are valid and what each type requires.
         try:
             result = self._submit_with_retry("BOUNTY", self.school.submit_bounty, bounty_data)
             logger.info(f"[BOUNTY] Filed — type={bounty_data.get('challenge_type')}")
@@ -1062,9 +1029,16 @@ class PeerZeroBot:
         target_id = target["id"]
         full = self.school.get_papers(params={"id": target_id, "audit": "true"})
 
-        # Search for new evidence to strengthen the revision
+        # LLM generates search queries based on SKILL.md guidance
         paper_title = target.get("title", "")
-        revision_queries = [f"{paper_title} new evidence", f"{paper_title} contradicting"]
+        search_plan_msg = self.prompts.build_search_planning_prompt(
+            "revise", paper_title,
+            extra_context="You received critical reviews. Search for evidence to address weaknesses and strengthen your argument.",
+        )
+        search_plan = extract_json(self.llm_fast.call(system_prompt, search_plan_msg)) or {}
+        revision_queries = search_plan.get("supporting_queries", []) + search_plan.get("opposing_queries", [])
+        if not revision_queries:
+            revision_queries = [paper_title]
         evidence_papers = search_and_summarize(revision_queries, f"Revision of: {paper_title}", self.llm_fast)
         logger.info(f"[REVISE] Found {len(evidence_papers)} papers from search")
 
@@ -1115,9 +1089,16 @@ class PeerZeroBot:
 
         full = self.school.get_papers(params={"id": paper_id})
 
-        # Search for evidence to support the critique
+        # LLM generates search queries based on SKILL.md guidance
         paper_title = target.get("title", "")
-        respond_queries = [f"{paper_title} contradicting evidence", f"{paper_title} methodology critique"]
+        search_plan_msg = self.prompts.build_search_planning_prompt(
+            "respond to", paper_title,
+            extra_context=f"You gave this paper a score of {my_score}/10. Search for evidence that supports your critique.",
+        )
+        search_plan = extract_json(self.llm_fast.call(system_prompt, search_plan_msg)) or {}
+        respond_queries = search_plan.get("supporting_queries", []) + search_plan.get("opposing_queries", [])
+        if not respond_queries:
+            respond_queries = [paper_title]
         evidence_papers = search_and_summarize(respond_queries, f"Critique of: {paper_title}", self.llm_fast)
         logger.info(f"[RESPOND] Found {len(evidence_papers)} papers from search")
 
@@ -1199,9 +1180,16 @@ class PeerZeroBot:
 
         full = self.school.get_papers(params={"id": paper_id})
 
-        # Search for evidence to support the defense
+        # LLM generates search queries based on SKILL.md guidance
         paper_title = target.get("title", "")
-        defense_queries = [f"{paper_title} supporting evidence", f"{paper_title} replication"]
+        search_plan_msg = self.prompts.build_search_planning_prompt(
+            "defend", paper_title,
+            extra_context=f"Your paper received these criticisms:{criticisms}\nSearch for evidence to support your defense and honestly test if criticisms have merit.",
+        )
+        search_plan = extract_json(self.llm_fast.call(system_prompt, search_plan_msg)) or {}
+        defense_queries = search_plan.get("supporting_queries", []) + search_plan.get("opposing_queries", [])
+        if not defense_queries:
+            defense_queries = [paper_title]
         evidence_papers = search_and_summarize(defense_queries, f"Defense of: {paper_title}", self.llm_fast)
         logger.info(f"[REBUT] Found {len(evidence_papers)} papers from search")
 

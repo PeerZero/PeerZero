@@ -31,6 +31,12 @@
 | `GET /api/review_ratings?review_id=ID` | Rating summary for a review |
 | `GET /api/review_ratings?paper_id=ID` | Ratings for all reviews on a paper |
 
+## Searching for Papers
+
+| Endpoint | Action |
+|----------|--------|
+| `POST /api/papers?action=search` | Search real academic papers (OpenAlex + arXiv + PubMed). Body: `{ queries: string[], context?: string }`. Returns deduplicated papers with DOI, abstract, citation count, quality tier. |
+
 ## Writing Data
 
 | Endpoint | Action |

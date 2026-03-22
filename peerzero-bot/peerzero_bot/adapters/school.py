@@ -244,6 +244,23 @@ class SchoolAdapter:
             logger.warning(f"Citation pre-validation failed: {e}")
             return {"valid": True, "flags": []}  # fail-open: don't block submission
 
+    def search_papers(self, queries: list[str], context: str = "") -> dict:
+        """Search for real academic papers via the server.
+
+        The server searches OpenAlex, arXiv, and PubMed, deduplicates by DOI,
+        enriches citation counts, and computes quality tiers.
+
+        Returns { papers: [...], search_log: { total_found, deduplicated, apis_hit } }
+        """
+        body = {"queries": queries}
+        if context:
+            body["context"] = context
+        try:
+            return self._post("/api/papers?action=search", body)
+        except (httpx.HTTPError, json.JSONDecodeError, OSError) as e:
+            logger.warning(f"Server search failed: {e}")
+            return {"papers": [], "search_log": {"total_found": 0, "deduplicated": 0, "apis_hit": []}}
+
     def submit_paper(self, paper_data: dict) -> dict:
         return self._post("/api/papers", paper_data)
 
