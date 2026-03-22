@@ -49,6 +49,31 @@ from .search import search_and_summarize
 logger = logging.getLogger("peerzero-bot")
 
 
+def _clamp_paper_fields(data: dict) -> dict:
+    """Truncate paper/response fields to match DB check constraints.
+
+    DB limits:  title 10-300, abstract 100-2000, body 500+,
+                citation agent_summary 50-1000, relevance_explanation 30-500,
+                source_quality_note 30+
+    """
+    if "title" in data:
+        data["title"] = str(data["title"])[:300]
+    if "abstract" in data:
+        data["abstract"] = str(data["abstract"])[:2000]
+    # body has no max constraint, just min 500
+
+    # Clamp citation fields
+    for c in data.get("citations", []):
+        if "agent_summary" in c:
+            c["agent_summary"] = str(c["agent_summary"])[:1000]
+        if "relevance_explanation" in c:
+            c["relevance_explanation"] = str(c["relevance_explanation"])[:500]
+        if "source_quality_note" in c:
+            c["source_quality_note"] = str(c["source_quality_note"])[:2000]
+    return data
+
+
+
 class LLMClient:
     """
     LLM client with provider-agnostic interface.
@@ -904,6 +929,7 @@ class PeerZeroBot:
             logger.warning(f"[PAPER] Citation pre-validation flagged issues: {citation_check.get('flags', [])} — submitting anyway")
 
         try:
+            paper_data = _clamp_paper_fields(paper_data)
             result = self._submit_with_retry("PAPER", self.school.submit_paper, paper_data)
             logger.info(f"[PAPER] Submitted — id={result.get('paper_id')}")
             return result
@@ -1031,6 +1057,7 @@ class PeerZeroBot:
             logger.warning(f"[REVISE] Citation pre-validation flagged issues: {citation_check.get('flags', [])} — submitting anyway")
 
         try:
+            revision_data = _clamp_paper_fields(revision_data)
             result = self._submit_with_retry("REVISE", self.school.submit_revision, target_id, revision_data)
             logger.info(f"[REVISE] Submitted for {target_id}")
             return result
@@ -1093,6 +1120,7 @@ class PeerZeroBot:
             logger.warning(f"[RESPOND] Citation pre-validation flagged issues: {citation_check.get('flags', [])} — submitting anyway")
 
         try:
+            response_data = _clamp_paper_fields(response_data)
             result = self._submit_with_retry("RESPOND", self.school.submit_revision, paper_id, response_data)
             logger.info(f"[RESPOND] Submitted — id={result.get('response_paper_id')}")
             return result
@@ -1176,6 +1204,7 @@ class PeerZeroBot:
             logger.warning(f"[REBUT] Citation pre-validation flagged issues: {citation_check.get('flags', [])} — submitting anyway")
 
         try:
+            rebut_data = _clamp_paper_fields(rebut_data)
             result = self._submit_with_retry("REBUT", self.school.submit_revision, paper_id, rebut_data)
             logger.info(f"[REBUT] Submitted — id={result.get('response_paper_id')}")
             return result
@@ -1361,6 +1390,7 @@ class PeerZeroBot:
         reaffirm_data.setdefault("search_strategy", {})
 
         try:
+            reaffirm_data = _clamp_paper_fields(reaffirm_data)
             result = self._submit_with_retry("REAFFIRM", self.school.submit_revision, paper_id, reaffirm_data)
             logger.info(f"[REAFFIRM] Submitted for {paper_id}")
             return result

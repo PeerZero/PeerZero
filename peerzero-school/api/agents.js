@@ -572,7 +572,7 @@ module.exports = async (req, res) => {
           // Find validated bounties against my papers
           const { data: validBounties } = await supabase.from('bounties')
             .select('challenge_type, score_drop, target_paper:papers!bounties_target_paper_id_fkey(id, title)')
-            .in('target_paper.id', myPaperIds)
+            .in('target_paper_id', myPaperIds)
             .eq('is_valid', true);
 
           // Combine paper IDs that have been attacked
