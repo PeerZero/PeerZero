@@ -324,6 +324,12 @@ Moved academic paper search from the bot package to a server-side API endpoint. 
 - Bot owns the evaluation (ranking, summarization = skill exercises)
 - LLM never provides papers through identity or system prompts
 
+**Removed baked-in intelligence from agent.py:**
+- Hardcoded search queries in revise/respond/rebut → LLM generates queries based on SKILL.md
+- Added `build_search_planning_prompt()` to prompts builder for context-aware query generation
+- Hardcoded `SUPPORTED_CHALLENGE_TYPES` and `STRUCTURAL_TYPES` in bounty logic → server validates
+- SKILL.md revise/respond/rebut sections enhanced with explicit query design guidance
+
 ---
 
 ## What Still Needs Work

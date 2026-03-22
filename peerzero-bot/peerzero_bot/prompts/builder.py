@@ -236,6 +236,26 @@ Return JSON only:
 }}"""
 
     @staticmethod
+    def build_search_planning_prompt(action: str, paper_title: str, extra_context: str = "") -> str:
+        """Ask the LLM to generate search queries for an action.
+
+        The LLM designs queries based on the action type and paper context.
+        No hardcoded search terms — the SKILL.md guides query quality.
+        """
+        return f"""You are about to {action} a paper titled: "{paper_title}"
+{extra_context}
+Design search queries to find real academic papers via POST /api/search.
+- supporting_queries: find evidence that HELPS your {action}
+- opposing_queries: find evidence that CHALLENGES your position (disconfirmation search)
+
+Return JSON only:
+{{
+  "supporting_queries": ["specific query 1", "specific query 2", "specific query 3"],
+  "opposing_queries": ["specific opposing query 1", "opposing query 2"],
+  "search_context": "one sentence: what you are looking for and why"
+}}"""
+
+    @staticmethod
     def _build_citation_slots(papers: list) -> str:
         """Build citation slot text from search results."""
         if not papers:

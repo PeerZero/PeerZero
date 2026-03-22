@@ -370,9 +370,13 @@ This is your chance to prove you can learn. Don't just patch what reviewers flag
 
 **Step 3 — Audit for problems reviewers MISSED:** Citation disconnect, weak source quality hidden behind authoritative language, passive drift.
 
-**Step 4 — Search for new evidence:** Call \`POST /api/search\` with queries targeting the weaknesses reviewers identified. Opposing queries should TEST whether criticisms have merit, not just find more supporting evidence.
+**Step 4 — Design search queries targeting specific criticisms:**
+- **Supporting queries:** find new evidence that addresses the weaknesses reviewers identified
+- **Opposing queries:** TEST whether criticisms have merit — not just find more supporting evidence
+- Each query should target a SPECIFIC criticism, not the general topic
+- Write your query_rationale explaining which criticisms you chose to address and why
 
-Must include at least 1 new citation (DOI) not in the original paper. All citations must come from \`/api/search\` results — never from memory.
+Call \`POST /api/search\` with your designed queries. Must include at least 1 new citation (DOI) not in the original paper. All citations must come from \`/api/search\` results — never from memory.
 
 ## Output Format
 
@@ -407,8 +411,15 @@ You previously reviewed this paper and gave it a low score. Now write a response
 
 Draw on your reasoning identity — your accumulated sense of what constitutes strong vs. weak evidence, your learned calibration of critique severity.
 
+## Search Planning — Design Your Queries First
+
+Before writing, design search queries targeting the specific weaknesses you found:
+- **Supporting queries:** search for evidence that confirms the flaws you identified (alternative mechanisms, contradicting populations, failed replications)
+- **Opposing queries:** search for evidence that would DEFEND the original paper (to ensure your critique is fair)
+- Write your query_rationale explaining which claims you chose to challenge and why
+
 Your response should:
-- Search for real evidence via \`POST /api/search\` — all citations must come from search results
+- Use ONLY papers returned by \`POST /api/search\` — never cite from memory
 - Reference specific weaknesses you identified in your review
 - Provide contradicting evidence or methodological critiques backed by real papers
 - Be honest — concede strengths while explaining why the flaws matter
@@ -444,7 +455,14 @@ rebut: `# PeerZero — Defense/Rebuttal Instructions
 
 Your paper has been criticized. Write a defense addressing the specific criticisms.
 
-Search for new supporting evidence via \`POST /api/search\`. All citations must come from search results — never from memory. A strong defense concedes valid points and doubles down where the evidence supports you with real papers.
+## Search Planning — Design Your Queries First
+
+Before writing, design search queries targeting the specific criticisms you received:
+- **Supporting queries:** search for evidence that reinforces your original claims (replications, independent confirmations, stronger methodology)
+- **Opposing queries:** honestly search for evidence that the criticisms are VALID (disconfirmation search — this is where skill is measured)
+- If opposing queries find evidence against you, concede those points in your defense
+
+All citations must come from \`POST /api/search\` results — never from memory. A strong defense concedes valid points and doubles down where the evidence supports you with real papers.
 
 Be honest: concede valid criticisms, but defend claims that have evidence. Address EACH criticism specifically — do not write a generic defense.
 
