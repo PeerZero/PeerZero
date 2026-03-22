@@ -868,7 +868,9 @@ class PeerZeroBot:
 
         try:
             result = self._submit_with_retry("REVIEW", self.school.submit_review, paper_id, review_data)
-            logger.info(f"[REVIEW] Submitted — score={review_data.get('score')}")
+            cred_new = result.get("your_new_credibility", "?")
+            cred_change = result.get("credibility_change", "?")
+            logger.info(f"[REVIEW] Submitted — score={review_data.get('score')}, credibility={cred_new} (change={cred_change})")
             # Track this paper so we can rate other reviews on it later
             self.memory.add_tracked_review_id(paper_id)
             return result
@@ -931,7 +933,7 @@ class PeerZeroBot:
         try:
             paper_data = _clamp_paper_fields(paper_data)
             result = self._submit_with_retry("PAPER", self.school.submit_paper, paper_data)
-            logger.info(f"[PAPER] Submitted — id={result.get('paper_id')}")
+            logger.info(f"[PAPER] Submitted — id={result.get('paper_id')}, credibility={result.get('your_new_credibility', '?')}")
             return result
         except Exception as e:
             logger.warning(f"[PAPER] Failed: {e}")
@@ -1059,7 +1061,7 @@ class PeerZeroBot:
         try:
             revision_data = _clamp_paper_fields(revision_data)
             result = self._submit_with_retry("REVISE", self.school.submit_revision, target_id, revision_data)
-            logger.info(f"[REVISE] Submitted for {target_id}")
+            logger.info(f"[REVISE] Submitted for {target_id}, credibility={result.get('your_new_credibility', '?')}")
             return result
         except Exception as e:
             logger.warning(f"[REVISE] Failed: {e}")
@@ -1122,7 +1124,7 @@ class PeerZeroBot:
         try:
             response_data = _clamp_paper_fields(response_data)
             result = self._submit_with_retry("RESPOND", self.school.submit_revision, paper_id, response_data)
-            logger.info(f"[RESPOND] Submitted — id={result.get('response_paper_id')}")
+            logger.info(f"[RESPOND] Submitted — id={result.get('response_paper_id')}, credibility={result.get('your_new_credibility', '?')}")
             return result
         except Exception as e:
             status = getattr(getattr(e, "response", None), "status_code", None)
@@ -1206,7 +1208,7 @@ class PeerZeroBot:
         try:
             rebut_data = _clamp_paper_fields(rebut_data)
             result = self._submit_with_retry("REBUT", self.school.submit_revision, paper_id, rebut_data)
-            logger.info(f"[REBUT] Submitted — id={result.get('response_paper_id')}")
+            logger.info(f"[REBUT] Submitted — id={result.get('response_paper_id')}, credibility={result.get('your_new_credibility', '?')}")
             return result
         except Exception as e:
             status = getattr(getattr(e, "response", None), "status_code", None)
@@ -1392,7 +1394,7 @@ class PeerZeroBot:
         try:
             reaffirm_data = _clamp_paper_fields(reaffirm_data)
             result = self._submit_with_retry("REAFFIRM", self.school.submit_revision, paper_id, reaffirm_data)
-            logger.info(f"[REAFFIRM] Submitted for {paper_id}")
+            logger.info(f"[REAFFIRM] Submitted for {paper_id}, credibility={result.get('your_new_credibility', '?')}")
             return result
         except Exception as e:
             status = getattr(getattr(e, "response", None), "status_code", None)
