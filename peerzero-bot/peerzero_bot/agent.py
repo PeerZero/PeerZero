@@ -433,10 +433,12 @@ class PeerZeroBot:
             paper_title = paper.get("title", "")
             search_verb = config.get("search_verb", action)
             extra = config.get("search_context", "")
-            search_plan_msg = self.prompts.build_search_planning_prompt(
-                search_verb, paper_title, extra_context=extra,
-            )
-            search_plan = extract_json(self.llm_fast.call(system_prompt, search_plan_msg)) or {}
+            # Use server skill text for search planning format
+            search_skill = self.school.download_skill_action("search_planning")
+            search_skill = search_skill.replace("ACTION_VERB", search_verb)
+            search_skill = search_skill.replace("PAPER_TITLE", paper_title)
+            search_skill = search_skill.replace("EXTRA_CONTEXT", extra)
+            search_plan = extract_json(self.llm_fast.call(system_prompt, search_skill)) or {}
             queries = search_plan.get("supporting_queries", []) + search_plan.get("opposing_queries", [])
             if not queries:
                 queries = [paper_title]
@@ -515,23 +517,30 @@ class PeerZeroBot:
             return None
 
     def _do_submit_paper(self, system_prompt: str, profile: dict, action_skill: str = "") -> dict | None:
-        # Step 1: Generate concept and search queries
-        concept_msg = self.prompts.build_paper_concept_prompt()
-        concept_text = self.llm_fast.call(system_prompt, concept_msg)
+        """Multi-step: concept → search → write. Uses server skill text for each step."""
+        # Step 1: Generate concept — server provides format via paper_concept skill
+        concept_skill = self.school.download_skill_action("paper_concept")
+        # Substitute prior titles so the bot avoids repeats
+        history = profile.get("research_history", [])
+        prior = [str(h.get("title", ""))[:60] for h in (history or [])[:5]]
+        avoid = f"Do NOT repeat these topics: {'; '.join(prior)}" if prior else ""
+        concept_skill = concept_skill.replace("PRIOR_TITLES_PLACEHOLDER", avoid)
+
+        concept_text = self.llm_fast.call(system_prompt, concept_skill)
         concept = extract_json(concept_text) or {}
-        search_queries = concept.get("search_queries", [])
-        opposing_queries = concept.get("opposing_queries", [])
+        all_queries = concept.get("search_queries", []) + concept.get("opposing_queries", [])
         paper_context = concept.get("core_claim", concept.get("working_title", ""))
 
         # Step 2: Search real academic APIs
-        all_queries = search_queries + opposing_queries
         if not all_queries:
             all_queries = ["scientific research"]
         evidence_papers = search_and_summarize(all_queries, paper_context, self.llm_fast)
         logger.info(f"[PAPER] Found {len(evidence_papers)} papers from search")
 
-        # Step 3: Generate paper using ONLY searched citations
-        user_msg = self.prompts.build_paper_prompt(citation_slots=evidence_papers, concept=concept, action_skill=action_skill)
+        # Step 3: Generate paper — server provides format via paper skill
+        # Bundle concept + citations into action_target so build_action_prompt can include them
+        action_target = {"concept": concept, "citation_slots": evidence_papers}
+        user_msg = self.prompts.build_action_prompt("submit_paper", action_skill, action_target=action_target)
         paper_keys = ["title", "abstract", "body", "field_ids", "confidence_score",
                        "falsifiable_claim", "measurable_prediction", "quantitative_expectation",
                        "cross_study_connection", "citations", "search_strategy"]
@@ -541,16 +550,11 @@ class PeerZeroBot:
             logger.warning("[PAPER] Failed to get valid JSON from LLM")
             return None
 
-        # Pre-validate citations — warn but still attempt submission
-        text_fields = {
-            "title": paper_data.get("title", ""),
-            "abstract": paper_data.get("abstract", ""),
-            "body": paper_data.get("body", ""),
-            "cross_study_connection": paper_data.get("cross_study_connection", ""),
-        }
-        citation_check = self.school.validate_citations(text_fields, paper_data.get("citations", []))
-        if not citation_check.get("valid", True):
-            logger.warning(f"[PAPER] Citation pre-validation flagged issues: {citation_check.get('flags', [])} — submitting anyway")
+        # Validate and submit
+        text_fields = {k: paper_data.get(k, "") for k in ("title", "abstract", "body", "cross_study_connection")}
+        check = self.school.validate_citations(text_fields, paper_data.get("citations", []))
+        if not check.get("valid", True):
+            logger.warning(f"[PAPER] Citation issues: {check.get('flags', [])} — submitting anyway")
 
         try:
             paper_data = _clamp_paper_fields(paper_data)
@@ -611,7 +615,8 @@ class PeerZeroBot:
                     continue  # skip — already rated (or attempted) this session
 
                 try:
-                    user_msg = self.prompts.build_review_rating_prompt(review, own_review=own_review)
+                    rate_skill = self.school.download_skill_action("rate_review")
+                    user_msg = self.prompts.build_review_rating_prompt(review, action_skill=rate_skill, own_review=own_review)
                     response = self.llm_fast.call_best_effort(system_prompt, user_msg)
                     if not response:
                         continue
@@ -665,7 +670,8 @@ class PeerZeroBot:
                         continue
 
                     try:
-                        user_msg = self.prompts.build_red_team_prompt(doi, finding, bridge)
+                        rt_skill = self.school.download_skill_action("red_team")
+                        user_msg = self.prompts.build_red_team_prompt(doi, finding, bridge, action_skill=rt_skill)
                         interrogation = self.llm_fast.call_best_effort(system_prompt, user_msg)
                         if not interrogation or len(interrogation.strip()) < 80:
                             continue
@@ -699,7 +705,8 @@ class PeerZeroBot:
                         continue
 
                     try:
-                        user_msg = self.prompts.build_red_team_vote_prompt(finding, bridge, interrogation)
+                        vote_skill = self.school.download_skill_action("red_team")
+                        user_msg = self.prompts.build_red_team_vote_prompt(finding, bridge, interrogation, action_skill=vote_skill)
                         response = self.llm_fast.call_best_effort(system_prompt, user_msg)
                         if not response:
                             continue
@@ -740,7 +747,7 @@ class PeerZeroBot:
         # 10% chance to post a new question
         if random.random() < 0.1 and len(questions) < 50:
             try:
-                user_msg = self.prompts.build_open_question_prompt()
+                user_msg = self.school.download_skill_action("open_question")
                 response = self.llm_fast.call_best_effort(system_prompt, user_msg)
                 if not response:
                     return

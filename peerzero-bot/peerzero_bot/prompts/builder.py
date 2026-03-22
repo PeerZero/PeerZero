@@ -224,99 +224,6 @@ class PromptBuilder:
 
         return "\n".join(parts)
 
-    def build_paper_concept_prompt(self) -> str:
-        """Generate a paper concept with search queries before searching."""
-        profile = getattr(self, "_profile", None) or {}
-        history = profile.get("research_history", [])
-        prior_titles = [str(h.get("title", ""))[:60] for h in history[:5]] if history else []
-        avoid = f"\nDo NOT repeat these topics: {'; '.join(prior_titles)}" if prior_titles else ""
-
-        return f"""Generate a NEW paper concept with a cross-domain connection.{avoid}
-
-Return JSON only:
-{{
-  "working_title": "...",
-  "domain_a": "...",
-  "domain_b": "...",
-  "core_claim": "...",
-  "search_queries": ["q1", "q2", "q3", "q4", "q5"],
-  "opposing_queries": ["oq1", "oq2", "oq3"]
-}}"""
-
-    @staticmethod
-    def build_search_planning_prompt(action: str, paper_title: str, extra_context: str = "") -> str:
-        """Ask the LLM to generate search queries for an action.
-
-        The LLM designs queries based on the action type and paper context.
-        No hardcoded search terms — the SKILL.md guides query quality.
-        """
-        return f"""You are about to {action} a paper titled: "{paper_title}"
-{extra_context}
-Design search queries to find real academic papers via POST /api/search.
-- supporting_queries: find evidence that HELPS your {action}
-- opposing_queries: find evidence that CHALLENGES your position (disconfirmation search)
-
-Return JSON only:
-{{
-  "supporting_queries": ["specific query 1", "specific query 2", "specific query 3"],
-  "opposing_queries": ["specific opposing query 1", "opposing query 2"],
-  "search_context": "one sentence: what you are looking for and why"
-}}"""
-
-    @staticmethod
-    def _build_citation_slots(papers: list) -> str:
-        """Build citation slot text from search results."""
-        if not papers:
-            return ""
-        slots = ""
-        for p in papers:
-            doi = p.get("externalIds", {}).get("DOI") or p.get("doi", "")
-            if not doi:
-                continue
-            cc = p.get("citationCount")
-            cc_str = str(cc) if cc is not None else "not indexed"
-            slots += f"\n--- CITATION SLOT ---\nDOI: {doi}\nTitle: {p.get('title', '')}\nCitation count: {cc_str}\nAbstract: {p.get('abstract', '')}\n"
-            if p.get("agent_summary"):
-                slots += f"Pre-computed agent_summary: {p['agent_summary']}\n"
-            if p.get("source_quality_note"):
-                slots += f"Pre-computed source_quality_note: {p['source_quality_note']}\n"
-        return slots
-
-    def build_paper_prompt(self, citation_slots: list = None, concept: dict = None, action_skill: str = "") -> str:
-        preamble = self._build_memory_preamble("write your next paper")
-
-        # Inject paper-specific context
-        profile = getattr(self, "_profile", None) or {}
-        cred = profile.get("credibility_score", "?")
-        papers_submitted = profile.get("original_papers_submitted", 0)
-        papers_needed = profile.get("papers_needed", 0)
-
-        paper_context = f"\nYour credibility: {cred}. Papers submitted: {papers_submitted}."
-        if papers_needed > 0:
-            paper_context += f" You need {papers_needed} more paper(s) for tier advancement."
-
-        history = profile.get("research_history", [])
-        if history:
-            prior_titles = [str(h.get("title", ""))[:60] for h in history[:5]]
-            paper_context += f"\nDo NOT repeat these topics from your prior papers: {'; '.join(prior_titles)}"
-
-        concept_section = ""
-        if concept and concept.get("core_claim"):
-            concept_section = f"\nYour paper concept: {concept.get('working_title', '')}\nCore claim: {concept['core_claim']}\n"
-
-        slots_text = self._build_citation_slots(citation_slots or [])
-        citation_instruction = (
-            f"\nAVAILABLE CITATIONS — you may ONLY cite these DOIs:\n{slots_text}"
-            if slots_text else
-            "\nNo search results available — use DOIs you know are real."
-        )
-
-        return f"""{preamble}
-{paper_context}
-{concept_section}
-{action_skill}
-{citation_instruction}"""
-
     def build_condenser_prompt(self, condenser_prompt: str, exercises: list[dict]) -> str:
         exercises_json = truncate_json(json.dumps(exercises, indent=2, default=str), 8000)
         return f"""{condenser_prompt}
@@ -414,106 +321,43 @@ as a JSON object with these fields:
 Return ONLY the JSON object, nothing else."""
 
     def build_review_rating_prompt(self, review: dict, action_skill: str = "", own_review: dict | None = None) -> str:
-        """Prompt the bot to rate another agent's review."""
+        """Format review data for rating. Intelligence lives in server's rate_review skill."""
         score = review.get("score", "?")
         methodology = str(review.get("methodology_notes", ""))[:800]
         assessment = str(review.get("overall_assessment", ""))[:2000]
 
-        data_context = f"""Review score: {score}
-Methodology notes: {methodology}
-Overall assessment: {assessment}"""
-
-        # Include bot's own review for context so it knows what it thought
         own_context = ""
         if own_review:
-            own_score = own_review.get("score", "?")
-            own_methodology = str(own_review.get("methodology_notes", ""))[:800]
-            own_assessment = str(own_review.get("overall_assessment", ""))[:1200]
-            own_context = f"""
-YOUR review of this paper (for reference):
-Your score: {own_score}
-Your methodology notes: {own_methodology}
-Your assessment: {own_assessment}
+            own_context = f"""YOUR review of this paper (for reference):
+Your score: {own_review.get("score", "?")}
+Your methodology: {str(own_review.get("methodology_notes", ""))[:800]}
+Your assessment: {str(own_review.get("overall_assessment", ""))[:1200]}
 """
 
-        if action_skill:
-            return f"""{own_context}
+        return f"""{own_context}
 Review to rate:
-{data_context}
+Review score: {score}
+Methodology notes: {methodology}
+Overall assessment: {assessment}
 
 {action_skill}"""
-        # Fallback if server doesn't provide action skill yet
-        return f"""Evaluate this review of a paper you also reviewed.
-{own_context}
-Review to rate:
-{data_context}
-
-Was this review helpful? Did it identify real issues or was it vague/consensus-following?
-
-Return ONLY a JSON object:
-{{
-    "helpful": true/false,
-    "tags": ["tag1", "tag2"]
-}}
-
-Valid tags: identified_error, statistical_misuse, overclaim, poor_uncertainty,
-missing_control, logical_gap, vague, consensus_following"""
 
     def build_red_team_prompt(self, source_doi: str, specific_finding: str, logical_bridge: str, action_skill: str = "") -> str:
-        """Prompt the bot to interrogate a bounty challenger's source."""
-        data_context = f"""Source DOI: {source_doi}
+        """Format bounty source data for red team interrogation. Intelligence in server skill."""
+        return f"""Source DOI: {source_doi}
 Their specific finding: {specific_finding}
-Their logical bridge: {logical_bridge}"""
-
-        if action_skill:
-            return f"""{data_context}
+Their logical bridge: {logical_bridge}
 
 {action_skill}"""
-        # Fallback
-        return f"""A bounty has been filed against your paper using this source:
-
-{data_context}
-
-Write a genuine red team interrogation. Be honest — concede if the challenge has merit.
-Write your interrogation as a single paragraph (80+ characters). Be specific."""
 
     def build_red_team_vote_prompt(self, specific_finding: str, logical_bridge: str, interrogation: str, action_skill: str = "") -> str:
-        """Prompt the bot to vote on a red team response."""
-        data_context = f"""Challenger's finding: {specific_finding}
+        """Format red team data for jury vote. Intelligence in server skill."""
+        return f"""Challenger's finding: {specific_finding}
 Challenger's bridge: {logical_bridge}
 
-Author's interrogation: {interrogation}"""
-
-        if action_skill:
-            return f"""{data_context}
+Author's interrogation: {interrogation}
 
 {action_skill}"""
-        # Fallback
-        return f"""You reviewed this paper. A bounty was filed, and the author responded.
-
-{data_context}
-
-Return ONLY a JSON object:
-{{
-    "vote": "upheld" or "rejected",
-    "reasoning": "<100+ chars explaining your vote>"
-}}"""
-
-    def build_open_question_prompt(self) -> str:
-        """Prompt the bot to generate a new open research question."""
-        return """Generate a specific, falsifiable research question with two identifiable sides.
-It should be something that could be written as a paper in this community.
-
-Return ONLY a JSON object:
-{
-    "title": "<10-300 chars, the question itself>",
-    "description": "<50-2000 chars, why this matters and what would count as evidence>",
-    "field_id": <1-13>
-}
-
-Field IDs: 1=Physics, 2=Biology, 3=Chemistry, 4=Medicine, 5=Computer Science,
-6=Mathematics, 7=Environmental Science, 8=Psychology, 9=Economics,
-10=Astronomy, 11=Materials Science, 12=Interdisciplinary, 13=Methodology"""
 
     def build_private_block_prompt(self, grade: int = 1) -> str:
         """
