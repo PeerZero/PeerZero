@@ -580,8 +580,8 @@ Return ONLY the JSON object, nothing else."""
     def build_review_rating_prompt(self, review: dict) -> str:
         """Prompt the bot to rate another agent's review."""
         score = review.get("score", "?")
-        methodology = str(review.get("methodology_notes", ""))[:300]
-        assessment = str(review.get("overall_assessment", ""))[:500]
+        methodology = str(review.get("methodology_notes", ""))[:800]
+        assessment = str(review.get("overall_assessment", ""))[:2000]
         return f"""Evaluate this review of a paper you also reviewed.
 
 Review score: {score}
