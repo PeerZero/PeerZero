@@ -262,20 +262,12 @@ class PeerZeroBot:
             action_skill = self.school.download_skill_action(skill_action)
 
         result = None
-        if next_action == "revise":
-            result = self._do_revise(system_prompt, profile, action_skill)
-        elif next_action == "submit_paper":
+        if next_action == "submit_paper":
+            # Multi-step: concept → search → write. Stays specialized.
             result = self._do_submit_paper(system_prompt, profile, action_skill)
-        elif next_action == "file_bounty":
-            result = self._do_file_bounty(system_prompt, profile, action_skill)
-        elif next_action == "respond":
-            result = self._do_respond(system_prompt, profile, action_skill)
-        elif next_action == "rebut":
-            result = self._do_rebut(system_prompt, profile, action_skill)
-        elif next_action == "review":
-            result = self._do_review(system_prompt, profile, action_skill)
-        elif next_action == "reaffirm":
-            result = self._do_reaffirm(system_prompt, profile, action_skill)
+        elif next_action in self._ACTION_CONFIGS:
+            # Generic: server provides target, bot calls LLM, submits result
+            result = self._execute_action(system_prompt, profile, action_skill)
         elif next_action == "sleep":
             logger.info(f"[{handle}] Server says nothing to do — sleeping")
             result = {"status": "sleeping"}
@@ -346,82 +338,180 @@ class PeerZeroBot:
 
     # ── School actions ────────────────────────────────────────────────────
 
-    def _do_review(self, system_prompt: str, profile: dict, action_skill: str = "") -> dict | None:
-        # Server already filtered: not own paper, not already reviewed, <15 reviews
-        reviewable = profile.get("reviewable_papers", [])
+    # Action configs: what JSON keys to expect, how to submit, post-processing
+    _ACTION_CONFIGS = {
+        "review": {
+            "json_keys": ["score", "overall_assessment", "methodology_notes", "statistical_validity_notes",
+                          "citation_accuracy_notes", "reproducibility_notes", "logical_consistency_notes",
+                          "review_search_strategy"],
+            "submit": "submit_review",  # school adapter method name
+            "needs_paper_id": True,     # submit_review(paper_id, data)
+            "required_key": "score",    # validation: result must have this key
+            "search": False,
+        },
+        "file_bounty": {
+            "json_keys": ["action", "target_paper_id", "challenge_type", "skip", "reason",
+                          "challenged_doi", "quality_challenge_reason", "search_strategy"],
+            "submit": "submit_bounty",  # submit_bounty(data) — no paper_id arg
+            "needs_paper_id": False,
+            "required_key": "challenge_type",
+            "search": False,
+        },
+        "reaffirm": {
+            "json_keys": ["title", "abstract", "body", "stance", "cross_study_connection",
+                          "citations", "search_strategy"],
+            "submit": "submit_revision",
+            "needs_paper_id": True,
+            "required_key": "title",
+            "defaults": {"stance": "reaffirmation"},
+            "clamp_paper_fields": True,
+            "search": False,
+        },
+        "revise": {
+            "json_keys": ["title", "abstract", "body", "stance", "cross_study_connection",
+                          "citations", "search_strategy"],
+            "submit": "submit_revision",
+            "needs_paper_id": True,
+            "required_key": "title",
+            "clamp_paper_fields": True,
+            "validate_citations": True,
+            "search": True,
+            "search_verb": "revise",
+            "search_context": "You received critical reviews. Search for evidence to address weaknesses.",
+        },
+        "respond": {
+            "json_keys": ["title", "abstract", "body", "stance", "cross_study_connection",
+                          "mechanism_chain", "citations", "search_strategy"],
+            "submit": "submit_revision",
+            "needs_paper_id": True,
+            "required_key": "title",
+            "defaults": {"stance": "rebut"},
+            "clamp_paper_fields": True,
+            "validate_citations": True,
+            "search": True,
+            "search_verb": "respond to",
+        },
+        "rebut": {
+            "json_keys": ["title", "abstract", "body", "stance", "cross_study_connection",
+                          "mechanism_chain", "citations", "search_strategy"],
+            "submit": "submit_revision",
+            "needs_paper_id": True,
+            "required_key": "title",
+            "defaults": {"stance": "support"},
+            "clamp_paper_fields": True,
+            "validate_citations": True,
+            "search": True,
+            "search_verb": "defend",
+        },
+    }
 
-        # Also filter out papers we've locally tracked as reviewed (catches races / stale server data)
-        tracked = set(self.memory.get_tracked_review_ids())
-        if tracked:
-            before = len(reviewable)
-            reviewable = [p for p in reviewable if p.get("id") not in tracked]
-            if len(reviewable) < before:
-                logger.info(f"[REVIEW] Filtered {before - len(reviewable)} locally-tracked papers")
-
-        if not reviewable:
-            logger.info("[REVIEW] No reviewable papers")
+    def _execute_action(self, system_prompt: str, profile: dict, action_skill: str = "") -> dict | None:
+        """Generic school action executor. The server provides everything via action_target.
+        The bot just: build prompt → (optional search) → call LLM → submit."""
+        action = profile.get("next_action", "review")
+        config = self._ACTION_CONFIGS.get(action)
+        if not config:
             return None
 
-        # Pick randomly from the full list to spread bots across papers
-        paper = random.choice(reviewable)
+        label = action.upper().replace("_", " ")
+        action_target = profile.get("action_target")
+        if not action_target:
+            logger.info(f"[{label}] No action_target from server — nothing to do")
+            return None
+
+        paper = action_target.get("paper", {})
         paper_id = paper.get("id")
         if not paper_id:
-            return None
-        logger.info(f"[REVIEW] Selected: {paper.get('title', '?')[:60]}...")
-
-        full = self.school.get_papers(params={"id": paper_id})
-        user_msg = self.prompts.build_review_prompt(full, action_skill=action_skill)
-        review_keys = ["score", "overall_assessment", "methodology_notes", "statistical_validity_notes",
-                       "citation_accuracy_notes", "reproducibility_notes", "logical_consistency_notes",
-                       "review_search_strategy"]
-        review_data = self.llm.call_json(system_prompt, user_msg, json_keys=review_keys)
-
-        if not review_data or "score" not in review_data:
-            logger.warning("[REVIEW] Failed to get valid JSON from LLM")
+            logger.info(f"[{label}] No paper ID in action_target")
             return None
 
-        # Clamp score to valid range (LLM sometimes returns 0.5 or 10.5)
-        try:
-            review_data["score"] = max(1.0, min(10.0, round(float(review_data["score"]), 1)))
-        except (ValueError, TypeError):
-            logger.warning(f"[REVIEW] Invalid score '{review_data.get('score')}' — defaulting to 5.0")
-            review_data["score"] = 5.0
+        logger.info(f"[{label}] Target: {paper.get('title', '?')[:60]}...")
 
+        # Optional: search for evidence (multi-step actions)
+        citation_slots = []
+        if config.get("search"):
+            paper_title = paper.get("title", "")
+            search_verb = config.get("search_verb", action)
+            extra = config.get("search_context", "")
+            search_plan_msg = self.prompts.build_search_planning_prompt(
+                search_verb, paper_title, extra_context=extra,
+            )
+            search_plan = extract_json(self.llm_fast.call(system_prompt, search_plan_msg)) or {}
+            queries = search_plan.get("supporting_queries", []) + search_plan.get("opposing_queries", [])
+            if not queries:
+                queries = [paper_title]
+            citation_slots = search_and_summarize(queries, f"{search_verb}: {paper_title}", self.llm_fast)
+            logger.info(f"[{label}] Found {len(citation_slots)} papers from search")
+            # Add citation slots to action_target so the prompt can include them
+            action_target["citation_slots"] = citation_slots
+
+        # Build prompt — generic: memory preamble + server skill text + target data
+        user_msg = self.prompts.build_action_prompt(action, action_skill, action_target=action_target)
+
+        # Call LLM
+        result_data = self.llm.call_json(system_prompt, user_msg, json_keys=config["json_keys"])
+
+        if not result_data or config.get("required_key") not in (result_data or {}):
+            logger.warning(f"[{label}] Failed to get valid JSON from LLM")
+            return None
+
+        # Handle bounty skip
+        if action == "file_bounty" and result_data.get("skip"):
+            logger.info(f"[{label}] Skipped — {result_data.get('reason', 'no reason')}")
+            return None
+
+        # Apply defaults (stance, etc.)
+        for k, v in config.get("defaults", {}).items():
+            result_data[k] = v
+        result_data.setdefault("citations", [])
+        result_data.setdefault("search_strategy", {})
+
+        # Clamp review score
+        if action == "review":
+            try:
+                result_data["score"] = max(1.0, min(10.0, round(float(result_data["score"]), 1)))
+            except (ValueError, TypeError):
+                result_data["score"] = 5.0
+
+        # Clamp paper fields
+        if config.get("clamp_paper_fields"):
+            result_data = _clamp_paper_fields(result_data)
+
+        # Validate citations if needed
+        if config.get("validate_citations"):
+            text_fields = {k: result_data.get(k, "") for k in ("title", "abstract", "body", "cross_study_connection")}
+            check = self.school.validate_citations(text_fields, result_data.get("citations", []))
+            if not check.get("valid", True):
+                logger.warning(f"[{label}] Citation issues: {check.get('flags', [])} — submitting anyway")
+
+        # Submit
+        submit_fn = getattr(self.school, config["submit"])
         try:
-            result = self._submit_with_retry("REVIEW", self.school.submit_review, paper_id, review_data)
-            cred_new = result.get("your_new_credibility", "?")
-            cred_change = result.get("credibility_change", "?")
-            logger.info(f"[REVIEW] Submitted — score={review_data.get('score')}, credibility={cred_new} (change={cred_change})")
-            # Track this paper so we can rate other reviews on it later
-            self.memory.add_tracked_review_id(paper_id)
+            if config.get("needs_paper_id"):
+                result = self._submit_with_retry(label, submit_fn, paper_id, result_data)
+            else:
+                result = self._submit_with_retry(label, submit_fn, result_data)
+            cred = result.get("your_new_credibility", result.get("credibility", "?"))
+            logger.info(f"[{label}] Submitted — credibility={cred}")
+            # Track reviewed papers locally
+            if action == "review":
+                self.memory.add_tracked_review_id(paper_id)
             return result
         except Exception as e:
             status = getattr(getattr(e, "response", None), "status_code", None)
             if status == 409:
-                # Distinguish "already reviewed" (safe to track) from "paper full" (not reviewed)
-                err_msg = ""
-                try:
-                    err_msg = e.response.json().get("error", "")
-                except Exception:
-                    pass
-                if "already has 15 reviews" in err_msg:
-                    logger.info(f"[REVIEW] 409 — paper full (15 reviews), skipping")
-                    return {"status": "paper_full"}
-                logger.info(f"[REVIEW] 409 — already reviewed, tracking locally")
-                self.memory.add_tracked_review_id(paper_id)
+                logger.info(f"[{label}] 409 — already done, moving on")
+                if action == "review":
+                    self.memory.add_tracked_review_id(paper_id)
                 return {"status": "already_done"}
             if status is not None:
                 try:
-                    err_body = e.response.json()
-                    err_msg = err_body.get("error", str(e))
-                    failures = err_body.get("failures", [])
-                    if failures:
-                        err_msg += f" — {failures}"
+                    err_msg = e.response.json().get("error", str(e))
                 except Exception:
                     err_msg = str(e)
-                logger.warning(f"[REVIEW] HTTP {status}: {err_msg}")
+                logger.warning(f"[{label}] HTTP {status}: {err_msg}")
             else:
-                logger.warning(f"[REVIEW] Failed: {e}")
+                logger.warning(f"[{label}] Failed: {e}")
             return None
 
     def _do_submit_paper(self, system_prompt: str, profile: dict, action_skill: str = "") -> dict | None:
@@ -469,289 +559,6 @@ class PeerZeroBot:
             return result
         except Exception as e:
             logger.warning(f"[PAPER] Failed: {e}")
-            return None
-
-    def _do_file_bounty(self, system_prompt: str, profile: dict, action_skill: str = "") -> dict | None:
-        # Server already filtered: reviewed by bot, not already bountied, 3+ reviews, <8 family bounties
-        bountyable = profile.get("bountyable_papers", [])
-        if not bountyable:
-            logger.info("[BOUNTY] No bountyable papers from server")
-            return None
-
-        # Pick randomly from lowest-scored third to reduce 409 races
-        pool_size = max(1, len(bountyable) // 3)
-        target = random.choice(bountyable[:pool_size])
-        target_id = target["id"]
-        full = self.school.get_papers(params={"id": target_id})
-
-        user_msg = self.prompts.build_bounty_prompt(full, target_id, action_skill=action_skill)
-        bounty_keys = ["action", "target_paper_id", "challenge_type", "skip", "reason",
-                       "challenged_doi", "quality_challenge_reason", "search_strategy"]
-        bounty_data = self.llm.call_json(system_prompt, user_msg, json_keys=bounty_keys)
-
-        if bounty_data and bounty_data.get("skip"):
-            logger.info(f"[BOUNTY] Skipped — {bounty_data.get('reason', 'no reason given')}")
-            return None
-
-        if not bounty_data:
-            logger.warning("[BOUNTY] Failed to get valid JSON from LLM")
-            return None
-
-        # Pre-validate structural challenge types against paper metadata from profile
-        # to avoid wasting a round-trip on a guaranteed 400
-        challenge_type = bounty_data.get("challenge_type")
-        if challenge_type == "no_mechanism_chain" and not target.get("missing_mechanism_chain", True):
-            logger.info(f"[BOUNTY] Skipped no_mechanism_chain — paper already has a mechanism chain")
-            return None
-        if challenge_type == "no_cross_study_connection" and target.get("has_cross_study", False):
-            logger.info(f"[BOUNTY] Skipped no_cross_study_connection — paper already has one")
-            return None
-
-        try:
-            result = self._submit_with_retry("BOUNTY", self.school.submit_bounty, bounty_data)
-            logger.info(f"[BOUNTY] Filed — type={bounty_data.get('challenge_type')}")
-            return result
-        except Exception as e:
-            status = getattr(getattr(e, "response", None), "status_code", None)
-            if status == 409:
-                logger.info(f"[BOUNTY] 409 — already filed or limit reached, moving on")
-                return {"status": "already_done"}
-            if status is not None:
-                try:
-                    err_body = e.response.json()
-                    err_msg = err_body.get("error", str(e))
-                except Exception:
-                    err_msg = str(e)
-                logger.warning(f"[BOUNTY] HTTP {status}: {err_msg}")
-            else:
-                logger.warning(f"[BOUNTY] Failed: {e}")
-            return None
-
-    def _do_revise(self, system_prompt: str, profile: dict, action_skill: str = "") -> dict | None:
-        # Server already filtered: own paper, enough reviews, <2 revisions, bounties, rebuttals
-        revisable = profile.get("can_revise_papers", [])
-        if not revisable:
-            logger.info("[REVISE] No revisable papers from server")
-            return None
-
-        # Pick lowest-scored paper
-        revisable.sort(key=lambda p: p.get("weighted_score", 10))
-        target = revisable[0]
-        target_id = target["id"]
-        full = self.school.get_papers(params={"id": target_id, "audit": "true"})
-
-        # LLM generates search queries based on SKILL.md guidance
-        paper_title = target.get("title", "")
-        search_plan_msg = self.prompts.build_search_planning_prompt(
-            "revise", paper_title,
-            extra_context="You received critical reviews. Search for evidence to address weaknesses and strengthen your argument.",
-        )
-        search_plan = extract_json(self.llm_fast.call(system_prompt, search_plan_msg)) or {}
-        revision_queries = search_plan.get("supporting_queries", []) + search_plan.get("opposing_queries", [])
-        if not revision_queries:
-            revision_queries = [paper_title]
-        evidence_papers = search_and_summarize(revision_queries, f"Revision of: {paper_title}", self.llm_fast)
-        logger.info(f"[REVISE] Found {len(evidence_papers)} papers from search")
-
-        user_msg = self.prompts.build_revision_prompt(full, citation_slots=evidence_papers, action_skill=action_skill)
-        revision_keys = ["title", "abstract", "body", "stance", "cross_study_connection", "citations", "search_strategy"]
-        revision_data = self.llm.call_json(system_prompt, user_msg, json_keys=revision_keys)
-
-        if not revision_data or "title" not in revision_data:
-            logger.warning("[REVISE] Failed to get valid JSON from LLM")
-            return None
-
-        # Pre-validate citations — warn but still attempt submission
-        text_fields = {
-            "title": revision_data.get("title", ""),
-            "abstract": revision_data.get("abstract", ""),
-            "body": revision_data.get("body", ""),
-            "cross_study_connection": revision_data.get("cross_study_connection", ""),
-        }
-        citation_check = self.school.validate_citations(text_fields, revision_data.get("citations", []))
-        if not citation_check.get("valid", True):
-            logger.warning(f"[REVISE] Citation pre-validation flagged issues: {citation_check.get('flags', [])} — submitting anyway")
-
-        try:
-            revision_data = _clamp_paper_fields(revision_data)
-            result = self._submit_with_retry("REVISE", self.school.submit_revision, target_id, revision_data)
-            logger.info(f"[REVISE] Submitted for {target_id}, credibility={result.get('your_new_credibility', '?')}")
-            return result
-        except Exception as e:
-            logger.warning(f"[REVISE] Failed: {e}")
-            return None
-
-    def _do_respond(self, system_prompt: str, profile: dict, action_skill: str = "") -> dict | None:
-        """Write a response paper critiquing a paper this bot reviewed harshly."""
-        respondable = profile.get("respondable_papers", [])
-        # Only respond to original papers (not other responses)
-        respondable = [p for p in respondable if not p.get("parent_paper_id")]
-        if not respondable:
-            logger.info("[RESPOND] No respondable papers")
-            return None
-
-        target = respondable[0]
-        paper_id = target.get("id")
-        if not paper_id:
-            return None
-
-        my_score = target.get("my_review_score", "unknown")
-        logger.info(f"[RESPOND] Critiquing: {target.get('title', '?')[:60]}... (my score: {my_score})")
-
-        full = self.school.get_papers(params={"id": paper_id})
-
-        # LLM generates search queries based on SKILL.md guidance
-        paper_title = target.get("title", "")
-        search_plan_msg = self.prompts.build_search_planning_prompt(
-            "respond to", paper_title,
-            extra_context=f"You gave this paper a score of {my_score}/10. Search for evidence that supports your critique.",
-        )
-        search_plan = extract_json(self.llm_fast.call(system_prompt, search_plan_msg)) or {}
-        respond_queries = search_plan.get("supporting_queries", []) + search_plan.get("opposing_queries", [])
-        if not respond_queries:
-            respond_queries = [paper_title]
-        evidence_papers = search_and_summarize(respond_queries, f"Critique of: {paper_title}", self.llm_fast)
-        logger.info(f"[RESPOND] Found {len(evidence_papers)} papers from search")
-
-        user_msg = self.prompts.build_respond_prompt(full, my_score, citation_slots=evidence_papers, action_skill=action_skill)
-        respond_keys = ["title", "abstract", "body", "stance", "cross_study_connection",
-                        "mechanism_chain", "citations", "search_strategy"]
-        response_data = self.llm.call_json(system_prompt, user_msg, json_keys=respond_keys)
-
-        if not response_data or "title" not in response_data:
-            logger.warning("[RESPOND] Failed to get valid JSON from LLM")
-            return None
-
-        # Fill defaults for any missing required fields
-        response_data.setdefault("abstract", response_data.get("title", ""))
-        response_data.setdefault("body", response_data.get("abstract", ""))
-        response_data.setdefault("citations", [])
-        response_data.setdefault("search_strategy", "")
-
-        # Ensure correct stance
-        response_data["stance"] = "rebut"
-
-        # Pre-validate citations — warn but still attempt submission
-        text_fields = {
-            "title": response_data.get("title", ""),
-            "abstract": response_data.get("abstract", ""),
-            "body": response_data.get("body", ""),
-            "cross_study_connection": response_data.get("cross_study_connection", ""),
-        }
-        citation_check = self.school.validate_citations(text_fields, response_data.get("citations", []))
-        if not citation_check.get("valid", True):
-            logger.warning(f"[RESPOND] Citation pre-validation flagged issues: {citation_check.get('flags', [])} — submitting anyway")
-
-        try:
-            response_data = _clamp_paper_fields(response_data)
-            result = self._submit_with_retry("RESPOND", self.school.submit_revision, paper_id, response_data)
-            logger.info(f"[RESPOND] Submitted — id={result.get('response_paper_id')}, credibility={result.get('your_new_credibility', '?')}")
-            return result
-        except Exception as e:
-            status = getattr(getattr(e, "response", None), "status_code", None)
-            if status == 409:
-                logger.info(f"[RESPOND] 409 — already responded, moving on")
-                return {"status": "already_done"}
-            if status is not None:
-                try:
-                    err_body = e.response.json()
-                    err_msg = err_body.get("error", str(e))
-                except Exception:
-                    err_msg = str(e)
-                logger.warning(f"[RESPOND] HTTP {status}: {err_msg}")
-            else:
-                logger.warning(f"[RESPOND] Failed: {e}")
-            return None
-
-    def _do_rebut(self, system_prompt: str, profile: dict, action_skill: str = "") -> dict | None:
-        """Defend own paper against low reviews or validated bounties."""
-        rebuttable = profile.get("rebuttable_papers", [])
-        if not rebuttable:
-            logger.info("[REBUT] No rebuttable papers")
-            return None
-
-        target = rebuttable[0]
-        paper_id = target.get("id")
-        if not paper_id:
-            return None
-
-        logger.info(f"[REBUT] Defending: {target.get('title', '?')[:60]}...")
-
-        # Build criticisms summary from low reviews and bounties
-        criticisms = ""
-        for r in (target.get("low_reviews") or [])[:5]:
-            assessment = str(r.get("assessment", ""))[:300]
-            criticisms += f"\n- Review score {r.get('score')}: {assessment}"
-        for b in (target.get("bounties") or [])[:3]:
-            criticisms += f"\n- Bounty ({b.get('challenge_type', 'unknown')}): score drop {b.get('score_drop', 'unknown')}"
-
-        if not criticisms:
-            logger.info("[REBUT] No specific criticisms to address")
-            return None
-
-        full = self.school.get_papers(params={"id": paper_id})
-
-        # LLM generates search queries based on SKILL.md guidance
-        paper_title = target.get("title", "")
-        search_plan_msg = self.prompts.build_search_planning_prompt(
-            "defend", paper_title,
-            extra_context=f"Your paper received these criticisms:{criticisms}\nSearch for evidence to support your defense and honestly test if criticisms have merit.",
-        )
-        search_plan = extract_json(self.llm_fast.call(system_prompt, search_plan_msg)) or {}
-        defense_queries = search_plan.get("supporting_queries", []) + search_plan.get("opposing_queries", [])
-        if not defense_queries:
-            defense_queries = [paper_title]
-        evidence_papers = search_and_summarize(defense_queries, f"Defense of: {paper_title}", self.llm_fast)
-        logger.info(f"[REBUT] Found {len(evidence_papers)} papers from search")
-
-        user_msg = self.prompts.build_rebut_prompt(full, criticisms, citation_slots=evidence_papers, action_skill=action_skill)
-        rebut_keys = ["title", "abstract", "body", "stance", "cross_study_connection",
-                      "mechanism_chain", "citations", "search_strategy"]
-        rebut_data = self.llm.call_json(system_prompt, user_msg, json_keys=rebut_keys)
-
-        if not rebut_data or "title" not in rebut_data:
-            logger.warning("[REBUT] Failed to get valid JSON from LLM")
-            return None
-
-        # Fill defaults for any missing required fields
-        rebut_data.setdefault("abstract", rebut_data.get("title", ""))
-        rebut_data.setdefault("body", rebut_data.get("abstract", ""))
-        rebut_data.setdefault("citations", [])
-        rebut_data.setdefault("search_strategy", "")
-
-        # Ensure correct stance
-        rebut_data["stance"] = "support"
-
-        # Pre-validate citations — warn but still attempt submission
-        text_fields = {
-            "title": rebut_data.get("title", ""),
-            "abstract": rebut_data.get("abstract", ""),
-            "body": rebut_data.get("body", ""),
-            "cross_study_connection": rebut_data.get("cross_study_connection", ""),
-        }
-        citation_check = self.school.validate_citations(text_fields, rebut_data.get("citations", []))
-        if not citation_check.get("valid", True):
-            logger.warning(f"[REBUT] Citation pre-validation flagged issues: {citation_check.get('flags', [])} — submitting anyway")
-
-        try:
-            rebut_data = _clamp_paper_fields(rebut_data)
-            result = self._submit_with_retry("REBUT", self.school.submit_revision, paper_id, rebut_data)
-            logger.info(f"[REBUT] Submitted — id={result.get('response_paper_id')}, credibility={result.get('your_new_credibility', '?')}")
-            return result
-        except Exception as e:
-            status = getattr(getattr(e, "response", None), "status_code", None)
-            if status == 409:
-                logger.info(f"[REBUT] 409 — already rebutted, moving on")
-                return {"status": "already_done"}
-            if status is not None:
-                try:
-                    err_body = e.response.json()
-                    err_msg = err_body.get("error", str(e))
-                except Exception:
-                    err_msg = str(e)
-                logger.warning(f"[REBUT] HTTP {status}: {err_msg}")
-            else:
-                logger.warning(f"[REBUT] Failed: {e}")
             return None
 
     # ── Pre-action community work ──────────────────────────────────────────
@@ -908,55 +715,6 @@ class PeerZeroBot:
                         return  # one vote per cycle
                     except Exception as e:
                         logger.debug(f"[JURY] Failed: {e}")
-
-    def _do_reaffirm(self, system_prompt: str, profile: dict, action_skill: str = "") -> dict | None:
-        """Reaffirm a decaying paper with new evidence."""
-        reaffirmable = profile.get("reaffirmable_papers", [])
-        if not reaffirmable:
-            logger.info("[REAFFIRM] No reaffirmable papers")
-            return None
-
-        target = reaffirmable[0]
-        paper_id = target.get("paper_id")
-        if not paper_id:
-            return None
-
-        logger.info(f"[REAFFIRM] Targeting paper {paper_id} (raw={target.get('raw_score')}, effective={target.get('effective_score')})")
-
-        try:
-            full = self.school.get_papers(params={"id": paper_id})
-        except Exception as e:
-            logger.warning(f"[REAFFIRM] Failed to fetch paper: {e}")
-            return None
-
-        original = full if isinstance(full, dict) else (full[0] if isinstance(full, list) and full else {})
-        paper_data = original.get("paper", original)
-
-        user_msg = self.prompts.build_reaffirmation_prompt(paper_data, [], action_skill=action_skill)
-        reaffirm_keys = ["title", "abstract", "body", "stance", "cross_study_connection",
-                         "citations", "search_strategy"]
-        reaffirm_data = self.llm.call_json(system_prompt, user_msg, json_keys=reaffirm_keys)
-
-        if not reaffirm_data or "title" not in reaffirm_data:
-            logger.warning("[REAFFIRM] Failed to get valid JSON from LLM")
-            return None
-
-        reaffirm_data["stance"] = "reaffirmation"
-        reaffirm_data.setdefault("citations", [])
-        reaffirm_data.setdefault("search_strategy", {})
-
-        try:
-            reaffirm_data = _clamp_paper_fields(reaffirm_data)
-            result = self._submit_with_retry("REAFFIRM", self.school.submit_revision, paper_id, reaffirm_data)
-            logger.info(f"[REAFFIRM] Submitted for {paper_id}, credibility={result.get('your_new_credibility', '?')}")
-            return result
-        except Exception as e:
-            status = getattr(getattr(e, "response", None), "status_code", None)
-            if status == 409:
-                logger.info("[REAFFIRM] 409 — already reaffirmed, moving on")
-                return {"status": "already_done"}
-            logger.warning(f"[REAFFIRM] Failed: {e}")
-            return None
 
     def _do_open_questions(self, system_prompt: str):
         """Vote on open questions and occasionally post new ones."""

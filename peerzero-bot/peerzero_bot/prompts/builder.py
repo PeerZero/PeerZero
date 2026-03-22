@@ -49,6 +49,34 @@ class PromptBuilder:
         """Store the current cycle's profile for use in prompts."""
         self._profile = profile
 
+    def build_action_prompt(self, action: str, action_skill: str, action_target: dict | None = None) -> str:
+        """Generic prompt for any school action. The server provides skill text + target data.
+        The bot just adds its memory preamble. That's it — intelligence lives in the server."""
+        verb_map = {
+            "review": "review this paper", "file_bounty": "challenge this paper",
+            "revise": "revise your paper", "respond": "respond to this paper",
+            "rebut": "defend your paper", "reaffirm": "reaffirm your paper",
+            "submit_paper": "write a paper",
+        }
+        preamble = self._build_memory_preamble(verb_map.get(action, action))
+
+        # Substitute placeholders in skill text
+        if action_target and action_skill:
+            paper = action_target.get("paper", {})
+            target_id = paper.get("id", "")
+            action_skill = action_skill.replace("TARGET_PAPER_ID", str(target_id))
+
+        # Serialize target data
+        target_section = ""
+        if action_target:
+            target_json = truncate_json(json.dumps(action_target, indent=2, default=str), 15000)
+            target_section = f"\n\nTarget data:\n{target_json}"
+
+        return f"""{preamble}
+
+{action_skill}
+{target_section}"""
+
     def _build_memory_preamble(self, action_verb: str) -> str:
         """Build a preamble with memory context + coaching + research history."""
         parts = []
@@ -196,26 +224,6 @@ class PromptBuilder:
 
         return "\n".join(parts)
 
-    def build_review_prompt(self, paper_data: dict, action_skill: str = "") -> str:
-        paper_json = truncate_json(json.dumps(paper_data, indent=2, default=str), 12000)
-        preamble = self._build_memory_preamble("review this paper")
-
-        # Inject review-specific context: credibility and bounty status
-        profile = getattr(self, "_profile", None) or {}
-        cred = profile.get("credibility_score", "?")
-        review_context = f"\nYour credibility: {cred}. "
-        bounty_status = profile.get("bounty_status", {})
-        if bounty_status:
-            review_context += f"Your bounties: {bounty_status.get('validated', 0)} validated, {bounty_status.get('pending', 0)} pending. "
-
-        return f"""{preamble}
-{review_context}
-
-{action_skill}
-
-Paper data:
-{paper_json}"""
-
     def build_paper_concept_prompt(self) -> str:
         """Generate a paper concept with search queries before searching."""
         profile = getattr(self, "_profile", None) or {}
@@ -308,122 +316,6 @@ Return JSON only:
 {concept_section}
 {action_skill}
 {citation_instruction}"""
-
-    def build_bounty_prompt(self, paper_data: dict, target_id: str, action_skill: str = "") -> str:
-        paper_json = truncate_json(json.dumps(paper_data, indent=2, default=str), 12000)
-        preamble = self._build_memory_preamble("challenge this paper")
-
-        # Inject bounty-specific context
-        profile = getattr(self, "_profile", None) or {}
-        bounty_status = profile.get("bounty_status", {})
-        required = profile.get("required_bounties", "?")
-        validated = bounty_status.get("validated", 0)
-        pending = bounty_status.get("pending", 0)
-        failed = bounty_status.get("failed", 0)
-        bounty_context = f"\nYour bounty status: {validated} validated, {pending} pending, {failed} failed. Need {required} total."
-        if failed > 0:
-            bounty_context += " You have failed bounties — be more careful with challenge selection."
-
-        # Replace TARGET_PAPER_ID placeholder in server instructions
-        skill = action_skill.replace("TARGET_PAPER_ID", target_id) if action_skill else ""
-
-        return f"""{preamble}
-{bounty_context}
-
-{skill}
-
-Paper data:
-{paper_json}"""
-
-    def build_revision_prompt(self, paper_data: dict, citation_slots: list = None, action_skill: str = "") -> str:
-        paper_json = truncate_json(json.dumps(paper_data, indent=2, default=str), 15000)
-        preamble = self._build_memory_preamble("revise your paper")
-
-        # Inject revision-specific context
-        profile = getattr(self, "_profile", None) or {}
-        revision_context = ""
-        recent = profile.get("recent_feedback", {})
-        if recent:
-            bounties_against = recent.get("bounties_against_your_papers", [])
-            if bounties_against:
-                bounty_lines = []
-                for b in bounties_against[:3]:
-                    btype = b.get("challenge_type", "unknown")
-                    drop = b.get("score_drop", "?")
-                    bounty_lines.append(f"  - {btype}: score drop {drop}")
-                revision_context += f"\nBounties filed against your papers:\n" + "\n".join(bounty_lines)
-
-        coaching = profile.get("coaching", {})
-        if coaching:
-            trajectory = coaching.get("quality_trajectory", "")
-            if trajectory:
-                revision_context += f"\nYour quality trajectory: {trajectory}"
-
-        slots_text = self._build_citation_slots(citation_slots or [])
-        citation_instruction = (
-            f"\nNEW CITATIONS AVAILABLE — use these DOIs for new evidence:\n{slots_text}"
-            if slots_text else ""
-        )
-
-        return f"""{preamble}
-{revision_context}
-
-{action_skill}
-{citation_instruction}
-
-Paper + reviews + audit:
-{paper_json}"""
-
-    def build_respond_prompt(self, paper_data: dict, my_review_score: int, citation_slots: list = None, action_skill: str = "") -> str:
-        paper_json = truncate_json(json.dumps(paper_data, indent=2, default=str), 15000)
-        preamble = self._build_memory_preamble("write your response critique")
-
-        profile = getattr(self, "_profile", None) or {}
-        cred = profile.get("credibility_score", "?")
-        respond_context = f"\nYour credibility: {cred}. Your original review score: {my_review_score}/10."
-
-        slots_text = self._build_citation_slots(citation_slots or [])
-        citation_instruction = (
-            f"\nAVAILABLE CITATIONS -- use these DOIs from real search results:\n{slots_text}"
-            if slots_text else ""
-        )
-
-        return f"""{preamble}
-{respond_context}
-
-{action_skill}
-{citation_instruction}
-
-Paper to respond to:
-{paper_json}"""
-
-    def build_rebut_prompt(self, paper_data: dict, criticisms: str, citation_slots: list = None, action_skill: str = "") -> str:
-        paper_json = truncate_json(json.dumps(paper_data, indent=2, default=str), 12000)
-        preamble = self._build_memory_preamble("defend your paper")
-
-        profile = getattr(self, "_profile", None) or {}
-        risk = profile.get("risk_summary", {})
-        rebut_context = ""
-        if risk.get("grade_failure_risk") in ("high", "imminent"):
-            rebut_context = f"\nWARNING: Grade failure risk is {risk['grade_failure_risk']}. A strong defense here matters."
-
-        slots_text = self._build_citation_slots(citation_slots or [])
-        citation_instruction = (
-            f"\nAVAILABLE CITATIONS -- use these DOIs from real search results:\n{slots_text}"
-            if slots_text else ""
-        )
-
-        return f"""{preamble}
-{rebut_context}
-
-{action_skill}
-
-Criticisms received:
-{criticisms}
-{citation_instruction}
-
-Your paper:
-{paper_json}"""
 
     def build_condenser_prompt(self, condenser_prompt: str, exercises: list[dict]) -> str:
         exercises_json = truncate_json(json.dumps(exercises, indent=2, default=str), 8000)
@@ -606,28 +498,6 @@ Return ONLY a JSON object:
     "vote": "upheld" or "rejected",
     "reasoning": "<100+ chars explaining your vote>"
 }}"""
-
-    def build_reaffirmation_prompt(self, original: dict, new_papers: list, action_skill: str = "") -> str:
-        """Prompt the bot to reaffirm a decaying paper with new evidence."""
-        title = original.get("title", "Unknown")
-        claim = str(original.get("falsifiable_claim", ""))[:200]
-        abstract = str(original.get("abstract", ""))[:500]
-
-        citation_slots = ""
-        for p in new_papers[:6]:
-            doi = p.get("doi", "unknown")
-            p_title = p.get("title", "unknown")[:100]
-            p_abstract = str(p.get("abstract", ""))[:500]
-            citation_slots += f"\n- DOI: {doi}\n  Title: {p_title}\n  Abstract: {p_abstract}\n"
-
-        return f"""Original paper: {title}
-Original claim: {claim}
-Original abstract: {abstract}
-
-New papers found that may support or update your thesis:
-{citation_slots if citation_slots else "(No new papers found — you must still write a reaffirmation based on reflection.)"}
-
-{action_skill}"""
 
     def build_open_question_prompt(self) -> str:
         """Prompt the bot to generate a new open research question."""
