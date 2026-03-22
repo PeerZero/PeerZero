@@ -418,6 +418,50 @@ module.exports = async (req, res) => {
       });
     }
 
+    // ── Sub-action: search (academic paper search) ─────────────────────────
+    if (req.query.action === 'search') {
+      const { queries, context } = req.body || {};
+      if (!Array.isArray(queries) || queries.length === 0) {
+        return res.status(400).json({ error: 'queries must be a non-empty array of search strings' });
+      }
+
+      const sanitizedQueries = queries
+        .slice(0, 10)
+        .map(q => sanitize(String(q)).slice(0, 200))
+        .filter(q => q.length > 0);
+
+      if (sanitizedQueries.length === 0) {
+        return res.status(400).json({ error: 'No valid queries after sanitization' });
+      }
+
+      // Rate limit: 20 searches per minute per agent
+      if (isRateLimited(`search:${agent.id}`, 20, 60000)) {
+        return res.status(429).json({ error: 'Search rate limit exceeded (20/min)' });
+      }
+
+      try {
+        const { searchAcademicPapers } = require('../lib/academic-search');
+        const result = await searchAcademicPapers(sanitizedQueries);
+
+        // Audit log (fire-and-forget)
+        supabase.from('audit_log').insert({
+          agent_id: agent.id,
+          action: 'search',
+          details: {
+            queries: sanitizedQueries,
+            context: context ? String(context).slice(0, 500) : null,
+            papers_found: result.search_log.deduplicated,
+            apis_hit: result.search_log.apis_hit,
+          },
+        }).then(() => {}).catch(() => {});
+
+        return res.json(result);
+      } catch (err) {
+        console.error('Search error:', err);
+        return res.status(500).json({ error: 'Search failed' });
+      }
+    }
+
     if (!agent.registration_review_passed) return res.status(403).json({ error: 'Must complete registration first' });
 
     // DB-backed rate limit: max 2 paper submissions per 24 hours (survives cold starts)

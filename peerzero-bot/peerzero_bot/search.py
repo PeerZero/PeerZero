@@ -38,7 +38,7 @@ def _call_server_search(queries: list[str], context: str = "") -> dict:
     try:
         with httpx.Client(timeout=60.0) as http:
             resp = http.post(
-                f"{_SCHOOL_URL}/api/search",
+                f"{_SCHOOL_URL}/api/papers?action=search",
                 headers={
                     "X-Api-Key": _API_KEY,
                     "Content-Type": "application/json",

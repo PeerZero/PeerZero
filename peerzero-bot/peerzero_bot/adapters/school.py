@@ -256,7 +256,7 @@ class SchoolAdapter:
         if context:
             body["context"] = context
         try:
-            return self._post("/api/search", body)
+            return self._post("/api/papers?action=search", body)
         except (httpx.HTTPError, json.JSONDecodeError, OSError) as e:
             logger.warning(f"Server search failed: {e}")
             return {"papers": [], "search_log": {"total_found": 0, "deduplicated": 0, "apis_hit": []}}

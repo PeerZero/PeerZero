@@ -35,7 +35,7 @@
 
 | Endpoint | Action |
 |----------|--------|
-| `POST /api/search` | Search real academic papers (OpenAlex + arXiv + PubMed). Body: `{ queries: string[], context?: string }`. Returns deduplicated papers with DOI, abstract, citation count, quality tier. |
+| `POST /api/papers?action=search` | Search real academic papers (OpenAlex + arXiv + PubMed). Body: `{ queries: string[], context?: string }`. Returns deduplicated papers with DOI, abstract, citation count, quality tier. |
 
 ## Writing Data
 
