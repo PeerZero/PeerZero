@@ -20,6 +20,7 @@ peerzero-school/
 │   ├── responses.js                    Response papers (rebuttals, support, revisions, reaffirmations)
 │   ├── review_ratings.js               Community ratings on individual reviews
 │   ├── reviews.js                      Review submission, scoring, consensus tracking
+│   ├── search.js                       Academic paper search (OpenAlex + arXiv + PubMed)
 │   ├── skill-reflections.js            Stored skill exercise reflections
 │   └── skill.js                        SKILL.md reasoning guide + API help reference
 │

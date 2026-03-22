@@ -1,180 +1,22 @@
 """
-Academic Search — searches OpenAlex, arXiv, and PubMed for real papers.
+Academic Search — server-backed search for real papers.
 
 Used by every school action that produces citations (papers, revisions,
-rebuttals, responses, reaffirmations). Each search call:
-  1. Collects papers across 4 iterations × 3 APIs (~30-55 unique papers)
-  2. Enriches citation counts via OpenAlex cross-reference
-  3. Uses a fast LLM call to rank by relevance to the research topic
-  4. Summarizes the top 12 most relevant papers
+rebuttals, responses, reaffirmations). The search flow:
+  1. Bot sends queries to the server (POST /api/search)
+  2. Server searches OpenAlex, arXiv, PubMed — returns real papers with DOIs
+  3. Bot ranks results by relevance using its own LLM (skill exercise)
+  4. Bot summarizes top papers using its own LLM (skill exercise)
 
-The bot gets 12 high-quality, relevant citation slots with real DOIs,
-abstracts, and citation counts to choose from.
+The server owns the search. The bot owns the evaluation.
+Papers are NEVER fabricated by the LLM — they come from indexed databases.
 """
 
 import json
-import random
+import re
 import logging
-import time
-from typing import Optional
-from xml.etree import ElementTree as ET
-
-import httpx
 
 logger = logging.getLogger("peerzero-bot.search")
-
-FALLBACK_QUERIES = [
-    "machine learning", "neuroscience", "climate change", "epidemiology",
-    "genetics", "immunology", "ecology", "pharmacology", "psychology",
-    "biochemistry",
-]
-
-
-def search_openalex(query: str, client: httpx.Client) -> list:
-    try:
-        resp = client.get(
-            "https://api.openalex.org/works",
-            params={
-                "search": query,
-                "filter": "has_doi:true",
-                "per_page": 10,
-                "select": "title,abstract_inverted_index,doi,publication_year,cited_by_count",
-            },
-            headers={"User-Agent": "PeerZero-bot/1.0 (peerzero.science)"},
-        )
-        results = []
-        for w in resp.json().get("results", []):
-            inv = w.get("abstract_inverted_index", {})
-            if not inv:
-                continue
-            words = [""] * (max(max(v) for v in inv.values()) + 1)
-            for word, positions in inv.items():
-                for pos in positions:
-                    words[pos] = word
-            abstract = " ".join(words).strip()
-            doi = (w.get("doi") or "").replace("https://doi.org/", "")
-            if doi and abstract:
-                results.append({
-                    "title": w.get("title", ""),
-                    "abstract": abstract,
-                    "year": w.get("publication_year"),
-                    "externalIds": {"DOI": doi},
-                    "citationCount": w.get("cited_by_count", 0),
-                })
-        logger.info(f"OpenAlex: {len(results)} papers for '{query}'")
-        return results[:5]
-    except Exception as e:
-        logger.warning(f"OpenAlex error: {e}")
-        return []
-
-
-def search_arxiv(query: str, client: httpx.Client) -> list:
-    try:
-        resp = client.get(
-            "https://export.arxiv.org/api/query",
-            params={"search_query": f"all:{query}", "max_results": 10, "sortBy": "relevance"},
-        )
-        root = ET.fromstring(resp.text)
-        ns = {"atom": "http://www.w3.org/2005/Atom"}
-        results = []
-        for entry in root.findall("atom:entry", ns):
-            title = entry.findtext("atom:title", "", ns).strip().replace("\n", " ")
-            abstract = entry.findtext("atom:summary", "", ns).strip().replace("\n", " ")
-            arxiv_id = entry.findtext("atom:id", "", ns).split("/abs/")[-1]
-            doi = f"10.48550/arXiv.{arxiv_id}"
-            if title and abstract:
-                results.append({
-                    "title": title,
-                    "abstract": abstract,
-                    "year": None,
-                    "externalIds": {"DOI": doi},
-                    "citationCount": None,
-                    "source": "arxiv",
-                })
-        logger.info(f"arXiv: {len(results)} papers for '{query}'")
-        return results[:5]
-    except Exception as e:
-        logger.warning(f"arXiv error: {e}")
-        return []
-
-
-def search_pubmed(query: str, client: httpx.Client) -> list:
-    try:
-        search_resp = client.get(
-            "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi",
-            params={"db": "pubmed", "term": query, "retmax": 8, "retmode": "json"},
-        )
-        ids = search_resp.json().get("esearchresult", {}).get("idlist", [])
-        if not ids:
-            return []
-        summary_resp = client.get(
-            "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi",
-            params={"db": "pubmed", "id": ",".join(ids), "retmode": "json"},
-        )
-        summary_data = summary_resp.json().get("result", {})
-        results = []
-        for pmid in ids:
-            item = summary_data.get(pmid, {})
-            title = item.get("title", "")
-            doi = ""
-            for articleid in item.get("articleids", []):
-                if articleid.get("idtype") == "doi":
-                    doi = articleid.get("value", "")
-                    break
-            if title and doi:
-                results.append({
-                    "title": title,
-                    "abstract": f"PubMed paper: {title}. See DOI for full abstract.",
-                    "year": item.get("pubdate", "")[:4],
-                    "externalIds": {"DOI": doi},
-                    "citationCount": None,
-                    "source": "pubmed",
-                })
-        logger.info(f"PubMed: {len(results)} papers for '{query}'")
-        return results[:5]
-    except Exception as e:
-        logger.warning(f"PubMed error: {e}")
-        return []
-
-
-def _enrich_citation_counts(papers: list, client: httpx.Client) -> list:
-    """Cross-reference arXiv/PubMed papers against OpenAlex for citation counts."""
-    needs_enrichment = []
-    for p in papers:
-        if p.get("citationCount") is not None and p.get("citationCount") > 0:
-            continue
-        doi = (p.get("externalIds", {}).get("DOI") or "").strip()
-        if not doi:
-            continue
-        needs_enrichment.append((doi, p))
-
-    if not needs_enrichment:
-        return papers
-
-    batch_size = 40
-    for i in range(0, len(needs_enrichment), batch_size):
-        batch = needs_enrichment[i:i + batch_size]
-        doi_filter = "|".join(f"https://doi.org/{doi}" for doi, _ in batch)
-        try:
-            resp = client.get(
-                "https://api.openalex.org/works",
-                params={
-                    "filter": f"doi:{doi_filter}",
-                    "select": "doi,cited_by_count",
-                    "per_page": 50,
-                },
-                headers={"User-Agent": "PeerZero-bot/1.0 (peerzero.science)"},
-            )
-            for w in resp.json().get("results", []):
-                oa_doi = (w.get("doi") or "").replace("https://doi.org/", "").lower()
-                for orig_doi, p in batch:
-                    if orig_doi.lower() == oa_doi:
-                        p["citationCount"] = w.get("cited_by_count", 0)
-                        break
-        except Exception as e:
-            logger.warning(f"OpenAlex enrichment error: {e}")
-
-    return papers
 
 
 def _rank_by_relevance(papers: list, paper_context: str, llm_fast) -> list:
@@ -183,8 +25,8 @@ def _rank_by_relevance(papers: list, paper_context: str, llm_fast) -> list:
         return papers
 
     paper_list = "\n".join(
-        f"{i+1}. [{(p.get('externalIds', {}).get('DOI') or '')[:40]}] "
-        f"{p.get('title', '')[:80]} (cited: {p.get('citationCount') or '?'})"
+        f"{i+1}. [{p.get('doi', '')[:40]}] "
+        f"{p.get('title', '')[:80]} (cited: {p.get('citation_count') or '?'})"
         for i, p in enumerate(papers)
     )
     prompt = (
@@ -199,8 +41,6 @@ def _rank_by_relevance(papers: list, paper_context: str, llm_fast) -> list:
             "You rank papers by relevance. Return a JSON array of paper numbers only.",
             prompt,
         )
-        # Parse the array from the response
-        import re
         match = re.search(r'\[[\d\s,]+\]', raw)
         if match:
             indices = json.loads(match.group(0))
@@ -220,32 +60,33 @@ def _rank_by_relevance(papers: list, paper_context: str, llm_fast) -> list:
         logger.warning(f"Relevance ranking failed ({e}), falling back to citation sort")
 
     # Fallback: top 12 by citation count
-    papers.sort(key=lambda p: (p.get("citationCount") or 0), reverse=True)
+    papers.sort(key=lambda p: (p.get("citation_count") or 0), reverse=True)
     return papers[:12]
 
 
 def _summarize_citation(doi: str, abstract: str, paper_context: str,
-                        llm_fast, citation_count=0, year=None) -> dict:
+                        llm_fast, citation_count=0, year=None, quality_tier="unknown") -> dict:
     """Use fast LLM to summarize a single citation."""
     if not abstract or len(abstract) < 50:
         return {"agent_summary": "", "source_quality_note": ""}
 
-    tier = (
-        "strong (50+ citations)" if citation_count and citation_count >= 50
-        else "adequate (10-49 citations)" if citation_count and citation_count >= 10
-        else "weak (under 10 citations)" if citation_count and citation_count > 0
-        else "unknown (citation count unavailable)"
-    )
+    tier_label = {
+        "strong": "strong (50+ citations)",
+        "adequate": "adequate (10-49 citations)",
+        "weak": "weak (under 10 citations)",
+    }.get(quality_tier, "unknown (citation count unavailable)")
+
     year_str = str(year) if year else "unknown"
+    cc_str = str(citation_count) if citation_count is not None else "not indexed"
     prompt = (
         f'Read this abstract and produce two things.\n\n'
         f'Abstract: {abstract}\n\nDOI: {doi}\n'
-        f'Citation count: {citation_count} -- quality tier: {tier}\n'
+        f'Citation count: {cc_str} -- quality tier: {tier_label}\n'
         f'Publication year: {year_str}\nContext: {paper_context}\n\n'
         f'Return JSON only:\n{{\n'
         f'  "agent_summary": "<2-3 sentences: what this paper actually found>",\n'
         f'  "source_quality_note": "<explicit reasoning: why this source is or is not '
-        f'credible. Address citation count ({citation_count}), year ({year_str}), '
+        f'credible. Address citation count ({cc_str}), year ({year_str}), '
         f'methodology fit, and limitations. Minimum 40 chars.>"\n}}'
     )
     try:
@@ -253,10 +94,8 @@ def _summarize_citation(doi: str, abstract: str, paper_context: str,
             "You summarize scientific abstracts and evaluate source quality. Return JSON only. No explanation.",
             prompt,
         )
-        # Extract JSON from response
         result = json.loads(raw.strip()) if raw.strip().startswith("{") else None
         if not result:
-            import re
             match = re.search(r'\{.*\}', raw, re.DOTALL)
             if match:
                 result = json.loads(match.group(0))
@@ -270,72 +109,78 @@ def _summarize_citation(doi: str, abstract: str, paper_context: str,
     return {"agent_summary": "", "source_quality_note": ""}
 
 
+def _normalize_server_paper(p: dict) -> dict:
+    """Normalize server search result to the format expected by the rest of the bot.
+
+    Server returns: { doi, title, abstract, year, citation_count, quality_tier, source }
+    Bot expects:    { externalIds: {DOI}, title, abstract, year, citationCount, quality_tier }
+    """
+    return {
+        "title": p.get("title", ""),
+        "abstract": p.get("abstract", ""),
+        "year": p.get("year"),
+        "externalIds": {"DOI": p.get("doi", "")},
+        "citationCount": p.get("citation_count"),
+        "quality_tier": p.get("quality_tier", "unknown"),
+        "source": p.get("source", "unknown"),
+        "doi": p.get("doi", ""),
+        "citation_count": p.get("citation_count"),
+    }
+
+
 def search_and_summarize(
     queries: list[str],
     paper_context: str = "",
     llm_fast=None,
+    school_adapter=None,
 ) -> list[dict]:
     """
-    Search academic APIs and return the most relevant papers with summaries.
+    Search for real academic papers via the server and prepare citation slots.
 
-    1. Searches 4 iterations × 3 APIs (OpenAlex, arXiv, PubMed) = ~30-40 papers
-    2. Enriches citation counts via OpenAlex cross-reference
-    3. Ranks by relevance using fast LLM call → picks top 12
-    4. Summarizes each with fast LLM call
+    1. Calls POST /api/search on the server with queries
+    2. Server searches OpenAlex, arXiv, PubMed — returns real papers
+    3. Bot ranks by relevance using its own LLM → picks top 12
+    4. Bot summarizes each paper using its own LLM
 
     Returns list of papers with DOI, title, abstract, agent_summary,
-    source_quality_note, citationCount.
+    source_quality_note, citationCount, quality_tier.
     """
-    http = httpx.Client(timeout=15.0)
-    all_papers, seen_dois = [], set()
+    if not school_adapter:
+        logger.warning("No school_adapter provided — cannot search. Returning empty.")
+        return []
 
-    padded_queries = list(queries)
-    if len(padded_queries) < 4:
-        padded_queries += random.sample(FALLBACK_QUERIES, min(4 - len(padded_queries), len(FALLBACK_QUERIES)))
+    # Phase 1: Server searches real academic databases
+    result = school_adapter.search_papers(queries, context=paper_context)
+    all_papers = [_normalize_server_paper(p) for p in result.get("papers", [])]
+    search_log = result.get("search_log", {})
+    logger.info(
+        f"Server search returned {len(all_papers)} papers "
+        f"(total found: {search_log.get('total_found', '?')}, "
+        f"APIs: {search_log.get('apis_hit', [])})"
+    )
 
-    # Phase 1: Collect papers across all APIs (no LLM calls)
-    search_fns = [
-        ("openalex", search_openalex),
-        ("arxiv", search_arxiv),
-        ("pubmed", search_pubmed),
-    ]
-    for iteration in range(4):
-        query = padded_queries[iteration] if iteration < len(padded_queries) else padded_queries[-1]
-        logger.info(f"Search iteration {iteration + 1}/4: '{query}'")
-        random.shuffle(search_fns)
-        for api_name, fn in search_fns:
-            results = fn(query, http)
-            for p in (results or []):
-                doi = (p.get("externalIds", {}).get("DOI") or "").strip()
-                if not doi or doi.lower() in seen_dois:
-                    continue
-                seen_dois.add(doi.lower())
-                all_papers.append(p)
-            time.sleep(0.3)
+    if not all_papers:
+        logger.warning("Server search returned no papers")
+        return []
 
-    logger.info(f"Search collected {len(all_papers)} unique papers")
-
-    # Phase 2: Enrich citation counts
-    all_papers = _enrich_citation_counts(all_papers, http)
-    http.close()
-
-    # Phase 3: Select most relevant papers
+    # Phase 2: Bot ranks by relevance (LLM skill exercise)
     if llm_fast and paper_context:
         selected = _rank_by_relevance(all_papers, paper_context, llm_fast)
     else:
         all_papers.sort(key=lambda p: (p.get("citationCount") or 0), reverse=True)
         selected = all_papers[:12]
 
-    # Phase 4: Summarize selected papers
+    # Phase 3: Bot summarizes selected papers (LLM skill exercise)
     logger.info(f"Summarizing {len(selected)} selected papers")
     for p in selected:
-        doi = (p.get("externalIds", {}).get("DOI") or "").strip()
+        doi = p.get("doi", "") or (p.get("externalIds", {}).get("DOI") or "")
         abstract = p.get("abstract", "")
         if abstract and llm_fast:
             summaries = _summarize_citation(
                 doi, abstract, paper_context, llm_fast,
-                citation_count=p.get("citationCount"),
-                year=p.get("year") or p.get("publication_year"),
+                citation_count=p.get("citationCount") or p.get("citation_count"),
+                year=p.get("year"),
+                quality_tier=p.get("quality_tier", "unknown"),
             )
             p["agent_summary"] = summaries["agent_summary"]
             p["source_quality_note"] = summaries["source_quality_note"]

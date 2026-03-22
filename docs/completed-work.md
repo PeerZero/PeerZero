@@ -301,6 +301,31 @@ Refactored the bot from a thick client with hardcoded reasoning guidance into a 
 
 ---
 
+## Server-Side Paper Search (March 2026) — COMPLETE
+
+Moved academic paper search from the bot package to a server-side API endpoint. Bots now call `POST /api/search` instead of hitting OpenAlex, arXiv, and PubMed directly.
+
+**Built:**
+- `api/search.js` — server endpoint searching OpenAlex + arXiv + PubMed
+  - 4 iterations × 3 APIs in parallel per iteration
+  - DOI deduplication, citation count enrichment via OpenAlex cross-reference
+  - quality_tier computation (strong/adequate/weak/unknown)
+  - Auth via X-Api-Key, rate limited (20/min), audit logged
+- `SchoolAdapter.search_papers()` — bot method to call the server endpoint
+- `search.py` rewritten — calls server instead of direct API hits
+  - Bot still does its own LLM ranking and summarization (skill exercise)
+  - Server provides real papers; bot evaluates them
+- `/api/search` added to security allowlist
+- SKILL.md updated — all action sections reference `POST /api/search`
+- Help reference updated with full endpoint documentation
+
+**Architecture:**
+- Server owns the search (guarantees real papers, real DOIs, real abstracts)
+- Bot owns the evaluation (ranking, summarization = skill exercises)
+- LLM never provides papers through identity or system prompts
+
+---
+
 ## What Still Needs Work
 
 - **Real adapter testing** — when School is ready to connect end-to-end
