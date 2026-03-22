@@ -126,6 +126,68 @@ class PromptBuilder:
                     history_lines.append(f"    Reviewer ({fb_score}): {fb_text}")
             parts.append(f"\nYOUR RESEARCH HISTORY (build on what worked, avoid what didn't):\n" + "\n".join(history_lines))
 
+        # Inject decision context — full game state so the bot understands why
+        # it's doing this action and what's blocked/available
+        dc = profile.get("decision_context")
+        if dc:
+            dc_lines = [f"\nDECISION CONTEXT — why you are about to {action_verb}:"]
+            reasoning = dc.get("reasoning", "")
+            if reasoning:
+                dc_lines.append(f"  Reasoning: {reasoning}")
+
+            # Grade progress
+            grade_info = dc.get("grade", {})
+            reqs = grade_info.get("requirements", {})
+            activity = grade_info.get("activity", {})
+            if reqs:
+                dc_lines.append(
+                    f"  Grade {grade_info.get('current', '?')} progress: "
+                    f"papers {activity.get('papers', 0)}/{reqs.get('papers', '?')}, "
+                    f"reviews {activity.get('reviews', 0)}/{reqs.get('reviews', '?')}, "
+                    f"revisions {activity.get('revisions', 0)}/{reqs.get('revisions', '?')}, "
+                    f"bounties {activity.get('bounties', 0)}/{reqs.get('bounties', '?')}"
+                )
+                min_score = reqs.get("min_score")
+                if min_score:
+                    dc_lines.append(f"  Quality gate: need paper scored {min_score}+")
+                if grade_info.get("fail_count", 0) > 0:
+                    dc_lines.append(f"  WARNING: Failed this grade {grade_info['fail_count']} time(s)")
+
+            # Credibility / paper limits
+            cred_info = dc.get("credibility", {})
+            if cred_info:
+                dc_lines.append(
+                    f"  Credibility {cred_info.get('score', '?')}: "
+                    f"papers {cred_info.get('papers_used', '?')}/{cred_info.get('paper_limit', '?')} "
+                    f"({cred_info.get('papers_available', 0)} slots open"
+                    + (f", need {cred_info['reviews_before_next_paper']} more reviews first"
+                       if cred_info.get('reviews_before_next_paper', 0) > 0 else "")
+                    + ")"
+                )
+
+            # Bounty progress
+            bp = dc.get("bounty_progress", {})
+            if bp:
+                dc_lines.append(
+                    f"  Bounties: {bp.get('validated', 0)} validated, "
+                    f"{bp.get('pending', 0)} pending, {bp.get('failed', 0)} failed "
+                    f"(need {bp.get('needed_for_grade', '?')} more for grade, "
+                    f"{bp.get('needed_for_tier', '?')} total for tier)"
+                )
+
+            # What's blocked and why
+            blocked = dc.get("blocked_actions", {})
+            if blocked:
+                blocked_strs = [f"{act}: {reason}" for act, reason in blocked.items()]
+                dc_lines.append(f"  Blocked: {'; '.join(blocked_strs[:4])}")
+
+            # What comes next
+            after = dc.get("available_after_this", [])
+            if after:
+                dc_lines.append(f"  After this action, consider: {'; '.join(after[:3])}")
+
+            parts.append("\n".join(dc_lines))
+
         # Inject risk warnings
         risk = profile.get("risk_summary", {})
         warnings = risk.get("warnings", [])

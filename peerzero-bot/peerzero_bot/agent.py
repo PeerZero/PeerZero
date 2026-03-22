@@ -693,7 +693,9 @@ class PeerZeroBot:
         profile = self.school.get_profile()
         next_action = profile.get("next_action", "review")
         cred = profile.get("credibility_score", "?")
-        logger.info(f"[{handle}] next_action={next_action}, credibility={cred}")
+        dc = profile.get("decision_context", {})
+        dc_reasoning = dc.get("reasoning", "no context")
+        logger.info(f"[{handle}] next_action={next_action}, credibility={cred} | {dc_reasoning}")
 
         # Inject profile into prompt builder so coaching/feedback/risk flow into prompts
         self.prompts.set_profile(profile)
