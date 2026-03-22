@@ -615,13 +615,13 @@ module.exports = async (req, res) => {
     // Compute validated/pending/failed so bots can make informed decisions
     // about whether to keep filing bounties or switch to other actions.
     const { data: agentBounties } = await supabase.from('bounties')
-      .select('id, status')
+      .select('id, is_valid, validated_at')
       .eq('challenger_agent_id', agent.id);
     const bountyStatus = { validated: 0, pending: 0, failed: 0 };
     for (const b of (agentBounties || [])) {
-      if (b.status === 'validated') bountyStatus.validated++;
-      else if (b.status === 'pending') bountyStatus.pending++;
-      else if (b.status === 'failed' || b.status === 'rejected') bountyStatus.failed++;
+      if (b.is_valid === true) bountyStatus.validated++;
+      else if (b.is_valid === false) bountyStatus.failed++;
+      else bountyStatus.pending++;  // is_valid is null → not yet validated
     }
     // Required bounties based on credibility tier
     const requiredBounties = credibility < 75 ? 3 : credibility < 100 ? 6 : credibility < 150 ? 12 : credibility < 175 ? 20 : 30;
@@ -633,9 +633,11 @@ module.exports = async (req, res) => {
     // Response/rebuttal forcing: override tier logic when bot has unaddressed obligations
     // Priority: revise > respond > rebut > tier logic
     // (revise is already handled by getTierInfo returning 'revise' before anything else)
-    // Only force 60% of the time — agents need review cycles to build credibility
-    // and provide community feedback, not just chase their own obligations
-    if (nextAction !== 'revise' && Math.random() < 0.6) {
+    // Only force 40% of the time — agents need review cycles to build credibility
+    // and provide community feedback, not just chase their own obligations.
+    // When there are many unreviewed papers, prefer reviewing to keep the ecosystem moving.
+    const reviewPressure = reviewablePapers.length >= 5 ? 0.25 : 0.40;
+    if (nextAction !== 'revise' && Math.random() < reviewPressure) {
       if (canRespond) nextAction = 'respond';
       else if (canRebut) nextAction = 'rebut';
     }
@@ -674,8 +676,8 @@ module.exports = async (req, res) => {
 
     if (!actionFeasibility[nextAction]) {
       // Chosen action has no valid targets — find the best alternative
-      // Priority: revise > submit_paper > respond > rebut > reaffirm > file_bounty > review
-      const fallbackOrder = ['revise', 'submit_paper', 'respond', 'rebut', 'reaffirm', 'file_bounty', 'review'];
+      // Priority: revise > submit_paper > review > respond > rebut > reaffirm > file_bounty
+      const fallbackOrder = ['revise', 'submit_paper', 'review', 'respond', 'rebut', 'reaffirm', 'file_bounty'];
       const originalAction = nextAction;
       nextAction = 'sleep'; // default: nothing to do — tell bot to wait
       for (const fallback of fallbackOrder) {
@@ -706,8 +708,8 @@ module.exports = async (req, res) => {
               .order('created_at', { ascending: false })
               .limit(10),
             supabase.from('bounties')
-              .select('challenge_type, score_drop, is_valid, external_sources, target_paper:papers!bounties_target_paper_id_fkey(title)')
-              .eq('target_paper:papers!bounties_target_paper_id_fkey.agent_id', agent.id)
+              .select('challenge_type, score_drop, is_valid, external_sources, target_paper:papers!bounties_target_paper_id_fkey!inner(title, agent_id)')
+              .eq('target_paper.agent_id', agent.id)
               .order('created_at', { ascending: false })
               .limit(5),
           ]);
