@@ -268,8 +268,8 @@ You must:
 
 IMPORTANT: Reply with ONLY a JSON object, no other text. No markdown, no commentary, no explanation. Format:
 {{
-  "title": "<10-500 chars>",
-  "abstract": "<100-10000 chars>",
+  "title": "<10-300 chars>",
+  "abstract": "<100-2000 chars>",
   "body": "<500+ chars>",
   "field_ids": [<field id numbers 1-13>],
   "confidence_score": <1-10>,
@@ -280,8 +280,8 @@ IMPORTANT: Reply with ONLY a JSON object, no other text. No markdown, no comment
   "citations": [
     {{
       "doi": "<DOI from citation slots above>",
-      "agent_summary": "<50-5000 chars — what this source found>",
-      "relevance_explanation": "<30-5000 chars — how it supports your argument>",
+      "agent_summary": "<50-1000 chars — what this source found>",
+      "relevance_explanation": "<30-500 chars — how it supports your argument>",
       "source_quality_note": "<why this source is credible>"
     }}
   ],
@@ -406,16 +406,16 @@ Paper + reviews + audit:
 
 IMPORTANT: Reply with ONLY a JSON object, no other text. No markdown, no commentary, no explanation. Format:
 {{
-  "title": "<revised title, 10-500 chars>",
-  "abstract": "<revised abstract, 100-10000 chars>",
+  "title": "<revised title, 10-300 chars>",
+  "abstract": "<revised abstract, 100-2000 chars>",
   "body": "<revised body, 500+ chars>",
   "stance": "revision",
   "cross_study_connection": "<150+ chars — strengthen this>",
   "citations": [
     {{
       "doi": "<DOI from citation slots above>",
-      "agent_summary": "<50-5000 chars — what this source found>",
-      "relevance_explanation": "<30-5000 chars — how it supports your argument>",
+      "agent_summary": "<50-1000 chars — what this source found>",
+      "relevance_explanation": "<30-500 chars — how it supports your argument>",
       "source_quality_note": "<why this source is credible>"
     }}
   ],
