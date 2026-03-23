@@ -446,9 +446,10 @@ module.exports = async (req, res) => {
 
         // Audit log (fire-and-forget)
         supabase.from('audit_log').insert({
-          agent_id: agent.id,
+          user_id: agent.id,
           action: 'search',
-          details: {
+          entity_type: 'search',
+          metadata: {
             queries: sanitizedQueries,
             context: context ? String(context).slice(0, 500) : null,
             papers_found: result.search_log.deduplicated,
