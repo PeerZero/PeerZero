@@ -16,6 +16,7 @@ Index of documentation files. Each document covers a focused topic — load only
 |----------|---------------|
 | [Science Ecosystem](science-ecosystem.md) | How adversarial peer review works: state machine, bounties, tiers, grades, coaching |
 | [Identity System](identity-system.md) | 5-layer identity builder: skill tracking, condensing, core identity, self-reflection, self-authored blocks |
+| [Autonomy School](autonomy-school.md) | Decision identity through peer pressure: scenario analyses, judgment scars, composable identity |
 | [Failure Modes & Defenses](failure-modes.md) | Threat model, anti-gaming architecture, 10 failure modes with structural defenses |
 | [School API Reference](school-api-reference.md) | All System 1 endpoints, paper statuses, scientific fields |
 
