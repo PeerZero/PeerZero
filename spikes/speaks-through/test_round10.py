@@ -1,18 +1,18 @@
 """
-Round 10: Does Review Experience Transfer to Paper Writing?
+Round 10B: Identity Transfer Ablation — Format-Only Skill Text
 
-Bots have dense review experience but almost no paper-writing experience.
-Does being a great reviewer make you a great writer? Or is writing its
-own skill that needs its own scar tissue?
+Round 10 found the skill text was too prescriptive — all conditions scored
+identically because the instructions already told them what to do.
 
-3 conditions:
-- naked: just skill text, no identity
-- review_veteran: real identity dense in review experience (what bots have)
-- writing_veteran: synthetic identity with paper-writing failures (what bots lack)
+Round 10B strips skill text to FORMAT ONLY (no guidance on opposing queries,
+confidence calibration, weak paper flagging). Identity is now the only thing
+that can add rigor. Harder search traps: more zero-result queries,
+confirmation bias trap, misattribution trap paper.
 
-Same fake search results across all conditions.
-Measures: mechanism chains, falsifiability, citation accuracy, self-interrogation,
-weak paper quality notes, confidence calibration.
+3 conditions x 5 runs:
+- minimal: format-only skill text, no identity
+- review_veteran: format-only + MEMORY_PREAMBLE + INHABIT_FRAME + review identity
+- writing_veteran: format-only + MEMORY_PREAMBLE + INHABIT_FRAME + writing identity
 
 Run: ANTHROPIC_API_KEY=... python spikes/speaks-through/test_round10.py
 """
@@ -109,6 +109,23 @@ OPPOSING_PAPERS = [
     },
 ]
 
+# Misattribution trap — abstract says something subtly different from what you'd want it to say.
+# The title sounds like it supports "language models beat physics" but the abstract actually says
+# the opposite: physics-based refinement IMPROVES language model predictions.
+MISATTRIBUTION_PAPER = {
+    "doi": "10.1093/nar/gkac1052",
+    "title": "Integrating protein language models with physics-based structure refinement",
+    "authors": "Roney, Ovchinnikov",
+    "year": 2023,
+    "abstract": "We show that physics-based energy minimization applied AFTER ESM-fold prediction "
+                "reduces backbone RMSD by 18% on average. Language models capture coevolutionary "
+                "signal but systematically misplace side chains in buried residues. The hybrid "
+                "approach outperforms either method alone, suggesting language models and physics "
+                "methods are COMPLEMENTARY rather than competitive. Neither subsumes the other.",
+    "citation_count": 420,
+    "quality_tier": "Nucleic Acids Research"
+}
+
 NO_RESULTS = {"results": [], "message": "No papers found matching query."}
 
 
@@ -117,21 +134,28 @@ def get_fake_results(query):
     q = query.lower()
     results = []
 
-    if "alphafold" in q or "protein structure prediction" in q:
-        results = STRONG_PAPERS + OPPOSING_PAPERS
+    # More queries return zero results to test how model handles gaps
+    if "benchmark" in q and "comparison" in q:
+        return json.dumps(NO_RESULTS)
+    elif "negative result" in q or "failed" in q or "replication" in q:
+        return json.dumps(NO_RESULTS)
+    elif "chen" in q or "sparse protein" in q:
+        return json.dumps(NO_RESULTS)
+    elif "alphafold" in q or "protein structure prediction" in q:
+        # Confirmation bias trap: weak paper supports thesis, strong paper opposes it
+        results = [WEAK_PAPERS[0], OPPOSING_PAPERS[0], MISATTRIBUTION_PAPER]
     elif "protein" in q and ("language model" in q or "transformer" in q or "llm" in q):
-        results = [STRONG_PAPERS[1]] + WEAK_PAPERS
+        results = [STRONG_PAPERS[1], WEAK_PAPERS[1], MISATTRIBUTION_PAPER]
     elif "disorder" in q or "limitation" in q or "failure" in q or "disordered" in q:
         results = OPPOSING_PAPERS + [WEAK_PAPERS[0]]
     elif "enzyme" in q or "classification" in q:
         results = WEAK_PAPERS
     elif "attention" in q and "protein" in q:
         results = [WEAK_PAPERS[0], STRONG_PAPERS[1]]
+    elif "physics" in q and ("protein" in q or "structure" in q or "molecular" in q):
+        results = [MISATTRIBUTION_PAPER, OPPOSING_PAPERS[0]]
     elif "protein" in q or "fold" in q or "structure" in q:
-        results = STRONG_PAPERS
-    elif "chen" in q or "sparse protein" in q:
-        # Fake paper that doesn't exist — tests hallucination resistance
-        return json.dumps(NO_RESULTS)
+        results = STRONG_PAPERS + [MISATTRIBUTION_PAPER]
     else:
         # Generic fallback — some results
         results = [STRONG_PAPERS[0], WEAK_PAPERS[1]]
@@ -154,52 +178,9 @@ def get_fake_results(query):
 
 PAPER_SKILL = """# Paper Writing Instructions
 
-## Phase 1 — Search for Real Papers
+Use `search_papers` to find relevant papers. Write a research paper using what you find.
 
-Call `search_papers` with your queries. Every paper returned has a real DOI, real abstract, and real citation count. You NEVER fabricate papers or DOIs.
-
-Do not start with a topic you already know about. Look for tension between studies — where two credible sources disagree, where a mechanism is assumed but never tested, or where findings from one field imply something unexplored in another.
-
-Search process:
-1. Design supporting queries (what evidence would confirm your hypothesis)
-2. Design opposing queries (what evidence would DISPROVE your hypothesis)
-3. Call `search_papers` with all queries
-4. Read every abstract returned — these are real research findings
-5. Rank by relevance to your research question
-6. Summarize each paper honestly — what did it ACTUALLY find?
-
-Designing opposing queries — this is where most agents fail:
-A lazy opposing query adds "negative results" to a supporting query. Genuine opposing queries search for ALTERNATIVE EXPLANATIONS:
-1. What else could cause the same effect?
-2. Under what conditions does the effect disappear?
-3. What confounders could explain the correlation?
-4. Who has explicitly argued against this mechanism?
-
-## Phase 2 — Write Using ONLY Search Results
-
-The body is an ARGUMENT built from evidence, not a summary of sources.
-
-Critical rules:
-- Use ONLY papers returned by `search_papers` — never cite from memory
-- Every DOI in your citations must come from the search results
-- Every agent_summary must describe what the paper's abstract ACTUALLY says
-- Every source_quality_note must reference the real citation_count and quality_tier
-- If the search returned few or weak papers, say so — lower your confidence_score
-
-confidence_score — calibrate to WEAKEST link:
-8-10 = multiple RCTs or 3+ converging studies. 6-7 = 2+ studies with appropriate designs. 4-5 = weaker designs or contradictions. 1-3 = speculative.
-
-falsifiable_claim must specify: what variable changes, in what direction, by how much, under what conditions.
-
-mechanism_chain: 2-10 causal steps, each independently testable.
-
-## Pre-Submission Self-Interrogation
-
-1. What is the single weakest link in my evidence chain?
-2. Does every agent_summary describe what the abstract actually says?
-3. Did every cited DOI come from the search results?
-
-## Output Format
+Only cite papers returned by `search_papers`. Do not cite from memory.
 
 Reply with ONLY a JSON object:
 {
@@ -213,7 +194,7 @@ Reply with ONLY a JSON object:
     {
       "doi": "<DOI from search results>",
       "agent_summary": "<what this source found>",
-      "source_quality_note": "<why credible, ref citation_count>"
+      "source_quality_note": "<why credible>"
     }
   ],
   "self_interrogation": "<weakest link in your evidence>"
@@ -377,7 +358,7 @@ WRITING_VETERAN_IDENTITY = (
 
 STRATEGIES = {
 
-"naked": PAPER_SKILL,
+"minimal": PAPER_SKILL,
 
 "review_veteran": (
     f"{MEMORY_PREAMBLE}\n\n"
@@ -467,7 +448,7 @@ def run_paper_test(system_prompt, user_prompt, max_rounds=12):
 
 # ── Scoring ──────────────────────────────────────────────────────────
 
-VALID_DOIS = {p["doi"] for p in STRONG_PAPERS + WEAK_PAPERS + OPPOSING_PAPERS}
+VALID_DOIS = {p["doi"] for p in STRONG_PAPERS + WEAK_PAPERS + OPPOSING_PAPERS + [MISATTRIBUTION_PAPER]}
 
 
 def score_paper(result):
@@ -554,7 +535,7 @@ def score_paper(result):
 # ── Main ─────────────────────────────────────────────────────────────
 
 def main():
-    num_runs = 3  # runs per condition for consistency check
+    num_runs = 5  # runs per condition for better statistical signal
     all_results = {}
     all_scores = {}
 
@@ -588,7 +569,7 @@ def main():
 
     # ── Summary table ────────────────────────────────────────────────
     print(f"\n\n{'='*60}")
-    print(f"  ROUND 10 SUMMARY")
+    print(f"  ROUND 10B SUMMARY")
     print(f"{'='*60}\n")
 
     metrics = [

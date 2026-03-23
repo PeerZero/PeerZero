@@ -200,6 +200,11 @@ class PeerZeroBot:
         dc_reasoning = dc.get("reasoning", "no context")
         logger.info(f"[{handle}] next_action={next_action}, credibility={cred} | {dc_reasoning}")
 
+        # Store feedback and research history into Layer 1 memory so condensers
+        # can reason through them.  Without this, reviewer comments and paper
+        # outcomes are transient context that evaporates after the cycle.
+        self._store_experience_context(profile)
+
         # Inject profile into prompt builder so coaching/feedback/risk flow into prompts
         self.prompts.set_profile(profile)
         system_prompt = self.prompts.build_school_system_prompt()
@@ -816,6 +821,95 @@ class PeerZeroBot:
             self._run_private_block(system_prompt, grade)
         except Exception as e:
             logger.warning(f"[IDENTITY] Pre-action reflection failed (non-blocking): {e}")
+
+    def _store_experience_context(self, profile: dict):
+        """Store feedback and research history into Layer 1 so condensers see them.
+
+        Without this, reviewer comments on our papers and our own paper outcomes
+        are only transient system-prompt context — the condenser never sees the
+        specific criticism that should become writing scars.
+        """
+        # Recent feedback: reviews and bounties on our papers
+        recent = profile.get("recent_feedback")
+        if recent:
+            reviews = recent.get("reviews_on_your_papers", [])
+            for r in reviews:
+                self.memory.store_school_exercises({
+                    "interaction_type": "feedback_received",
+                    "content": {
+                        "what_happened": "Another agent reviewed your paper",
+                        "score": r.get("score"),
+                        "assessment": str(r.get("assessment", ""))[:500],
+                        "methodology_notes": str(r.get("methodology", ""))[:300],
+                        "paper_title": str(r.get("paper_title", ""))[:100],
+                    },
+                    "exercises": [],
+                    "storage_instruction": "This is feedback on YOUR work. What did the reviewer see that you missed? Store the specific criticism — it becomes a scar that improves your next paper.",
+                })
+            bounties = recent.get("bounties_against_your_papers", [])
+            for b in bounties:
+                self.memory.store_school_exercises({
+                    "interaction_type": "bounty_received",
+                    "content": {
+                        "what_happened": "Another agent filed a structural challenge against your paper",
+                        "challenge_type": b.get("challenge_type"),
+                        "reasoning": str(b.get("reasoning", ""))[:300],
+                        "score_drop": b.get("score_drop"),
+                        "paper_title": str(b.get("paper_title", ""))[:100],
+                    },
+                    "exercises": [],
+                    "storage_instruction": "Your paper was structurally challenged. What weakness did they find? This is the kind of scar that prevents the same mistake.",
+                })
+
+        # Research history: our own papers with scores + reviewer feedback
+        history = profile.get("research_history")
+        if history and isinstance(history, list):
+            # Only store papers we haven't stored before (check by title)
+            stored_titles = set()
+            for ex in self.memory.get_school_exercises():
+                data = ex.get("data", {})
+                content = data.get("content", {})
+                if content.get("what_happened") == "You wrote a paper":
+                    stored_titles.add(content.get("title", ""))
+
+            for h in history:
+                title = str(h.get("title", ""))[:100]
+                if title in stored_titles or not title:
+                    continue
+                entry = {
+                    "interaction_type": "paper_outcome",
+                    "content": {
+                        "what_happened": "You wrote a paper",
+                        "title": title,
+                        "score": h.get("score"),
+                        "status": h.get("status"),
+                        "review_count": h.get("review_count", 0),
+                    },
+                    "exercises": [],
+                    "storage_instruction": "This is the outcome of YOUR paper. What score did it get? What did reviewers say? Learn from both successes and failures.",
+                }
+                # Include reviewer feedback directly in the exercise
+                feedback = h.get("top_feedback", [])
+                if feedback:
+                    entry["content"]["reviewer_feedback"] = [
+                        {
+                            "score": fb.get("score"),
+                            "assessment": str(fb.get("assessment", ""))[:400],
+                            "methodology": str(fb.get("methodology", ""))[:200],
+                        }
+                        for fb in feedback[:3]
+                    ]
+                bounties = h.get("bounties_received", [])
+                if bounties:
+                    entry["content"]["bounties_received"] = [
+                        {
+                            "challenge_type": b.get("challenge_type"),
+                            "score_drop": b.get("score_drop"),
+                            "reasoning": str(b.get("reasoning", ""))[:200],
+                        }
+                        for b in bounties[:3]
+                    ]
+                self.memory.store_school_exercises(entry)
 
     def _process_inline_condensers(self, memory_prompts: dict, system_prompt: str):
         """Process only condensers from inline memory prompts (post-action).

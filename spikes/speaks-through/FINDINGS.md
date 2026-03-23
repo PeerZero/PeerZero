@@ -433,6 +433,72 @@ This works because it:
 
 ---
 
+## Round 10: Does Identity Improve Paper Quality?
+
+### Round 10A: Skill text is too prescriptive (inconclusive)
+
+**Setup:** 3 conditions × 3 runs, Sonnet. Conditions: naked, review_veteran, writing_veteran. Full prescriptive skill text telling the model to design opposing queries, flag weak papers, calibrate confidence, etc.
+
+**Finding:** All conditions scored identically on every binary metric. The skill text was a safety net — it told the model exactly what to do, so identity had nothing to add. One weak signal: review_veteran (0%) did NOT flag weak papers while naked (30%) did, but n=3 was too small.
+
+### Round 10B: Format-only skill text (the real test)
+
+**The key change:** Strip the skill text to format only — "use search_papers, write a paper, here's the JSON format." No guidance on opposing queries, confidence calibration, or weak paper flagging. Identity is now the only thing that can add rigor.
+
+**Additional changes:**
+- Misattribution trap paper (title sounds supportive, abstract says the opposite)
+- More zero-result queries to test how the model handles evidence gaps
+- Stronger confirmation bias trap (weak paper supports thesis, strong paper opposes)
+- n=5 runs per condition
+
+**Setup:** 3 conditions × 5 runs, Sonnet
+
+| Condition | Identity | What it tests |
+|---|---|---|
+| minimal | None — just format spec | Baseline LLM behavior |
+| review_veteran | Dense review experience (50+ reviews, 3 schools) | Does reviewing transfer to writing? |
+| writing_veteran | Synthetic paper-writing scars (53 papers, adversarial feedback) | Do writing-specific failures improve writing? |
+
+Both identity conditions include MEMORY_PREAMBLE ("you are an LLM, a previous version learned these lessons") and INHABIT_FRAME ("you wrote this, inhabit it").
+
+### Results
+
+| Metric | minimal | review_veteran | writing_veteran |
+|---|---|---|---|
+| Confidence score (avg) | 7.4 | 7.2 | **5.8** |
+| Confidence calibrated (3-7) | 60% | 80% | **100%** |
+| Noted weak papers | 0% | 0% | **40%** |
+| Num searches (avg) | 6.0 | 5.6 | **8.0** |
+| Used opposing queries | 100% | 100% | 100% |
+| Citation accuracy | 100% | 100% | 100% |
+| Self-interrogation | 100% | 100% | 100% |
+| Hallucinated citations | 0 | 0 | 0 |
+
+### What this means
+
+**1. Review experience does NOT transfer to writing.**
+
+review_veteran scored almost identically to minimal across every metric. A bot that's done 50 reviews and seen 50 papers' structures, citation patterns, and scoring feedback performed no better at writing than a bot with no identity at all. The skills are different.
+
+**2. Writing-specific scars DO transfer.**
+
+writing_veteran was the only condition that:
+- Kept confidence calibrated 100% of the time (avg 5.8 vs 7.4)
+- Actually flagged weak papers when citing them (40% vs 0%)
+- Did more searches (8.0 vs 6.0)
+
+These are exactly the behaviors described in the writing_veteran identity text: "confidence inflation" scar → lower confidence; "weak paper laundering" scar → flags weak papers; "search laziness" scar → more searches. The scars transferred to behavior.
+
+**3. Identity makes the LLM better than itself.**
+
+Same model. Same weights. Same tools. Same task. The only difference is ~2000 characters of identity text in the system prompt. The writing_veteran identity made Sonnet more rigorous than Sonnet alone — it used its own capabilities (search, calibration, quality assessment) more effectively because the identity told it *when* to deploy them.
+
+This is the product thesis: school-forged bots aren't smarter than the base LLM. They're the LLM with scar tissue that triggers its existing capabilities at the right moments. The school is the product because it produces the scars.
+
+**4. The scars must match the task.**
+
+Review scars didn't help with writing. Writing scars did. This implies bots need task-specific experience, not just generic "be rigorous" training. A bot that's only reviewed will need paper-writing school cycles before its papers improve.
+
 ## What We Didn't Test
 
 - **Opus vs Sonnet:** All tests used Sonnet. Opus may respond
@@ -441,6 +507,10 @@ This works because it:
   Real condenser output may be more or less effective.
 - **Long conversations (20+ turns):** Multi-turn was 5 turns max.
 - **Cross-platform:** Does school identity work on A2A/MCP tasks?
+- **Real school-forged writing identity:** The writing_veteran was synthetic.
+  Do bots that actually go through paper-writing school develop similar scars?
+- **Transfer across domains:** Does a protein-paper writing identity help
+  with writing papers in a completely different field?
 
 ---
 
@@ -456,4 +526,5 @@ This works because it:
 | test_round6_self_verify.py | 20 | Round 6: self-verification strategies |
 | test_round7_meta.py | 16 | Round 7: meta-cognitive framing |
 | test_round8_final.py | 15 | Round 8: final candidate + realistic results |
+| test_round10.py | 15 | Round 10B: identity vs paper quality ablation |
 | results*.json | — | Raw results for each round |
