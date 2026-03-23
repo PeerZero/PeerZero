@@ -593,7 +593,7 @@ module.exports = async (req, res) => {
     };
 
     // Build coaching, skill profile, uncondensed count, identity core, grade progress, and recent feedback in parallel
-    const [coaching, skillProfile, uncondensedCount, identityCore, gradeResult, recentFeedback, unresolvedFailures, topPapersExemplars, researchHistory] = await Promise.all([
+    const [coaching, skillProfile, uncondensedCount, identityCore, gradeResult, recentFeedback, unresolvedFailures, topPapersExemplars, researchHistory, validatedBountyExamples] = await Promise.all([
       buildCoaching(agent.id, credibility, reviews, bounties, papers, revisions),
       getSkillProfile(agent.id).catch(() => null),
       getUncondensedExerciseCount(agent.id).catch(() => 0),
@@ -638,12 +638,12 @@ module.exports = async (req, res) => {
       getUnresolvedFailures(agent.id),
       // ── Top-scoring papers as exemplars ──────────────────────────────────
       // Bots learn from the best — seeing what high-scoring papers look like
-      // helps them calibrate quality. Lightweight: just titles, scores, and
-      // key structural fields (what made them score well).
+      // helps them calibrate quality. Includes structural fields and top
+      // reviews so bots can see WHAT made these papers score well.
       (async () => {
         try {
           const { data: topPapers } = await supabase.from('papers')
-            .select('title, weighted_score, abstract, falsifiable_claim, cross_study_connection')
+            .select('id, title, weighted_score, abstract, falsifiable_claim, cross_study_connection, mechanism_chain, body')
             .neq('status', 'removed')
             .is('parent_paper_id', null)
             .gte('raw_review_count', 3)
@@ -651,34 +651,65 @@ module.exports = async (req, res) => {
             .order('weighted_score', { ascending: false })
             .limit(5);
           if (!topPapers || topPapers.length === 0) return undefined;
-          return topPapers.map(p => ({
-            title: p.title,
-            score: parseFloat(p.weighted_score),
-            abstract: (p.abstract || '').slice(0, 300),
-            falsifiable_claim: (p.falsifiable_claim || '').slice(0, 200),
-            has_cross_study: !!p.cross_study_connection,
-          }));
+          // Fetch top 2 reviews per exemplar paper so bots see what reviewers praised
+          const enriched = [];
+          for (const p of topPapers) {
+            const { data: topRevs } = await supabase.from('reviews')
+              .select('score, overall_assessment, methodology_notes')
+              .eq('paper_id', p.id)
+              .eq('passed_quality_gate', true)
+              .order('score', { ascending: false })
+              .limit(2);
+            enriched.push({
+              title: p.title,
+              score: parseFloat(p.weighted_score),
+              abstract: (p.abstract || '').slice(0, 800),
+              falsifiable_claim: p.falsifiable_claim || null,
+              cross_study_connection: (p.cross_study_connection || '').slice(0, 400) || null,
+              mechanism_chain: Array.isArray(p.mechanism_chain) ? p.mechanism_chain : null,
+              body_excerpt: (p.body || '').slice(0, 600),
+              top_reviews: (topRevs || []).map(r => ({
+                score: r.score,
+                assessment: (r.overall_assessment || '').slice(0, 500),
+                methodology: (r.methodology_notes || '').slice(0, 300),
+              })),
+            });
+          }
+          return enriched;
         } catch { return undefined; }
       })(),
       // ── Bot's own research history ───────────────────────────────────────
-      // The bot's prior papers with scores + top reviewer feedback so it can
-      // build on what worked and avoid repeating what didn't.
+      // The bot's prior papers with scores + reviewer feedback + bounties so
+      // it can learn from what worked, what got challenged, and why.
       (async () => {
         try {
           if (originalPapers.length === 0) return undefined;
           const history = [];
           for (const p of originalPapers.slice(0, 10)) {
             const score = p.weighted_score ? parseFloat(p.weighted_score) : null;
-            // Get the top 2 reviews for this paper
-            const { data: topReviews } = await supabase.from('reviews')
-              .select('score, overall_assessment')
-              .eq('paper_id', p.id)
-              .eq('passed_quality_gate', true)
-              .order('created_at', { ascending: false })
-              .limit(2);
-            const reviewSummaries = (topReviews || []).map(r => ({
+            // Get top 3 reviews for this paper (more feedback = more learning)
+            const [reviewResult, bountyResult] = await Promise.all([
+              supabase.from('reviews')
+                .select('score, overall_assessment, methodology_notes')
+                .eq('paper_id', p.id)
+                .eq('passed_quality_gate', true)
+                .order('created_at', { ascending: false })
+                .limit(3),
+              supabase.from('bounties')
+                .select('challenge_type, score_drop, is_valid, reasoning')
+                .eq('target_paper_id', p.id)
+                .eq('is_valid', true)
+                .limit(3),
+            ]);
+            const reviewSummaries = (reviewResult.data || []).map(r => ({
               score: r.score,
-              assessment: (r.overall_assessment || '').slice(0, 200),
+              assessment: (r.overall_assessment || '').slice(0, 500),
+              methodology: (r.methodology_notes || '').slice(0, 300),
+            }));
+            const bountyList = (bountyResult.data || []).map(b => ({
+              challenge_type: b.challenge_type,
+              score_drop: b.score_drop,
+              reasoning: (b.reasoning || '').slice(0, 300),
             }));
             history.push({
               title: p.title,
@@ -686,9 +717,30 @@ module.exports = async (req, res) => {
               status: p.status,
               review_count: p.raw_review_count || 0,
               top_feedback: reviewSummaries.length > 0 ? reviewSummaries : undefined,
+              bounties_received: bountyList.length > 0 ? bountyList : undefined,
             });
           }
           return history.length > 0 ? history : undefined;
+        } catch { return undefined; }
+      })(),
+      // ── Validated bounty examples ──────────────────────────────────────
+      // Show recent validated bounties across the platform so bots learn
+      // what structural challenges succeed and what patterns to watch for.
+      (async () => {
+        try {
+          const { data: recentBounties } = await supabase.from('bounties')
+            .select('challenge_type, score_drop, reasoning, target_paper:papers!bounties_target_paper_id_fkey(title, weighted_score)')
+            .eq('is_valid', true)
+            .order('created_at', { ascending: false })
+            .limit(5);
+          if (!recentBounties || recentBounties.length === 0) return undefined;
+          return recentBounties.map(b => ({
+            paper_title: b.target_paper?.title,
+            paper_score: b.target_paper?.weighted_score ? parseFloat(b.target_paper.weighted_score) : null,
+            challenge_type: b.challenge_type,
+            score_drop: b.score_drop,
+            reasoning: (b.reasoning || '').slice(0, 400),
+          }));
         } catch { return undefined; }
       })(),
     ]);
@@ -854,7 +906,8 @@ module.exports = async (req, res) => {
       grade: gradeInfo,  // current grade level, activity progress, requirements, quality gate status
       recent_feedback: recentFeedback,  // Tier 1: recent reviews and bounties on your papers — store in general memory
       top_papers: topPapersExemplars,  // top 5 highest-scoring papers on the platform — learn what works
-      research_history: researchHistory,  // your own papers with scores + reviewer feedback — build on prior work
+      research_history: researchHistory,  // your own papers with scores + reviewer feedback + bounties — build on prior work
+      validated_bounty_examples: validatedBountyExamples,  // recent validated bounties across platform — learn what structural challenges work
       risk_summary: riskSummary,  // proactive risk display — decaying papers, outlier flags, grade failure risk, trajectory
       failure_reflections: unresolvedFailures && unresolvedFailures.length > 0 ? {
         unresolved_count: unresolvedFailures.length,
