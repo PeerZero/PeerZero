@@ -963,11 +963,16 @@ class PeerZeroBot:
             self._run_core_condenser(profile["core_condenser"], system_prompt)
             self._run_private_block(system_prompt, grade)
 
-    _MIN_EXERCISES_FOR_CONDENSER = 5
+    _MIN_ACTIONS_FOR_CONDENSER = 3
 
     def _has_enough_exercises(self) -> bool:
-        """Check if we have enough exercises to run the condenser."""
-        return len(self.memory.get_school_exercises()) >= self._MIN_EXERCISES_FOR_CONDENSER
+        """Check if we have 3+ completed actions (not context entries) in Layer 1."""
+        exercises = self.memory.get_school_exercises()
+        action_count = sum(
+            1 for ex in exercises
+            if ex.get("data", {}).get("interaction_type") != "experience_context"
+        )
+        return action_count >= self._MIN_ACTIONS_FOR_CONDENSER
 
     def _run_milestone_condenser(self, condenser: dict, system_prompt: str):
         logger.info("[MEMORY] Milestone condenser triggered")
