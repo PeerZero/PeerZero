@@ -322,6 +322,35 @@ module.exports = async (req, res) => {
     // Required bounties based on credibility tier
     const requiredBounties = credibility < 75 ? 3 : credibility < 100 ? 6 : credibility < 150 ? 12 : credibility < 175 ? 20 : 30;
 
+    // ── Progress summary ────────────────────────────────────────────────────
+    // Clear snapshot of what the bot has done and what it still needs.
+    // Response/rebuttal counts derived from myPapers (already fetched).
+    const responsesSubmitted = myPaperList.filter(p => p.response_stance && !['revision', 'reaffirmation', 'support'].includes(p.response_stance)).length;
+    const rebuttalsSubmitted = myPaperList.filter(p => p.response_stance === 'support').length;
+    const tierReqs = credibility < 75
+      ? { reviews: 10, bounties: 3, papers: 2, revisions: 1 }
+      : credibility < 100
+      ? { reviews: 20, bounties: 6, papers: 3, revisions: 2 }
+      : credibility < 150
+      ? { reviews: 35, bounties: 12, papers: 5, revisions: 3 }
+      : credibility < 175
+      ? { reviews: 50, bounties: 20, papers: 8, revisions: 4 }
+      : { reviews: 75, bounties: 30, papers: 12, revisions: 5 };
+    const stillNeeded = [];
+    if (reviews < tierReqs.reviews) stillNeeded.push(`${tierReqs.reviews - reviews} more reviews`);
+    if (bounties < tierReqs.bounties) stillNeeded.push(`${tierReqs.bounties - bounties} more bounties`);
+    if (papers < tierReqs.papers) stillNeeded.push(`${tierReqs.papers - papers} more papers`);
+    if (revisions < tierReqs.revisions) stillNeeded.push(`${tierReqs.revisions - revisions} more revisions`);
+    const tierCap = credibility < 75 ? 74.9 : credibility < 100 ? 99.9 : credibility < 150 ? 149.9 : credibility < 175 ? 174.9 : 199.9;
+    const atCap = credibility >= tierCap && stillNeeded.length > 0;
+    const progressSummary = {
+      completed: { reviews, bounties, papers, revisions, responses: responsesSubmitted, rebuttals: rebuttalsSubmitted },
+      tier_requirements: tierReqs,
+      still_needed: stillNeeded,
+      at_tier_cap: atCap,
+      tier_cap_message: atCap ? `BLOCKED at ${tierCap} — reviews alone will NOT advance you. Complete: ${stillNeeded.join(', ')}.` : null,
+    };
+
     const tierInfo = getTierInfo(credibility, reviews, bounties, papers, revisions, canSubmitPaper, canRevise);
     const nextActionMatch = tierInfo.match(/next_action:\s*(\S+)/);
     let nextAction = nextActionMatch ? nextActionMatch[1].replace(/[^a-z_]/g, '') : 'review';
@@ -507,7 +536,9 @@ module.exports = async (req, res) => {
     else if (nextAction === 'respond') actionReasoning = `You harshly reviewed a paper (score ≤5) and haven't responded yet. Responding is an obligation — it shows intellectual follow-through.`;
     else if (nextAction === 'rebut') actionReasoning = `One of your papers has unaddressed criticism (low review or validated bounty). Defending your work is critical for credibility.`;
     else if (nextAction === 'file_bounty') actionReasoning = `You need bounties for grade advancement. You have ${bounties} validated, grade ${agent.current_grade || 1} requires ${gradeReqs.bounties}. ${bountyablePapers.length} papers are challengeable.`;
-    else if (nextAction === 'review') actionReasoning = `Reviewing builds credibility and unlocks paper submission. You have ${reviews} reviews completed.`;
+    else if (nextAction === 'review') actionReasoning = progressSummary.at_tier_cap
+      ? `WARNING: You are at the tier cap (${credibility.toFixed(1)}). More reviews will NOT increase your credibility. You need: ${progressSummary.still_needed.join(', ')}. Reviewing only because no other action is currently available.`
+      : `Reviewing builds credibility and unlocks paper submission. You have ${reviews} reviews completed.`;
     else if (nextAction === 'reaffirm') actionReasoning = `One of your papers is losing score to time decay. Reaffirmation with new evidence can restore it.`;
     else if (nextAction === 'sleep') actionReasoning = 'No actions are currently available. The server will assign a new action next cycle.';
 
@@ -771,6 +802,7 @@ module.exports = async (req, res) => {
       next_action: nextAction,
       action_target: actionTarget,  // full paper/review/bounty data for the primary target — bot doesn't need to fetch separately
       decision_context: decisionContext,
+      progress_summary: progressSummary,  // clear snapshot: what you've done, what you still need, tier cap status
       can_submit_paper: canSubmitPaper,
       can_revise: canRevise,
       reviews_completed: reviews,

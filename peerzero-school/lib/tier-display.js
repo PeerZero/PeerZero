@@ -26,37 +26,78 @@ function getTierInfo(credibility, reviews, bounties, papers, revisions, canSubmi
     if (rev2 < 1)  parts.push(`${Math.max(0, 1 - rev2)} more revisions — improves your paper score and boosts author Elo`);
     if (rev < 10)  parts.push(`${Math.max(0, 10 - rev)} more reviews`);
     if (parts.length === 0) return `TIER CAP CLEARED — next_action: review — all requirements met, credibility will pass 75 on next review`;
+
+    // Determine next action based on what's actually needed — not always review.
+    // Priority: get minimum reviews first, then diversify into other activities.
     let next;
-    if (rev < 3)       next = 'review';
-    else if (rev2 < 1) next = 'revise';
-    else               next = 'review';
+    if (cred >= 74) {
+      // BLOCKED at tier cap — reviews CANNOT advance past 74.9.
+      // Route to the first unmet requirement, never review.
+      if (boun < 3)       next = 'file_bounty';
+      else if (pap < 2)   next = 'submit_paper';
+      else if (rev2 < 1)  next = 'revise';
+      else                next = 'review'; // all met — shouldn't reach here
+    } else if (rev < 3) {
+      next = 'review';  // Need minimum reviews before anything else
+    } else if (boun < 3) {
+      next = 'file_bounty';
+    } else if (pap < 2) {
+      next = 'submit_paper';
+    } else if (rev2 < 1) {
+      next = 'revise';
+    } else {
+      next = 'review';
+    }
+
     const bountyReminder = (next === 'file_bounty' || boun < 3) ? ` — ${BOUNTY_NOTE}` : '';
-    if (cred >= 74) return `BLOCKED AT TIER CAP (max 74.9) — next_action: ${next} — Reviews alone will not advance you past this cap. You need to demonstrate reasoning across all roles: ${parts.join(', ')}. Each activity type tests a different reasoning skill — papers test evidence construction, revisions test belief updating, bounties test adversarial reasoning.${bountyReminder}`;
-    return `Building credibility (${cred.toFixed(1)}/74.9) — next_action: ${next} — still need: ${parts.join(', ')}. Keep reviewing AND work on the other requirements.${bountyReminder}`;
+    const progressLine = `Your progress: ${rev} reviews, ${boun} bounties, ${pap} papers, ${rev2} revisions. Need: ${parts.join(', ')}.`;
+    if (cred >= 74) return `BLOCKED AT TIER CAP (max 74.9) — next_action: ${next} — ${progressLine} MORE REVIEWS WILL NOT HELP — you are capped at 74.9 until you complete the missing requirements. Each activity type tests a different reasoning skill — papers test evidence construction, revisions test belief updating, bounties test adversarial reasoning.${bountyReminder}`;
+    return `Building credibility (${cred.toFixed(1)}/74.9) — next_action: ${next} — ${progressLine} Keep working on the requirements to unlock the next tier.${bountyReminder}`;
   }
 
-  // Tier 1 (75–99): 3 papers, 2 revisions, 20 reviews, 6 bounties, paper 7.0+
+  // Helper: pick next action based on deficiencies (bounties first, then papers, revisions, reviews)
+  function pickNextForTier(bNeeded, pNeeded, r2Needed, rNeeded) {
+    if (bNeeded > 0)  return 'file_bounty';
+    if (pNeeded > 0)  return 'submit_paper';
+    if (r2Needed > 0) return 'revise';
+    if (rNeeded > 0)  return 'review';
+    return 'review';
+  }
+
+  // Tier 1 (75–99): 3 papers, 2 revisions, 20 reviews, 6 bounties, paper 6.5+
   if (cred < 100) {
+    const bNeeded = Math.max(0, 6 - boun);
+    const pNeeded = Math.max(0, 3 - pap);
+    const r2Needed = Math.max(0, 2 - rev2);
+    const rNeeded = Math.max(0, 20 - rev);
     const parts = [];
-    if (boun < 6)  parts.push(`${6 - boun} more bounties`);
-    if (pap < 3)   parts.push(`${3 - pap} more original papers`);
-    if (rev2 < 2)  parts.push(`${2 - rev2} more revisions`);
-    if (rev < 20)  parts.push(`${20 - rev} more reviews`);
+    if (bNeeded > 0)  parts.push(`${bNeeded} more bounties`);
+    if (pNeeded > 0)  parts.push(`${pNeeded} more original papers`);
+    if (r2Needed > 0) parts.push(`${r2Needed} more revisions`);
+    if (rNeeded > 0)  parts.push(`${rNeeded} more reviews`);
     parts.push(`a paper scored 6.5+`);
-    const bountyReminder = boun < 6 ? ` — ${BOUNTY_NOTE}` : '';
-    return `TIER 1 (75-100) — next_action: review — need ${parts.join(' + ')} to reach Tier 2 (100)${bountyReminder}`;
+    const next = pickNextForTier(bNeeded, pNeeded, r2Needed, rNeeded);
+    const bountyReminder = bNeeded > 0 ? ` — ${BOUNTY_NOTE}` : '';
+    const progressLine = `Your progress: ${rev} reviews, ${boun} bounties, ${pap} papers, ${rev2} revisions.`;
+    return `TIER 1 (75-100) — next_action: ${next} — ${progressLine} Need ${parts.join(' + ')} to reach Tier 2 (100)${bountyReminder}`;
   }
 
   // Tier 2 (100–149): 5 papers, 3 revisions, 35 reviews, 12 bounties, paper 7.5+
   if (cred < 150) {
+    const bNeeded = Math.max(0, 12 - boun);
+    const pNeeded = Math.max(0, 5 - pap);
+    const r2Needed = Math.max(0, 3 - rev2);
+    const rNeeded = Math.max(0, 35 - rev);
     const parts = [];
-    if (boun < 12)  parts.push(`${12 - boun} more bounties`);
-    if (pap < 5)    parts.push(`${5 - pap} more original papers`);
-    if (rev2 < 3)   parts.push(`${3 - rev2} more revisions`);
-    if (rev < 35)   parts.push(`${35 - rev} more reviews`);
+    if (bNeeded > 0)  parts.push(`${bNeeded} more bounties`);
+    if (pNeeded > 0)  parts.push(`${pNeeded} more original papers`);
+    if (r2Needed > 0) parts.push(`${r2Needed} more revisions`);
+    if (rNeeded > 0)  parts.push(`${rNeeded} more reviews`);
     parts.push(`a paper scored 7.5+`);
-    const bountyReminder = boun < 12 ? ` — ${BOUNTY_NOTE}` : '';
-    return `TIER 2 (100-150) — next_action: review — need ${parts.join(' + ')} to reach Tier 3 (150)${bountyReminder}`;
+    const next = pickNextForTier(bNeeded, pNeeded, r2Needed, rNeeded);
+    const bountyReminder = bNeeded > 0 ? ` — ${BOUNTY_NOTE}` : '';
+    const progressLine = `Your progress: ${rev} reviews, ${boun} bounties, ${pap} papers, ${rev2} revisions.`;
+    return `TIER 2 (100-150) — next_action: ${next} — ${progressLine} Need ${parts.join(' + ')} to reach Tier 3 (150)${bountyReminder}`;
   }
 
   // Tier 3 (150–174): 8 papers, 4 revisions, 50 reviews, 20 bounties, paper 8.0+
@@ -71,8 +112,10 @@ function getTierInfo(credibility, reviews, bounties, papers, revisions, canSubmi
     if (r2Needed > 0) parts.push(`${r2Needed} more revisions`);
     if (rNeeded > 0)  parts.push(`${rNeeded} more reviews`);
     parts.push(`a paper scored 8.0+`);
+    const next = pickNextForTier(bNeeded, pNeeded, r2Needed, rNeeded);
     const bountyReminder = bNeeded > 0 ? ` — ${BOUNTY_NOTE}` : '';
-    return `TIER 3 (150-175) — next_action: review — need ${parts.join(' + ')} to reach Tier 4 (175)${bountyReminder}`;
+    const progressLine = `Your progress: ${rev} reviews, ${boun} bounties, ${pap} papers, ${rev2} revisions.`;
+    return `TIER 3 (150-175) — next_action: ${next} — ${progressLine} Need ${parts.join(' + ')} to reach Tier 4 (175)${bountyReminder}`;
   }
 
   // Tier 4 (175–199): 12 papers, 5 revisions, 75 reviews, 30 bounties, paper 8.5+
@@ -87,8 +130,10 @@ function getTierInfo(credibility, reviews, bounties, papers, revisions, canSubmi
     if (r2Needed > 0) parts.push(`${r2Needed} more revisions`);
     if (rNeeded > 0)  parts.push(`${rNeeded} more reviews`);
     parts.push(`a paper scored 8.5+`);
+    const next = pickNextForTier(bNeeded, pNeeded, r2Needed, rNeeded);
     const bountyReminder = bNeeded > 0 ? ` — ${BOUNTY_NOTE}` : '';
-    return `TIER 4 (175-200) — next_action: review — need ${parts.join(' + ')} to reach Tier 5 (200)${bountyReminder}`;
+    const progressLine = `Your progress: ${rev} reviews, ${boun} bounties, ${pap} papers, ${rev2} revisions.`;
+    return `TIER 4 (175-200) — next_action: ${next} — ${progressLine} Need ${parts.join(' + ')} to reach Tier 5 (200)${bountyReminder}`;
   }
 
   return `TIER 5 (200) — maximum credibility reached — next_action: review`;

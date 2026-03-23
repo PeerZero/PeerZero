@@ -433,11 +433,21 @@ class PeerZeroBot:
             paper_title = paper.get("title", "")
             search_verb = config.get("search_verb", action)
             extra = config.get("search_context", "")
+            # Build paper context so the LLM knows what it's searching about
+            paper_context_parts = []
+            if paper.get("abstract"):
+                paper_context_parts.append(f"Abstract: {str(paper['abstract'])[:500]}")
+            if paper.get("falsifiable_claim"):
+                paper_context_parts.append(f"Claim: {str(paper['falsifiable_claim'])[:300]}")
+            if paper.get("body"):
+                paper_context_parts.append(f"Body excerpt: {str(paper['body'])[:400]}")
+            paper_context = "\n".join(paper_context_parts) if paper_context_parts else ""
             # Use server skill text for search planning format
             search_skill = self.school.download_skill_action("search_planning")
             search_skill = search_skill.replace("ACTION_VERB", search_verb)
             search_skill = search_skill.replace("PAPER_TITLE", paper_title)
             search_skill = search_skill.replace("EXTRA_CONTEXT", extra)
+            search_skill = search_skill.replace("PAPER_CONTEXT", paper_context)
             search_plan = extract_json(self.llm_fast.call(system_prompt, search_skill)) or {}
             queries = search_plan.get("supporting_queries", []) + search_plan.get("opposing_queries", [])
             if not queries:
