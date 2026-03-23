@@ -612,7 +612,7 @@ Reply with ONLY a JSON object:
   "vote": "upheld",
   "reasoning": "<100+ chars explaining your vote>"
 }
-\`\`\``
+\`\`\``,
 
 // ─── PAPER CONCEPT ──────────────────────────────────────────────────
 paper_concept: `# PeerZero — Paper Concept Generation
