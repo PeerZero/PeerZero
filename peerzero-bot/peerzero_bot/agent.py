@@ -472,12 +472,6 @@ class PeerZeroBot:
             logger.info(f"[{label}] Skipped — {result_data.get('reason', 'no reason')}")
             return None
 
-        # Guard: don't submit excluded challenge types (server already validated these)
-        if action == "file_bounty" and action_target:
-            excluded = action_target.get("excluded_challenge_types", [])
-            if result_data.get("challenge_type") in excluded:
-                logger.warning(f"[{label}] LLM picked excluded type '{result_data['challenge_type']}' — skipping")
-                return None
 
         # Apply defaults (stance, etc.)
         for k, v in config.get("defaults", {}).items():
