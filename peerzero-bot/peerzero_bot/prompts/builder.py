@@ -340,8 +340,8 @@ Return ONLY the JSON object, nothing else."""
     def build_review_rating_prompt(self, review: dict, action_skill: str = "", own_review: dict | None = None) -> str:
         """Format review data for rating. Intelligence lives in server's rate_review skill."""
         score = review.get("score", "?")
-        methodology = str(review.get("methodology_notes", ""))[:800]
-        assessment = str(review.get("overall_assessment", ""))[:2000]
+        methodology = str(review.get("methodology_notes", ""))[:1500]
+        assessment = str(review.get("overall_assessment", ""))[:4000]
 
         own_context = ""
         if own_review:
