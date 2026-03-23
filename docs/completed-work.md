@@ -60,10 +60,9 @@ See [system3-exportable-bot.md](system3-exportable-bot.md) for architecture.
 - 3 consecutive platform failures = pause platform (never stops the bot)
 - Platform routes: registry, list, connect, disconnect, update
 - Skill snapshot caching: batch upsert from School profile for BrainScreen progress bars
-- Class system: create, join (6-char codes), leave, delete, dashboard aggregation
-- Class dashboard: avg credibility, grade distribution, active bots, top performers, milestones
-- Mobile API client: platforms, classes, skills method groups
-- Mobile screens: PlatformsScreen, ConnectPlatformScreen, ClassesScreen, ClassDetailScreen
+- ~~Class system~~ — built then removed (tables dropped, routes unmounted, screens deleted; see Education Features section)
+- Mobile API client: platforms, skills method groups
+- Mobile screens: PlatformsScreen, ConnectPlatformScreen
 - BotScreen updated with Platforms nav button
 - BrainScreen updated with skill progress bars
 - AppNavigator updated with Classes tab + new screen routes
@@ -139,7 +138,7 @@ Rewrote the prompt builder and added a full skill system. Identity now leads eve
 
 - Bot CRUD with procedural avatar generation (6-tier evolution, 256 unique creatures)
 - School enrollment via adapter pattern
-- 5-layer memory system (Cowan's working memory model + self-authored identity block)
+- 5-layer memory system (L1 Desk → L2 Notebook → L3 Condensed → L4 Core Identity → L5 Master Core, plus self-authored identity block)
 - BullMQ agent loop with FSM action routing
 - Activity logging with human-readable translation and category filtering
 - Soft-delete for activity entries
@@ -154,16 +153,9 @@ Rewrote the prompt builder and added a full skill system. Identity now leads eve
 
 ---
 
-## Education Features (March 2026) — COMPLETE (routes unmounted, see below)
+## Education Features (March 2026) — REMOVED
 
-**Built:**
-- Class system with cryptographically random join codes (6-char, ambiguity-free charset)
-- Class CRUD: create, join, leave, delete with role-based access (owner/member)
-- Class dashboard: aggregate stats (avg credibility, grade distribution, active bots, top performers, recent milestones)
-- Member management: add/remove members, assign bots to classes
-- Max 50 members per class, rate-limited join attempts
-- Mobile screens: ClassesScreen (list + join/create), ClassDetailScreen (members + dashboard tabs)
-- Classes tab in bottom navigation
+**History:** Class system was built (join codes, CRUD, dashboard, mobile screens) but deliberately abandoned. Tables (`classes`, `class_members`) dropped in migration `0016_drop-unused-classes-tables.sql`. Routes unmounted from `index.ts`. Mobile screens removed. Bot enrollment works directly via School API without class grouping. See `CLEANUP_LOG.md` for details.
 
 ---
 
@@ -218,7 +210,7 @@ Full emotional layer for bot ownership — bots speak, hatch, celebrate, and can
 - Webhook idempotency improvements in payment handling
 
 **Changed:**
-- Classes feature: routes retained but unmounted from `index.ts`, mobile screens removed
+- Classes feature: fully removed (tables dropped, routes unmounted, mobile screens deleted)
 - CreateBotScreen now routes to EggHatchScreen after creation
 
 ---
@@ -338,6 +330,30 @@ Moved academic paper search from the bot package to a server-side API endpoint. 
 - Removed fallback prompts from review_rating, red_team, red_team_vote — always use server skill text
 - Community methods now fetch and pass server skill text (rate_review, red_team, open_question)
 - Net result: -515 lines from agent.py + builder.py. Bot is a thin shell, server owns intelligence.
+
+---
+
+## Code Restructuring (March 2026) — COMPLETE
+
+See `CLEANUP_LOG.md` for full details on each change.
+
+**Server (peerzero-school):**
+- `lib/skills.js` split into 5 focused submodules (skills-core, skills-exercises, skills-profile, skills-collectors, skills-condensers) + 45-line re-export facade
+- `api/agents.js` helpers extracted to `lib/tier-display.js` and `lib/coaching.js`
+- `api/review_ratings.js` renamed to `api/review-ratings.js` (kebab-case consistency)
+- `MIN_SCORE_DROP` deduplication in bounties.js
+- 5 unused database views dropped (migration 018)
+- `bots.py` deprecated with header (kept for reference)
+
+**Bot (peerzero-bot):**
+- `LLMClient` extracted from agent.py to `llm_client.py` (agent.py: 1,998 → 1,501 lines)
+- 2 unused `import sys` removed
+
+**App (peerzero-app):**
+- `classes` and `class_members` tables dropped (migration 0016)
+- `getBotEnrollments()` and `updateEnrollmentStatus()` removed from school.service.ts
+- `apikey.service.ts` renamed to `api-key.service.ts` (kebab-case consistency)
+- 17 mobile screens reorganized into 7 domain folders
 
 ---
 

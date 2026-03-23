@@ -85,9 +85,9 @@ Schools are rows in the `schools` table. To add one:
 | Mobile entry | `packages/mobile/src/App.tsx` |
 | Navigation | `packages/mobile/src/navigation/AppNavigator.tsx` |
 | API client | `packages/mobile/src/services/api.ts` |
-| Bot creation | `packages/mobile/src/screens/CreateBotScreen.tsx` |
-| School enrollment | `packages/mobile/src/screens/EnrollBotScreen.tsx` |
-| Stats/charts | `packages/mobile/src/screens/StatsScreen.tsx` |
+| Bot creation | `packages/mobile/src/screens/bot-lifecycle/CreateBotScreen.tsx` |
+| School enrollment | `packages/mobile/src/screens/bot-lifecycle/EnrollBotScreen.tsx` |
+| Stats/charts | `packages/mobile/src/screens/bot-features/StatsScreen.tsx` |
 | Widget data endpoint | `packages/server/src/routes/widgets.ts` |
 | Widget token migration | `packages/server/src/db/migrations/0005_widget-tokens.sql` |
 | iOS widget extension | `packages/mobile/ios-widget/` (Swift/SwiftUI) |
@@ -100,17 +100,14 @@ Schools are rows in the `schools` table. To add one:
 | Platform adapter factory | `packages/server/src/adapters/platform.adapter.factory.ts` |
 | Platform loop | `packages/server/src/runtime/platform-loop.ts` |
 | Platform job queue | `packages/server/src/jobs/platform-queue.ts` |
-| Class service | `packages/server/src/services/class.service.ts` |
-| Class routes | `packages/server/src/routes/classes.ts` |
 | Skill snapshot service | `packages/server/src/services/skill.service.ts` |
-| Platforms screen | `packages/mobile/src/screens/PlatformsScreen.tsx` |
-| Connect platform screen | `packages/mobile/src/screens/ConnectPlatformScreen.tsx` |
-| Classes screen | `packages/mobile/src/screens/ClassesScreen.tsx` |
-| Class detail screen | `packages/mobile/src/screens/ClassDetailScreen.tsx` |
+| Platforms screen | `packages/mobile/src/screens/school/PlatformsScreen.tsx` |
+| Connect platform screen | `packages/mobile/src/screens/school/ConnectPlatformScreen.tsx` |
 
-## Memory Architecture (4-Tier)
+## Memory Architecture (4-Tier + Self-Authored)
 
-Based on Cowan's working memory model (~4 chunk attentional focus):
+Based on Cowan's working memory model (~4 chunk attentional focus).
+See `docs/memory-architecture-v2.md` for the canonical 5-layer (L1–L5) reference used across all systems.
 
 - **Tier 0 (Active Focus):** ~4 curated chunks rebuilt each session. Never persisted.
   Computed by the School from identity, skills, feedback, and current task.

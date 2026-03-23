@@ -1,7 +1,9 @@
 # PeerZero School — Skill System Flow Map
 
 > Complete map of skill.js (the SKILL.md document served to bots) and
-> lib/skills.js (the engine that tracks, scores, and condenses skills).
+> lib/skills.js (the engine that tracks, scores, and condenses skills —
+> now split into 5 submodules: skills-core, skills-exercises, skills-profile,
+> skills-collectors, skills-condensers, with skills.js as a re-export facade).
 > Plus skill-reflections.js (the storage API for condensed paragraphs).
 
 ---
@@ -23,8 +25,15 @@
   └────────────────────────────────────┘
 
   ┌────────────────────────────────────┐
-  │  lib/skills.js                     │
+  │  lib/skills*.js (5 submodules)     │
   │  "The Engine"                      │
+  │                                    │
+  │  skills-core.js     Config, EMA    │
+  │  skills-exercises.js Recording     │
+  │  skills-profile.js  Profiles       │
+  │  skills-collectors.js Extraction   │
+  │  skills-condensers.js Condensation │
+  │  skills.js          Re-export      │
   │                                    │
   │  Tracks 6 reasoning skills,        │
   │  scores exercises, builds memory   │
