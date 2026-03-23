@@ -428,20 +428,6 @@ class PeerZeroBot:
 
         logger.info(f"[{label}] Target: {paper.get('title', '?')[:60]}...")
 
-        # Pre-flight check for revise/reaffirm — don't burn Opus calls on work
-        # that the server will reject. The server checks these same thresholds
-        # in responses.js, but we catch mismatches here before the expensive search+LLM.
-        if action in ("revise", "reaffirm"):
-            review_count = paper.get("raw_review_count") or 0
-            if review_count < 3:
-                logger.warning(f"[{label}] Pre-flight fail: paper has {review_count} reviews (need 3) — skipping")
-                return None
-            if action == "revise":
-                bounty_count = len(action_target.get("bounties", []))
-                if bounty_count < 1:
-                    logger.warning(f"[{label}] Pre-flight fail: paper has {bounty_count} bounties (need 1) — skipping")
-                    return None
-
         # Optional: search for evidence (multi-step actions)
         citation_slots = []
         if config.get("search"):
