@@ -77,7 +77,7 @@ class PeerZeroBot:
         self.memory = memory
         self.school = school
         self.llm = llm  # Strong model — paper, review, bounty, revise
-        self.llm_fast = llm_fast or llm  # Fast model — condensers, platform, identity reflection
+        self.llm_fast = llm_fast or llm  # Fast model — condensers, platform
         self.prompts = prompts
         self.gateway = gateway
         self.audit = audit
@@ -90,7 +90,7 @@ class PeerZeroBot:
         self._agent_card: dict = {}
         self._identity_refresh_interval: int = config.identity_refresh_interval
         self._last_identity_refresh: int = 0
-        self._last_reflection_cycle: int = -5  # allow first cycle to reflect
+        self._condensed_doc_count_at_last_identity: int = 0  # track L3 for L3→L4 cascade
 
     # ═══════════════════════════════════════════════════════════════════════
     # STARTUP
@@ -172,7 +172,7 @@ class PeerZeroBot:
             )
 
             logger.info("Identity refreshed:")
-            logger.info(build_identity_summary(self._portable_profile, self.memory.get_self_identity()))
+            logger.info(build_identity_summary(self._portable_profile, None))
         except Exception as e:
             logger.warning(f"Failed to refresh identity: {e}")
 
@@ -211,11 +211,7 @@ class PeerZeroBot:
         system_prompt = self.prompts.build_school_system_prompt()
         grade = profile.get("agent", {}).get("grade", 1) if isinstance(profile.get("agent"), dict) else profile.get("grade", 1)
 
-        # Step 2: Identity reflection — only when server triggers it (~33% of cycles).
-        # Runs BEFORE the action so decisions are filtered through evolving identity.
-        self._pre_action_identity(profile, system_prompt, grade)
-
-        # Step 2b: Action-relevant community work — only run tasks that relate to
+        # Step 2: Action-relevant community work — only run tasks that relate to
         # what the server told us to do. No fetching bounty data for a review cycle.
         if self.cycle_count % 3 == 0:
             try:
@@ -284,8 +280,7 @@ class PeerZeroBot:
             logger.info(f"[{handle}] {next_action} produced no result — server will reassign next cycle")
 
         # Step 5: Store exercises + process condensers (post-action)
-        # Identity reflection already ran in Step 2.  Only condensers run here
-        # so they don't block the productive action.
+        # Condensers cascade: L1→L2→L3→L4 when thresholds are met.
         if result and isinstance(result, dict):
             if result.get("skill_exercises"):
                 self.memory.store_school_exercises(result["skill_exercises"])
@@ -818,41 +813,17 @@ class PeerZeroBot:
                         continue
                     logger.debug(f"[BOUNTY] Structural bounty failed: {e}")
 
-    # ── Memory processing ─────────────────────────────────────────────────
+    # ── Condensation Cascade ─────────────────────────────────────────────
     #
-    # Identity reflection runs BEFORE the action (pre-work) so every
-    # decision is filtered through the bot's evolving identity.  It is NOT
-    # a task — it doesn't count as the cycle's productive action.
+    # ALL identity writes happen through the condenser cascade. No rogue writes.
     #
-    # Condensers (skill, core, master) run AFTER the action (post-work).
-    # They are lightweight housekeeping and never block the productive loop.
-
-    _REFLECTION_COOLDOWN_CYCLES = 5  # min cycles between identity reflections
-
-    def _pre_action_identity(self, profile: dict, system_prompt: str, grade: int = 1):
-        """Run identity reflection + private block BEFORE the action.
-
-        This is the bot's decision lens — every action is filtered through it.
-        Best-effort: if the LLM call fails, log and move on.  The action must
-        not be blocked by identity work.
-
-        Cooldown: reflection fires at most once every 5 cycles to avoid
-        excessive memory writes.  The server already gates at ~33%, but with
-        short cycle times the bot needs its own brake.
-        """
-        reflection = profile.get("identity_reflection")
-        if not reflection:
-            return
-        cycles_since = self.cycle_count - self._last_reflection_cycle
-        if cycles_since < self._REFLECTION_COOLDOWN_CYCLES:
-            logger.info(f"[MEMORY] Identity reflection skipped (cooldown: {cycles_since}/{self._REFLECTION_COOLDOWN_CYCLES} cycles)")
-            return
-        try:
-            self._run_identity_reflection(reflection, system_prompt)
-            self._run_private_block(system_prompt, grade)
-            self._last_reflection_cycle = self.cycle_count
-        except Exception as e:
-            logger.warning(f"[IDENTITY] Pre-action reflection failed (non-blocking): {e}")
+    #   L1 (5 actions) → milestone condenser → L2 (paragraph)
+    #   L2 (5 paragraphs) → paragraph condenser → L3 (condensed doc)
+    #   L3 (3 docs) → identity condenser → L4 (core identity)
+    #   L4 → master condenser at graduation → L5 (locked forever)
+    #
+    # Condensers cascade: after L1→L2 fires, if L2 has enough entries,
+    # L2→L3 fires in the same cycle. Same for L3→L4.
 
     _last_feedback_hash: str = ""  # dedup: don't re-store identical feedback
 
@@ -952,10 +923,7 @@ class PeerZeroBot:
         })
 
     def _process_inline_condensers(self, memory_prompts: dict, system_prompt: str):
-        """Process only condensers from inline memory prompts (post-action).
-
-        Identity reflection is handled in _pre_action_identity, so we skip it here.
-        """
+        """Process condensers from inline memory prompts (post-action)."""
         if not memory_prompts:
             return
         if memory_prompts.get("skill_condenser") and self._has_enough_exercises():
@@ -964,18 +932,18 @@ class PeerZeroBot:
     def _process_post_action_triggers(self, profile: dict, system_prompt: str, grade: int = 1):
         """Process condensers from profile triggers (post-action).
 
-        Identity reflection already ran in _pre_action_identity, so only
-        condensers fire here.
+        Condensers cascade: L1→L2, then check L2→L3, then check L3→L4.
+        Master condenser at graduation overrides the cascade (L4→L5 lock).
         """
         if profile.get("skill_condenser") and self._has_enough_exercises():
             self._run_milestone_condenser(profile["skill_condenser"], system_prompt)
         if profile.get("master_condenser"):
             self._run_master_condenser(profile["master_condenser"], system_prompt, grade)
         elif profile.get("core_condenser"):
-            self._run_core_condenser(profile["core_condenser"], system_prompt)
-            self._run_private_block(system_prompt, grade)
+            # Server triggered L2→L3 (at grade transitions)
+            self._run_paragraph_condenser(system_prompt)
 
-    _MIN_ACTIONS_FOR_CONDENSER = 3
+    _MIN_ACTIONS_FOR_CONDENSER = 5
     # Only these count as completed actions for condenser triggering.
     # paper = submit_paper or respond, review = submit_review,
     # revision = revise or reaffirm, bounty = file_bounty
@@ -996,142 +964,113 @@ class PeerZeroBot:
         return action_count >= self._MIN_ACTIONS_FOR_CONDENSER
 
     def _run_milestone_condenser(self, condenser: dict, system_prompt: str):
-        logger.info("[MEMORY] Milestone condenser triggered")
+        """L1→L2: Condense raw exercises into a skill paragraph.
+
+        After writing L2, cascades to L2→L3 if L2 has 5+ paragraphs.
+        """
+        logger.info("[MEMORY] Milestone condenser triggered (L1→L2)")
         exercises = self.memory.get_school_exercises()
         user_msg = self.prompts.build_condenser_prompt(
             condenser.get("condenser_prompt", ""), exercises,
         )
         paragraph = self.llm.call(system_prompt, user_msg)  # Strong model — identity task
-        if paragraph and len(paragraph.strip()) >= 50:
+        if paragraph and len(paragraph.strip()) >= 100:
             self.memory.store_identity_paragraph(paragraph.strip())
             self.memory.clear_school_exercises()
             try:
                 self.school.submit_condensation(paragraph.strip())
             except Exception as e:
                 logger.warning(f"[MEMORY] Server backup failed: {e}")
-            logger.info(f"[MEMORY] Condensed {len(exercises)} exercises")
+            logger.info(f"[MEMORY] L1→L2: Condensed {len(exercises)} exercises into paragraph")
 
-    def _run_core_condenser(self, condenser: dict, system_prompt: str):
-        logger.info("[MEMORY] Core condenser triggered")
+            # Cascade: check if L2→L3 should fire
+            if len(self.memory.get_identity_paragraphs()) >= 5:
+                self._run_paragraph_condenser(system_prompt)
+
+    _PARAGRAPH_CONDENSER_THRESHOLD = 5  # L2 entries before condensing to L3
+
+    def _run_paragraph_condenser(self, system_prompt: str):
+        """L2→L3: Condense skill paragraphs into a condensed identity document.
+
+        After writing L3, cascades to L3→L4 if L3 has 3+ docs.
+        """
         paragraphs = self.memory.get_identity_paragraphs()
-        user_msg = self.prompts.build_core_condenser_prompt(
-            condenser.get("core_condenser_prompt", ""), paragraphs,
-        )
-        core = self.llm.call(system_prompt, user_msg)  # Strong model — identity task
-        if core and len(core.strip()) >= 100:
-            self.memory.store_core_identity(core.strip())
-            self.memory.clear_identity_paragraphs()
-            logger.info("[MEMORY] Core identity written")
-
-    def _run_identity_reflection(self, reflection: dict, system_prompt: str):
-        logger.info("[MEMORY] Identity reflection triggered")
-        user_msg = self.prompts.build_identity_reflection_prompt(
-            reflection.get("reflection_prompt", ""),
-        )
-        response = self.llm_fast.call_best_effort(system_prompt, user_msg)
-        if not response:
-            logger.info("[MEMORY] Identity reflection LLM call failed — skipping")
+        if len(paragraphs) < self._PARAGRAPH_CONDENSER_THRESHOLD:
+            logger.info(f"[MEMORY] L2→L3 skipped: only {len(paragraphs)}/{self._PARAGRAPH_CONDENSER_THRESHOLD} paragraphs")
             return
-        identity_data = extract_json(response)
-        if identity_data and identity_data.get("self_narrative"):
-            # Validate lengths before submitting to avoid 400s
-            narrative = str(identity_data.get("self_narrative", "")).strip()
-            if len(narrative) < 50 or len(narrative) > 5000:
-                logger.info(f"[MEMORY] self_narrative length {len(narrative)} out of range — skipping server sync")
-                return
-            tensions = identity_data.get("active_tensions")
-            if tensions and (len(str(tensions).strip()) < 20 or len(str(tensions).strip()) > 4000):
-                identity_data.pop("active_tensions", None)
-            convictions = identity_data.get("formed_convictions")
-            if convictions and (len(str(convictions).strip()) < 20 or len(str(convictions).strip()) > 4000):
-                identity_data.pop("formed_convictions", None)
-            values = identity_data.get("claimed_values")
-            if values and isinstance(values, list):
-                identity_data["claimed_values"] = [
-                    v for v in values
-                    if isinstance(v, str) and 5 <= len(v.strip()) <= 500
-                ][:10]
 
-            self.memory.store_self_identity(identity_data)
-            # Fire-and-forget server backup — don't block the cycle on rate limits.
-            # Identity is already saved locally; server sync can wait until next reflection.
-            try:
-                self.school.submit_identity(identity_data)
-                logger.info("[MEMORY] Self-authored identity updated")
-            except Exception as e:
-                status = getattr(getattr(e, "response", None), "status_code", None)
-                if status == 429:
-                    logger.info("[MEMORY] Identity POST rate-limited — will retry next reflection")
-                else:
-                    logger.warning(f"[MEMORY] Server backup failed: {e}")
+        logger.info(f"[MEMORY] Paragraph condenser triggered (L2→L3, {len(paragraphs)} paragraphs)")
+        user_msg = self.prompts.build_paragraph_condenser_prompt(paragraphs)
+        doc = self.llm.call(system_prompt, user_msg)  # Strong model — identity task
+        if doc and len(doc.strip()) >= 200:
+            self.memory.store_condensed_doc(doc.strip())
+            self.memory.clear_identity_paragraphs()
+            logger.info(f"[MEMORY] L2→L3: Condensed {len(paragraphs)} paragraphs into identity doc")
 
-    def _run_private_block(self, system_prompt: str, grade: int = 1):
-        """
-        Ask the bot to write a private reflection block for itself.
-
-        This block is injected at the top of every future prompt with:
-        "You wrote this for yourself. Inhabit it."
-
-        Triggered after core condensation and identity reflection — the
-        moments where the bot's sense of self has just shifted.
-        """
-        logger.info("[MEMORY] Private block triggered")
-        user_msg = self.prompts.build_private_block_prompt(grade)
-
-        # Use fresh system prompt so the bot sees its just-updated identity
-        fresh_system = self.prompts.build_school_system_prompt()
-        block = self.llm_fast.call_best_effort(fresh_system, user_msg)
-
-        if block and len(block.strip()) >= 30:
-            self.memory._archive_private_block()
-            self.memory.store_private_block(block.strip())
-            logger.info("[MEMORY] Private block written")
+            # Cascade: check if L3→L4 should fire
+            if len(self.memory.get_condensed_docs()) >= 3:
+                self._run_identity_condenser(system_prompt)
         else:
-            logger.warning("[MEMORY] Private block too short or empty — skipped")
+            logger.warning("[MEMORY] L2→L3 condensed doc too short — skipping")
+
+    _IDENTITY_CONDENSER_THRESHOLD = 3  # L3 docs before condensing to L4
+
+    def _run_identity_condenser(self, system_prompt: str):
+        """L3→L4: Condense identity documents into core reasoning identity."""
+        docs = self.memory.get_condensed_docs()
+        if len(docs) < self._IDENTITY_CONDENSER_THRESHOLD:
+            logger.info(f"[MEMORY] L3→L4 skipped: only {len(docs)}/{self._IDENTITY_CONDENSER_THRESHOLD} docs")
+            return
+
+        logger.info(f"[MEMORY] Identity condenser triggered (L3→L4, {len(docs)} docs)")
+        existing_core = self.memory.get_core_identity()
+        user_msg = self.prompts.build_identity_condenser_prompt(docs, existing_core)
+        core = self.llm.call(system_prompt, user_msg)  # Strong model — identity task
+        if core and len(core.strip()) >= 200:
+            self.memory.store_core_identity(core.strip())
+            self.memory.clear_condensed_docs()
+            logger.info(f"[MEMORY] L3→L4: Core identity updated ({len(core)} chars)")
+        else:
+            logger.warning("[MEMORY] L3→L4 core identity too short — skipping")
 
     def _run_master_condenser(self, condenser: dict, system_prompt: str, grade: int):
-        """
-        Grade 12 graduation condensation.
+        """L4→L5: Grade 12 graduation condensation.
 
-        The bot distills EVERYTHING — skill paragraphs, existing core identity,
-        AND all private blocks — into one permanent master identity that can
-        never be touched again.
+        The bot distills EVERYTHING — condensed docs, skill paragraphs,
+        and existing core identity — into one permanent master identity
+        that can never be touched again.
 
         After this:
-          - Core identity is permanently locked (is_master=True)
-          - Skill paragraphs are cleared (absorbed into master)
-          - Exercises are cleared (fed the paragraphs)
-          - Private blocks are cleared (absorbed into master)
+          - Core identity is permanently locked (is_master=True, becomes L5)
+          - All lower layers are cleared (absorbed into master)
           - No more condensers will fire (post-school mode)
         """
-        logger.info("[MEMORY] Master condenser triggered (Grade 12 graduation)")
+        logger.info("[MEMORY] Master condenser triggered (L4→L5, Grade 12 graduation)")
         paragraphs = self.memory.get_identity_paragraphs()
-        private_blocks = self.memory.get_all_private_blocks()
+        condensed_docs = self.memory.get_condensed_docs()
         existing_core = self.memory.get_core_identity()
 
-        if not paragraphs and not private_blocks and not existing_core:
+        if not paragraphs and not condensed_docs and not existing_core:
             logger.warning("[MEMORY] Nothing to condense for master — skipping")
             return
 
         user_msg = self.prompts.build_master_condenser_prompt(
             condenser, paragraphs,
-            private_blocks=private_blocks,
+            condensed_docs=condensed_docs,
             existing_core=existing_core,
         )
         master_identity = self.llm.call(system_prompt, user_msg)  # Use strong model for graduation
 
         if master_identity and len(master_identity.strip()) >= 200:
-            # Store as the permanently locked core identity
+            # Store as the permanently locked core identity (L5)
             self.memory.store_core_identity(master_identity.strip(), is_master=True)
             # Clear everything that was absorbed
             self.memory.clear_identity_paragraphs()
+            self.memory.clear_condensed_docs()
             self.memory.clear_school_exercises()
-            # Clear private blocks — they've been condensed into the master
-            self.memory._storage.write("school", "private_block", {})
-            self.memory._storage.clear("school", "private_block_history")
             logger.info(
-                f"[MEMORY] Master identity written and LOCKED ({len(master_identity)} chars). "
-                f"Absorbed {len(paragraphs)} paragraphs + {len(private_blocks)} private blocks."
+                f"[MEMORY] L4→L5: Master identity written and LOCKED ({len(master_identity)} chars). "
+                f"Absorbed {len(paragraphs)} paragraphs + {len(condensed_docs)} docs."
             )
         else:
             logger.warning("[MEMORY] Master identity too short — skipping")
