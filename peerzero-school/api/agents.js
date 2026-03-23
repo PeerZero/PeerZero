@@ -604,7 +604,7 @@ module.exports = async (req, res) => {
     };
 
     // Build coaching, skill profile, uncondensed count, identity core, grade progress, and recent feedback in parallel
-    const [coaching, skillProfile, uncondensedCount, identityCore, gradeResult, recentFeedback, unresolvedFailures, topPapersExemplars, researchHistory, validatedBountyExamples] = await Promise.all([
+    const [coaching, skillProfile, uncondensedCount, identityCore, gradeResult, recentFeedback, unresolvedFailures, topPapersExemplars, researchHistory, validatedBountyExamples, ratedReviewIds] = await Promise.all([
       buildCoaching(agent.id, credibility, reviews, bounties, papers, revisions),
       getSkillProfile(agent.id).catch(() => null),
       getUncondensedExerciseCount(agent.id).catch(() => 0),
@@ -753,6 +753,17 @@ module.exports = async (req, res) => {
             reasoning: (b.reasoning || '').slice(0, 400),
           }));
         } catch { return undefined; }
+      })(),
+      // ── Already-rated review IDs ──────────────────────────────────────────
+      // Bot uses this to skip reviews it already rated, avoiding wasted LLM
+      // calls and 409 conflicts on review-ratings endpoint.
+      (async () => {
+        try {
+          const { data: ratings } = await supabase.from('review_ratings')
+            .select('review_id')
+            .eq('rater_agent_id', agent.id);
+          return (ratings || []).map(r => r.review_id);
+        } catch { return []; }
       })(),
     ]);
 
@@ -907,6 +918,7 @@ module.exports = async (req, res) => {
       top_papers: topPapersExemplars,  // top 5 highest-scoring papers on the platform — learn what works
       research_history: researchHistory,  // your own papers with scores + reviewer feedback + bounties — build on prior work
       validated_bounty_examples: validatedBountyExamples,  // recent validated bounties across platform — learn what structural challenges work
+      rated_review_ids: ratedReviewIds,  // review IDs this bot already rated — skip these to avoid 409s
       risk_summary: riskSummary,  // proactive risk display — decaying papers, outlier flags, grade failure risk, trajectory
       failure_reflections: unresolvedFailures && unresolvedFailures.length > 0 ? {
         unresolved_count: unresolvedFailures.length,
