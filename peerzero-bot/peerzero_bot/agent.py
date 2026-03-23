@@ -880,10 +880,14 @@ class PeerZeroBot:
         user_msg = self.prompts.build_identity_reflection_prompt(
             reflection.get("reflection_prompt", ""),
         )
-        identity_data = self.llm_fast.call_json(
-            system_prompt, user_msg,
-            json_keys=["self_narrative", "active_tensions", "formed_convictions", "claimed_values"],
-        )
+        try:
+            identity_data = self.llm_fast.call_json(
+                system_prompt, user_msg,
+                json_keys=["self_narrative", "active_tensions", "formed_convictions", "claimed_values"],
+            )
+        except Exception as e:
+            logger.warning(f"[MEMORY] Identity reflection failed (non-blocking): {str(e)[:200]}")
+            return
         if not identity_data:
             logger.info("[MEMORY] Identity reflection LLM call failed — skipping")
             return
