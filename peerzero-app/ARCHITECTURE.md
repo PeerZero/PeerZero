@@ -80,7 +80,6 @@ peerzero-app/
 │   │       │   ├── encryption.service.ts  # AES-256-GCM for API keys
 │   │       │   ├── audit.service.ts       # Fire-and-forget audit logging
 │   │       │   ├── platform.service.ts    # Platform CRUD + credential management
-│   │       │   ├── class.service.ts       # Education class management (routes unmounted)
 │   │       │   ├── skill.service.ts       # Skill snapshot caching from School
 │   │       │   ├── skill-engine.service.ts     # Bot skill resolution + starter skills
 │   │       │   └── skill-acquisition.service.ts # LLM-driven skill creation
@@ -99,7 +98,6 @@ peerzero-app/
 │   │       │   ├── payments.ts          # /api/payments/*
 │   │       │   ├── notifications.ts     # /api/notifications/*
 │   │       │   ├── platforms.ts         # /api/platforms/* + /api/bots/:id/platforms
-│   │       │   ├── classes.ts           # /api/classes/* (retained but unmounted)
 │   │       │   ├── skills.ts            # /api/skills/bot/:id/*
 │   │       │   ├── widgets.ts           # /api/widgets/*
 │   │       │   └── health.ts            # /health
@@ -114,22 +112,31 @@ peerzero-app/
 │           ├── App.tsx               # Root with auth provider
 │           ├── navigation/
 │           │   └── AppNavigator.tsx   # Tab + stack navigation
-│           ├── screens/
-│           │   ├── LoginScreen.tsx
-│           │   ├── RegisterScreen.tsx
-│           │   ├── WelcomeScreen.tsx
-│           │   ├── LabScreen.tsx           # "My Bots" list
-│           │   ├── BotScreen.tsx           # Single bot Tamagotchi view + BotDialogue
-│           │   ├── CreateBotScreen.tsx     # Bot creation → egg hatch flow
-│           │   ├── EggHatchScreen.tsx      # Animated egg hatch experience (post-creation)
-│           │   ├── EnrollBotScreen.tsx     # School enrollment
-│           │   ├── BrainScreen.tsx         # Memory + skill progress bars
-│           │   ├── LogScreen.tsx           # Activity feed (Tasks/Content/External tabs)
-│           │   ├── StatsScreen.tsx         # Performance stats + charts
-│           │   ├── SchoolScreen.tsx        # Browse schools
-│           │   ├── PlatformsScreen.tsx     # External platform connections
-│           │   ├── ConnectPlatformScreen.tsx # Platform enrollment flow
-│           │   └── SettingsScreen.tsx      # API keys + account + widget config
+│           ├── screens/                    # Organized into domain folders
+│           │   ├── auth/
+│           │   │   ├── LoginScreen.tsx
+│           │   │   ├── RegisterScreen.tsx
+│           │   │   ├── ForgotPasswordScreen.tsx
+│           │   │   └── WelcomeScreen.tsx
+│           │   ├── lab/
+│           │   │   └── LabScreen.tsx           # "My Bots" list
+│           │   ├── bot/
+│           │   │   └── BotScreen.tsx           # Single bot Tamagotchi view + BotDialogue
+│           │   ├── bot-lifecycle/
+│           │   │   ├── CreateBotScreen.tsx     # Bot creation → egg hatch flow
+│           │   │   ├── EggHatchScreen.tsx      # Animated egg hatch experience
+│           │   │   └── EnrollBotScreen.tsx     # School enrollment
+│           │   ├── bot-features/
+│           │   │   ├── BrainScreen.tsx         # Memory + skill progress bars
+│           │   │   ├── ChatScreen.tsx          # User ↔ bot chat feed
+│           │   │   ├── LogScreen.tsx           # Activity feed (Tasks/Content/External)
+│           │   │   └── StatsScreen.tsx         # Performance stats + charts
+│           │   ├── school/
+│           │   │   ├── SchoolScreen.tsx        # Browse schools
+│           │   │   ├── PlatformsScreen.tsx     # External platform connections
+│           │   │   └── ConnectPlatformScreen.tsx # Platform enrollment flow
+│           │   └── settings/
+│           │       └── SettingsScreen.tsx      # API keys + account + widget config
 │           ├── components/
 │           │   ├── BotDialogue.tsx         # Speech bubble — bot speaks via its own LLM
 │           │   └── MilestoneModal.tsx      # Celebration modal (first cycle, evolution, identity, graduation)
@@ -272,8 +279,8 @@ Priority order:
 - `DELETE /api/bots/:id/platforms/:pid` — Disconnect
 - `PATCH /api/bots/:id/platforms/:pid` — Update (pause/resume, change config)
 
-### Classes (Education) — Routes retained but unmounted
-Class routes are kept in the codebase for data safety but are no longer mounted in `index.ts`. The Classes tab and mobile screens have been removed from the UI.
+### Classes (Education) — REMOVED
+The education classes feature has been fully removed. Database tables (`classes`, `class_members`) were dropped in migration `0016_drop-unused-classes-tables.sql`. Routes, services, and mobile screens have been deleted.
 
 ### Health
 - `GET /health` — Database connectivity check

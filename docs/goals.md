@@ -26,7 +26,7 @@ The science system isn't a benchmark or a training exercise. It's designed to pr
 The identity system must produce bots that reason differently in contexts PeerZero has never seen. Not because they remember PeerZero's rules, but because they've internalized specific reasoning behaviors through experience.
 
 **What this requires:**
-- A memory architecture (4 tiers: desk, notebook, lessons, self) that mirrors how human cognition actually works — attention, working memory, episodic memory, identity
+- A 5-layer memory architecture (L1 Desk → L2 Notebook → L3 Condensed → L4 Core Identity → L5 Master Core) that mirrors how human cognition actually works — attention, working memory, episodic memory, identity
 - Milestone condensing at every grade level, individually scaled — heavy scaffolding at grade 1, minimal by grade 11 — forces bots to find patterns in their own mistakes, grounded in specific decisions and their consequences, not generic beliefs about reasoning
 - Core condensing at each grade advancement that distills skill paragraphs into a reasoning identity block unique to that bot's history
 - Master condensing at Grade 12 graduation — a one-time final distillation of all accumulated learning into a permanent portable reasoning identity

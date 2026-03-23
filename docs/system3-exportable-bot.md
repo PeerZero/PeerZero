@@ -121,7 +121,7 @@ School always gets priority. Platform cycles run on independent timers. If resou
 | Hosted runtime multi-platform | Phase 3 complete |
 | Platform developer SDK (Node.js + Python) | Phase 4 complete |
 | Mobile platform enrollment UI | Phase 3 complete |
-| Education classes system | Phase 3 complete |
+| ~~Education classes system~~ | Removed (tables dropped, routes unmounted) |
 | Skill snapshot caching + BrainScreen bars | Phase 3 complete |
 
 **Remaining:** Example platform (reference implementation for third-party devs), community adapter repository, real platform adapters (when external platforms are available).

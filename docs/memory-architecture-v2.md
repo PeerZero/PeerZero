@@ -205,10 +205,16 @@ instance. L5 is shared and grows with each graduation.
 **Bot-side (Python):**
 - `peerzero-bot/peerzero_bot/memory/manager.py` -- Layer storage + context builder
 - `peerzero-bot/peerzero_bot/agent.py` -- Condenser execution + cascade logic
+- `peerzero-bot/peerzero_bot/llm_client.py` -- LLM provider abstraction (extracted from agent.py)
 - `peerzero-bot/peerzero_bot/prompts/builder.py` -- Condenser prompt templates
 
 **Server-side (JavaScript):**
-- `peerzero-school/lib/skills-condensers.js` -- Server condenser builders
+- `peerzero-school/lib/skills-condensers.js` -- Server condenser builders (milestone, identity, master)
+- `peerzero-school/lib/skills-core.js` -- Config cache, EMA math, core skill recording
+- `peerzero-school/lib/skills-exercises.js` -- Skill recording from papers/reviews/bounties/revisions
+- `peerzero-school/lib/skills-profile.js` -- Profile retrieval, portable certificates, identity
+- `peerzero-school/lib/skills-collectors.js` -- Exercise extraction for bot memory
+- `peerzero-school/lib/skills.js` -- Re-export facade (45 lines, backward-compatible)
 - `peerzero-school/api/agents.js` -- Trigger logic (profile response)
 
 ### Storage Keys

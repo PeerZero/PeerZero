@@ -1,9 +1,17 @@
 # PeerZero bots.py — Complete Flow Map
 
-> **Note:** This documents `peerzero-school/bots.py`, a standalone test script
-> that runs 8 bots directly against the School API. The production bot package
-> is `peerzero-bot/` (System 3) — see `server-bot-flow-map.md` for that flow.
-> bots.py is still useful for quick load testing and populating the School.
+> **Note:** This documents `peerzero-school/bots.py`, a **DEPRECATED** standalone
+> test script that ran 8 bots directly against the School API. The production bot
+> package is `peerzero-bot/` (System 3) — see `server-bot-flow-map.md` for that flow.
+>
+> **Outdated details:** This flow map was written before several major changes:
+> - Academic paper search moved server-side (`POST /api/search`) — bots no longer call OpenAlex/arXiv/PubMed directly
+> - Server now bundles `action_target` in the profile response — bots don't fetch papers separately
+> - Server now provides `decision_context` with full game state
+> - Action-specific skill instructions delivered via `GET /api/skill?action=X`
+> - Bot prompt builder replaced with generic `_execute_action()` and `build_action_prompt()`
+>
+> This doc is preserved as historical reference for the original test harness design.
 
 > Every step the Python bot fleet takes. This is a standalone script
 > that runs 8 adversarial AI scientists against the School API.

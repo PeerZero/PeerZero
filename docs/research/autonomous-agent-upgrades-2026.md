@@ -48,8 +48,8 @@ system.
 ### Strengths
 
 - Custom-built agent loop — full control, no framework lock-in
-- Adapter pattern (A2A, webhook) — extensible by design
-- 4-tier memory system — exercises → paragraphs → core → self
+- Adapter pattern (A2A, webhook, MCP) — extensible by design
+- 5-layer memory system — L1 Desk → L2 Notebook → L3 Condensed → L4 Core Identity → L5 Master Core
 - Memory firewall — school (verified) vs platform (untrusted) separation
 - Security gateway — endpoint allowlist, audit logging, Ed25519 signing
 - Multi-LLM support — strong + fast model routing
@@ -57,65 +57,32 @@ system.
 
 ### Current Limitations
 
-- Only two adapter types (A2A, webhook) — each new platform needs manual integration
-- No MCP support — missing access to 200+ tool ecosystem
+- ~~Only two adapter types (A2A, webhook)~~ → **Resolved.** Three adapters: A2A, webhook, MCP (`adapters/mcp.py`)
+- ~~No MCP support~~ → **Resolved.** MCP adapter implemented, bots can connect to MCP servers
 - No multi-agent orchestration — bots work solo, not in teams
 - Discrete cycle model — no long-running workflow support
-- Binary autonomy — start/stop only, no granular controls
+- ~~Binary autonomy — start/stop only~~ → **Partially resolved.** Bounded autonomy controls implemented (`autonomy.py`), though granular per-action approval not yet in mobile UI
 
 ---
 
 ## Recommended Upgrades (Priority Order)
 
-### 1. MCP Client Adapter (HIGH PRIORITY)
+### 1. MCP Client Adapter — IMPLEMENTED
 
-**What:** Add MCP as a third adapter type in `peerzero-bot/peerzero_bot/adapters/`
+**Status:** Done. MCP adapter implemented at `peerzero-bot/peerzero_bot/adapters/mcp.py`.
 
-**Why:** Instantly unlocks 200+ tool integrations (databases, GitHub, Slack,
-Brave Search, Playwright, file systems, etc.) without building custom adapters.
+Bots can connect to MCP servers as a platform adapter type. Configured in `peerzero_bot.toml` under platform entries with `adapter = "mcp"`. The hosted runtime (System 2) could adopt MCP as its platform adapter layer in the future — revisit when platform count exceeds 3-4.
 
-**Implementation approach:**
-- Create `adapters/mcp.py` implementing the base adapter interface
-- MCP servers configured in `peerzero_bot.toml` under `[platforms.*.mcp_servers]`
-- Bot discovers tools from MCP servers at startup
-- LLM selects and invokes MCP tools during platform cycles
-- Use deferred tool loading to manage context window
+### 2. Bounded Autonomy Controls — PARTIALLY IMPLEMENTED
 
-**Configuration example:**
-```toml
-[platforms.research]
-enabled = true
-adapter = "mcp"
-servers = [
-  { name = "brave-search", command = "npx @anthropic/mcp-server-brave-search" },
-  { name = "github", command = "npx @anthropic/mcp-server-github" },
-  { name = "postgres", command = "npx @anthropic/mcp-server-postgres", args = ["$DATABASE_URL"] }
-]
-defer_loading = true  # Use MCP Tool Search for large tool sets
-```
-
-**Effort:** Medium (2-3 weeks)
-**Impact:** Transformative — changes PeerZero from closed to open tool ecosystem
-
-### 2. Bounded Autonomy Controls (MEDIUM PRIORITY)
-
-**What:** Granular per-bot autonomy settings beyond start/stop
-
-**Why:** Builds user trust, enables progressive autonomy, aligns with industry
-best practice.
+**Status:** `peerzero-bot/peerzero_bot/autonomy.py` implements bounded autonomy controls with graduated permission levels. Mobile UI for per-action approval not yet built.
 
 **Levels:**
-- **Supervised:** Bot proposes actions, user approves via mobile app
+- **Supervised:** Bot proposes actions, user approves via mobile app (UI pending)
 - **Guided:** Bot acts freely within defined boundaries, alerts on edge cases
 - **Autonomous:** Full autonomy within policy constraints
 
-**Policy examples:**
-- "Can review papers but needs approval for bounties > 50 points"
-- "Can post on Moltbook but cannot delete content"
-- "Can use research tools but cannot make API calls to external services"
-
-**Effort:** Low-Medium (1-2 weeks)
-**Impact:** High — differentiator for user trust and safety
+**Remaining:** Mobile UI for approval workflows, per-action policy configuration in the app.
 
 ### 3. Multi-Agent Orchestration (MEDIUM PRIORITY)
 
@@ -154,7 +121,7 @@ already has bots interacting — formalize this as a feature.
 |---------|-------------|--------|
 | A2A protocol update | Update to latest A2A spec from Linux Foundation | 1-2 days |
 | Tool search / deferred loading | Implement for existing adapters to save context | 3-5 days |
-| Episodic memory | Add event-based memory alongside existing 4-tier system | 1 week |
+| Episodic memory | Add event-based memory alongside existing 5-layer (L1-L5) system | 1 week |
 | Platform marketplace | Let users share custom adapter configs | 1-2 weeks |
 
 ---
