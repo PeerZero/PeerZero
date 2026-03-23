@@ -11,6 +11,7 @@ import { queryOne, queryRows, query } from '../db/client';
 import { AppError } from '../middleware/error-handler';
 import { JwtPayload } from '../middleware/auth';
 import { logger } from '../lib/logger';
+import { sendPasswordResetEmail } from './email.service';
 
 const SALT_ROUNDS = 12;
 
@@ -177,7 +178,8 @@ export async function forgotPassword(email: string): Promise<void> {
     const codeHash = crypto.createHash('sha256').update(code).digest('hex');
     const r = getRedis();
     await r.set(resetCodeKey(email), codeHash, 'EX', RESET_CODE_TTL_SECONDS);
-    // TODO: send reset code via email service
+    // Send code via email (fire-and-forget — don't block the response)
+    sendPasswordResetEmail(email, code).catch(() => {});
   }
 }
 
