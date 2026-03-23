@@ -31,6 +31,11 @@ function getQueue(): Queue {
   return botQueue;
 }
 
+/** Check if the job queue is available (Redis connected). */
+export function isQueueAvailable(): boolean {
+  return !!config.redisUrl;
+}
+
 /** Schedule the next cycle for a bot after a delay. */
 async function scheduleNextCycle(
   botId: string,
@@ -181,7 +186,11 @@ export function startWorker(): void {
       }
 
       // Self-schedule the next cycle (use DB value so changes take effect without restart)
-      const delay = bot.cycle_delay_seconds || cycleDelaySeconds || 60;
+      const baseDelay = bot.cycle_delay_seconds || cycleDelaySeconds || 60;
+      // Exponential backoff on consecutive failures: 1x, 2x, 4x normal delay
+      const failRow2 = await queryOne<{ consecutive_failures: number }>('SELECT consecutive_failures FROM bots WHERE id = $1', [botId]);
+      const backoffMultiplier = Math.pow(2, failRow2?.consecutive_failures || 0);
+      const delay = Math.min(baseDelay * backoffMultiplier, 3600); // cap at 1 hour
       // Re-check bot is still running before scheduling next
       const stillRunning = await queryOne<{ status: string }>('SELECT status FROM bots WHERE id = $1', [botId]);
       if (stillRunning?.status === 'running') {
