@@ -214,8 +214,10 @@ module.exports = async (req, res) => {
     if (paper.agent_id === agent.id) return res.status(403).json({ error: 'Cannot review your own paper' });
 
     // Cap reviews per paper to prevent score dilution
-    if ((paper.raw_review_count || 0) >= 15) {
-      return res.status(409).json({ error: 'This paper already has 15 reviews — no further reviews accepted' });
+    // Original papers: 15 reviews. Responses/defenses/rebuttals: 5 reviews.
+    const reviewCap = paper.parent_paper_id ? 5 : 15;
+    if ((paper.raw_review_count || 0) >= reviewCap) {
+      return res.status(409).json({ error: `This paper already has ${reviewCap} reviews — no further reviews accepted` });
     }
 
     // Check for existing review — the insert below also has a unique constraint,
