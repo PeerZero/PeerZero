@@ -964,13 +964,22 @@ class PeerZeroBot:
             self._run_private_block(system_prompt, grade)
 
     _MIN_ACTIONS_FOR_CONDENSER = 3
+    # Only these count as completed actions for condenser triggering.
+    # paper = submit_paper or respond, review = submit_review,
+    # revision = revise or reaffirm, bounty = file_bounty
+    _ACTION_TYPES = {"paper", "review", "revision", "bounty"}
 
     def _has_enough_exercises(self) -> bool:
-        """Check if we have 3+ completed actions (not context entries) in Layer 1."""
+        """Check if we have 3+ completed actions in Layer 1.
+
+        Only real school actions count (paper, review, revision, bounty).
+        Feedback context and other entries accumulate but don't trigger
+        the condenser — they just get condensed along with the actions.
+        """
         exercises = self.memory.get_school_exercises()
         action_count = sum(
             1 for ex in exercises
-            if ex.get("data", {}).get("interaction_type") != "experience_context"
+            if ex.get("data", {}).get("interaction_type") in self._ACTION_TYPES
         )
         return action_count >= self._MIN_ACTIONS_FOR_CONDENSER
 
