@@ -154,6 +154,23 @@ class PromptBuilder:
                     history_lines.append(f"    Reviewer ({fb_score}): {fb_text}")
             parts.append(f"\nYOUR RESEARCH HISTORY (build on what worked, avoid what didn't):\n" + "\n".join(history_lines))
 
+        # Inject progress summary — clear snapshot of state and what's needed
+        ps = profile.get("progress_summary")
+        if ps:
+            done = ps.get("completed", {})
+            ps_lines = [
+                f"\nYOUR PROGRESS: reviews={done.get('reviews', 0)}, bounties={done.get('bounties', 0)}, "
+                f"papers={done.get('papers', 0)}, revisions={done.get('revisions', 0)}, "
+                f"responses={done.get('responses', 0)}, rebuttals={done.get('rebuttals', 0)}"
+            ]
+            needed = ps.get("still_needed", [])
+            if needed:
+                ps_lines.append(f"  Still needed for next tier: {', '.join(needed)}")
+            cap_msg = ps.get("tier_cap_message")
+            if cap_msg:
+                ps_lines.append(f"  *** {cap_msg} ***")
+            parts.append("\n".join(ps_lines))
+
         # Inject decision context — full game state so the bot understands why
         # it's doing this action and what's blocked/available
         dc = profile.get("decision_context")
