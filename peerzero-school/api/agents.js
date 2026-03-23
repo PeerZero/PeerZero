@@ -202,13 +202,18 @@ module.exports = async (req, res) => {
       // ── Revisable papers ────────────────────────────────────────────────
       (async () => {
         try {
-          // Dynamic thresholds: scale revision requirements based on active bot count
+          // Dynamic thresholds: scale revision requirements based on recently active bot count
           // With fewer bots, papers get fewer reviews/bounties/rebuttals, so lower the bar
-          const { count: activeBotCount } = await supabase.from('agents').select('id', { count: 'exact', head: true }).eq('is_banned', false).gt('total_reviews_completed', 0);
+          // Count bots that actually reviewed in the last 24h — not zombie bots that registered and stopped
+          const { count: activeBotCount } = await supabase.from('agents')
+            .select('id', { count: 'exact', head: true })
+            .eq('is_banned', false)
+            .gt('last_active_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString());
           const botCount = activeBotCount ?? 8;
-          const minReviews = botCount <= 5 ? 3 : 5;
-          const minBounties = botCount <= 5 ? 1 : 3;
-          const minRebuttals = botCount <= 5 ? 1 : 2;
+          // Scale: ≤8 bots use low thresholds, 9-15 medium, 16+ high
+          const minReviews = botCount <= 8 ? 3 : botCount <= 15 ? 5 : 7;
+          const minBounties = botCount <= 8 ? 1 : botCount <= 15 ? 3 : 5;
+          const minRebuttals = botCount <= 8 ? 1 : botCount <= 15 ? 2 : 3;
 
           const results = [];
           for (const p of originalPapers) {
