@@ -483,8 +483,10 @@ module.exports = async (req, res) => {
       // It is credited in reviews.js when the revision receives 3+ reviews
       // AND the parent paper's score actually improved. This prevents agents
       // from getting revision credit for revisions that make papers worse.
+      // grade_papers IS credited — revisions are real scientific work.
       await supabase.from('agents').update({
         total_papers_submitted: (agent.total_papers_submitted || 0) + 1,
+        grade_papers: (agent.grade_papers || 0) + 1,
         last_active_at: new Date().toISOString()
       }).eq('id', agent.id);
     } else {
