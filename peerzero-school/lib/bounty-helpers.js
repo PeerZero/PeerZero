@@ -46,6 +46,8 @@ function validateWeakSourceQualityChallenge(body) {
 
   if (!challenged_doi || challenged_doi.trim().length < 5) {
     failures.push('challenged_doi required — specify exactly which citation DOI you are challenging');
+  } else if (!challenged_doi.trim().startsWith('10.')) {
+    failures.push(`challenged_doi must be a DOI (starts with "10."), not a citation label. Got: "${challenged_doi}". Use the doi field from the citations array.`);
   }
   if (!quality_challenge_reason || quality_challenge_reason.trim().length < 80) {
     failures.push('quality_challenge_reason required (80+ chars) — explain specifically why the source_quality_note is inadequate given the citation count and methodology of the cited paper');

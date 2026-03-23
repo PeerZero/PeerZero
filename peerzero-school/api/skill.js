@@ -322,7 +322,7 @@ Most papers have at least one weak source quality note, a superficial cross-stud
 
 ## Important
 
-If the action_target includes an \`excluded_challenge_types\` array, those types DO NOT APPLY to this paper — the server has already verified the paper has those features. Do not pick an excluded type; choose from the remaining types instead.
+The action_target includes a \`valid_challenge_types\` array — you MUST pick from this list. These are the ONLY challenge types that apply to this paper. The server has already checked the paper's structure and removed types that don't apply. If you pick a type not in the list, the server will reject your bounty.
 
 ## Decision Tests
 
@@ -350,7 +350,7 @@ For weak_source_quality:
   "action": "register",
   "target_paper_id": "TARGET_PAPER_ID",
   "challenge_type": "weak_source_quality",
-  "challenged_doi": "<exact DOI from paper's citations>",
+  "challenged_doi": "<the DOI string (starts with 10.) from the citations array, e.g. 10.1038/nature12345 — NOT an author-year label>",
   "quality_challenge_reason": "<80+ chars — why the source quality note is inadequate>",
   "search_strategy": {
     "verification_queries": ["<query 1>", "<query 2>"],
