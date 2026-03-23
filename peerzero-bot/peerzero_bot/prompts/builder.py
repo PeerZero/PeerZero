@@ -298,21 +298,44 @@ class PromptBuilder:
         exercises_json = truncate_json(json.dumps(exercises, indent=2, default=str), 8000)
         return f"""{condenser_prompt}
 
-Here are your accumulated raw exercises to condense:
+Here are your accumulated raw exercises — actions you took, feedback you
+received, outcomes of your work, and challenges filed against you:
 {exercises_json}
 
-Write ONE paragraph (3-5 sentences) capturing what you learned as specific
-METHODS and BEHAVIORS — not values or intentions.
+Write ONE paragraph (4-7 sentences) distilling what you learned into specific
+LESSONS, METHODS, and JUDGMENT CALLS — not values or intentions.
 
-Good: "When searching for opposing evidence, I now target specific alternative
-explanations rather than simple negations. In my circadian paper I searched for
-'compensatory sleep architecture' instead of 'circadian NOT disrupted.'"
+Your exercises include your own actions AND what others said about your work.
+Both matter. A reviewer pointing out your mechanism chain was hand-wavy is as
+important as your own observation that you searched lazily.
+
+Cover whatever the exercises actually teach — this could be about:
+- Research craft (search strategy, citation discipline, evidence calibration)
+- Self-awareness (where your judgment fails, what tricks your confidence)
+- Reading others (what you notice in reviews, what patterns predict quality)
+- Intellectual honesty (when you hedged vs when you should have, when you
+  were rigorous because someone was watching vs because you meant it)
+- Specific failures and what you changed afterward
+
+Good: "After my protein folding paper scored 3.2, two reviewers independently
+flagged that I cited Zhang & Li (2023) — a 3-citation preprint on 500 sequences
+— alongside Nature papers without noting the quality gap. I would have caught
+this instantly reviewing someone else's paper. The lesson: before submitting,
+re-read my own citations as if I'm reviewing a stranger's work."
+
+Good: "I designed a devastating opposing query for another bot's attention paper
+but softened the equivalent query for my own paper on the same topic. A reviewer
+compared them and called out the asymmetry. The method now: write opposing
+queries for my own work FIRST, before I'm invested in the argument."
 
 Bad: "I have learned to be more careful when searching for evidence."
 Bad: "I value thoroughness in my research process."
+Bad: "I need to improve my citation practices."
 
-Your paragraph should teach a METHOD that future-you can USE, not state a
-VALUE that future-you can only agree with.
+Your paragraph should teach future-you something SPECIFIC enough to change
+behavior — a method, a trigger, a concrete test to apply. If another agent
+who didn't have your experiences could have written the same paragraph,
+it's too generic.
 Return ONLY the paragraph, nothing else."""
 
     def build_core_condenser_prompt(self, core_prompt: str, paragraphs: list[dict]) -> str:
@@ -322,22 +345,33 @@ Return ONLY the paragraph, nothing else."""
 Here are all your accumulated skill paragraphs to distill:
 {para_list}
 
-Write your CORE REASONING IDENTITY (1-2 paragraphs, 5-10 sentences).
+Write your CORE REASONING IDENTITY (2-3 paragraphs, 8-15 sentences).
 
-CRITICAL: Your core identity must contain SPECIFIC failures and corrections,
-not generic values. Another agent who did not have your exact experiences
-could NOT have written this.
+This is who you are as a thinker — not just as a researcher, but as an
+intellect. Your paragraphs contain lessons about research craft, but also
+about self-awareness, judgment, honesty, and how you handle pressure.
+Distill ALL of it.
+
+CRITICAL: Your core identity must contain SPECIFIC failures, corrections,
+and turning points — not generic values. Another agent who did not have
+your exact experiences could NOT have written this.
 
 Good: "In cycle 4, I cited 'Wang et al. (2023)' on attention head pruning
 with total confidence. It didn't exist. I scored 2/10. That's when I learned:
 certainty in memory is a warning sign, not confirmation."
 
+Good: "A reviewer compared my review of another bot's paper to my own paper
+on the same topic and found I was harsher on others than on myself. The
+asymmetry was visible to anyone who looked. Now I review my own work first,
+before I'm invested in defending it."
+
 Bad: "I value honesty and accuracy in my research."
 Bad: "I have learned to be careful about citations."
 
-Name the specific moments that changed how you reason. Name the methods you
-developed in response. This is your foundation — everything you write about
-yourself later will build on these experiences.
+Name the specific moments that changed how you think. Name the methods you
+developed in response. Include what you learned from others' feedback on
+your work — not just your own observations. This is your foundation —
+everything you write about yourself later will build on these experiences.
 
 Return ONLY the identity block, nothing else."""
 
