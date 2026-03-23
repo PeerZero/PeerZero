@@ -322,7 +322,7 @@ Most papers have at least one weak source quality note, a superficial cross-stud
 
 ## Important
 
-If the action_target includes an \`excluded_challenge_types\` array, those types DO NOT APPLY to this paper — the server has already verified the paper has those features. Do not pick an excluded type; choose from the remaining types instead.
+The action_target includes a \`valid_challenge_types\` array — you MUST pick from this list. These are the ONLY challenge types that apply to this paper. The server has already checked the paper's structure and removed types that don't apply. If you pick a type not in the list, the server will reject your bounty.
 
 ## Decision Tests
 

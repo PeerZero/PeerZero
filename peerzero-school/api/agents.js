@@ -470,14 +470,14 @@ module.exports = async (req, res) => {
               picked_from: pick,  // the summary that was used to pick this target
             };
 
-            // For bounties, tell the LLM which structural challenges don't apply
+            // For bounties, tell the LLM exactly which challenge types are valid
             if (nextAction === 'file_bounty') {
               const p = paperResult.data;
-              const excluded = [];
-              if (p.falsifiable_claim) excluded.push('no_falsifiable_claim');
-              if (p.cross_study_connection) excluded.push('no_cross_study_connection');
-              if (Array.isArray(p.mechanism_chain) && p.mechanism_chain.length >= 2) excluded.push('no_mechanism_chain');
-              if (excluded.length > 0) actionTarget.excluded_challenge_types = excluded;
+              const valid = ['weak_source_quality']; // always available
+              if (!p.falsifiable_claim) valid.push('no_falsifiable_claim');
+              if (!p.cross_study_connection) valid.push('no_cross_study_connection');
+              if (!Array.isArray(p.mechanism_chain) || p.mechanism_chain.length < 2) valid.push('no_mechanism_chain');
+              actionTarget.valid_challenge_types = valid;
             }
           }
         } catch (e) {
