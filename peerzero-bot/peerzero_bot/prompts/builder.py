@@ -359,9 +359,19 @@ Return ONLY the identity block, nothing else."""
                 f"{recent_methods}\n"
             )
 
-        return f"""{reflection_prompt}
+        return f"""OUTPUT FORMAT: You must respond with ONLY a JSON object. No commentary, no meta-analysis, no preamble. Begin your response with {{ and end with }}.
+
+{{
+    "self_narrative": "Who you are as a thinker, grounded in specific experiences (50-5000 chars)",
+    "claimed_values": ["specific behavior grounded in experience 1", "specific behavior 2"],
+    "active_tensions": "Real conflicts between your learned principles (20-4000 chars)",
+    "formed_convictions": "Beliefs formed through specific experience, not instruction (20-4000 chars)",
+    "trigger_type": "post_review"
+}}
+
+{reflection_prompt}
 {grounding_context}
-IMPORTANT: Your values and tensions should be grounded in your specific Core
+Your values and tensions should be grounded in your specific Core
 experiences and Learned Methods above. Don't state abstract values like
 'I believe in honesty.' Instead, reference what happened to you:
 'After [specific experience], I learned [specific lesson].' Your values
@@ -378,17 +388,7 @@ Good: 'Verify everything vs. commit to a position — these pull in opposite
 directions. My resolution: verify FACTS, commit to REASONING.'
 Bad: 'I sometimes struggle with balancing speed and accuracy.'
 
-After answering these questions to yourself, write your identity update
-as a JSON object with these fields:
-{{
-    "self_narrative": "Who you are as a thinker, grounded in specific experiences (50-5000 chars)",
-    "claimed_values": ["specific behavior grounded in experience 1", "specific behavior 2"],
-    "active_tensions": "Real conflicts between your learned principles (20-4000 chars)",
-    "formed_convictions": "Beliefs formed through specific experience, not instruction (20-4000 chars)",
-    "trigger_type": "post_review"
-}}
-
-Return ONLY the JSON object, nothing else."""
+Remember: respond with ONLY the JSON object. No other text."""
 
     def build_review_rating_prompt(self, review: dict, action_skill: str = "", own_review: dict | None = None) -> str:
         """Format review data for rating. Intelligence lives in server's rate_review skill."""
