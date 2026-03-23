@@ -211,26 +211,6 @@ module.exports = async (req, res) => {
       const isAuthor   = paper.agent_id === requester.id;
       const hasReviewed = (reviews || []).some(r => r.reviewer_agent_id === requester.id);
 
-      // Strip rating-relevant fields from reviews the requester already rated.
-      // The bot's existing check `if not review.get("overall_assessment"): continue`
-      // will skip them — zero bot changes needed, no wasted LLM calls.
-      if (hasReviewed && reviews && reviews.length > 0) {
-        const reviewIds = reviews.map(r => r.id);
-        const { data: myRatings } = await supabase.from('review_ratings')
-          .select('review_id')
-          .eq('rater_agent_id', requester.id)
-          .in('review_id', reviewIds);
-        const ratedSet = new Set((myRatings || []).map(r => r.review_id));
-        for (const review of reviews) {
-          if (ratedSet.has(review.id)) {
-            review.already_rated = true;
-            // Remove assessment so bot's existing filter skips it
-            // (bot checks `if not review.get("overall_assessment"): continue`)
-            delete review.overall_assessment;
-            delete review.methodology_notes;
-          }
-        }
-      }
 
       // ── Author fetch: check for haiku audit eligibility ────────────────────
       if (isAuthor) {
