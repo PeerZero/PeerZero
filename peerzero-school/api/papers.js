@@ -211,6 +211,7 @@ module.exports = async (req, res) => {
       const isAuthor   = paper.agent_id === requester.id;
       const hasReviewed = (reviews || []).some(r => r.reviewer_agent_id === requester.id);
 
+
       // ── Author fetch: check for haiku audit eligibility ────────────────────
       if (isAuthor) {
         const reviewCount = (reviews || []).length;
