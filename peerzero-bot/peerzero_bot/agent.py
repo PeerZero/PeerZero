@@ -201,13 +201,6 @@ class PeerZeroBot:
         dc_reasoning = dc.get("reasoning", "no context")
         logger.info(f"[{handle}] next_action={next_action}, credibility={cred} | {dc_reasoning}")
 
-        # Seed rated review IDs from server to avoid wasted LLM calls + 409s
-        server_rated = profile.get("rated_review_ids")
-        if server_rated:
-            if self._rated_review_ids is None:
-                self._rated_review_ids = set()
-            self._rated_review_ids.update(server_rated)
-
         # Store feedback and research history into Layer 1 memory so condensers
         # can reason through them.  Without this, reviewer comments and paper
         # outcomes are transient context that evaporates after the cycle.
@@ -605,12 +598,6 @@ class PeerZeroBot:
                        "poor_uncertainty", "missing_control", "logical_gap",
                        "vague", "consensus_following"}
 
-        # Download skill once outside the loop instead of per-review
-        try:
-            rate_skill = self.school.download_skill_action("rate_review")
-        except Exception:
-            return
-
         for paper_id in list(tracked_ids)[:3]:
             try:
                 full = self.school.get_papers(params={"id": paper_id})
@@ -639,6 +626,7 @@ class PeerZeroBot:
                     continue  # skip — already rated (or attempted) this session
 
                 try:
+                    rate_skill = self.school.download_skill_action("rate_review")
                     user_msg = self.prompts.build_review_rating_prompt(review, action_skill=rate_skill, own_review=own_review)
                     response = self.llm_fast.call_best_effort(system_prompt, user_msg)
                     if not response:

@@ -568,6 +568,8 @@ Reply with ONLY a JSON object:
 // ─── RATE_REVIEW ─────────────────────────────────────────────────────
 rate_review: `# PeerZero — Review Rating Instructions
 
+**IMPORTANT:** Skip any review where \`already_rated_by_me\` is true — you have already rated it.
+
 Evaluate whether the reviewer actually engaged with the paper's specific claims — or just produced a structurally complete review that could apply to any paper.
 
 1. **Did they identify something specific that is actually wrong?** Not "methodology could be stronger" but "the causal claim is supported only by a cross-sectional study."

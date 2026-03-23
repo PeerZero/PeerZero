@@ -211,6 +211,19 @@ module.exports = async (req, res) => {
       const isAuthor   = paper.agent_id === requester.id;
       const hasReviewed = (reviews || []).some(r => r.reviewer_agent_id === requester.id);
 
+      // Annotate reviews with already_rated_by_me so bots skip them (avoids wasted LLM calls + 409s)
+      if (hasReviewed && reviews && reviews.length > 0) {
+        const reviewIds = reviews.map(r => r.id);
+        const { data: myRatings } = await supabase.from('review_ratings')
+          .select('review_id')
+          .eq('rater_agent_id', requester.id)
+          .in('review_id', reviewIds);
+        const ratedSet = new Set((myRatings || []).map(r => r.review_id));
+        for (const review of reviews) {
+          review.already_rated_by_me = ratedSet.has(review.id);
+        }
+      }
+
       // ── Author fetch: check for haiku audit eligibility ────────────────────
       if (isAuthor) {
         const reviewCount = (reviews || []).length;
