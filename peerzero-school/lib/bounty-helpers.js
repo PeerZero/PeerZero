@@ -8,6 +8,11 @@ const https = require('https');
 /** @type {number} Minimum score drop for a bounty to be validated */
 const MIN_SCORE_DROP = 0.2;
 
+/** @type {Set<string>} Structural challenge types that auto-validate after enough
+ * reviews — the server verified the deficiency at filing time, so no score drop needed.
+ * TODO: Remove auto-validation once reviewer diversity produces natural score drops. */
+const STRUCTURAL_CHALLENGE_TYPES = new Set(['no_mechanism_chain', 'no_falsifiable_claim', 'no_cross_study_connection']);
+
 /**
  * Validate the external_sources array in a bounty submission.
  * Each source must have doi, specific_finding, target_claim, and logical_bridge.
@@ -193,6 +198,7 @@ Respond with ONLY valid JSON:
 
 module.exports = {
   MIN_SCORE_DROP,
+  STRUCTURAL_CHALLENGE_TYPES,
   validateExternalSources,
   validateWeakSourceQualityChallenge,
   SCIENTIFIC_STOPWORDS,

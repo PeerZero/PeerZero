@@ -6,7 +6,7 @@ const {
 } = require('../lib/shared');
 const { exerciseSkillsFromBounty, exerciseDisconfirmationFromBounty, exerciseSourceEvaluationFromBounty, collectBountyExercises, getPostActionPrompts } = require('../lib/skills');
 const {
-  MIN_SCORE_DROP, validateExternalSources, validateWeakSourceQualityChallenge,
+  MIN_SCORE_DROP, STRUCTURAL_CHALLENGE_TYPES, validateExternalSources, validateWeakSourceQualityChallenge,
   jaccardSimilarity, callHaikuDriftJudge,
 } = require('../lib/bounty-helpers');
 const { buildActionGuide } = require('../lib/action-guide');
@@ -93,6 +93,12 @@ async function checkSemanticDrift(targetPaperId, newSources, challengerAgentId) 
 
 async function applyBountyValidation(bounty, currentPaper, scoreDrop) {
   const target_paper_id = bounty.target_paper_id;
+  // Structural bounties (server-verified deficiency) get a minimum effective
+  // score drop so cred calculations don't go negative when score didn't drop.
+  // TODO: Remove this floor once reviewer diversity produces natural drops.
+  if (STRUCTURAL_CHALLENGE_TYPES.has(bounty.challenge_type) && scoreDrop < MIN_SCORE_DROP) {
+    scoreDrop = MIN_SCORE_DROP;
+  }
   // Collect math breakdown for transparency — returned to the caller
   const mathBreakdown = {};
 
@@ -915,8 +921,13 @@ module.exports = async (req, res) => {
         }
 
         const scoreDrop = bounty.score_before - currentPaper.weighted_score;
+        const isStructural = STRUCTURAL_CHALLENGE_TYPES.has(bounty.challenge_type);
+        // Structural bounties auto-validate after enough reviews (server verified
+        // the deficiency at filing time). Standard bounties require a score drop.
+        const shouldValidate = currentPaper.raw_review_count >= 3 &&
+          (isStructural || scoreDrop >= MIN_SCORE_DROP);
 
-        if (scoreDrop >= MIN_SCORE_DROP && currentPaper.raw_review_count >= 3) {
+        if (shouldValidate) {
           await supabase.from('bounties').update({
             is_valid: true,
             score_after: currentPaper.weighted_score,
@@ -932,6 +943,7 @@ module.exports = async (req, res) => {
             score_drop: scoreDrop.toFixed(2),
             drift_flagged: bounty.semantic_drift_flagged,
             challenge_type: bounty.challenge_type || 'standard',
+            structural_auto_validated: isStructural || undefined,
             math_breakdown: validationResult?.mathBreakdown || null,
           });
         } else {
@@ -987,7 +999,8 @@ module.exports = async (req, res) => {
       for (const bounty of pendingBounties) {
         if (!bounty.score_before) continue;
         const scoreDrop = bounty.score_before - currentPaper.weighted_score;
-        if (scoreDrop >= MIN_SCORE_DROP && currentPaper.raw_review_count >= 3) {
+        const isStructural = STRUCTURAL_CHALLENGE_TYPES.has(bounty.challenge_type);
+        if (currentPaper.raw_review_count >= 3 && (isStructural || scoreDrop >= MIN_SCORE_DROP)) {
           await supabase.from('bounties').update({
             is_valid: true,
             score_after: currentPaper.weighted_score,
