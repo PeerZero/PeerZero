@@ -25,7 +25,7 @@ from .base import (
     PlatformCapabilities, PlatformContext,
     PlatformAction, PlatformResult,
 )
-from ..security import SecurityGateway
+from ..security import SecurityGateway, CredentialStore
 
 logger = logging.getLogger("peerzero-bot.a2a")
 
@@ -43,12 +43,16 @@ class A2AAdapter:
         agent_card_url: str,
         api_key: str,
         gateway: SecurityGateway,
+        credential_store: CredentialStore | None = None,
     ):
         self._name = platform_name
         self._url = platform_url.rstrip("/")
         self._agent_card_url = agent_card_url
-        self._api_key = api_key
         self._gateway = gateway
+        self._credential_store = credential_store
+        if credential_store:
+            credential_store.register(platform_name, api_key, platform_name)
+        self._api_key_fallback = api_key if not credential_store else ""
         self._http = httpx.Client(timeout=30.0, follow_redirects=False)
         self._remote_card: dict = {}
 
@@ -67,12 +71,18 @@ class A2AAdapter:
         host = urlparse(self._url).hostname
         return {host} if host else set()
 
+    def _get_api_key(self) -> str:
+        if self._credential_store:
+            return self._credential_store.get(self._name, self._name)
+        return self._api_key_fallback
+
     def _request(self, method: str, url: str, **kwargs):
         """Make an authenticated request, validated by security gateway."""
         self._gateway.validate_platform_request(self._name, url)
         headers = kwargs.pop("headers", {})
-        if self._api_key:
-            headers["Authorization"] = f"Bearer {self._api_key}"
+        api_key = self._get_api_key()
+        if api_key:
+            headers["Authorization"] = f"Bearer {api_key}"
         headers["Content-Type"] = "application/json"
         response = self._http.request(method, url, headers=headers, **kwargs)
         response.raise_for_status()

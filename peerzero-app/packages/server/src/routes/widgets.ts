@@ -223,7 +223,7 @@ router.get('/data', jwtOrWidgetToken, userRateLimit('read'), async (req: Request
 
   // ETag for conditional fetching — hash of the response content
   const etag = crypto
-    .createHash('md5')
+    .createHash('sha256')
     .update(JSON.stringify(response))
     .digest('hex');
 

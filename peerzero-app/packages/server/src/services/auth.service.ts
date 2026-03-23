@@ -5,22 +5,32 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
+import IORedis from 'ioredis';
 import { config } from '../config';
 import { queryOne, queryRows, query } from '../db/client';
 import { AppError } from '../middleware/error-handler';
 import { JwtPayload } from '../middleware/auth';
+import { logger } from '../lib/logger';
+import { sendPasswordResetEmail } from './email.service';
 
 const SALT_ROUNDS = 12;
 
-// ── In-memory password reset codes ──
-const resetCodes = new Map<string, { code: string; expiresAt: number }>();
-const RESET_CODE_TTL = 15 * 60 * 1000; // 15 minutes
+// ── Redis-backed password reset codes ──
+const RESET_CODE_TTL_SECONDS = 15 * 60; // 15 minutes
 
-function cleanupExpiredCodes() {
-  const now = Date.now();
-  for (const [email, entry] of resetCodes) {
-    if (entry.expiresAt <= now) resetCodes.delete(email);
+let redis: IORedis | null = null;
+function getRedis(): IORedis {
+  if (!redis) {
+    redis = new IORedis(config.redisUrl, { maxRetriesPerRequest: 3 });
+    redis.on('error', (err) => {
+      logger.error({ err: err.message }, 'Auth Redis error');
+    });
   }
+  return redis;
+}
+
+function resetCodeKey(email: string): string {
+  return `reset:${email.toLowerCase()}`;
 }
 
 export interface TokenPair {
@@ -160,30 +170,32 @@ export async function deleteAccount(userId: string): Promise<void> {
 }
 
 export async function forgotPassword(email: string): Promise<void> {
-  cleanupExpiredCodes();
-
   // Check if user exists (but don't reveal this to the caller)
   const user = await queryOne('SELECT id FROM users WHERE email = $1', [email]);
   if (user) {
     const code = String(Math.floor(100000 + Math.random() * 900000)); // 6-digit code
-    resetCodes.set(email.toLowerCase(), { code, expiresAt: Date.now() + RESET_CODE_TTL });
-    console.log(`[AUTH] Password reset code for ${email}: ${code}`);
+    // Hash the code before storing — even Redis compromise won't leak usable codes
+    const codeHash = crypto.createHash('sha256').update(code).digest('hex');
+    const r = getRedis();
+    await r.set(resetCodeKey(email), codeHash, 'EX', RESET_CODE_TTL_SECONDS);
+    // Send code via email (fire-and-forget — don't block the response)
+    sendPasswordResetEmail(email, code).catch(() => {});
   }
 }
 
 export async function resetPassword(email: string, code: string, newPassword: string): Promise<void> {
-  cleanupExpiredCodes();
-
   if (!newPassword || typeof newPassword !== 'string' || newPassword.length < 8) {
     throw new AppError(400, 'New password must be at least 8 characters');
   }
 
-  const entry = resetCodes.get(email.toLowerCase());
-  if (!entry || entry.code !== code) {
+  const r = getRedis();
+  const storedHash = await r.get(resetCodeKey(email));
+  if (!storedHash) {
     throw new AppError(400, 'Invalid or expired reset code');
   }
-  if (entry.expiresAt <= Date.now()) {
-    resetCodes.delete(email.toLowerCase());
+
+  const codeHash = crypto.createHash('sha256').update(code).digest('hex');
+  if (storedHash !== codeHash) {
     throw new AppError(400, 'Invalid or expired reset code');
   }
 
@@ -197,7 +209,7 @@ export async function resetPassword(email: string, code: string, newPassword: st
   await revokeRefreshTokens(user.id);
 
   // Clear the reset code
-  resetCodes.delete(email.toLowerCase());
+  await r.del(resetCodeKey(email));
 }
 
 export async function getUserProfile(userId: string) {
@@ -231,4 +243,11 @@ export async function getUserProfile(userId: string) {
       school_enrollments: enrollments.map(e => e.school_id),
     },
   };
+}
+
+export async function closeAuthRedis(): Promise<void> {
+  if (redis) {
+    await redis.quit();
+    redis = null;
+  }
 }

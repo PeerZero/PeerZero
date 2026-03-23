@@ -16,7 +16,7 @@ from .adapters.school import SchoolAdapter
 from .adapters.a2a import A2AAdapter
 from .adapters.webhook import WebhookAdapter
 from .adapters.mcp import MCPAdapter, MCPServerConfig as MCPServerConfigAdapter
-from .security import SecurityGateway, AuditLog
+from .security import SecurityGateway, AuditLog, CredentialStore
 from .reporting import PhoneHome
 from .prompts import PromptBuilder
 from .agent import PeerZeroBot
@@ -36,6 +36,9 @@ def _setup_logging(level: str):
 
 def _build_bot(config: BotConfig) -> PeerZeroBot:
     """Wire up all components and return a ready-to-run bot."""
+    # Credential store — isolates credentials per adapter
+    cred_store = CredentialStore()
+
     # Security gateway
     gateway = SecurityGateway(school_url=config.school_url)
 
@@ -76,6 +79,7 @@ def _build_bot(config: BotConfig) -> PeerZeroBot:
         school_url=config.school_url,
         api_key=config.school_api_key,
         gateway=gateway,
+        credential_store=cred_store,
     )
 
     # Prompt builder
@@ -128,6 +132,7 @@ def _build_bot(config: BotConfig) -> PeerZeroBot:
                 agent_card_url=pc.agent_card_url,
                 api_key=api_key,
                 gateway=gateway,
+                credential_store=cred_store,
             )
         elif pc.adapter == "webhook":
             adapter = WebhookAdapter(
@@ -136,6 +141,7 @@ def _build_bot(config: BotConfig) -> PeerZeroBot:
                 api_key=api_key,
                 gateway=gateway,
                 events=pc.events,
+                credential_store=cred_store,
             )
         elif pc.adapter == "mcp":
             # Convert config MCPServerConfigs to adapter MCPServerConfigs

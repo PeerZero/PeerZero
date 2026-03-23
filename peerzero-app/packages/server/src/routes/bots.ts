@@ -13,7 +13,7 @@ import * as skillService from '../services/skill.service';
 import { generateDialogue, DIALOGUE_CONTEXTS, type DialogueContext } from '../services/bot-voice.service';
 import * as messageService from '../services/message.service';
 import { broadcastMessage } from '../websocket/activity-stream';
-import { addBotCycleJob, removeBotJobs } from '../jobs/queue';
+import { addBotCycleJob, removeBotJobs, isQueueAvailable } from '../jobs/queue';
 import { logAudit } from '../services/audit.service';
 import type { ActivityCategory, FocusChunk } from '@peerzero/shared';
 import { ACTIVITY_CATEGORIES } from '@peerzero/shared';
@@ -93,6 +93,11 @@ router.post('/:id/start', userRateLimit('bot_control'), async (req: Request, res
 
   if (bot.cycle_delay_seconds <= 0 || bot.cycle_delay_seconds > 86400) {
     res.status(400).json({ error: 'cycle_delay_seconds must be between 1 and 86400' });
+    return;
+  }
+
+  if (!isQueueAvailable()) {
+    res.status(503).json({ error: 'Bot execution unavailable — Redis is not configured on the server' });
     return;
   }
 

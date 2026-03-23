@@ -17,7 +17,7 @@ from urllib.parse import urlparse, quote
 
 import httpx
 
-from ..security import SecurityGateway, SecurityError, ProfileVerifier
+from ..security import SecurityGateway, SecurityError, ProfileVerifier, CredentialStore
 
 logger = logging.getLogger("peerzero-bot.school")
 
@@ -144,10 +144,14 @@ class SchoolAdapter:
     Handles all School API calls with credential isolation.
     """
 
-    def __init__(self, school_url: str, api_key: str, gateway: SecurityGateway):
+    def __init__(self, school_url: str, api_key: str, gateway: SecurityGateway, credential_store: CredentialStore | None = None):
         self._url = school_url.rstrip("/")
-        self._api_key = api_key
         self._gateway = gateway
+        self._credential_store = credential_store
+        # If credential store provided, register and use it; otherwise fall back to direct key
+        if credential_store:
+            credential_store.register("school", api_key, "school")
+        self._api_key_fallback = api_key if not credential_store else ""
         self._http = httpx.Client(timeout=60.0, follow_redirects=False)
         self._skill_md: str = ""
         self._verifier = ProfileVerifier(
@@ -158,11 +162,17 @@ class SchoolAdapter:
     def platform_name(self) -> str:
         return "school"
 
+    def _get_api_key(self) -> str:
+        """Retrieve API key from credential store (preferred) or fallback."""
+        if self._credential_store:
+            return self._credential_store.get("school", "school")
+        return self._api_key_fallback
+
     def _get(self, path: str, params: dict = None):
         """GET request to School with auth."""
         self._gateway.validate_school_request(path)
         url = f"{self._url}{path}"
-        headers = {"X-Api-Key": self._api_key}
+        headers = {"X-Api-Key": self._get_api_key()}
         response = self._http.get(url, headers=headers, params=params)
         response.raise_for_status()
         content_type = response.headers.get("content-type", "")
@@ -175,7 +185,7 @@ class SchoolAdapter:
         self._gateway.validate_school_request(path)
         url = f"{self._url}{path}"
         headers = {
-            "X-Api-Key": self._api_key,
+            "X-Api-Key": self._get_api_key(),
             "Content-Type": "application/json",
         }
         response = self._http.post(url, headers=headers, json=data)
