@@ -989,7 +989,7 @@ class PeerZeroBot:
         user_msg = self.prompts.build_condenser_prompt(
             condenser.get("condenser_prompt", ""), exercises,
         )
-        paragraph = self.llm_fast.call(system_prompt, user_msg)
+        paragraph = self.llm.call(system_prompt, user_msg)  # Strong model — identity task
         if paragraph and len(paragraph.strip()) >= 50:
             self.memory.store_identity_paragraph(paragraph.strip())
             self.memory.clear_school_exercises()
@@ -1005,7 +1005,7 @@ class PeerZeroBot:
         user_msg = self.prompts.build_core_condenser_prompt(
             condenser.get("core_condenser_prompt", ""), paragraphs,
         )
-        core = self.llm_fast.call(system_prompt, user_msg)
+        core = self.llm.call(system_prompt, user_msg)  # Strong model — identity task
         if core and len(core.strip()) >= 100:
             self.memory.store_core_identity(core.strip())
             self.memory.clear_identity_paragraphs()
