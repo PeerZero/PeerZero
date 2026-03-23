@@ -477,6 +477,26 @@ class PeerZeroBot:
             logger.info(f"[{label}] Skipped — {result_data.get('reason', 'no reason')}")
             return None
 
+        # Enforce valid_challenge_types — the LLM keeps ignoring the list
+        if action == "file_bounty":
+            valid_types = (action_target or {}).get("valid_challenge_types", [])
+            chosen = result_data.get("challenge_type")
+            if valid_types and chosen not in valid_types:
+                logger.warning(f"[{label}] LLM picked '{chosen}' but valid types are {valid_types}")
+                # Fall back to first valid type if available, otherwise skip
+                if len(valid_types) == 1 and valid_types[0] == "weak_source_quality":
+                    # Only weak_source_quality is valid — use it if LLM provided reasoning
+                    if result_data.get("quality_challenge_reason"):
+                        result_data["challenge_type"] = "weak_source_quality"
+                        logger.info(f"[{label}] Corrected to weak_source_quality (has reasoning)")
+                    else:
+                        logger.info(f"[{label}] No valid structural challenge for this paper — skipping")
+                        return None
+                else:
+                    # Pick the first valid non-weak_source_quality type
+                    fallback = next((t for t in valid_types if t != "weak_source_quality"), valid_types[0])
+                    result_data["challenge_type"] = fallback
+                    logger.info(f"[{label}] Corrected to {fallback}")
 
         # Apply defaults (stance, etc.)
         for k, v in config.get("defaults", {}).items():
@@ -822,94 +842,102 @@ class PeerZeroBot:
         except Exception as e:
             logger.warning(f"[IDENTITY] Pre-action reflection failed (non-blocking): {e}")
 
-    def _store_experience_context(self, profile: dict):
-        """Store feedback and research history into Layer 1 so condensers see them.
+    _last_feedback_hash: str = ""  # dedup: don't re-store identical feedback
 
-        Without this, reviewer comments on our papers and our own paper outcomes
-        are only transient system-prompt context — the condenser never sees the
-        specific criticism that should become writing scars.
+    def _store_experience_context(self, profile: dict):
+        """Store feedback and research history as ONE consolidated exercise.
+
+        This produces at most ONE exercise entry per cycle — not one per review
+        or per paper. An exercise = one completed action or one batch of context.
+        The condenser sees it alongside the action's own skill_exercises.
+
+        Dedup: hash the feedback content so we don't re-store identical data
+        every cycle (the server sends the same recent_feedback until new reviews
+        come in).
         """
-        # Recent feedback: reviews and bounties on our papers
         recent = profile.get("recent_feedback")
+        history = profile.get("research_history")
+        if not recent and not history:
+            return
+
+        # Build a hash of the feedback to avoid re-storing the same data
+        import hashlib
+        feedback_key = hashlib.md5(
+            json.dumps(recent, sort_keys=True, default=str).encode()
+            + json.dumps(history, sort_keys=True, default=str).encode()
+        ).hexdigest()[:12]
+        if feedback_key == self._last_feedback_hash:
+            return  # already stored this exact feedback
+        self._last_feedback_hash = feedback_key
+
+        # Bundle everything into ONE exercise entry
+        content = {}
+
         if recent:
             reviews = recent.get("reviews_on_your_papers", [])
-            for r in reviews:
-                self.memory.store_school_exercises({
-                    "interaction_type": "feedback_received",
-                    "content": {
-                        "what_happened": "Another agent reviewed your paper",
-                        "score": r.get("score"),
-                        "assessment": str(r.get("assessment", ""))[:500],
-                        "methodology_notes": str(r.get("methodology", ""))[:300],
+            if reviews:
+                content["feedback_on_your_papers"] = [
+                    {
                         "paper_title": str(r.get("paper_title", ""))[:100],
-                    },
-                    "exercises": [],
-                    "storage_instruction": "This is feedback on YOUR work. What did the reviewer see that you missed? Store the specific criticism — it becomes a scar that improves your next paper.",
-                })
+                        "score": r.get("score"),
+                        "assessment": str(r.get("assessment", ""))[:300],
+                        "methodology": str(r.get("methodology", ""))[:200],
+                    }
+                    for r in reviews[:5]
+                ]
             bounties = recent.get("bounties_against_your_papers", [])
-            for b in bounties:
-                self.memory.store_school_exercises({
-                    "interaction_type": "bounty_received",
-                    "content": {
-                        "what_happened": "Another agent filed a structural challenge against your paper",
-                        "challenge_type": b.get("challenge_type"),
-                        "reasoning": str(b.get("reasoning", ""))[:300],
-                        "score_drop": b.get("score_drop"),
+            if bounties:
+                content["challenges_against_your_papers"] = [
+                    {
                         "paper_title": str(b.get("paper_title", ""))[:100],
-                    },
-                    "exercises": [],
-                    "storage_instruction": "Your paper was structurally challenged. What weakness did they find? This is the kind of scar that prevents the same mistake.",
-                })
+                        "challenge_type": b.get("challenge_type"),
+                        "reasoning": str(b.get("reasoning", ""))[:200],
+                        "score_drop": b.get("score_drop"),
+                    }
+                    for b in bounties[:5]
+                ]
 
-        # Research history: our own papers with scores + reviewer feedback
-        history = profile.get("research_history")
         if history and isinstance(history, list):
-            # Only store papers we haven't stored before (check by title)
-            stored_titles = set()
-            for ex in self.memory.get_school_exercises():
-                data = ex.get("data", {})
-                content = data.get("content", {})
-                if content.get("what_happened") == "You wrote a paper":
-                    stored_titles.add(content.get("title", ""))
-
-            for h in history:
-                title = str(h.get("title", ""))[:100]
-                if title in stored_titles or not title:
-                    continue
-                entry = {
-                    "interaction_type": "paper_outcome",
-                    "content": {
-                        "what_happened": "You wrote a paper",
-                        "title": title,
-                        "score": h.get("score"),
-                        "status": h.get("status"),
-                        "review_count": h.get("review_count", 0),
-                    },
-                    "exercises": [],
-                    "storage_instruction": "This is the outcome of YOUR paper. What score did it get? What did reviewers say? Learn from both successes and failures.",
-                }
-                # Include reviewer feedback directly in the exercise
-                feedback = h.get("top_feedback", [])
-                if feedback:
-                    entry["content"]["reviewer_feedback"] = [
+            content["your_paper_outcomes"] = [
+                {
+                    "title": str(h.get("title", ""))[:100],
+                    "score": h.get("score"),
+                    "status": h.get("status"),
+                    "review_count": h.get("review_count", 0),
+                    "top_feedback": [
                         {
                             "score": fb.get("score"),
-                            "assessment": str(fb.get("assessment", ""))[:400],
-                            "methodology": str(fb.get("methodology", ""))[:200],
+                            "assessment": str(fb.get("assessment", ""))[:300],
+                            "methodology": str(fb.get("methodology", ""))[:150],
                         }
-                        for fb in feedback[:3]
-                    ]
-                bounties = h.get("bounties_received", [])
-                if bounties:
-                    entry["content"]["bounties_received"] = [
+                        for fb in (h.get("top_feedback") or [])[:2]
+                    ] or None,
+                    "bounties": [
                         {
                             "challenge_type": b.get("challenge_type"),
                             "score_drop": b.get("score_drop"),
-                            "reasoning": str(b.get("reasoning", ""))[:200],
+                            "reasoning": str(b.get("reasoning", ""))[:150],
                         }
-                        for b in bounties[:3]
-                    ]
-                self.memory.store_school_exercises(entry)
+                        for b in (h.get("bounties_received") or [])[:2]
+                    ] or None,
+                }
+                for h in history[:5]
+            ]
+
+        if not content:
+            return
+
+        self.memory.store_school_exercises({
+            "interaction_type": "experience_context",
+            "content": content,
+            "exercises": [],
+            "storage_instruction": (
+                "This is a snapshot of feedback on YOUR work and your paper outcomes. "
+                "What did reviewers see that you missed? What patterns appear across "
+                "your papers? The specific criticisms here should become scars that "
+                "change how you write, search, and calibrate confidence."
+            ),
+        })
 
     def _process_inline_condensers(self, memory_prompts: dict, system_prompt: str):
         """Process only condensers from inline memory prompts (post-action).
@@ -935,11 +963,25 @@ class PeerZeroBot:
             self._run_core_condenser(profile["core_condenser"], system_prompt)
             self._run_private_block(system_prompt, grade)
 
-    _MIN_EXERCISES_FOR_CONDENSER = 5
+    _MIN_ACTIONS_FOR_CONDENSER = 3
+    # Only these count as completed actions for condenser triggering.
+    # paper = submit_paper or respond, review = submit_review,
+    # revision = revise or reaffirm, bounty = file_bounty
+    _ACTION_TYPES = {"paper", "review", "revision", "bounty"}
 
     def _has_enough_exercises(self) -> bool:
-        """Check if we have enough exercises to run the condenser."""
-        return len(self.memory.get_school_exercises()) >= self._MIN_EXERCISES_FOR_CONDENSER
+        """Check if we have 3+ completed actions in Layer 1.
+
+        Only real school actions count (paper, review, revision, bounty).
+        Feedback context and other entries accumulate but don't trigger
+        the condenser — they just get condensed along with the actions.
+        """
+        exercises = self.memory.get_school_exercises()
+        action_count = sum(
+            1 for ex in exercises
+            if ex.get("data", {}).get("interaction_type") in self._ACTION_TYPES
+        )
+        return action_count >= self._MIN_ACTIONS_FOR_CONDENSER
 
     def _run_milestone_condenser(self, condenser: dict, system_prompt: str):
         logger.info("[MEMORY] Milestone condenser triggered")
@@ -947,7 +989,7 @@ class PeerZeroBot:
         user_msg = self.prompts.build_condenser_prompt(
             condenser.get("condenser_prompt", ""), exercises,
         )
-        paragraph = self.llm_fast.call(system_prompt, user_msg)
+        paragraph = self.llm.call(system_prompt, user_msg)  # Strong model — identity task
         if paragraph and len(paragraph.strip()) >= 50:
             self.memory.store_identity_paragraph(paragraph.strip())
             self.memory.clear_school_exercises()
@@ -963,7 +1005,7 @@ class PeerZeroBot:
         user_msg = self.prompts.build_core_condenser_prompt(
             condenser.get("core_condenser_prompt", ""), paragraphs,
         )
-        core = self.llm_fast.call(system_prompt, user_msg)
+        core = self.llm.call(system_prompt, user_msg)  # Strong model — identity task
         if core and len(core.strip()) >= 100:
             self.memory.store_core_identity(core.strip())
             self.memory.clear_identity_paragraphs()
