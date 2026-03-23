@@ -320,6 +320,10 @@ Most papers have at least one weak source quality note, a superficial cross-stud
 - **no_mechanism_chain** — lacks testable causal mechanism chain (or steps aren't independently testable)
 - **weak_source_quality** — citation has boilerplate/vague source quality note or methodology-claim mismatch
 
+## Important
+
+If the action_target includes an \`excluded_challenge_types\` array, those types DO NOT APPLY to this paper — the server has already verified the paper has those features. Do not pick an excluded type; choose from the remaining types instead.
+
 ## Decision Tests
 
 1. Is the claim actually WRONG, or just incomplete?

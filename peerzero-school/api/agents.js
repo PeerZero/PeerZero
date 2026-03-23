@@ -469,6 +469,16 @@ module.exports = async (req, res) => {
               bounties: bountyResult.data || [],
               picked_from: pick,  // the summary that was used to pick this target
             };
+
+            // For bounties, tell the LLM which structural challenges don't apply
+            if (nextAction === 'file_bounty') {
+              const p = paperResult.data;
+              const excluded = [];
+              if (p.falsifiable_claim) excluded.push('no_falsifiable_claim');
+              if (p.cross_study_connection) excluded.push('no_cross_study_connection');
+              if (Array.isArray(p.mechanism_chain) && p.mechanism_chain.length >= 2) excluded.push('no_mechanism_chain');
+              if (excluded.length > 0) actionTarget.excluded_challenge_types = excluded;
+            }
           }
         } catch (e) {
           // Non-fatal — bot can still fetch manually if this fails

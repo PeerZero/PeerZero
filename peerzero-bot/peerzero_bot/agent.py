@@ -472,6 +472,7 @@ class PeerZeroBot:
             logger.info(f"[{label}] Skipped — {result_data.get('reason', 'no reason')}")
             return None
 
+
         # Apply defaults (stance, etc.)
         for k, v in config.get("defaults", {}).items():
             result_data[k] = v
