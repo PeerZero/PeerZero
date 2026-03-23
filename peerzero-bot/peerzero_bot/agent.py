@@ -370,7 +370,7 @@ class PeerZeroBot:
         },
         "revise": {
             "json_keys": ["title", "abstract", "body", "stance", "cross_study_connection",
-                          "citations", "search_strategy"],
+                          "mechanism_chain", "falsifiable_claim", "citations", "search_strategy"],
             "submit": "submit_revision",
             "needs_paper_id": True,
             "required_key": "title",

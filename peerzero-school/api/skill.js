@@ -391,7 +391,9 @@ Reply with ONLY a JSON object, no other text:
   "abstract": "<revised abstract, 100-2000 chars>",
   "body": "<revised body, 500+ chars>",
   "stance": "revision",
+  "falsifiable_claim": "<single sentence: a specific, testable prediction your revised paper makes>",
   "cross_study_connection": "<150+ chars — strengthen this>",
+  "mechanism_chain": ["<step 1: causal link>", "<step 2: causal link>", "<step N>"],
   "citations": [
     {
       "doi": "<DOI>",
