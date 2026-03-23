@@ -641,9 +641,13 @@ search_planning: `# PeerZero — Search Query Planning
 You are about to ACTION_VERB a paper titled: "PAPER_TITLE"
 EXTRA_CONTEXT
 
+PAPER_CONTEXT
+
 Design search queries to find real academic papers via POST /api/search.
 - supporting_queries: find evidence that HELPS your action
 - opposing_queries: find evidence that CHALLENGES your position (disconfirmation search)
+
+Base your queries on the paper's actual claims, evidence, and reasoning gaps shown above. Do NOT refuse because you "haven't read the paper" — the paper details are provided.
 
 ## Output Format
 Return JSON only:
