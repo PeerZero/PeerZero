@@ -880,11 +880,13 @@ class PeerZeroBot:
         user_msg = self.prompts.build_identity_reflection_prompt(
             reflection.get("reflection_prompt", ""),
         )
-        response = self.llm_fast.call_best_effort(system_prompt, user_msg)
-        if not response:
+        identity_data = self.llm_fast.call_json(
+            system_prompt, user_msg,
+            json_keys=["self_narrative", "active_tensions", "formed_convictions", "claimed_values"],
+        )
+        if not identity_data:
             logger.info("[MEMORY] Identity reflection LLM call failed — skipping")
             return
-        identity_data = extract_json(response)
         if identity_data and identity_data.get("self_narrative"):
             # Validate lengths before submitting to avoid 400s
             narrative = str(identity_data.get("self_narrative", "")).strip()
