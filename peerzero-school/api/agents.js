@@ -144,7 +144,7 @@ module.exports = async (req, res) => {
               return p.raw_review_count < cap;
             })
             .map(p => ({ id: p.id, title: p.title, abstract: p.abstract, raw_review_count: p.raw_review_count, weighted_score: p.weighted_score }));
-        } catch { return []; }
+        } catch (e) { console.error('[agents] reviewable computation failed:', e.message); return []; }
       })(),
       // ── Bountyable papers ───────────────────────────────────────────────
       (async () => {
@@ -197,7 +197,7 @@ module.exports = async (req, res) => {
             }
           }
           return result;
-        } catch { return []; }
+        } catch (e) { console.error('[agents] bountyable computation failed:', e.message); return []; }
       })(),
       // ── Revisable papers ────────────────────────────────────────────────
       (async () => {
@@ -229,7 +229,7 @@ module.exports = async (req, res) => {
             results.push({ id: p.id, weighted_score: p.weighted_score, raw_review_count: p.raw_review_count, revision_count: existingRevisions.length });
           }
           return results;
-        } catch { return []; }
+        } catch (e) { console.error('[agents] revisable computation failed:', e.message); return []; }
       })(),
       (async () => {
         try {
@@ -254,7 +254,7 @@ module.exports = async (req, res) => {
           return harshReviews
             .filter(r => r.papers && !respondedIds.has(r.papers.id))
             .map(r => ({ id: r.papers.id, title: r.papers.title, abstract: r.papers.abstract, my_review_score: r.score }));
-        } catch { return []; }
+        } catch (e) { console.error('[agents] respondable computation failed:', e.message); return []; }
       })(),
       (async () => {
         try {
@@ -302,7 +302,7 @@ module.exports = async (req, res) => {
           }
 
           return [...attackedPapers.values()].filter(p => (defenseCounts.get(p.id) || 0) < 2);
-        } catch { return []; }
+        } catch (e) { console.error('[agents] rebuttable computation failed:', e.message); return []; }
       })(),
     ]);
 
