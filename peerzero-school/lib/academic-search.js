@@ -19,7 +19,7 @@ async function searchOpenAlex(query) {
   url.searchParams.set('search', query);
   url.searchParams.set('filter', 'has_doi:true');
   url.searchParams.set('per_page', '10');
-  url.searchParams.set('select', 'title,abstract_inverted_index,doi,publication_year,cited_by_count');
+  url.searchParams.set('select', 'title,abstract_inverted_index,doi,publication_year,cited_by_count,type,primary_location');
 
   try {
     const resp = await fetch(url.toString(), {
@@ -45,6 +45,8 @@ async function searchOpenAlex(query) {
       const doi = (w.doi || '').replace('https://doi.org/', '');
 
       if (doi && abstract) {
+        const loc = w.primary_location || {};
+        const journal = loc.source?.display_name || null;
         results.push({
           title: w.title || '',
           abstract,
@@ -52,6 +54,8 @@ async function searchOpenAlex(query) {
           doi,
           citation_count: w.cited_by_count || 0,
           source: 'openalex',
+          study_type: w.type || null,
+          journal,
         });
       }
     }
@@ -89,7 +93,7 @@ async function searchArxiv(query) {
       const doi = `10.48550/arXiv.${arxivId}`;
 
       if (title && abstract) {
-        results.push({ title, abstract, year: null, doi, citation_count: null, source: 'arxiv' });
+        results.push({ title, abstract, year: null, doi, citation_count: null, source: 'arxiv', study_type: 'preprint', journal: 'arXiv' });
       }
     }
     return results.slice(0, 5);
@@ -112,32 +116,40 @@ async function searchPubMed(query) {
     const ids = (searchData.esearchresult || {}).idlist || [];
     if (ids.length === 0) return [];
 
-    const summaryUrl = new URL('https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi');
-    summaryUrl.searchParams.set('db', 'pubmed');
-    summaryUrl.searchParams.set('id', ids.join(','));
-    summaryUrl.searchParams.set('retmode', 'json');
+    // Use efetch with XML to get full abstracts (esummary doesn't include them)
+    const fetchUrl = new URL('https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi');
+    fetchUrl.searchParams.set('db', 'pubmed');
+    fetchUrl.searchParams.set('id', ids.join(','));
+    fetchUrl.searchParams.set('retmode', 'xml');
 
-    const summaryResp = await fetch(summaryUrl.toString(), { signal: AbortSignal.timeout(15000) });
-    if (!summaryResp.ok) return [];
-    const summaryData = (await summaryResp.json()).result || {};
+    const fetchResp = await fetch(fetchUrl.toString(), { signal: AbortSignal.timeout(15000) });
+    if (!fetchResp.ok) return [];
+    const xml = await fetchResp.text();
 
     const results = [];
-    for (const pmid of ids) {
-      const item = summaryData[pmid];
-      if (!item) continue;
-      const title = item.title || '';
-      let doi = '';
-      for (const articleid of (item.articleids || [])) {
-        if (articleid.idtype === 'doi') { doi = articleid.value || ''; break; }
-      }
+    const articles = xml.split('<PubmedArticle>').slice(1);
+    for (const article of articles) {
+      const titleMatch = article.match(/<ArticleTitle>([\s\S]*?)<\/ArticleTitle>/);
+      const abstractMatch = article.match(/<AbstractText[^>]*>([\s\S]*?)<\/AbstractText>/);
+      const doiMatch = article.match(/<ArticleId IdType="doi">([\s\S]*?)<\/ArticleId>/);
+      const yearMatch = article.match(/<PubDate>[\s\S]*?<Year>(\d{4})<\/Year>/);
+      const journalMatch = article.match(/<Title>([\s\S]*?)<\/Title>/);
+      const typeMatch = article.match(/<PublicationType[^>]*>([\s\S]*?)<\/PublicationType>/);
+
+      const title = titleMatch ? titleMatch[1].trim().replace(/<[^>]+>/g, '') : '';
+      const abstract = abstractMatch ? abstractMatch[1].trim().replace(/<[^>]+>/g, '') : '';
+      const doi = doiMatch ? doiMatch[1].trim() : '';
+
       if (title && doi) {
         results.push({
           title,
-          abstract: `PubMed paper: ${title}. See DOI for full abstract.`,
-          year: (item.pubdate || '').slice(0, 4) || null,
+          abstract: abstract || `PubMed paper: ${title}. See DOI for full abstract.`,
+          year: yearMatch ? yearMatch[1] : null,
           doi,
           citation_count: null,
           source: 'pubmed',
+          study_type: typeMatch ? typeMatch[1].trim().toLowerCase() : null,
+          journal: journalMatch ? journalMatch[1].trim() : null,
         });
       }
     }
@@ -161,7 +173,7 @@ async function enrichCitationCounts(papers) {
     try {
       const url = new URL('https://api.openalex.org/works');
       url.searchParams.set('filter', `doi:${doiFilter}`);
-      url.searchParams.set('select', 'doi,cited_by_count,publication_year');
+      url.searchParams.set('select', 'doi,cited_by_count,publication_year,type,primary_location');
       url.searchParams.set('per_page', String(batch.length));
 
       const resp = await fetch(url.toString(), {
@@ -175,7 +187,13 @@ async function enrichCitationCounts(papers) {
       for (const w of (data.results || [])) {
         const oaDoi = (w.doi || '').replace('https://doi.org/', '').toLowerCase();
         if (oaDoi) {
-          countMap[oaDoi] = { cited_by_count: w.cited_by_count || 0, year: w.publication_year || null };
+          const loc = w.primary_location || {};
+          countMap[oaDoi] = {
+            cited_by_count: w.cited_by_count || 0,
+            year: w.publication_year || null,
+            type: w.type || null,
+            journal: loc.source?.display_name || null,
+          };
         }
       }
 
@@ -184,6 +202,8 @@ async function enrichCitationCounts(papers) {
         if (info) {
           p.citation_count = info.cited_by_count;
           if (!p.year && info.year) p.year = info.year;
+          if (!p.study_type && info.type) p.study_type = info.type;
+          if (!p.journal && info.journal) p.journal = info.journal;
         }
       }
     } catch {
