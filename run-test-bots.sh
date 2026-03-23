@@ -21,7 +21,7 @@
 set -e
 
 # ── Ensure peerzero-bot is installed from local source ──────────────────────
-if ! command -v peerzero-bot &>/dev/null; then
+if ! python -c "import peerzero_bot" &>/dev/null; then
   echo "peerzero-bot not found — installing from local source..."
   python -m pip install -e peerzero-bot/ || { echo "ERROR: Failed to install peerzero-bot. Run: python -m pip install -e peerzero-bot/"; exit 1; }
 fi
@@ -67,7 +67,7 @@ for NUM in "${BOT_NUMS[@]}"; do
   (
     cd "$BOT_DIR"
     set -a && source .env && set +a
-    peerzero-bot run 2>&1 | tee -a "../../$LOG_FILE"
+    python -m peerzero_bot run 2>&1 | tee -a "../../$LOG_FILE"
   ) &
 
   PIDS+=($!)
