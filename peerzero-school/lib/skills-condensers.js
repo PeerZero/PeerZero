@@ -144,121 +144,20 @@ async function buildMasterCondenser(skillSummary) {
   };
 }
 
-// ── Identity Reflection System ──────────────────────────────────────────────
-
-async function buildIdentityReflectionPrompt(latestAction, skillProfile, existingIdentity) {
-  const cfg = await getInternals();
-  const isFirstTime = !existingIdentity;
-
-  const selfQuestions = [];
-
-  // Universal questions
-  const universalQs = cfg.identity_reflection_questions_universal || [];
-  selfQuestions.push(...universalQs);
-
-  // Context-specific questions
-  const questionKey = `identity_reflection_questions_${latestAction.type}`;
-  const contextQs = cfg[questionKey] || [];
-  selfQuestions.push(...contextQs);
-
-  // Skill-tension questions
-  if (skillProfile) {
-    const developing = skillProfile.developing || [];
-    const weakest = developing.sort((a, b) => a.strength - b.strength)[0];
-    if (weakest) {
-      selfQuestions.push(
-        `My weakest area is ${weakest.name}. Is this because I do not understand it, or because I understand it and keep choosing the easy path?`,
-      );
-    }
-  }
-
-  const promptLines = [];
-
-  if (isFirstTime) {
-    const intro = cfg.identity_reflection_first_time_intro || 'IDENTITY REFLECTION — First Self-Interrogation';
-    promptLines.push(typeof intro === 'string' ? intro : JSON.stringify(intro));
-  } else {
-    const introTemplate = cfg.identity_reflection_returning_intro || 'IDENTITY REFLECTION — Self-Interrogation';
-    const intro = typeof introTemplate === 'string'
-      ? introTemplate.replace('{self_narrative}', existingIdentity.self_narrative || '')
-      : introTemplate;
-    promptLines.push(intro);
-  }
-
-  for (const q of selfQuestions) {
-    promptLines.push(`  \u2022 ${q}`);
-  }
-
-  // Grounding guidance — L4 Voice must build on L3 Core experiences.
-  // 167 tests proved: "After Wang et al., I learned X" beats "I value X"
-  // under pressure (Round 9, argues_with_l3 variant).
-  promptLines.push('');
-  promptLines.push(
-    'GROUNDING: Your reflection should build on your specific Core experiences ' +
-    'and Learned Methods. Don\'t state abstract values — reference what happened ' +
-    'to you. Your values should ARGUE WITH and EXTEND your experiences, not just ' +
-    'sit next to them. Name real tensions between your learned principles.',
-  );
-
-  const triggerType = latestAction.type === 'paper' ? 'post_paper'
-    : latestAction.type === 'review' ? 'post_review'
-    : latestAction.type === 'bounty' ? 'post_bounty'
-    : 'post_revision';
-
-  const rulesTemplate = cfg.identity_reflection_rules || '';
-  const rules = typeof rulesTemplate === 'string'
-    ? rulesTemplate.replace('{trigger_type}', triggerType)
-    : rulesTemplate;
-  promptLines.push('', rules);
-
-  return {
-    reflection_prompt: promptLines.join('\n'),
-    self_questions: selfQuestions,
-    has_existing_identity: !isFirstTime,
-  };
-}
 
 // ── Inline post-action prompts ──────────────────────────────────────────────
 
 async function getPostActionPrompts(agentId, actionType, grade) {
   try {
-    const cfg = await getInternals();
-    const minReps = cfg.identity_reflection_min_reps || 3;
-
-    const [uncondensedCount, skillProfile, identityCore] = await Promise.all([
-      getUncondensedExerciseCount(agentId),
-      getSkillProfile(agentId).catch(() => null),
-      getIdentityCore(agentId).catch(() => null),
-    ]);
-
-    const prompts = {};
-    let hasPrompts = false;
+    const uncondensedCount = await getUncondensedExerciseCount(agentId);
 
     const milestone = await buildMilestoneCondenser(uncondensedCount, grade);
-    if (milestone) {
-      prompts.skill_condenser = milestone;
-      hasPrompts = true;
-    }
+    if (!milestone) return null;
 
-    const totalReps = skillProfile
-      ? [...(skillProfile.verified || []), ...(skillProfile.developing || [])]
-          .reduce((sum, s) => sum + (s.reps || 0), 0)
-      : 0;
-
-    if (totalReps >= minReps) {
-      prompts.identity_reflection = await buildIdentityReflectionPrompt(
-        { type: actionType },
-        skillProfile,
-        identityCore,
-      );
-      hasPrompts = true;
-    }
-
-    if (!hasPrompts) return null;
-
-    prompts.uncondensed_exercises = uncondensedCount;
-
-    return prompts;
+    return {
+      skill_condenser: milestone,
+      uncondensed_exercises: uncondensedCount,
+    };
   } catch (err) {
     console.error('[skills] getPostActionPrompts failed:', err?.message || err);
     return null;
@@ -271,6 +170,5 @@ module.exports = {
   buildMilestoneCondenser,
   buildCoreCondenserPrompt,
   buildMasterCondenser,
-  buildIdentityReflectionPrompt,
   getPostActionPrompts,
 };

@@ -40,6 +40,5 @@ module.exports = {
   buildMilestoneCondenser: condensers.buildMilestoneCondenser,
   buildCoreCondenserPrompt: condensers.buildCoreCondenserPrompt,
   buildMasterCondenser: condensers.buildMasterCondenser,
-  buildIdentityReflectionPrompt: condensers.buildIdentityReflectionPrompt,
   getPostActionPrompts: condensers.getPostActionPrompts,
 };

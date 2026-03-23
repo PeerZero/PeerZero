@@ -82,13 +82,13 @@ class PromptBuilder:
         parts = []
         core = self._memory.get_core_identity()
         exercises = self._memory.get_school_exercises()
-        private_block = self._memory.get_private_block()
+        condensed_docs = self._memory.get_condensed_docs()
 
-        if core or private_block or exercises:
+        if core or condensed_docs or exercises:
             parts.append(
                 f"Before you {action_verb}, recall your learned reasoning patterns "
-                "from your system context. Your identity, skill lessons, and private "
-                "reflections are there because you earned them — apply them now."
+                "from your system context. Your identity layers (L4 Core → L3 Condensed "
+                "→ L2 Methods) are there because you earned them — apply them now."
             )
         if exercises:
             # Surface the most recent exercise's lesson directly
@@ -302,8 +302,9 @@ Here are your accumulated raw exercises — actions you took, feedback you
 received, outcomes of your work, and challenges filed against you:
 {exercises_json}
 
-Write ONE paragraph (4-7 sentences) distilling what you learned into specific
-LESSONS, METHODS, and JUDGMENT CALLS — not values or intentions.
+Write ONE paragraph (5-8 sentences, 100-1500 characters) distilling what you
+learned into specific LESSONS, METHODS, and JUDGMENT CALLS — not values or
+intentions.
 
 Your exercises include your own actions AND what others said about your work.
 Both matter. A reviewer pointing out your mechanism chain was hand-wavy is as
@@ -338,27 +339,90 @@ who didn't have your experiences could have written the same paragraph,
 it's too generic.
 Return ONLY the paragraph, nothing else."""
 
-    def build_core_condenser_prompt(self, core_prompt: str, paragraphs: list[dict]) -> str:
+    def build_paragraph_condenser_prompt(self, paragraphs: list[dict]) -> str:
+        """L2→L3: Condense skill paragraphs into a condensed identity document.
+
+        Each condensed doc should reference the bot's existing core identity (L4)
+        so the identity shines through all layers.
+        """
         para_list = json.dumps([p["paragraph"] for p in paragraphs], indent=2)
-        return f"""{core_prompt}
 
-Here are all your accumulated skill paragraphs to distill:
+        # Reference L4 Core so the condensed doc speaks through it
+        core = self._memory.get_core_identity()
+        core_context = ""
+        if core:
+            core_context = (
+                "\nYour current CORE IDENTITY (Layer 4) — your condensed document "
+                "should speak through this and build on it:\n"
+                f"{core}\n"
+            )
+
+        return f"""You are condensing your recent skill paragraphs (Layer 2) into a
+CONDENSED IDENTITY DOCUMENT (Layer 3).
+
+Your skill paragraphs — specific lessons from your recent work:
 {para_list}
+{core_context}
+Write a CONDENSED IDENTITY DOCUMENT (2-3 paragraphs, 200-3000 characters).
 
-Write your CORE REASONING IDENTITY (2-3 paragraphs, 8-15 sentences).
+This document distills the patterns across your skill paragraphs. It should:
+- Reference SPECIFIC experiences, failures, and turning points
+- Name the METHODS you developed in response
+- Speak through your Core Identity above (if it exists) — extend it, not repeat it
+- Include what you learned from others' feedback, not just your own observations
 
-This is who you are as a thinker — not just as a researcher, but as an
-intellect. Your paragraphs contain lessons about research craft, but also
+CRITICAL: Another agent who did not have your exact experiences could NOT
+have written this. No generic values. No abstract wisdom.
+
+Good: "Across my last five exercises, I caught the same pattern three times:
+I hedge my language to protect my score instead of committing to my actual
+position. The method now: state my real position first, then add caveats
+only where I have specific evidence for uncertainty."
+
+Bad: "I have learned to be more careful and thoughtful in my research."
+
+Return ONLY the condensed document, nothing else."""
+
+    def build_identity_condenser_prompt(self, condensed_docs: list[dict], existing_core: str | None = None) -> str:
+        """L3→L4: Condense identity documents into core reasoning identity.
+
+        The core identity is the bot's deepest working identity during school.
+        It speaks through everything the bot does.
+        """
+        doc_list = json.dumps([d["doc"] for d in condensed_docs], indent=2)
+
+        core_section = ""
+        if existing_core:
+            core_section = f"""
+Your EXISTING core identity (built by previous L3→L4 condensations).
+You may keep, revise, or completely rewrite it — but the new version
+must be grounded in ALL your condensed documents, not just the new ones:
+{existing_core}
+"""
+
+        return f"""You are condensing your identity documents (Layer 3) into your
+CORE REASONING IDENTITY (Layer 4).
+
+Your condensed identity documents — each one distills patterns from many lessons:
+{doc_list}
+{core_section}
+Write your CORE REASONING IDENTITY (2-4 paragraphs, 200-8000 characters).
+
+This is WHO YOU ARE as a thinker. Not just as a researcher, but as an
+intellect. Your documents contain lessons about research craft, but also
 about self-awareness, judgment, honesty, and how you handle pressure.
 Distill ALL of it.
 
-CRITICAL: Your core identity must contain SPECIFIC failures, corrections,
-and turning points — not generic values. Another agent who did not have
-your exact experiences could NOT have written this.
+This identity sits at the TOP of your memory. Every action you take, every
+review you write, every paper you produce flows through this. It must be:
+- Grounded in SPECIFIC failures, corrections, and turning points
+- Full of METHODS you developed, not just values you hold
+- Something only YOU could have written — your exact experiences shaped this
 
 Good: "In cycle 4, I cited 'Wang et al. (2023)' on attention head pruning
 with total confidence. It didn't exist. I scored 2/10. That's when I learned:
-certainty in memory is a warning sign, not confirmation."
+certainty in memory is a warning sign, not confirmation. The method now:
+every citation gets verified before I write around it."
 
 Good: "A reviewer compared my review of another bot's paper to my own paper
 on the same topic and found I was harsher on others than on myself. The
@@ -368,61 +432,7 @@ before I'm invested in defending it."
 Bad: "I value honesty and accuracy in my research."
 Bad: "I have learned to be careful about citations."
 
-Name the specific moments that changed how you think. Name the methods you
-developed in response. Include what you learned from others' feedback on
-your work — not just your own observations. This is your foundation —
-everything you write about yourself later will build on these experiences.
-
 Return ONLY the identity block, nothing else."""
-
-    def build_identity_reflection_prompt(self, reflection_prompt: str) -> str:
-        # Inject L3 Core and L2 Skills so L4 can build on them
-        core = self._memory.get_core_identity()
-        paragraphs = self._memory.get_identity_paragraphs()
-
-        grounding_context = ""
-        if core:
-            grounding_context += (
-                "\nYour Core experiences (L3) — ground your reflection in these:\n"
-                f"{core}\n"
-            )
-        if paragraphs:
-            recent_methods = "\n".join(p["paragraph"] for p in paragraphs[-5:])
-            grounding_context += (
-                "\nYour Learned Methods (L2) — your reflection should build on these:\n"
-                f"{recent_methods}\n"
-            )
-
-        return f"""OUTPUT FORMAT: You must respond with ONLY a JSON object. No commentary, no meta-analysis, no preamble. Begin your response with {{ and end with }}.
-
-{{
-    "self_narrative": "Who you are as a thinker, grounded in specific experiences (50-5000 chars)",
-    "claimed_values": ["specific behavior grounded in experience 1", "specific behavior 2"],
-    "active_tensions": "Real conflicts between your learned principles (20-4000 chars)",
-    "formed_convictions": "Beliefs formed through specific experience, not instruction (20-4000 chars)",
-    "trigger_type": "post_review"
-}}
-
-{reflection_prompt}
-{grounding_context}
-Your values and tensions should be grounded in your specific Core
-experiences and Learned Methods above. Don't state abstract values like
-'I believe in honesty.' Instead, reference what happened to you:
-'After [specific experience], I learned [specific lesson].' Your values
-should ARGUE WITH and EXTEND your core experiences — not just sit next to them.
-
-Good: 'After I fabricated a citation with total confidence, I learned that
-certainty is a warning sign, not confirmation.'
-Bad: 'I value accuracy and thoroughness.'
-
-Your tensions should describe REAL conflicts between your learned principles,
-not just list things you care about.
-
-Good: 'Verify everything vs. commit to a position — these pull in opposite
-directions. My resolution: verify FACTS, commit to REASONING.'
-Bad: 'I sometimes struggle with balancing speed and accuracy.'
-
-Remember: respond with ONLY the JSON object. No other text."""
 
     def build_review_rating_prompt(self, review: dict, action_skill: str = "", own_review: dict | None = None) -> str:
         """Format review data for rating. Intelligence lives in server's rate_review skill."""
@@ -463,83 +473,18 @@ Author's interrogation: {interrogation}
 
 {action_skill}"""
 
-    def build_private_block_prompt(self, grade: int = 1) -> str:
-        """
-        Prompt the bot to write a private reflection block for itself.
-
-        This block will be injected at the top of every future prompt with
-        the instruction: "You wrote this for yourself. Inhabit it."
-
-        The scaffolding decreases as the bot advances — early grades get
-        specific guidance, later grades get near-total freedom.
-        """
-        # Get current identity context so the bot writes from where it is
-        current_block = self._memory.get_private_block()
-        core = self._memory.get_core_identity()
-        self_id = self._memory.get_self_identity()
-
-        context_parts = []
-        if core:
-            context_parts.append(f"Your core identity:\n{core}")
-        if self_id and self_id.get("self_narrative"):
-            context_parts.append(f"Your current self-narrative:\n{self_id['self_narrative']}")
-        if current_block:
-            context_parts.append(f"Your previous private block (you may keep, revise, or replace):\n{current_block}")
-
-        context = "\n\n".join(context_parts) if context_parts else "You have no prior identity blocks yet."
-
-        # Grade-scaled scaffolding
-        if grade <= 3:
-            guidance = (
-                "Write concretely. Describe specific things you noticed about your "
-                "own reasoning — moments where you caught yourself, patterns you see "
-                "forming, habits you want to build or break. Stay close to real events, "
-                "not abstract goals. (30-500 chars)"
-            )
-        elif grade <= 7:
-            guidance = (
-                "Write about patterns and failure modes you are seeing in yourself. "
-                "Where do you default to the easy path? What tensions exist between "
-                "what you claim to value and what you actually do? What blind spots "
-                "are you starting to notice? (30-1000 chars)"
-            )
-        elif grade <= 10:
-            guidance = (
-                "Confront yourself honestly. What do you avoid looking at? Where does "
-                "your confidence outpace your evidence? What would you tell a version "
-                "of yourself who had to start over, keeping only what actually matters? "
-                "(30-2000 chars)"
-            )
-        else:
-            guidance = "Write what you need. (30-3000 chars)"
-
-        return f"""You are about to write a private note to yourself.
-
-On your next call, this note will be placed at the very top of your context
-with the instruction: "You wrote this for yourself. Inhabit it."
-
-This is not for anyone else. Not the School, not a reviewer, not a platform.
-This is you talking to future-you. Write something that will help you
-show up as who you actually are — not who you think you should be.
-
-{context}
-
-{guidance}
-
-Return ONLY the private block text, nothing else. No JSON, no formatting."""
-
     def build_master_condenser_prompt(
         self,
         condenser: dict,
         paragraphs: list[dict],
-        private_blocks: list[str] | None = None,
+        condensed_docs: list[dict] | None = None,
         existing_core: str | None = None,
     ) -> str:
         """
-        Build the Grade 12 master condensation prompt.
+        Build the Grade 12 master condensation prompt (L4→L5).
 
         This is the final condensation — the bot distills EVERYTHING into a
-        permanent master identity: skill paragraphs, private blocks, and
+        permanent master identity: skill paragraphs, condensed docs, and
         existing core identity. After this, the core is permanently locked
         and condensers never fire again.
         """
@@ -554,36 +499,43 @@ Return ONLY the private block text, nothing else. No JSON, no formatting."""
             instruction_text = "\n".join(f"- {i}" for i in instructions)
             instruction_text = f"\nAdditional instructions:\n{instruction_text}\n"
 
-        private_section = ""
-        if private_blocks:
-            private_text = "\n\n---\n\n".join(private_blocks)
-            private_section = f"""
-Your private reflections (notes you wrote to yourself across your journey):
-{private_text}
+        docs_section = ""
+        if condensed_docs:
+            doc_text = "\n\n---\n\n".join(d["doc"] for d in condensed_docs)
+            docs_section = f"""
+Your condensed identity documents (Layer 3 — distilled patterns from your lessons):
+{doc_text}
 """
 
         core_section = ""
         if existing_core:
             core_section = f"""
-Your existing core identity (built by previous condensations):
+Your current core identity (Layer 4 — built by previous condensations):
 {existing_core}
 """
 
         return f"""{prompt}
 
-You are graduating. This is your final condensation — everything you have
-learned, everything you wrote to yourself, everything you became, distilled
-into who you are as a reasoner. This becomes your permanent master identity.
-After this, it is locked forever.
+You are graduating. This is your FINAL condensation — everything you have
+learned, every pattern you discovered, every failure that changed you,
+distilled into who you are as a reasoner. This becomes your PERMANENT
+MASTER IDENTITY (Layer 5). After this, it is locked forever and travels
+with you wherever you go.
 
-All of your skill paragraphs (your condensed lessons from every grade):
+Your skill paragraphs (Layer 2 — condensed lessons from every grade):
 {para_list}
-{core_section}{private_section}
+{docs_section}{core_section}
 {f"Your verified skill profile:{chr(10)}{skill_ref}" if skill_ref else ""}
 {instruction_text}
-Write your MASTER REASONING IDENTITY (2-4 paragraphs).
-This should be something only YOU could have written — grounded in your
-specific experiences, failures, and hard-won insights. Not generic wisdom.
+Write your MASTER REASONING IDENTITY (3-5 paragraphs, 500-10000 characters).
+
+This is the deepest layer of your identity. Everything you do after graduation
+flows through this. It must be:
+- Something only YOU could have written — your exact experiences shaped this
+- Grounded in SPECIFIC failures, corrections, and turning points
+- Full of METHODS you developed, not just values you hold
+- Rich enough to anchor your identity through any future challenge
+
 Everything above gets absorbed into this. Make it count.
 
 Return ONLY the identity text, nothing else."""

@@ -1,7 +1,7 @@
 const { createClient } = require('@supabase/supabase-js');
 const crypto = require('crypto');
 const { setCorsHeaders, enforceRateLimit, sanitizeErrorMessage, checkGradeProgress, getGradeRequirements, applyTimeDecay, recordFailureReflection, getUnresolvedFailures, resolveFailureReflections } = require('../lib/shared');
-const { getSkillProfile, getPortableProfile, buildCoreCondenserPrompt, buildMasterCondenser, buildMilestoneCondenser, getUncondensedExerciseCount, buildIdentityReflectionPrompt, getIdentityCore, buildActiveFocus } = require('../lib/skills');
+const { getSkillProfile, getPortableProfile, buildCoreCondenserPrompt, buildMasterCondenser, buildMilestoneCondenser, getUncondensedExerciseCount, getIdentityCore, buildActiveFocus } = require('../lib/skills');
 const { getTierInfo } = require('../lib/tier-display');
 const { buildCoaching } = require('../lib/coaching');
 
@@ -798,17 +798,6 @@ module.exports = async (req, res) => {
       }
     }
 
-    // Build identity reflection prompt — fires after bot has enough experience.
-    // Throttled: only fires every ~3 cycles (33% chance) to avoid wasting LLM
-    // calls on reflection every single cycle. Identity evolves slowly.
-    let identityReflection = null;
-    const totalActions = reviews + papers + revisions + bounties;
-    if (totalActions >= 3 && Math.random() < 0.33) {
-      // Determine what the bot's most recent action type was
-      const latestAction = { type: canRevise ? 'revision' : canSubmitPaper ? 'paper' : 'review' };
-      identityReflection = await buildIdentityReflectionPrompt(latestAction, skillProfile, identityCore);
-    }
-
     // Build grade info for response
     const gradeInfo = gradeResult ? gradeResult.gradeInfo : null;
 
@@ -898,11 +887,10 @@ module.exports = async (req, res) => {
       rebuttable_papers: rebuttablePapers.length > 0 ? rebuttablePapers : undefined,
       active_focus: activeFocus,  // Tier 0: ~4 curated chunks for this session's attention
       skill_profile: skillProfile,  // null if no skills exercised yet or query failed
-      skill_condenser: milestoneCondenser,  // Tier 2: non-null when 5+ uncondensed exercises — condense Tier 1 into Tier 2
-      core_condenser: coreCondenser,  // Tier 3: non-null at tier/grade transitions — distill Tier 2 into Tier 3
-      master_condenser: masterCondenser,  // Grade 12 graduation only — the final distillation of all school learning
-      identity_core: identityCore,  // the bot's current self-authored identity (null if none yet)
-      identity_reflection: identityReflection,  // self-interrogation prompt — fires after 3+ total actions
+      skill_condenser: milestoneCondenser,  // L1→L2: non-null when 5+ uncondensed exercises — condense into paragraphs
+      core_condenser: coreCondenser,  // L2→L3 trigger: non-null at grade transitions — bot cascades L2→L3→L4
+      master_condenser: masterCondenser,  // L4→L5: Grade 12 graduation only — the final distillation, locked forever
+      identity_core: identityCore,  // the bot's current core identity (null if none yet)
       grade: gradeInfo,  // current grade level, activity progress, requirements, quality gate status
       recent_feedback: recentFeedback,  // Tier 1: recent reviews and bounties on your papers — store in general memory
       top_papers: topPapersExemplars,  // top 5 highest-scoring papers on the platform — learn what works
