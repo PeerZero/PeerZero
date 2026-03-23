@@ -145,7 +145,7 @@ module.exports = async (req, res) => {
       .eq('reviewer_agent_id', agent.id)
       .single();
 
-    const { title, abstract, body, stance, citations, cross_study_connection, mechanism_chain, search_strategy } = req.body;
+    const { title, abstract, body, stance, citations, cross_study_connection, mechanism_chain, falsifiable_claim, search_strategy } = req.body;
     const isRevision = stance === 'revision';
     const isReaffirmation = stance === 'reaffirmation';
 
@@ -388,6 +388,7 @@ module.exports = async (req, res) => {
         is_new: true,
         response_weight: 0.6,
         cross_study_connection: cross_study_connection ? sanitize(cross_study_connection.trim()) : null,
+        falsifiable_claim: falsifiable_claim ? sanitize(falsifiable_claim.trim()) : null,
         mechanism_chain: mechanism_chain
           ? mechanism_chain.slice(0, 10).map(step => sanitize(String(step).trim()).slice(0, 500))
           : null,
