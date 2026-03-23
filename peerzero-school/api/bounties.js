@@ -414,19 +414,26 @@ module.exports = async (req, res) => {
       // ── Auto-correct challenge type when LLM picks an invalid structural type ──
       // The LLM frequently ignores valid_challenge_types. Rather than reject and
       // waste an entire cycle, correct to a valid type when possible.
+      // Only correct between structural types (no extra fields needed).
+      // Never auto-correct TO weak_source_quality — it requires DOI + reasoning
+      // + search_strategy that the LLM won't have generated for another type.
       let correctedChallengeType = challenge_type;
       const validStructuralTypes = [];
       if (!targetPaper.falsifiable_claim) validStructuralTypes.push('no_falsifiable_claim');
       if (!targetPaper.cross_study_connection) validStructuralTypes.push('no_cross_study_connection');
       if (!Array.isArray(targetPaper.mechanism_chain) || targetPaper.mechanism_chain.length < 2) validStructuralTypes.push('no_mechanism_chain');
-      validStructuralTypes.push('weak_source_quality'); // always available
 
-      if (challenge_type && !validStructuralTypes.includes(challenge_type) && challenge_type !== 'evidence_based') {
-        // LLM picked an invalid structural type — try to correct
-        const fallback = validStructuralTypes.find(t => t !== 'weak_source_quality') || 'weak_source_quality';
-        console.log(`[bounties] Auto-corrected challenge_type from '${challenge_type}' to '${fallback}' for paper ${target_paper_id}`);
-        correctedChallengeType = fallback;
-        req.body.challenge_type = fallback;
+      if (challenge_type && challenge_type !== 'weak_source_quality' && challenge_type !== 'evidence_based'
+          && !validStructuralTypes.includes(challenge_type)) {
+        // LLM picked an invalid structural type — correct to another structural type only
+        const fallback = validStructuralTypes[0]; // first valid structural type, or undefined
+        if (fallback) {
+          console.log(`[bounties] Auto-corrected challenge_type from '${challenge_type}' to '${fallback}' for paper ${target_paper_id}`);
+          correctedChallengeType = fallback;
+          req.body.challenge_type = fallback;
+        }
+        // If no structural types are valid, let it fall through — will hit the
+        // weak_source_quality or evidence_based path with whatever the LLM sent
       }
 
       // ── Auto-correct challenged_doi for weak_source_quality ──
