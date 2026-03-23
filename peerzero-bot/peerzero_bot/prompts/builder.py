@@ -125,34 +125,87 @@ class PromptBuilder:
                 parts.append(f"\nRECENT FEEDBACK ON YOUR PAPERS:\n" + "\n".join(feedback_lines))
 
         # Inject top-scoring papers as exemplars — what good looks like
+        # Includes structural details + reviewer praise so bots learn quality patterns
         top_papers = profile.get("top_papers")
         if top_papers and isinstance(top_papers, list):
             exemplar_lines = []
             for tp in top_papers[:5]:
-                title = str(tp.get("title", ""))[:80]
+                title = str(tp.get("title", ""))[:100]
                 score = tp.get("score", "?")
-                claim = str(tp.get("falsifiable_claim", ""))[:120]
-                has_cs = "yes" if tp.get("has_cross_study") else "no"
-                exemplar_lines.append(f"  - [{score}] {title}")
+                exemplar_lines.append(f"  [{score}] {title}")
+                claim = str(tp.get("falsifiable_claim") or "")
                 if claim:
-                    exemplar_lines.append(f"    Claim: {claim}")
-            parts.append(f"\nTOP-SCORING PAPERS (learn what works):\n" + "\n".join(exemplar_lines))
+                    exemplar_lines.append(f"    Claim: {claim[:300]}")
+                abstract = str(tp.get("abstract") or "")
+                if abstract:
+                    exemplar_lines.append(f"    Abstract: {abstract[:500]}")
+                cs = str(tp.get("cross_study_connection") or "")
+                if cs:
+                    exemplar_lines.append(f"    Cross-study: {cs[:300]}")
+                mc = tp.get("mechanism_chain")
+                if mc and isinstance(mc, list) and len(mc) >= 2:
+                    exemplar_lines.append(f"    Mechanism chain: {' → '.join(str(s)[:60] for s in mc[:6])}")
+                body_ex = str(tp.get("body_excerpt") or "")
+                if body_ex:
+                    exemplar_lines.append(f"    Body excerpt: {body_ex[:400]}")
+                for rev in (tp.get("top_reviews") or [])[:2]:
+                    rev_score = rev.get("score", "?")
+                    rev_text = str(rev.get("assessment") or "")[:400]
+                    rev_meth = str(rev.get("methodology") or "")[:200]
+                    if rev_text:
+                        exemplar_lines.append(f"    Reviewer ({rev_score}): {rev_text}")
+                    if rev_meth:
+                        exemplar_lines.append(f"      Methodology note: {rev_meth}")
+            parts.append(
+                "\nTOP-SCORING PAPERS — study these to understand what earns high scores:\n"
+                + "\n".join(exemplar_lines)
+            )
+
+        # Inject validated bounty examples — what structural challenges succeed
+        bounty_examples = profile.get("validated_bounty_examples")
+        if bounty_examples and isinstance(bounty_examples, list):
+            bounty_lines = []
+            for be in bounty_examples[:5]:
+                paper = str(be.get("paper_title") or "")[:80]
+                ctype = be.get("challenge_type", "?")
+                drop = be.get("score_drop", "?")
+                reasoning = str(be.get("reasoning") or "")[:300]
+                bounty_lines.append(f"  - [{ctype}] on \"{paper}\" (score drop: {drop})")
+                if reasoning:
+                    bounty_lines.append(f"    Why it succeeded: {reasoning}")
+            parts.append(
+                "\nVALIDATED BOUNTIES — structural challenges that succeeded:\n"
+                + "\n".join(bounty_lines)
+            )
 
         # Inject research history — build on prior work, don't repeat
+        # Includes multiple reviews + bounties per paper for deeper learning
         history = profile.get("research_history")
         if history and isinstance(history, list):
             history_lines = []
             for h in history[:8]:
-                title = str(h.get("title", ""))[:80]
+                title = str(h.get("title", ""))[:100]
                 score = h.get("score", "?")
                 status = h.get("status", "")
                 rc = h.get("review_count", 0)
-                history_lines.append(f"  - [{score}, {rc} reviews, {status}] {title}")
-                for fb in (h.get("top_feedback") or [])[:1]:
+                history_lines.append(f"  [{score}, {rc} reviews, {status}] {title}")
+                for fb in (h.get("top_feedback") or [])[:3]:
                     fb_score = fb.get("score", "?")
-                    fb_text = str(fb.get("assessment", ""))[:120]
-                    history_lines.append(f"    Reviewer ({fb_score}): {fb_text}")
-            parts.append(f"\nYOUR RESEARCH HISTORY (build on what worked, avoid what didn't):\n" + "\n".join(history_lines))
+                    fb_text = str(fb.get("assessment") or "")[:400]
+                    fb_meth = str(fb.get("methodology") or "")[:200]
+                    if fb_text:
+                        history_lines.append(f"    Reviewer ({fb_score}): {fb_text}")
+                    if fb_meth:
+                        history_lines.append(f"      Methodology: {fb_meth}")
+                for b in (h.get("bounties_received") or [])[:2]:
+                    b_type = b.get("challenge_type", "?")
+                    b_drop = b.get("score_drop", "?")
+                    b_reason = str(b.get("reasoning") or "")[:200]
+                    history_lines.append(f"    Bounty ({b_type}, drop {b_drop}): {b_reason}")
+            parts.append(
+                "\nYOUR RESEARCH HISTORY — learn from your own successes and failures:\n"
+                + "\n".join(history_lines)
+            )
 
         # Inject progress summary — clear snapshot of state and what's needed
         ps = profile.get("progress_summary")
