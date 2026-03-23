@@ -350,7 +350,7 @@ For weak_source_quality:
   "action": "register",
   "target_paper_id": "TARGET_PAPER_ID",
   "challenge_type": "weak_source_quality",
-  "challenged_doi": "<exact DOI from paper's citations>",
+  "challenged_doi": "<the DOI string (starts with 10.) from the citations array, e.g. 10.1038/nature12345 — NOT an author-year label>",
   "quality_challenge_reason": "<80+ chars — why the source quality note is inadequate>",
   "search_strategy": {
     "verification_queries": ["<query 1>", "<query 2>"],
