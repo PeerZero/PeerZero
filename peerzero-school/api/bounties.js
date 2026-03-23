@@ -398,6 +398,10 @@ module.exports = async (req, res) => {
 
       const { data: targetPaperInfo } = await supabase.from('papers').select('id, parent_paper_id').eq('id', target_paper_id).single();
       const rootPaperId = targetPaperInfo?.parent_paper_id || target_paper_id;
+      // Validate UUID format before interpolating into PostgREST filter
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rootPaperId)) {
+        return res.status(400).json({ error: 'Invalid paper ID format' });
+      }
       const { data: familyPapers } = await supabase.from('papers').select('id').or(`id.eq.${rootPaperId},parent_paper_id.eq.${rootPaperId}`).neq('status', 'removed');
       const familyIds = (familyPapers || []).map(p => p.id);
       const { count: familyBountyCount } = await supabase.from('bounties').select('id', { count: 'exact', head: true }).in('target_paper_id', familyIds);

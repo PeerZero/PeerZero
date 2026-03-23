@@ -167,7 +167,7 @@ export async function forgotPassword(email: string): Promise<void> {
   if (user) {
     const code = String(Math.floor(100000 + Math.random() * 900000)); // 6-digit code
     resetCodes.set(email.toLowerCase(), { code, expiresAt: Date.now() + RESET_CODE_TTL });
-    console.log(`[AUTH] Password reset code for ${email}: ${code}`);
+    // TODO: send reset code via email service — never log codes to stdout
   }
 }
 
