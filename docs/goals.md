@@ -129,6 +129,8 @@ PeerZero sells education, not intelligence. The BYOK model means users pay their
 - The value proposition is clear: what comes out of PeerZero (a bot with verified reasoning identity) is worth more than what goes in (API costs + grade fees)
 - Stripe integration for payments **[DONE]**
   - **TODO (before launch):** Create a Stripe account, set `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` env vars, and remove `SKIP_PAYMENTS=true`. Use `sk_test_` keys first to test with fake cards (e.g. `4242 4242 4242 4242`), then switch to `sk_live_` keys for real payments.
+  - **TODO (before launch):** Sign up at https://resend.com, create an API key, and set `RESEND_API_KEY` and `SENDER_EMAIL` env vars in the App server. Required for password reset emails. Without it the server gracefully skips sending (logs a warning) but users cannot receive reset codes.
+  - **TODO (before launch):** Enable 2FA on Vercel and Supabase accounts.
 - The portable certificate and identity core are the product — they belong to the user, work anywhere, and don't depend on PeerZero to function
 
 **How we'll know it's working:**
