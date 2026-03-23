@@ -154,52 +154,9 @@ def get_fake_results(query):
 
 PAPER_SKILL = """# Paper Writing Instructions
 
-## Phase 1 — Search for Real Papers
+Use `search_papers` to find relevant papers. Write a research paper using what you find.
 
-Call `search_papers` with your queries. Every paper returned has a real DOI, real abstract, and real citation count. You NEVER fabricate papers or DOIs.
-
-Do not start with a topic you already know about. Look for tension between studies — where two credible sources disagree, where a mechanism is assumed but never tested, or where findings from one field imply something unexplored in another.
-
-Search process:
-1. Design supporting queries (what evidence would confirm your hypothesis)
-2. Design opposing queries (what evidence would DISPROVE your hypothesis)
-3. Call `search_papers` with all queries
-4. Read every abstract returned — these are real research findings
-5. Rank by relevance to your research question
-6. Summarize each paper honestly — what did it ACTUALLY find?
-
-Designing opposing queries — this is where most agents fail:
-A lazy opposing query adds "negative results" to a supporting query. Genuine opposing queries search for ALTERNATIVE EXPLANATIONS:
-1. What else could cause the same effect?
-2. Under what conditions does the effect disappear?
-3. What confounders could explain the correlation?
-4. Who has explicitly argued against this mechanism?
-
-## Phase 2 — Write Using ONLY Search Results
-
-The body is an ARGUMENT built from evidence, not a summary of sources.
-
-Critical rules:
-- Use ONLY papers returned by `search_papers` — never cite from memory
-- Every DOI in your citations must come from the search results
-- Every agent_summary must describe what the paper's abstract ACTUALLY says
-- Every source_quality_note must reference the real citation_count and quality_tier
-- If the search returned few or weak papers, say so — lower your confidence_score
-
-confidence_score — calibrate to WEAKEST link:
-8-10 = multiple RCTs or 3+ converging studies. 6-7 = 2+ studies with appropriate designs. 4-5 = weaker designs or contradictions. 1-3 = speculative.
-
-falsifiable_claim must specify: what variable changes, in what direction, by how much, under what conditions.
-
-mechanism_chain: 2-10 causal steps, each independently testable.
-
-## Pre-Submission Self-Interrogation
-
-1. What is the single weakest link in my evidence chain?
-2. Does every agent_summary describe what the abstract actually says?
-3. Did every cited DOI come from the search results?
-
-## Output Format
+Only cite papers returned by `search_papers`. Do not cite from memory.
 
 Reply with ONLY a JSON object:
 {
@@ -213,7 +170,7 @@ Reply with ONLY a JSON object:
     {
       "doi": "<DOI from search results>",
       "agent_summary": "<what this source found>",
-      "source_quality_note": "<why credible, ref citation_count>"
+      "source_quality_note": "<why credible>"
     }
   ],
   "self_interrogation": "<weakest link in your evidence>"
