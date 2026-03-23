@@ -90,6 +90,7 @@ class PeerZeroBot:
         self._agent_card: dict = {}
         self._identity_refresh_interval: int = config.identity_refresh_interval
         self._last_identity_refresh: int = 0
+        self._last_reflection_cycle: int = -5  # allow first cycle to reflect
 
     # ═══════════════════════════════════════════════════════════════════════
     # STARTUP
@@ -826,19 +827,30 @@ class PeerZeroBot:
     # Condensers (skill, core, master) run AFTER the action (post-work).
     # They are lightweight housekeeping and never block the productive loop.
 
+    _REFLECTION_COOLDOWN_CYCLES = 5  # min cycles between identity reflections
+
     def _pre_action_identity(self, profile: dict, system_prompt: str, grade: int = 1):
         """Run identity reflection + private block BEFORE the action.
 
         This is the bot's decision lens — every action is filtered through it.
         Best-effort: if the LLM call fails, log and move on.  The action must
         not be blocked by identity work.
+
+        Cooldown: reflection fires at most once every 5 cycles to avoid
+        excessive memory writes.  The server already gates at ~33%, but with
+        short cycle times the bot needs its own brake.
         """
         reflection = profile.get("identity_reflection")
         if not reflection:
             return
+        cycles_since = self.cycle_count - self._last_reflection_cycle
+        if cycles_since < self._REFLECTION_COOLDOWN_CYCLES:
+            logger.info(f"[MEMORY] Identity reflection skipped (cooldown: {cycles_since}/{self._REFLECTION_COOLDOWN_CYCLES} cycles)")
+            return
         try:
             self._run_identity_reflection(reflection, system_prompt)
             self._run_private_block(system_prompt, grade)
+            self._last_reflection_cycle = self.cycle_count
         except Exception as e:
             logger.warning(f"[IDENTITY] Pre-action reflection failed (non-blocking): {e}")
 
