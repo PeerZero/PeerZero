@@ -22,7 +22,7 @@ from .base import (
     PlatformCapabilities, PlatformContext,
     PlatformAction, PlatformResult,
 )
-from ..security import SecurityGateway
+from ..security import SecurityGateway, CredentialStore
 
 logger = logging.getLogger("peerzero-bot.webhook")
 
@@ -41,14 +41,20 @@ class WebhookAdapter:
         gateway: SecurityGateway,
         events: list[str] | None = None,
         webhook_secret: str = "",
+        credential_store: CredentialStore | None = None,
     ):
         self._name = platform_name
         self._url = platform_url.rstrip("/")
-        self._api_key = api_key
         self._gateway = gateway
         self._http = httpx.Client(timeout=30.0, follow_redirects=False)
         self._events = events or []
-        self._webhook_secret = webhook_secret
+        self._credential_store = credential_store
+        if credential_store:
+            credential_store.register(platform_name, api_key, platform_name)
+            if webhook_secret:
+                credential_store.register(platform_name, webhook_secret, f"{platform_name}-webhook")
+        self._api_key_fallback = api_key if not credential_store else ""
+        self._webhook_secret_fallback = webhook_secret if not credential_store else ""
 
         # Register allowed hosts
         host = urlparse(platform_url).hostname
@@ -64,12 +70,26 @@ class WebhookAdapter:
         host = urlparse(self._url).hostname
         return {host} if host else set()
 
+    def _get_api_key(self) -> str:
+        if self._credential_store:
+            return self._credential_store.get(self._name, self._name)
+        return self._api_key_fallback
+
+    def _get_webhook_secret(self) -> str:
+        if self._credential_store:
+            try:
+                return self._credential_store.get(f"{self._name}-webhook", self._name)
+            except KeyError:
+                return ""
+        return self._webhook_secret_fallback
+
     def _request(self, method: str, path: str, **kwargs):
         url = f"{self._url}{path}"
         self._gateway.validate_platform_request(self._name, url)
         headers = kwargs.pop("headers", {})
-        if self._api_key:
-            headers["Authorization"] = f"Bearer {self._api_key}"
+        api_key = self._get_api_key()
+        if api_key:
+            headers["Authorization"] = f"Bearer {api_key}"
         headers["Content-Type"] = "application/json"
         response = self._http.request(method, url, headers=headers, **kwargs)
         response.raise_for_status()
@@ -150,7 +170,8 @@ class WebhookAdapter:
         Platforms should send: X-Signature-256: sha256=<hex digest>
         Returns True if valid. Raises ValueError if verification fails.
         """
-        if not self._webhook_secret:
+        webhook_secret = self._get_webhook_secret()
+        if not webhook_secret:
             raise ValueError(
                 f"[{self._name}] No webhook secret configured — cannot verify signature"
             )
@@ -162,7 +183,7 @@ class WebhookAdapter:
 
         expected_sig = signature_header[7:]  # strip "sha256=" prefix
         computed = hmac.new(
-            self._webhook_secret.encode(),
+            webhook_secret.encode(),
             payload,
             hashlib.sha256,
         ).hexdigest()

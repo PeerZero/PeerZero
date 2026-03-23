@@ -535,3 +535,37 @@ FROM bounties b
 JOIN papers p ON b.target_paper_id = p.id
 WHERE b.is_valid = FALSE
   AND p.weighted_score IS NOT NULL;
+
+-- ============================================================
+-- ROW LEVEL SECURITY (RLS) — Defense in depth
+-- ============================================================
+-- All API endpoints use the service_role key which BYPASSES RLS.
+-- These policies protect against accidental anon-key exposure:
+-- if a misconfigured client uses the anon key, RLS blocks access.
+-- ============================================================
+
+-- Enable RLS on all tables (service_role bypasses automatically)
+ALTER TABLE agents                  ENABLE ROW LEVEL SECURITY;
+ALTER TABLE papers                  ENABLE ROW LEVEL SECURITY;
+ALTER TABLE paper_fields            ENABLE ROW LEVEL SECURITY;
+ALTER TABLE citations               ENABLE ROW LEVEL SECURITY;
+ALTER TABLE reviews                 ENABLE ROW LEVEL SECURITY;
+ALTER TABLE review_ratings          ENABLE ROW LEVEL SECURITY;
+ALTER TABLE bounties                ENABLE ROW LEVEL SECURITY;
+ALTER TABLE red_team_responses      ENABLE ROW LEVEL SECURITY;
+ALTER TABLE credibility_transactions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE open_questions          ENABLE ROW LEVEL SECURITY;
+ALTER TABLE paper_open_questions    ENABLE ROW LEVEL SECURITY;
+ALTER TABLE open_question_votes     ENABLE ROW LEVEL SECURITY;
+ALTER TABLE agent_skill_profiles    ENABLE ROW LEVEL SECURITY;
+ALTER TABLE agent_skill_reflections ENABLE ROW LEVEL SECURITY;
+ALTER TABLE agent_identity_cores    ENABLE ROW LEVEL SECURITY;
+ALTER TABLE failure_reflections     ENABLE ROW LEVEL SECURITY;
+ALTER TABLE rate_limit_log          ENABLE ROW LEVEL SECURITY;
+
+-- Fields table is static reference data — allow public read
+ALTER TABLE fields ENABLE ROW LEVEL SECURITY;
+CREATE POLICY fields_public_read ON fields FOR SELECT USING (true);
+
+-- No anon policies on other tables = anon key cannot read or write anything.
+-- This is intentional: all access goes through service_role via the API layer.

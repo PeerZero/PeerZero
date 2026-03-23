@@ -21,6 +21,7 @@ import { setupWebSocket } from './websocket/activity-stream';
 
 // Routes
 import authRoutes from './routes/auth';
+import { closeAuthRedis } from './services/auth.service';
 import botRoutes from './routes/bots';
 import apiKeyRoutes from './routes/api-keys';
 import schoolRoutes from './routes/schools';
@@ -39,7 +40,7 @@ const app = express();
 app.use(helmet());
 app.use(cors({
   origin: config.isDev
-    ? true // Allow any origin in dev (mobile devices use the machine's LAN IP, not localhost)
+    ? [/^https?:\/\/localhost(:\d+)?$/, /^https?:\/\/127\.0\.0\.1(:\d+)?$/]
     : config.corsOrigins.split(',').map(s => s.trim()).filter(Boolean),
   credentials: true,
 }));
@@ -104,6 +105,7 @@ async function shutdown() {
   await stopPlatformWorker();
   await closeRateLimitRedis();
   await closePhoneHomeRedis();
+  await closeAuthRedis();
   await closePool();
   server.close();
   process.exit(0);
