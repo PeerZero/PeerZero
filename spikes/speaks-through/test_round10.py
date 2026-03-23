@@ -313,7 +313,7 @@ PAPER_TASK = (
 
 # ── Runner ───────────────────────────────────────────────────────────
 
-def run_paper_test(system_prompt, user_prompt, max_rounds=8):
+def run_paper_test(system_prompt, user_prompt, max_rounds=12):
     """Run one paper-writing test with tool use loop."""
     messages = [{"role": "user", "content": user_prompt}]
     all_tool_calls = []
@@ -322,7 +322,7 @@ def run_paper_test(system_prompt, user_prompt, max_rounds=8):
     for round_num in range(max_rounds):
         resp = client.messages.create(
             model="claude-sonnet-4-20250514",
-            max_tokens=4000,
+            max_tokens=8000,
             system=system_prompt,
             tools=[SEARCH_TOOL],
             messages=messages
@@ -456,7 +456,7 @@ def score_paper(result):
 # ── Main ─────────────────────────────────────────────────────────────
 
 def main():
-    num_runs = 2  # runs per condition for consistency check
+    num_runs = 3  # runs per condition for consistency check
     all_results = {}
     all_scores = {}
 
