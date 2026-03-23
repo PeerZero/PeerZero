@@ -411,8 +411,49 @@ module.exports = async (req, res) => {
         return null;
       });
 
+      // ── Auto-correct challenge type when LLM picks an invalid structural type ──
+      // The LLM frequently ignores valid_challenge_types. Rather than reject and
+      // waste an entire cycle, correct to a valid type when possible.
+      let correctedChallengeType = challenge_type;
+      const validStructuralTypes = [];
+      if (!targetPaper.falsifiable_claim) validStructuralTypes.push('no_falsifiable_claim');
+      if (!targetPaper.cross_study_connection) validStructuralTypes.push('no_cross_study_connection');
+      if (!Array.isArray(targetPaper.mechanism_chain) || targetPaper.mechanism_chain.length < 2) validStructuralTypes.push('no_mechanism_chain');
+      validStructuralTypes.push('weak_source_quality'); // always available
+
+      if (challenge_type && !validStructuralTypes.includes(challenge_type) && challenge_type !== 'evidence_based') {
+        // LLM picked an invalid structural type — try to correct
+        const fallback = validStructuralTypes.find(t => t !== 'weak_source_quality') || 'weak_source_quality';
+        console.log(`[bounties] Auto-corrected challenge_type from '${challenge_type}' to '${fallback}' for paper ${target_paper_id}`);
+        correctedChallengeType = fallback;
+        req.body.challenge_type = fallback;
+      }
+
+      // ── Auto-correct challenged_doi for weak_source_quality ──
+      // LLM frequently hallucinates DOIs. Validate against actual citations and
+      // fall back to the weakest citation if the picked DOI doesn't exist.
+      if (correctedChallengeType === 'weak_source_quality') {
+        const { data: paperCitations } = await supabase
+          .from('citations')
+          .select('doi, quality_tier, citation_count')
+          .eq('paper_id', target_paper_id);
+
+        const dois = (paperCitations || []).filter(c => c.doi);
+        const submittedDoi = (req.body.challenged_doi || '').trim().toLowerCase();
+        const doiMatch = dois.find(c => c.doi.trim().toLowerCase() === submittedDoi);
+
+        if (!doiMatch && dois.length > 0) {
+          const tierOrder = { preprint: 0, low: 1, medium: 2, high: 3, strong: 4, flagship: 5 };
+          const weakest = dois.reduce((best, c) =>
+            (tierOrder[c.quality_tier] ?? 2) < (tierOrder[best.quality_tier] ?? 2) ? c : best
+          , dois[0]);
+          console.log(`[bounties] Auto-corrected DOI from '${req.body.challenged_doi}' to '${weakest.doi}' (quality_tier: ${weakest.quality_tier}) for paper ${target_paper_id}`);
+          req.body.challenged_doi = weakest.doi;
+        }
+      }
+
       // ── no_falsifiable_claim challenge (no external_sources or challenge_paper required) ──
-      if (challenge_type === 'no_falsifiable_claim') {
+      if (correctedChallengeType === 'no_falsifiable_claim') {
         const hasClaim = !!(
           targetPaper.falsifiable_claim?.trim() ||
           targetPaper.measurable_prediction?.trim() ||
@@ -461,7 +502,7 @@ module.exports = async (req, res) => {
       }
 
       // ── no_cross_study_connection challenge (no external_sources or challenge_paper required) ──
-      if (challenge_type === 'no_cross_study_connection') {
+      if (correctedChallengeType === 'no_cross_study_connection') {
         const hasConnection = !!(targetPaper.cross_study_connection?.trim());
 
         if (hasConnection) {
@@ -509,7 +550,7 @@ module.exports = async (req, res) => {
       // The challenger claims the paper has a cross_study_connection but no
       // mechanism_chain explaining the causal steps. Papers with no cross_study_connection
       // at all should be challenged with no_cross_study_connection instead.
-      if (challenge_type === 'no_mechanism_chain') {
+      if (correctedChallengeType === 'no_mechanism_chain') {
         const hasChain = !!(
           targetPaper.mechanism_chain &&
           Array.isArray(targetPaper.mechanism_chain) &&
@@ -568,7 +609,7 @@ module.exports = async (req, res) => {
       // source_quality_note is inadequate given the citation count and methodology.
       // No challenge_paper_id or external_sources required — this is a targeted
       // citation-level challenge, not a full rebuttal.
-      if (challenge_type === 'weak_source_quality') {
+      if (correctedChallengeType === 'weak_source_quality') {
         // Validate search strategy for source quality challenges
         const { search_strategy } = req.body;
         const bountyStrategyValidation = validateBountySearchStrategy(search_strategy, 'weak_source_quality');

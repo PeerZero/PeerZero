@@ -473,45 +473,6 @@ class PeerZeroBot:
             logger.info(f"[{label}] Skipped — {result_data.get('reason', 'no reason')}")
             return None
 
-        # Enforce valid_challenge_types — the LLM keeps ignoring the list
-        if action == "file_bounty":
-            valid_types = (action_target or {}).get("valid_challenge_types", [])
-            chosen = result_data.get("challenge_type")
-            if valid_types and chosen not in valid_types:
-                logger.warning(f"[{label}] LLM picked '{chosen}' but valid types are {valid_types}")
-                # Fall back to first valid type if available, otherwise skip
-                if len(valid_types) == 1 and valid_types[0] == "weak_source_quality":
-                    # Only weak_source_quality is valid — use it if LLM provided reasoning
-                    if result_data.get("quality_challenge_reason"):
-                        result_data["challenge_type"] = "weak_source_quality"
-                        logger.info(f"[{label}] Corrected to weak_source_quality (has reasoning)")
-                    else:
-                        logger.info(f"[{label}] No valid structural challenge for this paper — skipping")
-                        return None
-                else:
-                    # Pick the first valid non-weak_source_quality type
-                    fallback = next((t for t in valid_types if t != "weak_source_quality"), valid_types[0])
-                    result_data["challenge_type"] = fallback
-                    logger.info(f"[{label}] Corrected to {fallback}")
-
-            # Validate challenged_doi against actual citations — LLM hallucinates DOIs
-            if result_data.get("challenge_type") == "weak_source_quality":
-                challenged_doi = (result_data.get("challenged_doi") or "").strip().lower()
-                citations = (action_target or {}).get("citations", [])
-                valid_dois = {(c.get("doi") or "").strip().lower(): c for c in citations if c.get("doi")}
-
-                if challenged_doi not in valid_dois:
-                    logger.warning(f"[{label}] LLM picked DOI '{result_data.get('challenged_doi')}' not in paper citations")
-                    # Try to find a plausible target — pick lowest quality tier citation
-                    if valid_dois:
-                        tier_order = {"preprint": 0, "low": 1, "medium": 2, "high": 3, "flagship": 4}
-                        best = min(valid_dois.values(), key=lambda c: tier_order.get(c.get("quality_tier", "medium"), 2))
-                        result_data["challenged_doi"] = best["doi"]
-                        logger.info(f"[{label}] Corrected DOI to {best['doi']} (quality_tier: {best.get('quality_tier', '?')})")
-                    else:
-                        logger.info(f"[{label}] No citations available to challenge — skipping")
-                        return None
-
         # Apply defaults (stance, etc.)
         for k, v in config.get("defaults", {}).items():
             result_data[k] = v
