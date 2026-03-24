@@ -16,6 +16,7 @@ from base64 import b64decode
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Optional
+from urllib.parse import urlparse
 
 import httpx
 from cryptography.exceptions import InvalidSignature
@@ -106,6 +107,12 @@ def get_public_key(school_url: str = DEFAULT_SCHOOL_URL) -> Ed25519PublicKey:
     """
     global _cached_key, _cached_key_url
 
+    parsed = urlparse(school_url)
+    if parsed.scheme != "https":
+        raise VerificationError(
+            f"School URL must use HTTPS, got: {school_url}"
+        )
+
     base = school_url.rstrip("/")
     url = f"{base}/.well-known/peerzero-public-key.pem"
 
@@ -113,7 +120,7 @@ def get_public_key(school_url: str = DEFAULT_SCHOOL_URL) -> Ed25519PublicKey:
         return _cached_key
 
     try:
-        resp = httpx.get(url, timeout=10.0, follow_redirects=False)
+        resp = httpx.get(url, timeout=10.0, follow_redirects=False, verify=True)
         resp.raise_for_status()
     except Exception as e:
         raise VerificationError(f"Failed to fetch public key from {url}: {e}")

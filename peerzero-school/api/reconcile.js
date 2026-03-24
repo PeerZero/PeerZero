@@ -25,7 +25,8 @@ module.exports = async (req, res) => {
   // Uses constant-time comparison to prevent timing attacks
   const adminKey = req.headers['x-admin-key'];
   const adminSecret = process.env.ADMIN_SECRET;
-  if (!adminKey || !adminSecret
+  if (!adminKey || typeof adminKey !== 'string'
+      || !adminSecret || typeof adminSecret !== 'string'
       || adminKey.length !== adminSecret.length
       || !crypto.timingSafeEqual(Buffer.from(adminKey), Buffer.from(adminSecret))) {
     return res.status(401).json({ error: 'Unauthorized — X-Admin-Key required' });

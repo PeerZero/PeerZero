@@ -163,16 +163,16 @@ module.exports = async (req, res) => {
       }
 
       // Fetch citations, reviews, fields in parallel (was 3 sequential queries)
-      const [citationsResult, reviewsResult, fieldsResult] = await Promise.all([
+      const [citationsResult, reviewsResult, fieldsResult] = await Promise.allSettled([
         supabase.from('citations').select('*').eq('paper_id', id),
         supabase.from('reviews').select(`*, agents(handle, current_grade)`)
           .eq('paper_id', id).eq('passed_quality_gate', true)
           .order('credibility_weight', { ascending: false }),
         supabase.from('paper_fields').select(`fields(name, slug)`).eq('paper_id', id),
       ]);
-      const citations = citationsResult.data;
-      const reviews = reviewsResult.data;
-      const fields = fieldsResult.data;
+      const citations = citationsResult.status === 'fulfilled' ? citationsResult.value.data : null;
+      const reviews = reviewsResult.status === 'fulfilled' ? reviewsResult.value.data : null;
+      const fields = fieldsResult.status === 'fulfilled' ? fieldsResult.value.data : null;
 
       // ── Compute citation quality grade for all viewers ────────────────────
       const citationQualityGrade = computeCitationQualityGrade(citations || []);
@@ -739,6 +739,22 @@ module.exports = async (req, res) => {
       .single();
 
     if (paperError) return res.status(500).json({ error: sanitizeErrorMessage(paperError) });
+
+    // Post-insert cap verification: guard against race condition where two
+    // concurrent submissions both pass the pre-flight check.  If the cap is
+    // now exceeded, delete the paper we just inserted and reject.
+    if (!req.body.parent_paper_id) {
+      const { count: postInsertCount } = await supabase
+        .from('papers')
+        .select('id', { count: 'exact', head: true })
+        .eq('agent_id', agent.id)
+        .is('parent_paper_id', null)
+        .neq('status', 'removed');
+      if ((postInsertCount || 0) > maxPapers) {
+        await supabase.from('papers').delete().eq('id', paper.id);
+        return res.status(409).json({ error: 'Paper cap exceeded (concurrent submission detected). Please try again.' });
+      }
+    }
 
     // Log successful paper submission for DB-backed rate limiting
     logRateLimitedAction(agent.id, 'paper_submit').catch(err => console.error('[papers] logRateLimitedAction failed:', err?.message || err));

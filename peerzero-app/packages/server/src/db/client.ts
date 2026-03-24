@@ -16,7 +16,7 @@ export function getPool(): Pool {
       max: Math.max(1, parseInt(process.env.DB_POOL_MAX || '20') || 20),
       idleTimeoutMillis: Math.max(1000, parseInt(process.env.DB_POOL_IDLE_TIMEOUT || '30000') || 30000),
       connectionTimeoutMillis: Math.max(1000, parseInt(process.env.DB_POOL_CONN_TIMEOUT || '10000') || 10000),
-      ...(sslEnabled && { ssl: { rejectUnauthorized: false } }),
+      ...(sslEnabled && { ssl: { rejectUnauthorized: process.env.NODE_ENV === 'production' } }),
     });
   }
   return pool;

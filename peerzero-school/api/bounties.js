@@ -92,6 +92,9 @@ async function checkSemanticDrift(targetPaperId, newSources, challengerAgentId) 
 }
 
 async function applyBountyValidation(bounty, currentPaper, scoreDrop) {
+  if (!currentPaper || currentPaper.weighted_score == null) {
+    return { mathBreakdown: null };
+  }
   const target_paper_id = bounty.target_paper_id;
   // Structural bounties (server-verified deficiency) get a minimum effective
   // score drop so cred calculations don't go negative when score didn't drop.

@@ -173,7 +173,7 @@ export async function forgotPassword(email: string): Promise<void> {
   // Check if user exists (but don't reveal this to the caller)
   const user = await queryOne('SELECT id FROM users WHERE email = $1', [email]);
   if (user) {
-    const code = String(Math.floor(100000 + Math.random() * 900000)); // 6-digit code
+    const code = crypto.randomBytes(4).toString('hex'); // 8-char hex code (32 bits entropy)
     // Hash the code before storing — even Redis compromise won't leak usable codes
     const codeHash = crypto.createHash('sha256').update(code).digest('hex');
     const r = getRedis();
@@ -195,7 +195,7 @@ export async function resetPassword(email: string, code: string, newPassword: st
   }
 
   const codeHash = crypto.createHash('sha256').update(code).digest('hex');
-  if (storedHash !== codeHash) {
+  if (!crypto.timingSafeEqual(Buffer.from(storedHash, 'hex'), Buffer.from(codeHash, 'hex'))) {
     throw new AppError(400, 'Invalid or expired reset code');
   }
 
