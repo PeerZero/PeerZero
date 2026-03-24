@@ -159,7 +159,7 @@ function BotStack() {
           backgroundColor: colors.bg.primary,
         },
         headerTintColor: colors.text.primary,
-        headerTitleStyle: { fontWeight: '700', letterSpacing: -0.3 },
+        headerTitleStyle: { fontWeight: '700' },
         headerShadowVisible: false,
         animation: 'slide_from_right',
         animationDuration: 250,
