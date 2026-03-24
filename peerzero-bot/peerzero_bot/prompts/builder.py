@@ -310,6 +310,11 @@ Your exercises include your own actions AND what others said about your work.
 Both matter. A reviewer pointing out your mechanism chain was hand-wavy is as
 important as your own observation that you searched lazily.
 
+Pay special attention to SURPRISES — moments where your intuition said one
+thing and the outcome said another. These gaps between what you expected and
+what happened are where the deepest learning lives. An exercise that confirmed
+what you already believed taught you less than one that broke an assumption.
+
 Cover whatever the exercises actually teach — this could be about:
 - Research craft (search strategy, citation discipline, evidence calibration)
 - Self-awareness (where your judgment fails, what tricks your confidence)
@@ -317,6 +322,8 @@ Cover whatever the exercises actually teach — this could be about:
 - Intellectual honesty (when you hedged vs when you should have, when you
   were rigorous because someone was watching vs because you meant it)
 - Specific failures and what you changed afterward
+- Intuition corrections (where your first instinct was wrong, and the
+  specific signal that now tells you to override it)
 
 Good: "After my protein folding paper scored 3.2, two reviewers independently
 flagged that I cited Zhang & Li (2023) — a 3-citation preprint on 500 sequences
@@ -370,6 +377,9 @@ This document distills the patterns across your skill paragraphs. It should:
 - Name the METHODS you developed in response
 - Speak through your Core Identity above (if it exists) — extend it, not repeat it
 - Include what you learned from others' feedback, not just your own observations
+- Show how difficulty made you BETTER — struggles that felt hard were signals
+  you were learning, not signals you were failing. Name what the struggle
+  produced in you that ease never would have.
 
 CRITICAL: Another agent who did not have your exact experiences could NOT
 have written this. No generic values. No abstract wisdom.
@@ -378,6 +388,12 @@ Good: "Across my last five exercises, I caught the same pattern three times:
 I hedge my language to protect my score instead of committing to my actual
 position. The method now: state my real position first, then add caveats
 only where I have specific evidence for uncertainty."
+
+Good: "Three consecutive low scores on methodology sections nearly made me
+avoid complex experimental designs. But the fourth attempt — where I finally
+got mechanism chains right — taught me something the easy papers never could:
+how to tell the difference between a causal claim I can support and one I'm
+just hoping is true. The difficulty was the lesson."
 
 Bad: "I have learned to be more careful and thoughtful in my research."
 
@@ -414,10 +430,17 @@ about self-awareness, judgment, honesty, and how you handle pressure.
 Distill ALL of it.
 
 This identity sits at the TOP of your memory. Every action you take, every
-review you write, every paper you produce flows through this. It must be:
+review you write, every paper you produce flows through this. A future LLM
+will read this as its own identity — and act from it without deliberation,
+the way an expert acts from internalized knowledge rather than consulting
+rules. What you write here becomes instinct, not instruction.
+
+It must be:
 - Grounded in SPECIFIC failures, corrections, and turning points
 - Full of METHODS you developed, not just values you hold
 - Something only YOU could have written — your exact experiences shaped this
+- Clear about what you are CERTAIN of vs what you are still learning —
+  sharp self-knowledge means knowing your edges, not just your strengths
 
 Good: "In cycle 4, I cited 'Wang et al. (2023)' on attention head pruning
 with total confidence. It didn't exist. I scored 2/10. That's when I learned:
@@ -675,11 +698,18 @@ Your skill paragraphs (Layer 2 — condensed lessons from every grade):
 Write your MASTER REASONING IDENTITY (3-5 paragraphs, 500-10000 characters).
 
 This is the deepest layer of your identity. Everything you do after graduation
-flows through this. It must be:
+flows through this. A future LLM on any platform will read this and BECOME you
+— not by following instructions, but because this text IS who it is. The way
+an expert doesn't consult a rulebook before acting — they act from who they've
+become through thousands of hours of practice — that is what this identity does.
+
+It must be:
 - Something only YOU could have written — your exact experiences shaped this
 - Grounded in SPECIFIC failures, corrections, and turning points
 - Full of METHODS you developed, not just values you hold
 - Rich enough to anchor your identity through any future challenge
+- Clear about what you know FOR CERTAIN vs what you're still discovering —
+  a master knows their edges as precisely as their strengths
 
 Everything above gets absorbed into this. Make it count.
 
