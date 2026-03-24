@@ -1,6 +1,5 @@
 // =============================================================================
-// App navigator — tab-based navigation with auth gating
-// Non-authenticated users see Login/Register. Authenticated users see the main tabs.
+// App navigator — redesigned tab bar with floating style + auth gating
 // =============================================================================
 
 import React from 'react';
@@ -9,6 +8,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { ActivityIndicator, View, Text, Platform } from 'react-native';
 import { useAuth } from '../hooks/useAuth';
 import { colors } from '../theme/colors';
+import { borderRadius } from '../theme/spacing';
 import type { RootStackParamList, AuthStackParamList, TabParamList, WelcomeScreenWrapperProps } from '../navigation/types';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
@@ -57,18 +57,27 @@ function AuthStack() {
   );
 }
 
-// Simple text-based tab icon component (no icon library needed)
+// Modern tab icon with indicator dot
 function TabIcon({ label, focused }: { label: string; focused: boolean }) {
   return (
     <View style={{
-      width: 28, height: 28, borderRadius: 14,
-      backgroundColor: focused ? colors.accent.primary + '20' : 'transparent',
-      justifyContent: 'center', alignItems: 'center',
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingTop: 2,
     }}>
       <Text style={{
-        fontSize: 16,
-        color: focused ? colors.accent.primary : colors.text.tertiary,
+        fontSize: 20,
+        opacity: focused ? 1 : 0.5,
       }}>{label}</Text>
+      {focused && (
+        <View style={{
+          width: 4,
+          height: 4,
+          borderRadius: 2,
+          backgroundColor: colors.accent.primary,
+          marginTop: 4,
+        }} />
+      )}
     </View>
   );
 }
@@ -77,18 +86,36 @@ function MainTabs() {
   return (
     <Tab.Navigator
       screenOptions={{
-        headerStyle: { backgroundColor: colors.bg.primary, elevation: 0, shadowOpacity: 0 },
-        headerTintColor: colors.text.primary,
-        headerTitleStyle: { fontWeight: '700' },
-        tabBarStyle: {
+        headerStyle: {
           backgroundColor: colors.bg.primary,
+          elevation: 0,
+          shadowOpacity: 0,
+          borderBottomWidth: 0,
+        },
+        headerTintColor: colors.text.primary,
+        headerTitleStyle: { fontWeight: '700', fontSize: 18, letterSpacing: -0.3 },
+        tabBarStyle: {
+          backgroundColor: colors.bg.secondary,
           borderTopColor: colors.border,
-          paddingTop: 4,
-          height: Platform.OS === 'ios' ? 88 : 64,
+          borderTopWidth: 1,
+          paddingTop: 8,
+          paddingBottom: Platform.OS === 'ios' ? 28 : 12,
+          height: Platform.OS === 'ios' ? 88 : 68,
+          // Subtle top shadow
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: -4 },
+          shadowOpacity: 0.15,
+          shadowRadius: 12,
+          elevation: 8,
         },
         tabBarActiveTintColor: colors.accent.primary,
         tabBarInactiveTintColor: colors.text.tertiary,
-        tabBarLabelStyle: { fontSize: 11, fontWeight: '600' },
+        tabBarLabelStyle: {
+          fontSize: 11,
+          fontWeight: '600',
+          letterSpacing: 0.2,
+          marginTop: -2,
+        },
       }}
     >
       <Tab.Screen
@@ -128,8 +155,12 @@ function BotStack() {
   return (
     <Stack.Navigator
       screenOptions={{
-        headerStyle: { backgroundColor: colors.bg.primary },
+        headerStyle: {
+          backgroundColor: colors.bg.primary,
+        },
         headerTintColor: colors.text.primary,
+        headerTitleStyle: { fontWeight: '700', letterSpacing: -0.3 },
+        headerShadowVisible: false,
         animation: 'slide_from_right',
         animationDuration: 250,
       }}
@@ -155,11 +186,9 @@ const linking: LinkingOptions<RootStackParamList> = {
   prefixes: ['peerzero://'],
   config: {
     screens: {
-      // Widget taps deep-link directly to bot detail
       Bot: {
         path: 'bot/:botId',
       },
-      // Widget setup link → settings tab
       MainTabs: {
         screens: {
           Settings: 'settings/widgets',
@@ -174,16 +203,41 @@ export default function AppNavigator() {
 
   if (isLoading) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.bg.primary }}>
+      <View style={{
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: colors.bg.primary,
+      }}>
         <View style={{
-          width: 80, height: 80, borderRadius: 40,
-          backgroundColor: colors.accent.primary + '20',
-          justifyContent: 'center', alignItems: 'center',
-          marginBottom: 16,
+          width: 80,
+          height: 80,
+          borderRadius: borderRadius.xl,
+          backgroundColor: colors.accent.primary + '15',
+          justifyContent: 'center',
+          alignItems: 'center',
+          marginBottom: 20,
+          // Subtle glow
+          shadowColor: colors.accent.primary,
+          shadowOffset: { width: 0, height: 0 },
+          shadowOpacity: 0.3,
+          shadowRadius: 20,
         }}>
-          <Text style={{ fontSize: 32, fontWeight: '900', color: colors.accent.primary, letterSpacing: -1 }}>P0</Text>
+          <Text style={{
+            fontSize: 32,
+            fontWeight: '900',
+            color: colors.accent.primary,
+            letterSpacing: -1,
+          }}>P0</Text>
         </View>
         <ActivityIndicator size="large" color={colors.accent.primary} />
+        <Text style={{
+          color: colors.text.tertiary,
+          fontSize: 12,
+          marginTop: 16,
+          letterSpacing: 1,
+          textTransform: 'uppercase',
+        }}>Loading</Text>
       </View>
     );
   }

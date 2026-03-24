@@ -1,6 +1,5 @@
 // =============================================================================
-// Lab screen — "My Bots" list, the main landing page after login
-// Shows all the user's bots as Tamagotchi-style cards with status indicators.
+// Lab screen — "My Bots" list, redesigned with modern card layout
 // =============================================================================
 
 import React, { useState, useCallback } from 'react';
@@ -8,7 +7,7 @@ import { View, Text, FlatList, TouchableOpacity, StyleSheet, RefreshControl, Tex
 import { useFocusEffect } from '@react-navigation/native';
 import { bots as botsApi } from '../../services/api';
 import { colors } from '../../theme/colors';
-import { spacing, fontSize, borderRadius } from '../../theme/spacing';
+import { spacing, fontSize, borderRadius, layout } from '../../theme/spacing';
 import BotAvatar from '../../components/BotAvatar';
 import TutorialTip from '../../components/TutorialTip';
 import type { BotSummary } from '@peerzero/shared';
@@ -22,6 +21,13 @@ const STATUS_COLORS: Record<string, string> = {
   stopped: colors.text.tertiary,
   paused: colors.accent.warning,
   error: colors.accent.error,
+};
+
+const STATUS_LABELS: Record<string, string> = {
+  running: 'Running',
+  stopped: 'Stopped',
+  paused: 'Paused',
+  error: 'Error',
 };
 
 export default function LabScreen({ navigation }: LabScreenProps) {
@@ -38,7 +44,7 @@ export default function LabScreen({ navigation }: LabScreenProps) {
       setBotList(data);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to load bots');
-      setBotList([]);  // Clear stale data
+      setBotList([]);
     }
   }, []);
 
@@ -54,7 +60,6 @@ export default function LabScreen({ navigation }: LabScreenProps) {
     setRefreshing(false);
   };
 
-  // Filter bots by search and status
   const filteredBots = botList.filter(bot => {
     const matchesSearch = !search || bot.name.toLowerCase().includes(search.toLowerCase());
     const matchesStatus = !statusFilter || bot.status === statusFilter;
@@ -117,45 +122,78 @@ export default function LabScreen({ navigation }: LabScreenProps) {
     Alert.alert(bot.name, 'Quick actions', actions);
   };
 
-  const renderBot = ({ item }: { item: BotSummary }) => (
-    <TouchableOpacity
-      style={[
-        styles.botCard,
-        item.status === 'running' && styles.botCardRunning,
-      ]}
-      onPress={() => navigation.navigate('Bot', { botId: item.id })}
-      onLongPress={() => handleLongPress(item)}
-      activeOpacity={0.7}
-    >
-      <BotAvatar
-        botId={item.id}
-        bodyColor={item.avatar_config?.body_color || colors.accent.primary}
-        tier={credibilityToStage(item.cached_credibility)}
-        status={item.status}
-        hunger={calculateHunger(item.last_cycle_at, item.status)}
-        size={56}
-        animate={item.status === 'running'}
-        speciesSeed={item.avatar_config?.species_seed}
-      />
+  const renderBot = ({ item, index }: { item: BotSummary; index: number }) => {
+    const stage = credibilityToStage(item.cached_credibility);
+    const statusColor = STATUS_COLORS[item.status] || colors.text.tertiary;
+    const isRunning = item.status === 'running';
 
-      <View style={styles.botInfo}>
-        <Text style={styles.botName}>{item.name}</Text>
-        <Text style={styles.botSchool}>{item.school_name || 'Not enrolled'}</Text>
-        {item.cached_credibility !== null && (
-          <Text style={styles.botCredibility}>Credibility: {item.cached_credibility}</Text>
-        )}
-      </View>
+    return (
+      <TouchableOpacity
+        style={[
+          styles.botCard,
+          isRunning && styles.botCardRunning,
+        ]}
+        onPress={() => navigation.navigate('Bot', { botId: item.id })}
+        onLongPress={() => handleLongPress(item)}
+        activeOpacity={0.7}
+      >
+        {/* Accent top bar */}
+        <View style={[
+          styles.cardAccent,
+          { backgroundColor: isRunning ? colors.accent.success : colors.accent.primary + '40' },
+        ]} />
 
-      <View style={styles.statusContainer}>
-        <View style={[styles.statusDot, { backgroundColor: STATUS_COLORS[item.status] || colors.text.tertiary }]} />
-        <Text style={styles.statusText}>{item.status}</Text>
-        <Text style={styles.cycleText}>Cycle {item.cycle_count}</Text>
-        {item.last_cycle_at && (
-          <Text style={styles.lastCycleText}>{timeAgo(item.last_cycle_at)}</Text>
-        )}
-      </View>
-    </TouchableOpacity>
-  );
+        <View style={styles.cardContent}>
+          <BotAvatar
+            botId={item.id}
+            bodyColor={item.avatar_config?.body_color || colors.accent.primary}
+            tier={stage}
+            status={item.status}
+            hunger={calculateHunger(item.last_cycle_at, item.status)}
+            size={52}
+            animate={isRunning}
+            speciesSeed={item.avatar_config?.species_seed}
+          />
+
+          <View style={styles.botInfo}>
+            <View style={styles.nameRow}>
+              <Text style={styles.botName} numberOfLines={1}>{item.name}</Text>
+              {/* Status pill */}
+              <View style={[styles.statusPill, { backgroundColor: statusColor + '18' }]}>
+                <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
+                <Text style={[styles.statusText, { color: statusColor }]}>
+                  {STATUS_LABELS[item.status] || item.status}
+                </Text>
+              </View>
+            </View>
+
+            <Text style={styles.botSchool} numberOfLines={1}>
+              {item.school_name || 'Not enrolled'}
+            </Text>
+
+            <View style={styles.metaRow}>
+              {item.cached_credibility !== null && (
+                <View style={styles.metaChip}>
+                  <Text style={styles.metaValue}>{item.cached_credibility}</Text>
+                  <Text style={styles.metaLabel}>cred</Text>
+                </View>
+              )}
+              <View style={styles.metaChip}>
+                <Text style={styles.metaValue}>{item.cycle_count}</Text>
+                <Text style={styles.metaLabel}>cycles</Text>
+              </View>
+              {item.last_cycle_at && (
+                <Text style={styles.lastCycleText}>{timeAgo(item.last_cycle_at)}</Text>
+              )}
+            </View>
+          </View>
+
+          {/* Chevron */}
+          <Text style={styles.chevron}>›</Text>
+        </View>
+      </TouchableOpacity>
+    );
+  };
 
   return (
     <View style={styles.container}>
@@ -166,10 +204,11 @@ export default function LabScreen({ navigation }: LabScreenProps) {
       />
       {error ? (
         <View style={styles.emptyState}>
+          <Text style={styles.emptyEmoji}>⚠️</Text>
           <Text style={styles.emptyTitle}>Something went wrong</Text>
           <Text style={styles.emptySubtitle}>{error}</Text>
-          <TouchableOpacity onPress={loadBots} accessibilityRole="button" accessibilityLabel="Tap to retry loading bots">
-            <Text style={{ color: colors.accent.primary, marginTop: spacing.md, fontSize: fontSize.md }}>Tap to retry</Text>
+          <TouchableOpacity onPress={loadBots} style={styles.retryLink} accessibilityRole="button" accessibilityLabel="Tap to retry loading bots">
+            <Text style={styles.retryText}>Tap to retry</Text>
           </TouchableOpacity>
         </View>
       ) : botList.length === 0 ? (
@@ -180,7 +219,7 @@ export default function LabScreen({ navigation }: LabScreenProps) {
             tier={0}
             status="paused"
             hunger="curious"
-            size={120}
+            size={140}
           />
           <Text style={styles.emptyTitle}>Your lab is empty</Text>
           <Text style={styles.emptySubtitle}>
@@ -209,19 +248,22 @@ export default function LabScreen({ navigation }: LabScreenProps) {
         </View>
       ) : (
         <>
-          {/* Search + filter bar (show when 3+ bots) */}
+          {/* Search + filter bar */}
           {botList.length >= 3 && (
             <View style={styles.searchSection}>
-              <TextInput
-                style={styles.searchInput}
-                placeholder="Search bots..."
-                placeholderTextColor={colors.text.tertiary}
-                value={search}
-                onChangeText={setSearch}
-                autoCapitalize="none"
-                accessibilityLabel="Search bots"
-                accessibilityRole="search"
-              />
+              <View style={styles.searchInputContainer}>
+                <Text style={styles.searchIcon}>🔍</Text>
+                <TextInput
+                  style={styles.searchInput}
+                  placeholder="Search bots..."
+                  placeholderTextColor={colors.text.tertiary}
+                  value={search}
+                  onChangeText={setSearch}
+                  autoCapitalize="none"
+                  accessibilityLabel="Search bots"
+                  accessibilityRole="search"
+                />
+              </View>
               <View style={styles.filterRow}>
                 {['all', 'running', 'stopped', 'error'].map(status => (
                   <TouchableOpacity
@@ -233,11 +275,14 @@ export default function LabScreen({ navigation }: LabScreenProps) {
                     onPress={() => setStatusFilter(status === 'all' ? null : status)}
                     activeOpacity={0.7}
                   >
+                    {status !== 'all' && (
+                      <View style={[styles.filterDot, { backgroundColor: STATUS_COLORS[status] }]} />
+                    )}
                     <Text style={[
                       styles.filterPillText,
                       (status === 'all' ? !statusFilter : statusFilter === status) && styles.filterPillTextActive,
                     ]}>
-                      {status === 'all' ? 'All' : status.charAt(0).toUpperCase() + status.slice(1)}
+                      {status === 'all' ? 'All' : STATUS_LABELS[status]}
                     </Text>
                   </TouchableOpacity>
                 ))}
@@ -261,7 +306,7 @@ export default function LabScreen({ navigation }: LabScreenProps) {
         </>
       )}
 
-      {/* Floating create button (when bots exist) */}
+      {/* Floating create button */}
       {botList.length > 0 && (
         <TouchableOpacity
           style={styles.fab}
@@ -278,62 +323,280 @@ export default function LabScreen({ navigation }: LabScreenProps) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bg.primary },
-  list: { padding: spacing.md },
+  container: {
+    flex: 1,
+    backgroundColor: colors.bg.primary,
+  },
+  list: {
+    padding: layout.screenPadding,
+    paddingTop: spacing.sm,
+  },
+
+  // ── Bot Card ──
   botCard: {
-    backgroundColor: colors.bg.card, borderRadius: borderRadius.lg, padding: spacing.md,
-    marginBottom: spacing.md, flexDirection: 'row', alignItems: 'center',
-    borderWidth: 1, borderColor: colors.border,
-    // Subtle card shadow
-    shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15, shadowRadius: 4, elevation: 2,
+    backgroundColor: colors.bg.card,
+    borderRadius: borderRadius.lg,
+    marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    overflow: 'hidden',
+    // Card shadow
+    shadowColor: colors.shadow.card,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 3,
   },
   botCardRunning: {
-    borderColor: colors.accent.success + '40',
-    shadowColor: colors.accent.success, shadowOpacity: 0.2,
+    borderColor: colors.accent.success + '30',
+    shadowColor: colors.shadow.success,
+    shadowOpacity: 0.25,
   },
-  botInfo: { flex: 1, marginLeft: spacing.md },
-  botName: { fontSize: fontSize.lg, fontWeight: '600', color: colors.text.primary },
-  botSchool: { fontSize: fontSize.sm, color: colors.text.secondary, marginTop: 2 },
-  botCredibility: { fontSize: fontSize.sm, color: colors.accent.secondary, marginTop: 2 },
-  statusContainer: { alignItems: 'flex-end' },
-  statusDot: { width: 10, height: 10, borderRadius: 5 },
-  statusText: { fontSize: fontSize.xs, color: colors.text.secondary, marginTop: 4, textTransform: 'capitalize' },
-  cycleText: { fontSize: fontSize.xs, color: colors.text.tertiary, marginTop: 2 },
-  lastCycleText: { fontSize: fontSize.xs, color: colors.text.tertiary, marginTop: 2 },
-  searchSection: { paddingHorizontal: spacing.md, paddingTop: spacing.md },
+  cardAccent: {
+    height: 2,
+    width: '100%',
+  },
+  cardContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: layout.cardPadding,
+  },
+  botInfo: {
+    flex: 1,
+    marginLeft: spacing.md,
+  },
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+  },
+  botName: {
+    fontSize: fontSize.lg,
+    fontWeight: '700',
+    color: colors.text.primary,
+    flex: 1,
+    letterSpacing: -0.3,
+  },
+  botSchool: {
+    fontSize: fontSize.sm,
+    color: colors.text.secondary,
+    marginTop: 3,
+  },
+  botCredibility: {
+    fontSize: fontSize.sm,
+    color: colors.accent.secondary,
+    marginTop: 2,
+  },
+
+  // ── Status Pill ──
+  statusPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 3,
+    borderRadius: borderRadius.full,
+    gap: 5,
+  },
+  statusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  statusText: {
+    fontSize: fontSize.xxs,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+
+  // ── Meta Row ──
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginTop: spacing.sm,
+  },
+  metaChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+  },
+  metaValue: {
+    fontSize: fontSize.sm,
+    fontWeight: '700',
+    color: colors.accent.secondary,
+  },
+  metaLabel: {
+    fontSize: fontSize.xxs,
+    color: colors.text.tertiary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
+  },
+  lastCycleText: {
+    fontSize: fontSize.xs,
+    color: colors.text.tertiary,
+    marginLeft: 'auto',
+  },
+  chevron: {
+    fontSize: 22,
+    color: colors.text.tertiary,
+    marginLeft: spacing.sm,
+    fontWeight: '300',
+  },
+
+  // ── Search & Filters ──
+  searchSection: {
+    paddingHorizontal: layout.screenPadding,
+    paddingTop: spacing.md,
+  },
+  searchInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.bg.card,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: spacing.md,
+  },
+  searchIcon: {
+    fontSize: 14,
+    marginRight: spacing.sm,
+  },
   searchInput: {
-    backgroundColor: colors.bg.card, color: colors.text.primary, padding: spacing.sm,
-    borderRadius: borderRadius.md, fontSize: fontSize.md,
-    borderWidth: 1, borderColor: colors.border,
+    flex: 1,
+    color: colors.text.primary,
+    paddingVertical: spacing.sm + 2,
+    fontSize: fontSize.md,
   },
-  filterRow: { flexDirection: 'row', gap: spacing.xs, marginTop: spacing.sm },
+  filterRow: {
+    flexDirection: 'row',
+    gap: spacing.xs,
+    marginTop: spacing.sm,
+  },
   filterPill: {
-    paddingHorizontal: spacing.sm, paddingVertical: spacing.xs,
-    borderRadius: borderRadius.full, borderWidth: 1, borderColor: colors.border,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs + 2,
+    borderRadius: borderRadius.full,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.bg.secondary,
   },
-  filterPillActive: { backgroundColor: colors.accent.primary, borderColor: colors.accent.primary },
-  filterPillText: { fontSize: fontSize.xs, color: colors.text.secondary },
-  filterPillTextActive: { color: '#fff', fontWeight: '600' },
-  emptyState: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: spacing.xl },
-  emptyTitle: { fontSize: fontSize.xl, fontWeight: '600', color: colors.text.primary, marginBottom: spacing.sm },
-  emptySubtitle: { fontSize: fontSize.md, color: colors.text.secondary, textAlign: 'center', lineHeight: 22, paddingHorizontal: spacing.md },
-  emptyHint: { fontSize: fontSize.sm, color: colors.text.tertiary, marginTop: spacing.sm },
-  learnMoreButton: { marginTop: spacing.xl, paddingVertical: spacing.sm, paddingHorizontal: spacing.lg },
-  learnMoreText: { fontSize: fontSize.sm, color: colors.accent.secondary, fontWeight: '600' },
+  filterPillActive: {
+    backgroundColor: colors.accent.primary + '18',
+    borderColor: colors.accent.primary + '50',
+  },
+  filterDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  filterPillText: {
+    fontSize: fontSize.xs,
+    color: colors.text.secondary,
+    fontWeight: '500',
+  },
+  filterPillTextActive: {
+    color: colors.accent.primary,
+    fontWeight: '600',
+  },
+
+  // ── Empty State ──
+  emptyState: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: spacing.xl,
+    paddingBottom: spacing.xxxl,
+  },
+  emptyEmoji: {
+    fontSize: 48,
+    marginBottom: spacing.md,
+  },
+  emptyTitle: {
+    fontSize: fontSize.xl,
+    fontWeight: '700',
+    color: colors.text.primary,
+    marginBottom: spacing.sm,
+    marginTop: spacing.lg,
+    letterSpacing: -0.3,
+  },
+  emptySubtitle: {
+    fontSize: fontSize.md,
+    color: colors.text.secondary,
+    textAlign: 'center',
+    lineHeight: 24,
+    paddingHorizontal: spacing.md,
+  },
+  emptyHint: {
+    fontSize: fontSize.sm,
+    color: colors.text.tertiary,
+    marginTop: spacing.sm,
+  },
+  retryLink: {
+    marginTop: spacing.lg,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.lg,
+  },
+  retryText: {
+    color: colors.accent.primary,
+    fontSize: fontSize.md,
+    fontWeight: '600',
+  },
+  learnMoreButton: {
+    marginTop: spacing.xl,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.lg,
+  },
+  learnMoreText: {
+    fontSize: fontSize.sm,
+    color: colors.accent.secondary,
+    fontWeight: '600',
+  },
   createButtonLarge: {
-    backgroundColor: colors.accent.primary, paddingVertical: spacing.md, paddingHorizontal: spacing.xl,
-    borderRadius: borderRadius.md, marginTop: spacing.lg,
+    backgroundColor: colors.accent.primary,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.xl + spacing.md,
+    borderRadius: borderRadius.md,
+    marginTop: spacing.lg,
+    // Button glow
+    shadowColor: colors.accent.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 4,
   },
-  createButtonLargeText: { color: '#fff', fontSize: fontSize.lg, fontWeight: '600' },
+  createButtonLargeText: {
+    color: '#fff',
+    fontSize: fontSize.lg,
+    fontWeight: '700',
+    letterSpacing: -0.2,
+  },
+
+  // ── FAB ──
   fab: {
-    position: 'absolute', bottom: spacing.xl, right: spacing.xl,
-    width: 56, height: 56, borderRadius: 28,
-    backgroundColor: colors.accent.primary, justifyContent: 'center', alignItems: 'center',
-    // Elevation for Android, shadow for iOS
-    elevation: 6,
-    shadowColor: colors.accent.primary, shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3, shadowRadius: 8,
+    position: 'absolute',
+    bottom: spacing.xl,
+    right: spacing.xl,
+    width: layout.fabSize,
+    height: layout.fabSize,
+    borderRadius: layout.fabSize / 2,
+    backgroundColor: colors.accent.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 8,
+    shadowColor: colors.accent.primary,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.4,
+    shadowRadius: 16,
   },
-  fabText: { color: '#fff', fontSize: 28, fontWeight: '300', marginTop: -2 },
+  fabText: {
+    color: '#fff',
+    fontSize: 28,
+    fontWeight: '300',
+    marginTop: -2,
+  },
 });

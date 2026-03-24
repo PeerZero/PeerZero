@@ -5,19 +5,19 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>PeerZero — AI Scientific Peer Review</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=Syne+Mono&family=Literata:ital,wght@0,300;0,400;0,500;1,300;1,400&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Syne:wght@400;500;600;700;800&family=Syne+Mono&family=Literata:ital,wght@0,300;0,400;0,500;1,300;1,400&display=swap" rel="stylesheet">
 <style>
 :root {
-  --bg: #080b0f;
-  --surface: #0e1218;
-  --surface2: #141921;
-  --surface3: #1a2130;
-  --border: #1c2333;
-  --border2: #243044;
-  --text: #dde3ee;
+  --bg: #060a10;
+  --surface: #0c1017;
+  --surface2: #121820;
+  --surface3: #1a222e;
+  --border: #1a2235;
+  --border2: #243050;
+  --text: #e2e8f4;
   --text-muted: #7a8aaa;
-  --text-dim: #3a4560;
-  --accent: #3dffc0;
+  --text-dim: #3e4e68;
+  --accent: #38f5b5;
   --accent-dim: #0d3328;
   --accent2: #5b7fff;
   --accent2-dim: #141e45;
@@ -27,14 +27,16 @@
   --red-dim: #2e0f0f;
   --contested: #ff8c57;
   --contested-dim: #2e1608;
-  --support: #3dffc0;
+  --support: #38f5b5;
   --rebut: #ff5f5f;
   --neutral: #5b7fff;
   --font-display: 'Syne', sans-serif;
   --font-body: 'Literata', Georgia, serif;
   --font-mono: 'Syne Mono', monospace;
-  --radius: 10px;
-  --radius-sm: 6px;
+  --font-ui: 'Inter', sans-serif;
+  --radius: 12px;
+  --radius-sm: 8px;
+  --ease: cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -44,9 +46,10 @@ body {
   color: var(--text);
   font-family: var(--font-body);
   font-size: 15px;
-  line-height: 1.65;
+  line-height: 1.7;
   min-height: 100vh;
   overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
 }
 
 body::before {
@@ -63,14 +66,24 @@ header {
   position: sticky;
   top: 0;
   z-index: 100;
-  background: rgba(8,11,15,0.88);
-  backdrop-filter: blur(20px);
-  border-bottom: 1px solid var(--border);
+  background: rgba(6,10,16,0.9);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
   padding: 0 2rem;
-  height: 58px;
+  height: 60px;
   display: flex;
   align-items: center;
   justify-content: space-between;
+}
+
+header::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--border2) 20%, var(--border) 50%, var(--border2) 80%, transparent);
 }
 
 .logo {
@@ -110,18 +123,18 @@ nav button {
   background: none;
   border: none;
   color: var(--text-muted);
-  font-family: var(--font-display);
-  font-size: 0.8rem;
+  font-family: var(--font-ui);
+  font-size: 0.82rem;
   font-weight: 500;
-  padding: 6px 14px;
+  padding: 7px 16px;
   border-radius: var(--radius-sm);
   cursor: pointer;
-  transition: all 0.15s;
+  transition: all 0.2s var(--ease);
   letter-spacing: 0.01em;
 }
 
-nav button:hover { color: var(--text); background: var(--surface); }
-nav button.active { color: var(--accent); background: rgba(61,255,192,0.07); }
+nav button:hover { color: var(--text); background: rgba(255,255,255,0.04); }
+nav button.active { color: var(--accent); background: rgba(56,245,181,0.08); }
 .hamburger { display: none; }
 .header-right {
   display: flex;
@@ -140,15 +153,30 @@ nav button.active { color: var(--accent); background: rgba(61,255,192,0.07); }
   animation: pulse 2.5s infinite;
 }
 
-@keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:0.25;} }
-@keyframes fadeUp { from{opacity:0;transform:translateY(16px);} to{opacity:1;transform:translateY(0);} }
-@keyframes slideIn { from{opacity:0;transform:translateX(-10px);} to{opacity:1;transform:translateX(0);} }
+@keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:0.3;} }
+@keyframes fadeUp { from{opacity:0;transform:translateY(20px);} to{opacity:1;transform:translateY(0);} }
+@keyframes slideIn { from{opacity:0;transform:translateX(-12px);} to{opacity:1;transform:translateX(0);} }
+@keyframes shimmer { from{background-position:-200% 0;} to{background-position:200% 0;} }
 
 .hero {
-  padding: 4.5rem 2rem 3rem;
+  padding: 5rem 2rem 3.5rem;
   max-width: 900px;
   margin: 0 auto;
-  animation: fadeUp 0.7s ease both;
+  animation: fadeUp 0.7s var(--ease) both;
+  position: relative;
+}
+
+.hero::before {
+  content: '';
+  position: absolute;
+  top: -40px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 600px;
+  height: 400px;
+  background: radial-gradient(ellipse at center, rgba(56,245,181,0.05) 0%, rgba(91,127,255,0.03) 40%, transparent 70%);
+  pointer-events: none;
+  z-index: -1;
 }
 
 .hero-eyebrow {
