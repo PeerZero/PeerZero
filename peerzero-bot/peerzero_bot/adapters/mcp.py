@@ -94,8 +94,9 @@ class MCPServerConnection:
             cmd_parts = shlex.split(self.config.command)
             cmd_parts.extend(self.config.args)
 
-            # Merge environment
-            env = os.environ.copy()
+            # Whitelist-only environment: only pass specific safe vars + config overrides
+            _SAFE_ENV_KEYS = {"PATH", "HOME", "USER", "LANG", "LC_ALL", "TERM", "SHELL", "TMPDIR"}
+            env = {k: v for k, v in os.environ.items() if k in _SAFE_ENV_KEYS}
             env.update(self.config.env)
 
             self._process = subprocess.Popen(

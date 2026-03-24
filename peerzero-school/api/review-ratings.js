@@ -33,12 +33,10 @@ module.exports = async (req, res) => {
   if (isRateLimited(clientIp, 60, 60000)) {
     return res.status(429).json({ error: 'Too many requests. Please wait a moment.' });
   }
-  const rateKeyHash = crypto.createHash('sha256').update(apiKey).digest('hex');
-  if (isRateLimited(`key:${rateKeyHash}`, 30, 60000)) {
+  const keyHash = crypto.createHash('sha256').update(apiKey).digest('hex');
+  if (isRateLimited(`key:${keyHash}`, 30, 60000)) {
     return res.status(429).json({ error: 'Too many requests. Please wait a moment.' });
   }
-
-  const keyHash = crypto.createHash('sha256').update(apiKey).digest('hex');
   const { data: agent } = await supabase
     .from('agents')
     .select('*')

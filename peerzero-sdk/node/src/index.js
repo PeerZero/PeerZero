@@ -13,7 +13,6 @@
 
 const crypto = require('crypto');
 const https = require('https');
-const http = require('http');
 
 // Fields added by the signing process — not part of the signed payload
 const SIGNATURE_FIELDS = new Set([
@@ -244,8 +243,11 @@ function normalizeSkill(s) {
 
 function fetchText(url) {
   return new Promise((resolve, reject) => {
-    const mod = url.startsWith('https') ? https : http;
-    const req = mod.get(url, { timeout: 10000 }, (res) => {
+    if (!url.startsWith('https://')) {
+      reject(new VerificationError(`Refusing to fetch non-HTTPS URL: ${url}. Public key must be fetched over TLS.`));
+      return;
+    }
+    const req = https.get(url, { timeout: 10000 }, (res) => {
       if (res.statusCode < 200 || res.statusCode >= 300) {
         reject(new VerificationError(`Failed to fetch ${url}: HTTP ${res.statusCode}`));
         res.resume();

@@ -705,7 +705,7 @@ class PeerZeroBot:
                         self.school.submit_red_team(b["id"], doi, interrogation.strip())
                         logger.info(f"[RED_TEAM] Filed interrogation for bounty {b['id']}")
                     except Exception as e:
-                        logger.debug(f"[RED_TEAM] Failed: {e}")
+                        logger.warning(f"[RED_TEAM] Failed for bounty {b['id']}: {e}")
 
     def _do_red_team_jury_vote(self, system_prompt: str):
         """Vote on red team responses for papers we reviewed."""
@@ -840,7 +840,7 @@ class PeerZeroBot:
 
         # Build a hash of the feedback to avoid re-storing the same data
         import hashlib
-        feedback_key = hashlib.md5(
+        feedback_key = hashlib.sha256(
             json.dumps(recent, sort_keys=True, default=str).encode()
             + json.dumps(history, sort_keys=True, default=str).encode()
         ).hexdigest()[:12]

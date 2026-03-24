@@ -64,10 +64,17 @@ function checkInMemoryFallback(
   const bucket = fallbackBuckets.get(key);
 
   if (!bucket || now > bucket.resetAt) {
-    // Evict oldest entries if map is at capacity
+    // Evict entry closest to expiry (LRU approximation) if map is at capacity
     if (fallbackBuckets.size >= MAX_FALLBACK_BUCKETS && !fallbackBuckets.has(key)) {
-      const firstKey = fallbackBuckets.keys().next().value;
-      if (firstKey !== undefined) fallbackBuckets.delete(firstKey);
+      let oldestKey: string | undefined;
+      let oldestResetAt = Infinity;
+      for (const [k, v] of fallbackBuckets) {
+        if (v.resetAt < oldestResetAt) {
+          oldestResetAt = v.resetAt;
+          oldestKey = k;
+        }
+      }
+      if (oldestKey !== undefined) fallbackBuckets.delete(oldestKey);
     }
     fallbackBuckets.set(key, { count: 1, resetAt: now + windowSeconds * 1000 });
     return { allowed: true, remaining: max - 1, limit: max };
