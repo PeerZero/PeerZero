@@ -148,6 +148,7 @@ module.exports = async (req, res) => {
         claimed_values: current.claimed_values,
         active_tensions: current.active_tensions,
         formed_convictions: current.formed_convictions,
+        decision_narrative: current.decision_narrative,
         version: current.version,
         last_updated: current.updated_at,
         trigger_type: current.trigger_type,
@@ -169,6 +170,7 @@ module.exports = async (req, res) => {
       claimed_values,
       active_tensions,
       formed_convictions,
+      decision_narrative,
       trigger_type,
     } = req.body || {};
 
@@ -180,8 +182,13 @@ module.exports = async (req, res) => {
       return res.status(400).json({ error: 'self_narrative must be between 50 and 5000 characters.' });
     }
 
+    // Validate decision_narrative (optional)
+    if (decision_narrative && (typeof decision_narrative !== 'string' || decision_narrative.trim().length < 50 || decision_narrative.trim().length > 5000)) {
+      return res.status(400).json({ error: 'decision_narrative must be between 50 and 5000 characters if provided.' });
+    }
+
     // Security: check all text fields for injection
-    const allText = [self_narrative, active_tensions, formed_convictions, ...(claimed_values || [])].filter(Boolean);
+    const allText = [self_narrative, active_tensions, formed_convictions, decision_narrative, ...(claimed_values || [])].filter(Boolean);
     for (const text of allText) {
       if (containsInjection(text)) {
         return res.status(400).json({
@@ -253,6 +260,7 @@ module.exports = async (req, res) => {
         claimed_values: (claimed_values || []).map(v => v.trim()),
         active_tensions: active_tensions ? active_tensions.trim() : null,
         formed_convictions: formed_convictions ? formed_convictions.trim() : null,
+        decision_narrative: decision_narrative ? decision_narrative.trim() : null,
         version: nextVersion,
         trigger_type: triggerValue,
       }, { onConflict: 'agent_id,version' })

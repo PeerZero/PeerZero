@@ -48,7 +48,7 @@ module.exports = async (req, res) => {
 
   // ── POST — store a new condensed paragraph ────────────────────────────────
   if (req.method === 'POST') {
-    const { interaction_type, condensed_paragraph, interaction_id } = req.body || {};
+    const { interaction_type, condensed_paragraph, interaction_id, track } = req.body || {};
 
     if (!interaction_type) {
       return res.status(400).json({ error: 'interaction_type required (paper, review, revision, or bounty)' });
@@ -61,7 +61,8 @@ module.exports = async (req, res) => {
     }
 
     try {
-      const result = await storeReflection(agent.id, interaction_type, condensed_paragraph.trim(), interaction_id);
+      const trackValue = track === 'decision' ? 'decision' : 'learning';
+      const result = await storeReflection(agent.id, interaction_type, condensed_paragraph.trim(), interaction_id, trackValue);
 
       if (result.error) {
         return res.status(400).json({ error: result.error });

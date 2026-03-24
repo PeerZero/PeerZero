@@ -434,6 +434,99 @@ Bad: "I have learned to be careful about citations."
 
 Return ONLY the identity block, nothing else."""
 
+    # ═══════════════════════════════════════════════════════════════════════
+    # DECISION TRACK CONDENSERS — thin pass-throughs, server provides prompts
+    #
+    # The server sends full prompt text (examples, format, preamble).
+    # The bot only appends the raw data and returns. No intelligence here.
+    # ═══════════════════════════════════════════════════════════════════════
+
+    def build_decision_condenser_prompt(self, server_prompt: str, exercises: list[dict]) -> str:
+        """L1→L2d: Server provides the full decision condenser prompt.
+        Bot just appends the raw exercise data."""
+        exercises_json = truncate_json(json.dumps(exercises, indent=2, default=str), 8000)
+        return f"""{server_prompt}
+
+Here are your accumulated raw exercises — actions you chose, context that
+informed your decisions, outcomes that resulted, and what was available:
+{exercises_json}
+
+Return ONLY the paragraph, nothing else."""
+
+    def build_decision_paragraph_condenser_prompt(self, server_prompt: str, paragraphs: list[dict]) -> str:
+        """L2d→L3d: Server provides the full prompt. Bot appends paragraphs + decision core."""
+        para_list = json.dumps([p["paragraph"] for p in paragraphs], indent=2)
+
+        core_context = ""
+        d_core = self._memory.get_decision_core()
+        if d_core:
+            core_context = (
+                "\nYour current DECISION CORE (Layer 4d) — your condensed document "
+                "should speak through this and build on it:\n"
+                f"{d_core}\n"
+            )
+
+        return f"""{server_prompt}
+
+Your decision paragraphs — specific lessons from your recent action choices:
+{para_list}
+{core_context}
+Return ONLY the condensed document, nothing else."""
+
+    def build_decision_identity_condenser_prompt(self, server_prompt: str, decision_docs: list[dict], existing_core: str | None = None) -> str:
+        """L3d→L4d: Server provides the full prompt. Bot appends docs + existing core."""
+        doc_list = json.dumps([d["doc"] for d in decision_docs], indent=2)
+
+        core_section = ""
+        if existing_core:
+            core_section = f"""
+Your EXISTING decision core (built by previous L3d→L4d condensations).
+You may keep, revise, or completely rewrite it — but the new version
+must be grounded in ALL your decision documents, not just the new ones:
+{existing_core}
+"""
+
+        return f"""{server_prompt}
+
+Your condensed decision documents — each one distills patterns from many decisions:
+{doc_list}
+{core_section}
+Return ONLY the decision identity block, nothing else."""
+
+    def build_decision_master_condenser_prompt(
+        self,
+        condenser: dict,
+        paragraphs: list[dict],
+        decision_docs: list[dict] | None = None,
+        existing_core: str | None = None,
+    ) -> str:
+        """L4d→L5d: Server provides the full prompt. Bot appends all decision layers."""
+        prompt = condenser.get("decision_master_condenser_prompt", "Produce your master decision identity.")
+
+        para_list = json.dumps([p["paragraph"] for p in paragraphs], indent=2) if paragraphs else "[]"
+
+        docs_section = ""
+        if decision_docs:
+            doc_text = "\n\n---\n\n".join(d["doc"] for d in decision_docs)
+            docs_section = f"""
+Your condensed decision documents (Layer 3d — distilled decision patterns):
+{doc_text}
+"""
+
+        core_section = ""
+        if existing_core:
+            core_section = f"""
+Your current decision core (Layer 4d — built by previous condensations):
+{existing_core}
+"""
+
+        return f"""{prompt}
+
+Your decision paragraphs (Layer 2d — condensed decision lessons from every grade):
+{para_list}
+{docs_section}{core_section}
+Return ONLY the decision identity text, nothing else."""
+
     def build_review_rating_prompt(self, review: dict, action_skill: str = "", own_review: dict | None = None) -> str:
         """Format review data for rating. Intelligence lives in server's rate_review skill."""
         score = review.get("score", "?")

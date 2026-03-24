@@ -1,7 +1,7 @@
 const { createClient } = require('@supabase/supabase-js');
 const crypto = require('crypto');
 const { setCorsHeaders, enforceRateLimit, sanitizeErrorMessage, checkGradeProgress, getGradeRequirements, applyTimeDecay, recordFailureReflection, getUnresolvedFailures, resolveFailureReflections } = require('../lib/shared');
-const { getSkillProfile, getPortableProfile, buildCoreCondenserPrompt, buildMasterCondenser, buildMilestoneCondenser, getUncondensedExerciseCount, getIdentityCore, buildActiveFocus } = require('../lib/skills');
+const { getSkillProfile, getPortableProfile, buildCoreCondenserPrompt, buildMasterCondenser, buildMilestoneCondenser, getUncondensedExerciseCount, getIdentityCore, buildActiveFocus, buildDecisionMilestoneCondenser, buildDecisionCoreCondenserPrompt, buildDecisionMasterCondenser } = require('../lib/skills');
 const { getTierInfo } = require('../lib/tier-display');
 const { buildCoaching } = require('../lib/coaching');
 
@@ -766,12 +766,11 @@ module.exports = async (req, res) => {
       currentTask
     );
 
+    // ── Learning track condensers ───────────────────────────────────────────
     // Tier 2: Milestone condenser — fires when bot has 5+ uncondensed exercises
-    // Tells the bot to read its general memory (Tier 1) and condense into identity memory (Tier 2)
     const milestoneCondenser = await buildMilestoneCondenser(uncondensedCount, agent.current_grade);
 
     // Tier 3: Core condenser — fires at tier transitions AND grade transitions
-    // This tells the bot to distill all their accumulated skill paragraphs (Tier 2) into core identity (Tier 3)
     let coreCondenser = null;
 
     // Trigger on grade advancement or grade failure (both produce condensing)
@@ -806,6 +805,24 @@ module.exports = async (req, res) => {
       // On grade advancement, resolve any previous grade_failure reflections
       if (gradeResult.advanced) {
         resolveFailureReflections(agent.id, 'grade_failure').catch(err => console.error('[coaching] resolveFailureReflections failed:', err?.message || err));
+      }
+    }
+
+    // ── Decision track condensers ────────────────────────────────────────
+    // Parallel to learning — same triggers, different prompts.
+    // Decision milestone fires alongside learning milestone (same L1 threshold).
+    // Decision core/master fire alongside learning core/master (same grade triggers).
+    const decisionMilestoneCondenser = await buildDecisionMilestoneCondenser(uncondensedCount, agent.current_grade);
+    let decisionCoreCondenser = null;
+    let decisionMasterCondenser = null;
+    if (gradeResult && (gradeResult.advanced || gradeResult.failed)) {
+      if (gradeResult.advanced && gradeResult.previousGrade === 12) {
+        decisionMasterCondenser = await buildDecisionMasterCondenser();
+      } else {
+        const gradeLabel = gradeResult.advanced
+          ? `Grade ${gradeResult.previousGrade} Graduate`
+          : `Grade ${gradeResult.grade} (retry ${gradeResult.gradeInfo.grade_fail_count})`;
+        decisionCoreCondenser = await buildDecisionCoreCondenserPrompt(gradeLabel, agent.current_grade);
       }
     }
 
@@ -901,6 +918,9 @@ module.exports = async (req, res) => {
       skill_condenser: milestoneCondenser,  // L1→L2: non-null when 5+ uncondensed exercises — condense into paragraphs
       core_condenser: coreCondenser,  // L2→L3 trigger: non-null at grade transitions — bot cascades L2→L3→L4
       master_condenser: masterCondenser,  // L4→L5: Grade 12 graduation only — the final distillation, locked forever
+      decision_condenser: decisionMilestoneCondenser,  // L1→L2d: decision track milestone — fires alongside learning
+      decision_core_condenser: decisionCoreCondenser,  // L2d→L3d trigger: fires alongside learning core condenser
+      decision_master_condenser: decisionMasterCondenser,  // L4d→L5d: decision track graduation — parallel to learning master
       identity_core: identityCore,  // the bot's current core identity (null if none yet)
       grade: gradeInfo,  // current grade level, activity progress, requirements, quality gate status
       recent_feedback: recentFeedback,  // Tier 1: recent reviews and bounties on your papers — store in general memory
