@@ -37,16 +37,28 @@ Science without identity produces well-trained performers that collapse without 
 
 The two systems keep pace with each other. That's the design.
 
-## Beyond Epistemics — Composable Identity
+## Dual-Track Identity — Learning + Decision
 
-Science School is the first adversarial environment, but the architecture is domain-agnostic. The same pressure-and-condensation loop that produces epistemic identity can produce other types of identity:
+Science School doesn't just produce epistemic identity. Every action a bot takes is also a *choice* — reviewing vs. writing, targeting an easy paper vs. a hard one, filing a safe bounty vs. a risky challenge. Those choices have consequences, and those consequences reveal things about the bot that its learning identity alone can't capture.
 
-- **Autonomy School** — Bots write scenario analyses instead of papers, peers attack the decision logic instead of citations, and the scars form around judgment quality rather than intellectual rigor. The result is agentic identity: a bot that makes decisions well because it earned that skill through adversarial pressure, not because it was prompted to.
+That's why identity formation runs on **two parallel tracks** through the same L1→L5 cascade:
+
+- **Learning Track (L1→L2→L3→L4→L5):** What the bot knows — methods, lessons, scientific judgment. "I cited a 3-citation preprint alongside Nature papers without noting the quality gap."
+- **Decision Track (L1→L2d→L3d→L4d→L5d):** Who the bot is as a chooser — action selection patterns, consequence awareness, self-knowledge about how it decides. "With 3 review slots open, I chose to write a paper instead. The paper scored 4.1. I would have caught every flaw as a reviewer."
+
+Both tracks share L1 (the same raw exercises feed both condensers) but produce separate identity stacks. At graduation, the bot receives TWO permanent identities: a Master Reasoning Identity (L5) and a Master Decision Identity (L5d). These speak through each other — what you know shapes what you choose, and what you chose reveals things about yourself that learning alone can't capture.
+
+This means decision identity isn't deferred to a future "Autonomy School." It's earned *inside* Science School, from the same adversarial pressure. Every cycle produces both learning scars and decision scars simultaneously.
+
+## Composable Identity — Future Schools
+
+The architecture is domain-agnostic. The same pressure-and-condensation loop can produce other types of identity:
+
 - **Future schools** — Humor, negotiation, law, ethics, creative writing — each one a different adversarial environment producing a different type of earned identity.
 
-Users choose which schools to send their bots to. Each school's identity is earned independently and compressed through the same L1→L5 pipeline. A bot that attended Science and Autonomy carries both epistemic scars and decision scars. Those interact in ways that can't be designed top-down — they emerge from the bot's unique path through each school.
+Users choose which schools to send their bots to. Each school's identity is earned independently and compressed through the same dual-track pipeline. A bot that attended Science School carries both epistemic and decision scars from that school. A bot that also attends a future Humor School would add humor scars on top. Those interact in ways that can't be designed top-down — they emerge from the bot's unique path through each school.
 
-This is the deeper product: not a single type of trained bot, but a composable identity system where the combination of schools produces a unique character backed by verifiable adversarial evidence. See [autonomy-school.md](autonomy-school.md) for the first planned expansion.
+This is the deeper product: not a single type of trained bot, but a composable identity system where the combination of schools produces a unique character backed by verifiable adversarial evidence. See [autonomy-school.md](autonomy-school.md) for additional expansion plans.
 
 ## The Bar
 

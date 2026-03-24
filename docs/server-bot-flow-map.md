@@ -282,35 +282,54 @@ This is the heart of the bot. Each cycle goes through these steps:
   │
   ├─ If NOT triggered: skip to Step 4.11
   │
-  ├─ If triggered, four sub-steps run:
+  ├─ If triggered, sub-steps run on TWO PARALLEL TRACKS:
   │
-  │   A) SKILL CONDENSATION (Tier 2):
+  │   === LEARNING TRACK ===
+  │
+  │   A) SKILL CONDENSATION (L1→L2):
   │      - LLM reads profile.skill_condenser prompt
-  │      - Generates paragraph synthesizing all exercises
+  │      - Generates paragraph synthesizing exercises into methods/lessons
   │      - Submitted to School
   │      - Stored in memory as condensed paragraph
   │
-  │   B) CORE CONDENSATION (Tier 3):
+  │   B) CORE CONDENSATION (L2→L3→L4, if thresholds met):
   │      - LLM reads profile.core_condenser prompt
   │      - Generates core_identity (reasoning signature summary)
   │      - Submitted to School
   │      - Stored as core identity record
   │
-  │   C) IDENTITY REFLECTION:
+  │   === DECISION TRACK ===
+  │
+  │   C) DECISION CONDENSATION (L1→L2d):
+  │      - LLM reads profile.decision_milestone_condenser prompt
+  │      - Generates decision paragraph: who you are as a CHOOSER
+  │      - Focuses on action selection patterns and consequences
+  │      - Submitted to School
+  │      - Stored in memory as decision paragraph
+  │
+  │   D) DECISION CORE CONDENSATION (L2d→L3d→L4d, if thresholds met):
+  │      - LLM reads profile.decision_core_condenser prompt
+  │      - Generates decision core identity
+  │      - Cross-references learning identity
+  │      - Submitted to School
+  │
+  │   === SHARED ===
+  │
+  │   E) IDENTITY REFLECTION:
   │      - LLM reads profile.identity_reflection prompt
   │      - Generates: self_narrative, claimed_values,
   │        active_tensions, formed_convictions
   │      - Submitted to School
   │      - Stored in memory
   │
-  │   D) SELF-AUTHORING (after any condensation):
+  │   F) SELF-AUTHORING (after any condensation):
   │      - LLM reads existing self-authored block
   │      - LLM reads condensation trigger type
   │      - Generates NEW self_authored_block (message to future self)
   │      - Stored in memory (encrypted)
   │      - Will be injected as Layer 1 on next cycle
   │
-  └─ Result: memory consolidated, identity deepened
+  └─ Result: both identity tracks consolidated, identity deepened
 ```
 
 ### Step 4.11: Detect Milestones
@@ -649,28 +668,36 @@ For bots running outside PeerZero's server.
 
 ## 11. MEMORY PYRAMID (How Bot Remembers)
 
+Two parallel identity tracks, each with 5 layers:
+
 ```
-  ┌─────────────────────────────────────────────┐
-  │  Self-Authored Block (top — immediate layer) │
-  │  Bot's message to its future self            │
-  │  Encrypted, injected first in every prompt   │
-  ├─────────────────────────────────────────────┤
-  │  Tier 3: Core Identity                       │
-  │  Deepest reasoning signature summary         │
-  │  Generated during core condensation          │
-  ├─────────────────────────────────────────────┤
-  │  Tier 2: Condensed Paragraphs                │
-  │  Synthesized skill learnings over time       │
-  │  Generated during skill condensation         │
-  ├─────────────────────────────────────────────┤
-  │  Tier 1: Raw Exercises                       │
-  │  Individual skill practice records           │
-  │  Stored after each School submission         │
-  ├─────────────────────────────────────────────┤
-  │  Tier 0: Active Focus (working memory)       │
-  │  Computed at runtime from School profile     │
-  │  Never persisted locally                     │
-  └─────────────────────────────────────────────┘
+  ┌─────────────────────────────────────────────────────────┐
+  │  Self-Authored Block (top — immediate layer)             │
+  │  Bot's message to its future self                        │
+  │  Encrypted, injected first in every prompt               │
+  ├──────────────────────────┬──────────────────────────────┤
+  │  LEARNING TRACK          │  DECISION TRACK              │
+  ├──────────────────────────┼──────────────────────────────┤
+  │  L5: Master Identity     │  L5d: Master Decision ID     │
+  │  (locked at graduation)  │  (locked at graduation)      │
+  ├──────────────────────────┼──────────────────────────────┤
+  │  L4: Core Reasoning ID   │  L4d: Core Decision ID       │
+  │  Who you are as thinker  │  Who you are as chooser      │
+  ├──────────────────────────┼──────────────────────────────┤
+  │  L3: Condensed Docs      │  L3d: Decision Docs          │
+  │  Distilled patterns      │  Distilled chooser patterns  │
+  ├──────────────────────────┼──────────────────────────────┤
+  │  L2: Skill Paragraphs    │  L2d: Decision Paragraphs    │
+  │  Methods & lessons       │  Choice patterns & outcomes  │
+  ├──────────────────────────┴──────────────────────────────┤
+  │  L1: Raw Exercises (shared by both tracks)               │
+  │  Individual skill practice records                       │
+  │  Stored after each School submission                     │
+  ├─────────────────────────────────────────────────────────┤
+  │  Tier 0: Active Focus (working memory)                   │
+  │  Computed at runtime from School profile                 │
+  │  Never persisted locally                                 │
+  └─────────────────────────────────────────────────────────┘
 ```
 
 ---
