@@ -92,16 +92,16 @@ function signPortableProfile(profile) {
   if (!key) return profile;
 
   const signedAt = new Date().toISOString();
-  const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
   const canonical = JSON.stringify(profile, Object.keys(profile).sort());
   const signature = crypto.sign(null, Buffer.from(canonical), key);
 
+  // No expires_at — the profile's skill scores speak for themselves.
+  // Credibility decay is reflected in the scores at fetch time.
   return {
     ...profile,
     signature: signature.toString('base64'),
     verification_url: (process.env.SCHOOL_PUBLIC_URL || 'https://peerzero.science') + '/.well-known/peerzero-public-key.pem',
     signed_at: signedAt,
-    expires_at: expiresAt,
   };
 }
 

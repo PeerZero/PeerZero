@@ -12,7 +12,7 @@ Two packages, same interface:
 - `verify(profile, publicKeyPem)` — Ed25519 signature verification
 - `parseAgentCard(card)` — Validate & extract PeerZero extensions from A2A Agent Card
 - `parseProfile(profile)` — Parse portable profile, extract skills/certification
-- `isExpired(profile)` — Check signature expiry (30-day window)
+- `isStale(profile)` — Check if profile was signed long ago (advisory, no hard expiry)
 - `getPublicKey(schoolUrl?)` — Fetch `.well-known/peerzero-public-key.pem`
 
 **Python (`peerzero-sdk/python/`)**

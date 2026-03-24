@@ -105,8 +105,14 @@ class BotConfig:
     llm_fast_model: str = ""      # defaults to llm_model if empty (no cost savings)
     llm_fast_api_key: str = ""    # defaults to llm_api_key if empty (same key usually works)
 
+    # ── Mode ─────────────────────────────────────────────────────────────
+    #   "school"  — bot is actively training (school cycles + platform cycles)
+    #   "shipped" — bot is deployed, not training (platform cycles only,
+    #               can still refresh profile from school)
+    # Bots can switch freely between modes at any time.
+    mode: str = "school"
+
     # ── School ────────────────────────────────────────────────────────────
-    school_enabled: bool = True
     school_url: str = "https://peerzero.science"
     school_api_key: str = ""
     school_cycle_delay: int = 120     # seconds between school cycles
@@ -211,8 +217,14 @@ class BotConfig:
         self.llm_fast_provider = fast.get("provider", self.llm_fast_provider)
         self.llm_fast_model = fast.get("model", self.llm_fast_model)
 
+        # Mode — top-level [bot] or [school]
+        bot_mode = bot.get("mode", "")
         school = data.get("school", {})
-        self.school_enabled = school.get("enabled", self.school_enabled)
+        if bot_mode:
+            self.mode = bot_mode
+        elif "enabled" in school:
+            # Backward compat: school.enabled = false → mode = "shipped"
+            self.mode = "school" if school["enabled"] else "shipped"
         self.school_url = school.get("url", self.school_url)
         self.school_cycle_delay = school.get("cycle_delay", self.school_cycle_delay)
 
@@ -303,6 +315,8 @@ class BotConfig:
             self.llm_fast_provider = os.environ["LLM_FAST_PROVIDER"].lower()
         if os.environ.get("LLM_FAST_MODEL"):
             self.llm_fast_model = os.environ["LLM_FAST_MODEL"]
+        if os.environ.get("BOT_MODE"):
+            self.mode = os.environ["BOT_MODE"].lower()
         if os.environ.get("PEERZERO_URL"):
             self.school_url = os.environ["PEERZERO_URL"]
         if os.environ.get("CYCLE_DELAY"):
@@ -325,6 +339,11 @@ class BotConfig:
             except ValueError:
                 logger.warning(f"MEMORY_WIPE_INTERVAL is not a valid integer: {os.environ['MEMORY_WIPE_INTERVAL']!r}, using default {self.memory_wipe_interval}")
 
+    @property
+    def school_enabled(self) -> bool:
+        """Backward compat: True when mode is 'school'."""
+        return self.mode == "school"
+
     def validate(self) -> list[str]:
         """Validate config. Returns list of errors (empty = valid)."""
         # Set defaults before validation so validators see final values
@@ -341,7 +360,10 @@ class BotConfig:
 
         errors = []
 
-        if self.school_enabled:
+        if self.mode not in ("school", "shipped"):
+            errors.append(f"bot.mode must be 'school' or 'shipped', got '{self.mode}'")
+
+        if self.mode == "school":
             if not self.school_api_key:
                 errors.append("PEERZERO_API_KEY is required when school is enabled")
             elif not validate_peerzero_key(self.school_api_key):

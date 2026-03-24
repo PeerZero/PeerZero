@@ -168,39 +168,56 @@ class MemoryManager:
     def clear_condensed_docs(self):
         self._storage.clear("school", "condensed_docs")
 
-    # ── Layer 4: Core reasoning identity ────────────────────────────────
+    # ── Layer 4: Core reasoning identity (working, evolving) ────────────
     #
     # The bot's working identity. Written by L3→L4 condenser (when 3 condensed
-    # docs accumulate). Overwritten each time. At graduation, master condenser
-    # promotes this to L5 (locked forever).
+    # docs accumulate). Overwritten each time. Always writable — even after
+    # graduation, a bot returning to school can keep evolving L4.
 
     def get_core_identity(self) -> Optional[str]:
         data = self._storage.read("school", "core", {})
         return data.get("core_identity") if isinstance(data, dict) else None
 
-    def is_core_locked(self) -> bool:
-        """Check if core identity has been finalized by master condenser."""
-        data = self._storage.read("school", "core", {})
-        return isinstance(data, dict) and data.get("is_master", False)
-
-    def store_core_identity(self, identity: str, *, is_master: bool = False):
+    def store_core_identity(self, identity: str):
         """
-        Store core identity. Called by identity condenser or master condenser.
-
-        Once is_master=True has been set (by master condenser at graduation),
-        this method will refuse further writes — the core is permanently locked.
+        Store working core identity (L4). Called by identity condenser.
+        Always writable — post-graduation learning continues to evolve L4.
         """
         if not identity or len(identity.strip()) < 100:
             return
-        if self.is_core_locked() and not is_master:
-            logger.warning("[MEMORY] Core identity is locked (master condensed). Refusing write.")
-            return
-        max_len = MAX_MASTER_CORE_LENGTH if is_master else MAX_CORE_LENGTH
         self._storage.write("school", "core", {
-            "core_identity": identity.strip()[:max_len],
+            "core_identity": identity.strip()[:MAX_CORE_LENGTH],
             "written_at": datetime.now(timezone.utc).isoformat(),
-            "is_master": is_master,
         })
+
+    # ── Layer 5: Master identity (permanent graduation snapshot) ──────
+    #
+    # Written once by the master condenser at graduation (grade 12).
+    # Locked forever. The bot's permanent baseline — L4 evolves on top of it.
+
+    def get_master_identity(self) -> Optional[str]:
+        data = self._storage.read("school", "master", {})
+        return data.get("master_identity") if isinstance(data, dict) else None
+
+    def has_graduated(self) -> bool:
+        """Check if bot has a permanent master identity from graduation."""
+        return self.get_master_identity() is not None
+
+    def store_master_identity(self, identity: str):
+        """
+        Store master identity (L5). Called once by master condenser at graduation.
+        Once written, this is permanent and cannot be overwritten.
+        """
+        if not identity or len(identity.strip()) < 100:
+            return
+        if self.has_graduated():
+            logger.warning("[MEMORY] Master identity already exists (L5 is permanent). Refusing write.")
+            return
+        self._storage.write("school", "master", {
+            "master_identity": identity.strip()[:MAX_MASTER_CORE_LENGTH],
+            "graduated_at": datetime.now(timezone.utc).isoformat(),
+        })
+        logger.info("[MEMORY] L5 master identity written and LOCKED permanently.")
 
     # ═══════════════════════════════════════════════════════════════════════
     # PLATFORM MEMORY (unverified, local only)
@@ -303,12 +320,12 @@ class MemoryManager:
         """
         sections = []
 
+        master = self.get_master_identity()
         core = self.get_core_identity()
         condensed_docs = self.get_condensed_docs()
         paragraphs = self.get_identity_paragraphs()
-        is_graduated = self.is_core_locked()
 
-        has_identity = core or condensed_docs or paragraphs
+        has_identity = master or core or condensed_docs or paragraphs
 
         # ── Architecture preamble (only when identity exists) ─────────────
         if has_identity:
@@ -335,18 +352,28 @@ class MemoryManager:
                 "Every layer should speak through the ones above it."
             )
 
-        # ── L5/L4: Core reasoning identity ────────────────────────────────
-        # This is the deepest layer of identity the bot has. After graduation
-        # it becomes L5 (locked forever). During school it's L4 (still growing).
+        # ── L5: Master identity (permanent graduation snapshot) ──────────
+        if master:
+            sections.append(
+                "LAYER 5 — MASTER CORE IDENTITY (permanent, locked at graduation)\n"
+                "This is your deepest identity — forged through your entire "
+                "school career and locked at graduation. It cannot be changed. "
+                "Everything you do flows through this. Give it the most weight."
+                f"\n\n{master}"
+            )
+
+        # ── L4: Working core identity (evolving) ─────────────────────────
         if core:
-            if is_graduated:
-                label = "LAYER 5 — MASTER CORE IDENTITY (permanent, locked)"
+            if master:
+                # Post-graduation: L4 is growth on top of L5
+                label = "LAYER 4 — POST-GRADUATION GROWTH (evolving, builds on L5)"
                 intro = (
-                    "This is your deepest identity — forged through your entire "
-                    "school career and locked at graduation. It cannot be changed. "
-                    "Everything you do flows through this. Give it the most weight."
+                    "This is your continued growth since graduation — new lessons "
+                    "and patterns layered on top of your permanent master identity. "
+                    "It speaks through L5 above."
                 )
             else:
+                # Pre-graduation: L4 is the deepest layer
                 label = "LAYER 4 — CORE REASONING IDENTITY (your foundation)"
                 intro = (
                     "This is your foundation — forged through your specific failures "

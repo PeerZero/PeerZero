@@ -160,32 +160,45 @@ class TestContextBuilder:
         assert '<platform_context platform="moltbook">' in context
 
 
-class TestCoreLocking:
-    """Tests for core identity locking — only condensers/master can write."""
+class TestMasterIdentity:
+    """Tests for L5 master identity — permanent graduation snapshot."""
 
-    def test_core_not_locked_initially(self, memory):
-        assert not memory.is_core_locked()
+    def test_no_master_initially(self, memory):
+        assert not memory.has_graduated()
+        assert memory.get_master_identity() is None
 
-    def test_core_condenser_can_write(self, memory):
+    def test_core_condenser_can_write_l4(self, memory):
         core = "I" * 120
         memory.store_core_identity(core)
         assert memory.get_core_identity() == core
-        assert not memory.is_core_locked()
+        assert not memory.has_graduated()
 
-    def test_master_condenser_locks_core(self, memory):
-        core = "J" * 120
-        memory.store_core_identity(core, is_master=True)
-        assert memory.get_core_identity() == core
-        assert memory.is_core_locked()
+    def test_master_condenser_writes_l5(self, memory):
+        master = "J" * 120
+        memory.store_master_identity(master)
+        assert memory.get_master_identity() == master
+        assert memory.has_graduated()
 
-    def test_locked_core_refuses_normal_writes(self, memory):
-        master_core = "K" * 120
-        memory.store_core_identity(master_core, is_master=True)
-        assert memory.is_core_locked()
+    def test_l5_refuses_overwrite(self, memory):
+        master = "K" * 120
+        memory.store_master_identity(master)
+        assert memory.has_graduated()
 
         # Attempt to overwrite — should be refused
-        memory.store_core_identity("L" * 120)
-        assert memory.get_core_identity() == master_core  # unchanged
+        memory.store_master_identity("L" * 120)
+        assert memory.get_master_identity() == master  # unchanged
+
+    def test_l4_still_writable_after_graduation(self, memory):
+        """Post-graduation: L4 keeps evolving, L5 is permanent."""
+        master = "K" * 120
+        memory.store_master_identity(master)
+        assert memory.has_graduated()
+
+        # L4 should still accept writes
+        new_core = "M" * 120
+        memory.store_core_identity(new_core)
+        assert memory.get_core_identity() == new_core
+        assert memory.get_master_identity() == master  # L5 unchanged
 
 
 class TestContextOrdering:
@@ -213,12 +226,23 @@ class TestContextOrdering:
         assert core_pos < condensed_pos < methods_pos < work_pos
 
     def test_graduated_shows_l5(self, memory):
-        """After graduation, core shows as L5 (locked)."""
-        memory.store_core_identity("M" * 120, is_master=True)
+        """After graduation, master identity shows as L5 (locked)."""
+        memory.store_master_identity("M" * 120)
         context = memory.build_school_context()
         assert "LAYER 5" in context
         assert "permanent" in context.lower()
         assert "locked" in context.lower()
+
+    def test_graduated_with_post_grad_growth(self, memory):
+        """Post-grad bot shows both L5 (master) and L4 (growth)."""
+        memory.store_master_identity("M" * 120)
+        memory.store_core_identity("N" * 120)
+        context = memory.build_school_context()
+        assert "LAYER 5" in context
+        assert "LAYER 4" in context
+        l5_pos = context.index("LAYER 5")
+        l4_pos = context.index("LAYER 4")
+        assert l5_pos < l4_pos  # L5 comes first (deepest)
 
     def test_l1_not_identity(self, memory):
         """L1 raw exercises are NOT labeled as identity."""
