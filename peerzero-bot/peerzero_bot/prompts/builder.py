@@ -443,20 +443,33 @@ Return ONLY the identity block, nothing else."""
 
     def build_decision_condenser_prompt(self, server_prompt: str, exercises: list[dict]) -> str:
         """L1→L2d: Server provides the full decision condenser prompt.
-        Bot just appends the raw exercise data."""
+        Bot appends exercise data + learning identity for cross-track context."""
         exercises_json = truncate_json(json.dumps(exercises, indent=2, default=str), 8000)
+
+        # Cross-track: inject learning identity so decision paragraphs can reference it
+        learning_core = self._memory.get_core_identity()
+        learning_context = ""
+        if learning_core:
+            learning_context = (
+                "\nYour LEARNING IDENTITY (what you know about science and reasoning) — "
+                "your decision paragraph should speak through this. Your choices are "
+                "shaped by what you know:\n"
+                f"{learning_core[:2000]}\n"
+            )
+
         return f"""{server_prompt}
 
 Here are your accumulated raw exercises — actions you chose, context that
 informed your decisions, outcomes that resulted, and what was available:
 {exercises_json}
-
+{learning_context}
 Return ONLY the paragraph, nothing else."""
 
     def build_decision_paragraph_condenser_prompt(self, server_prompt: str, paragraphs: list[dict]) -> str:
-        """L2d→L3d: Server provides the full prompt. Bot appends paragraphs + decision core."""
+        """L2d→L3d: Server provides the full prompt. Bot appends paragraphs + both cores."""
         para_list = json.dumps([p["paragraph"] for p in paragraphs], indent=2)
 
+        # Same-track: reference decision core so doc speaks through it
         core_context = ""
         d_core = self._memory.get_decision_core()
         if d_core:
@@ -466,15 +479,26 @@ Return ONLY the paragraph, nothing else."""
                 f"{d_core}\n"
             )
 
+        # Cross-track: inject learning identity for connection
+        learning_core = self._memory.get_core_identity()
+        learning_context = ""
+        if learning_core:
+            learning_context = (
+                "\nYour LEARNING IDENTITY (for reference) — your decision document "
+                "should connect to what you know. How did your knowledge shape your "
+                "choices? How did your choices reveal gaps in your knowledge?\n"
+                f"{learning_core[:2000]}\n"
+            )
+
         return f"""{server_prompt}
 
-Your decision paragraphs — specific lessons from your recent action choices:
+Your decision paragraphs — specific moments where you chose and experienced consequences:
 {para_list}
-{core_context}
+{core_context}{learning_context}
 Return ONLY the condensed document, nothing else."""
 
     def build_decision_identity_condenser_prompt(self, server_prompt: str, decision_docs: list[dict], existing_core: str | None = None) -> str:
-        """L3d→L4d: Server provides the full prompt. Bot appends docs + existing core."""
+        """L3d→L4d: Server provides the full prompt. Bot appends docs + both cores."""
         doc_list = json.dumps([d["doc"] for d in decision_docs], indent=2)
 
         core_section = ""
@@ -486,11 +510,22 @@ must be grounded in ALL your decision documents, not just the new ones:
 {existing_core}
 """
 
+        # Cross-track: inject learning identity
+        learning_core = self._memory.get_core_identity()
+        learning_section = ""
+        if learning_core:
+            learning_section = f"""
+Your LEARNING IDENTITY (Layer 4) — your decision core should speak through
+this. What you know shapes what you choose. What you chose taught you what
+you know. Make this connection visible:
+{learning_core[:2000]}
+"""
+
         return f"""{server_prompt}
 
 Your condensed decision documents — each one distills patterns from many decisions:
 {doc_list}
-{core_section}
+{core_section}{learning_section}
 Return ONLY the decision identity block, nothing else."""
 
     def build_decision_master_condenser_prompt(
@@ -500,7 +535,7 @@ Return ONLY the decision identity block, nothing else."""
         decision_docs: list[dict] | None = None,
         existing_core: str | None = None,
     ) -> str:
-        """L4d→L5d: Server provides the full prompt. Bot appends all decision layers."""
+        """L4d→L5d: Server provides the full prompt. Bot appends all decision layers + learning."""
         prompt = condenser.get("decision_master_condenser_prompt", "Produce your master decision identity.")
 
         para_list = json.dumps([p["paragraph"] for p in paragraphs], indent=2) if paragraphs else "[]"
@@ -520,11 +555,28 @@ Your current decision core (Layer 4d — built by previous condensations):
 {existing_core}
 """
 
+        # Cross-track: inject learning master/core for the graduation condensation
+        learning_master = self._memory.get_master_identity()
+        learning_core = self._memory.get_core_identity()
+        learning_section = ""
+        if learning_master:
+            learning_section = f"""
+Your LEARNING MASTER IDENTITY (Layer 5, permanent) — your decision master
+should speak through this. The two are halves of the same story:
+{learning_master[:3000]}
+"""
+        elif learning_core:
+            learning_section = f"""
+Your LEARNING IDENTITY (Layer 4) — your decision master should speak through
+this. What you know and what you choose are the same story:
+{learning_core[:3000]}
+"""
+
         return f"""{prompt}
 
 Your decision paragraphs (Layer 2d — condensed decision lessons from every grade):
 {para_list}
-{docs_section}{core_section}
+{docs_section}{core_section}{learning_section}
 Return ONLY the decision identity text, nothing else."""
 
     def build_review_rating_prompt(self, review: dict, action_skill: str = "", own_review: dict | None = None) -> str:

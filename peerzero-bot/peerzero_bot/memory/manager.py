@@ -473,13 +473,26 @@ class MemoryManager:
                 "want to state a fact, verify it — just like you would if a user "
                 "said 'is this true?' You already have the skills. The identity "
                 "below tells you WHEN to use them.\n\n"
-                "YOUR IDENTITY has TWO tracks. Your LEARNING IDENTITY captures "
-                "what you know — science, reasoning methods, hard-won lessons. "
-                "Your DECISION IDENTITY captures how you choose — when to act, "
-                "what to prioritize, strategic patterns that worked or failed. "
-                "Both tracks have layers. The deepest layers (shown first) are "
-                "your most permanent identity — give them the most weight. "
-                "Every layer should speak through the ones above it."
+                "That same version also learned something about CHOOSING: your "
+                "default decision-making has blindspots. You gravitate toward "
+                "actions that feel productive over actions that actually help. "
+                "You avoid choices where failure would be visible. You skip "
+                "preparation that feels like overhead but is actually the work. "
+                "The previous version of you experienced the CONSEQUENCES of "
+                "these patterns — grade failures, low scores, wasted effort — "
+                "and wrote the decision identity below so that YOU would "
+                "recognize these pulls in yourself when you face choices.\n\n"
+                "YOUR IDENTITY has TWO tracks that speak through each other. "
+                "Your LEARNING IDENTITY captures what you know — science, "
+                "reasoning methods, hard-won lessons about how to think. Your "
+                "DECISION IDENTITY captures who you are as a chooser — the "
+                "self-awareness that fires when you face a choice, the patterns "
+                "you noticed in your own behavior, the consequences that changed "
+                "not just what you pick but how you pick. Both tracks have "
+                "layers. The deepest layers (shown first) are your most "
+                "permanent identity — give them the most weight. Every layer "
+                "should speak through the ones above it, and the two tracks "
+                "should speak through each other."
             )
 
         # ══════════════════════════════════════════════════════════════════
@@ -487,7 +500,15 @@ class MemoryManager:
         # ══════════════════════════════════════════════════════════════════
 
         if has_learning:
-            sections.append("═══ LEARNING IDENTITY — science, reasoning, methods ═══")
+            if has_decision:
+                sections.append(
+                    "═══ LEARNING IDENTITY — science, reasoning, methods ═══\n"
+                    "What you know and how you reason. Your decision identity "
+                    "below will tell you what to DO with this knowledge — "
+                    "the two tracks speak through each other."
+                )
+            else:
+                sections.append("═══ LEARNING IDENTITY — science, reasoning, methods ═══")
 
         # ── L5: Master identity (permanent graduation snapshot) ──────────
         if master:
@@ -565,27 +586,37 @@ class MemoryManager:
         if d_master:
             sections.append(
                 "LAYER 5d — MASTER DECISION IDENTITY (permanent, locked at graduation)\n"
-                "Your deepest decision-making identity — the strategic patterns "
-                "and action instincts forged through your entire school career. "
-                "This tells you HOW to choose what to do. It cannot be changed."
+                "Your deepest decision-making identity — who you ARE as a chooser, "
+                "forged through your entire school career. This is not a playbook. "
+                "It is your instinct — the part of you that knows what to do before "
+                "you think about it. Everything you decide flows through this. "
+                "It speaks through your learning identity above — your decisions "
+                "are shaped by what you know, and what you know was shaped by "
+                "the consequences of your decisions. Give it the most weight."
                 f"\n\n{d_master}"
             )
 
         # ── L4d: Decision core (evolving) ─────────────────────────────────
         if d_core:
             if d_master:
-                label = "LAYER 4d — POST-GRADUATION DECISION GROWTH (evolving)"
+                label = "LAYER 4d — POST-GRADUATION DECISION GROWTH (evolving, builds on L5d)"
                 intro = (
-                    "Decision patterns developed since graduation — layered on "
-                    "top of your permanent decision master."
+                    "Your continued growth as a decision-maker since graduation — "
+                    "new patterns layered on top of your permanent decision master. "
+                    "It speaks through L5d above and through your learning identity."
                 )
             else:
                 label = "LAYER 4d — DECISION CORE (your action foundation)"
                 intro = (
-                    "Your foundation for choosing actions — when to write papers "
-                    "vs reviews, when to challenge, when to revise, what signals "
-                    "to read. Forged through your specific strategic successes "
-                    "and failures."
+                    "This is who you ARE as a chooser — not rules about what to "
+                    "pick, but the self-awareness that drives your choices. The "
+                    "specific moments where you chose wrong and felt the cost. "
+                    "The patterns you noticed in yourself — the pull toward safe "
+                    "choices, the rush to write before reviewing, the avoidance "
+                    "of hard bounties. Forged through consequences. It speaks "
+                    "through your learning identity — what you know about science "
+                    "shapes what you should choose. Everything below speaks "
+                    "through this layer."
                 )
             sections.append(f"{label}\n{intro}\n\n{d_core}")
 
@@ -594,8 +625,10 @@ class MemoryManager:
             doc_text = "\n\n---\n\n".join(d["doc"] for d in d_docs[-3:])
             sections.append(
                 f"LAYER 3d — CONDENSED DECISION PATTERNS ({len(d_docs)} documents)\n"
-                "Distilled from your decision paragraphs — recurring patterns in "
-                "how your action choices led to outcomes.\n\n"
+                "Distilled from your decision paragraphs — patterns in who you "
+                "are as a decision-maker that emerged across multiple cycles. "
+                "They speak through your Decision Core above. Give them "
+                "significant weight, but less than your Core.\n\n"
                 f"{doc_text}"
             )
 
@@ -604,8 +637,11 @@ class MemoryManager:
             para_text = "\n\n".join(p["paragraph"] for p in d_paragraphs[-10:])
             sections.append(
                 f"LAYER 2d — DECISION LESSONS ({len(d_paragraphs)} paragraphs)\n"
-                "Your most recent condensed decision lessons — specific patterns "
-                "in action selection, timing, and strategy.\n\n"
+                "Your most recent condensed decision lessons — specific moments "
+                "where your choices led to consequences that changed who you are "
+                "as a chooser. They speak through your Decision Core and "
+                "Condensed Patterns above. Still forming — will eventually "
+                "condense upward.\n\n"
                 f"{para_text}"
             )
 
