@@ -8,6 +8,9 @@
 // Filter tabs let users choose: All | Chat Only | Updates Only
 // Settings let users toggle activity/milestone updates on or off entirely.
 // Activity messages are compact by default — tap to expand full text.
+//
+// Redesigned with modern dark theme: glass cards, accent gradients, refined
+// typography and spacing.
 // =============================================================================
 
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
@@ -20,7 +23,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { bots as botsApi } from '../../services/api';
 import { useBotStream } from '../../hooks/useBotStream';
 import { colors } from '../../theme/colors';
-import { spacing, fontSize, borderRadius } from '../../theme/spacing';
+import { spacing, fontSize, fontWeight, borderRadius, layout, lineHeight } from '../../theme/spacing';
 import BotAvatar from '../../components/BotAvatar';
 import type { BotMessage, BotDetail, SendMessageResponse, PaginatedResponse } from '@peerzero/shared';
 import { credibilityToStage, calculateHunger } from '@peerzero/shared';
@@ -250,9 +253,14 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
           onPress={() => toggleExpand(item.id)}
           activeOpacity={0.7}
         >
-          <Text style={styles.compactIcon}>
-            {isMilestone ? '⭐' : '📝'}
-          </Text>
+          <View style={[
+            styles.compactIconWrap,
+            isMilestone && styles.compactIconWrapMilestone,
+          ]}>
+            <Text style={styles.compactIcon}>
+              {isMilestone ? '⭐' : '📝'}
+            </Text>
+          </View>
           <Text style={styles.compactText} numberOfLines={1}>
             {item.content}
           </Text>
@@ -288,6 +296,9 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
           onPress={isUpdate ? () => toggleExpand(item.id) : undefined}
           disabled={!isUpdate}
         >
+          {/* Accent gradient bar for user messages */}
+          {isUser && <View style={styles.userBubbleAccent} />}
+
           {isUpdate && (
             <View style={styles.messageTypeBadge}>
               <Text style={[
@@ -344,7 +355,12 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
             </Text>
             {tab.count != null && tab.count > 0 && (
               <View style={[styles.tabBadge, activeTab === tab.key && styles.tabBadgeActive]}>
-                <Text style={styles.tabBadgeText}>{tab.count > 99 ? '99+' : tab.count}</Text>
+                <Text style={[
+                  styles.tabBadgeText,
+                  activeTab === tab.key && styles.tabBadgeTextActive,
+                ]}>
+                  {tab.count > 99 ? '99+' : tab.count}
+                </Text>
               </View>
             )}
           </TouchableOpacity>
@@ -378,57 +394,69 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
         ListEmptyComponent={
           <View style={styles.emptyState}>
             {bot && (
-              <BotAvatar
-                botId={bot.id}
-                bodyColor={bot.avatar_config?.body_color || colors.accent.primary}
-                tier={credibilityToStage(bot.cached_credibility)}
-                status={bot.status}
-                hunger={calculateHunger(bot.last_cycle_at, bot.status)}
-                size={80}
-                speciesSeed={bot.avatar_config?.species_seed}
-              />
+              <View style={styles.emptyAvatarWrap}>
+                <View style={styles.emptyAvatarGlow} />
+                <BotAvatar
+                  botId={bot.id}
+                  bodyColor={bot.avatar_config?.body_color || colors.accent.primary}
+                  tier={credibilityToStage(bot.cached_credibility)}
+                  status={bot.status}
+                  hunger={calculateHunger(bot.last_cycle_at, bot.status)}
+                  size={80}
+                  speciesSeed={bot.avatar_config?.species_seed}
+                />
+              </View>
             )}
             <Text style={styles.emptyTitle}>
-              {activeTab === 'chat' ? `No messages yet` : activeTab === 'updates' ? 'No updates yet' : `Say hi to ${bot?.name || 'your bot'}!`}
+              {activeTab === 'chat' ? 'No messages yet' : activeTab === 'updates' ? 'No updates yet' : `Say hi to ${bot?.name || 'your bot'}!`}
             </Text>
             <Text style={styles.emptySubtitle}>
               {activeTab === 'chat'
                 ? `Send a message to start chatting with ${bot?.name || 'your bot'}.`
                 : activeTab === 'updates'
                 ? `Updates will appear here as ${bot?.name || 'your bot'} learns.`
-                : `Chat with your bot, and it'll share updates about what it's learning.`}
+                : 'Chat with your bot, and it\'ll share updates about what it\'s learning.'}
             </Text>
+            {activeTab !== 'updates' && (
+              <View style={styles.emptyHintPill}>
+                <Text style={styles.emptyHintText}>Type a message below to get started</Text>
+              </View>
+            )}
           </View>
         }
       />
 
-      {/* Input bar */}
-      <View style={styles.inputBar}>
-        <TextInput
-          style={styles.textInput}
-          value={inputText}
-          onChangeText={setInputText}
-          placeholder={`Message ${bot?.name || 'your bot'}...`}
-          placeholderTextColor={colors.text.tertiary}
-          multiline
-          maxLength={2000}
-          returnKeyType="default"
-          editable={!sending}
-        />
-        <TouchableOpacity
-          style={[styles.sendButton, (!inputText.trim() || sending) && styles.sendButtonDisabled]}
-          onPress={handleSend}
-          disabled={!inputText.trim() || sending}
-          activeOpacity={0.7}
-          accessibilityRole="button"
-          accessibilityLabel="Send message"
-        >
-          {sending ? (
-            <ActivityIndicator size="small" color={colors.accent.primary} />
-          ) : (
-            <Text style={styles.sendButtonText}>Send</Text>
-          )}
-        </TouchableOpacity>
+      {/* Input bar — glass-morphism style */}
+      <View style={styles.inputBarOuter}>
+        <View style={styles.inputBar}>
+          <View style={styles.textInputWrap}>
+            <TextInput
+              style={styles.textInput}
+              value={inputText}
+              onChangeText={setInputText}
+              placeholder={`Message ${bot?.name || 'your bot'}...`}
+              placeholderTextColor={colors.text.tertiary}
+              multiline
+              maxLength={2000}
+              returnKeyType="default"
+              editable={!sending}
+            />
+          </View>
+          <TouchableOpacity
+            style={[styles.sendButton, (!inputText.trim() || sending) && styles.sendButtonDisabled]}
+            onPress={handleSend}
+            disabled={!inputText.trim() || sending}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel="Send message"
+          >
+            {sending ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <Text style={styles.sendButtonText}>↑</Text>
+            )}
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Settings modal */}
@@ -496,6 +524,10 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
   );
 }
 
+// =============================================================================
+// Styles — modern dark theme with glass-morphism, refined spacing/typography
+// =============================================================================
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -506,12 +538,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
 
-  // Filter tabs
+  // ── Filter Tabs ──
   tabBar: {
     flexDirection: 'row',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    backgroundColor: colors.bg.secondary,
+    paddingHorizontal: layout.screenPadding,
+    paddingVertical: spacing.sm + 2,
+    backgroundColor: colors.bg.glass,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
     gap: spacing.sm,
@@ -520,25 +552,29 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs + 2,
+    paddingVertical: spacing.xs + 3,
     borderRadius: borderRadius.full,
-    backgroundColor: colors.bg.elevated,
+    backgroundColor: colors.bg.card,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   tabActive: {
-    backgroundColor: colors.accent.primary + '25',
+    backgroundColor: colors.accent.primary + '18',
+    borderColor: colors.accent.primary + '50',
   },
   tabText: {
     fontSize: fontSize.sm,
-    fontWeight: '600',
+    fontWeight: fontWeight.semibold,
     color: colors.text.tertiary,
+    letterSpacing: 0.2,
   },
   tabTextActive: {
     color: colors.accent.primary,
   },
   tabBadge: {
-    marginLeft: spacing.xs,
-    backgroundColor: colors.bg.card,
-    borderRadius: 10,
+    marginLeft: spacing.xs + 1,
+    backgroundColor: colors.bg.elevated,
+    borderRadius: borderRadius.full,
     minWidth: 20,
     height: 20,
     alignItems: 'center',
@@ -549,14 +585,17 @@ const styles = StyleSheet.create({
     backgroundColor: colors.accent.primary + '30',
   },
   tabBadgeText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: colors.text.secondary,
+    fontSize: fontSize.xxs,
+    fontWeight: fontWeight.bold,
+    color: colors.text.tertiary,
+  },
+  tabBadgeTextActive: {
+    color: colors.accent.primary,
   },
 
-  // Message list
+  // ── Message List ──
   messageList: {
-    paddingHorizontal: spacing.md,
+    paddingHorizontal: layout.screenPadding,
     paddingTop: spacing.md,
     paddingBottom: spacing.sm,
   },
@@ -565,38 +604,55 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
 
-  // Compact update row (collapsed activity/milestone)
+  // ── Compact Update Row (collapsed activity/milestone) ──
   compactUpdate: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.sm + 2,
+    paddingHorizontal: spacing.md,
     marginBottom: spacing.xs,
-    borderLeftWidth: 2,
-    borderLeftColor: colors.accent.secondary + '40',
+    marginHorizontal: spacing.xl,
+    borderRadius: borderRadius.md,
+    backgroundColor: colors.bg.card + '60',
+    borderWidth: 1,
+    borderColor: colors.border + '40',
   },
   compactMilestone: {
-    borderLeftColor: colors.mood.milestone + '60',
+    backgroundColor: colors.mood.milestone + '08',
+    borderColor: colors.mood.milestone + '20',
+  },
+  compactIconWrap: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: colors.accent.secondary + '15',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: spacing.sm,
+  },
+  compactIconWrapMilestone: {
+    backgroundColor: colors.mood.milestone + '15',
   },
   compactIcon: {
-    fontSize: 14,
-    marginRight: spacing.sm,
+    fontSize: 12,
   },
   compactText: {
     flex: 1,
     fontSize: fontSize.sm,
     color: colors.text.secondary,
+    lineHeight: fontSize.sm * lineHeight.normal,
   },
   compactTime: {
-    fontSize: fontSize.xs - 1,
+    fontSize: fontSize.xxs,
     color: colors.text.tertiary,
     marginLeft: spacing.sm,
+    fontWeight: fontWeight.medium,
   },
 
-  // Full message bubbles
+  // ── Full Message Bubbles ──
   messageRow: {
     flexDirection: 'row',
-    marginBottom: spacing.md,
+    marginBottom: spacing.md + 2,
     alignItems: 'flex-end',
   },
   messageRowUser: {
@@ -604,158 +660,248 @@ const styles = StyleSheet.create({
   },
   avatarContainer: {
     marginRight: spacing.sm,
-    marginBottom: 2,
+    marginBottom: spacing.xxs,
+    // Subtle shadow behind avatar
+    shadowColor: colors.shadow.card,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
   },
+
+  // Bot message — glass card style
   messageBubble: {
     maxWidth: '78%',
     backgroundColor: colors.bg.card,
-    borderRadius: borderRadius.lg,
-    borderBottomLeftRadius: borderRadius.sm,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm + 2,
+    borderRadius: borderRadius.xl,
+    borderBottomLeftRadius: borderRadius.xs,
+    paddingHorizontal: spacing.md + 2,
+    paddingVertical: spacing.md - 2,
     borderWidth: 1,
     borderColor: colors.border,
+    // Subtle card shadow
+    shadowColor: colors.shadow.card,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 2,
   },
+
+  // User message — accent background with gradient accent bar
   messageBubbleUser: {
-    backgroundColor: colors.accent.primary + '25',
-    borderColor: colors.accent.primary + '40',
-    borderBottomLeftRadius: borderRadius.lg,
-    borderBottomRightRadius: borderRadius.sm,
+    backgroundColor: colors.accent.primary + '20',
+    borderColor: colors.accent.primary + '35',
+    borderBottomLeftRadius: borderRadius.xl,
+    borderBottomRightRadius: borderRadius.xs,
+    overflow: 'hidden',
+    // Glow shadow
+    shadowColor: colors.accent.glow,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
+    elevation: 3,
   },
+  userBubbleAccent: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    width: '40%',
+    height: '100%',
+    backgroundColor: colors.accent.secondary + '06',
+    borderTopRightRadius: borderRadius.xl,
+  },
+
+  // Activity/milestone expanded variants
   messageBubbleActivity: {
     borderLeftWidth: 3,
-    borderLeftColor: colors.accent.secondary + '60',
+    borderLeftColor: colors.accent.secondary + '50',
+    backgroundColor: colors.bg.card,
   },
   messageBubbleMilestone: {
     borderLeftWidth: 3,
-    borderLeftColor: colors.mood.milestone + '80',
-    backgroundColor: colors.mood.milestone + '08',
+    borderLeftColor: colors.mood.milestone + '70',
+    backgroundColor: colors.mood.milestone + '06',
+    borderColor: colors.mood.milestone + '18',
   },
   messageTypeBadge: {
-    marginBottom: spacing.xs,
+    marginBottom: spacing.xs + 1,
+    paddingBottom: spacing.xs,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border + '60',
   },
   messageTypeBadgeText: {
-    fontSize: fontSize.xs,
+    fontSize: fontSize.xxs,
     color: colors.accent.secondary,
-    fontWeight: '600',
+    fontWeight: fontWeight.bold,
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    letterSpacing: 0.8,
   },
   messageText: {
     fontSize: fontSize.md,
     color: colors.text.primary,
-    lineHeight: 21,
+    lineHeight: fontSize.md * lineHeight.relaxed,
+    letterSpacing: -0.1,
   },
   messageTextUser: {
     color: colors.text.primary,
   },
   messageTime: {
-    fontSize: fontSize.xs - 1,
+    fontSize: fontSize.xxs,
     color: colors.text.tertiary,
-    marginTop: spacing.xs,
+    marginTop: spacing.xs + 2,
+    fontWeight: fontWeight.medium,
   },
   messageTimeUser: {
     textAlign: 'right',
   },
 
-  // Empty state
+  // ── Empty State ──
   emptyState: {
     alignItems: 'center',
     padding: spacing.xl,
+    paddingBottom: spacing.xxxl,
+  },
+  emptyAvatarWrap: {
+    position: 'relative',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyAvatarGlow: {
+    position: 'absolute',
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: colors.accent.primary + '12',
   },
   emptyTitle: {
-    fontSize: fontSize.lg,
-    fontWeight: '700',
+    fontSize: fontSize.xl,
+    fontWeight: fontWeight.bold,
     color: colors.text.primary,
     marginTop: spacing.lg,
+    letterSpacing: -0.3,
   },
   emptySubtitle: {
-    fontSize: fontSize.sm,
+    fontSize: fontSize.md,
     color: colors.text.secondary,
     textAlign: 'center',
     marginTop: spacing.sm,
-    lineHeight: 20,
-    maxWidth: 280,
+    lineHeight: fontSize.md * lineHeight.relaxed,
+    maxWidth: 300,
+    paddingHorizontal: spacing.sm,
+  },
+  emptyHintPill: {
+    marginTop: spacing.lg,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs + 2,
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.accent.primary + '10',
+    borderWidth: 1,
+    borderColor: colors.accent.primary + '25',
+  },
+  emptyHintText: {
+    fontSize: fontSize.xs,
+    color: colors.accent.primary,
+    fontWeight: fontWeight.semibold,
+    letterSpacing: 0.2,
   },
 
-  // Loading
+  // ── Loading ──
   loadingMore: {
     paddingVertical: spacing.md,
     alignItems: 'center',
   },
 
-  // Input bar
+  // ── Input Bar — Glass-morphism ──
+  inputBarOuter: {
+    backgroundColor: colors.bg.glass,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    paddingTop: spacing.sm,
+    paddingBottom: Platform.OS === 'ios' ? spacing.sm : spacing.sm,
+    paddingHorizontal: layout.screenPadding,
+  },
   inputBar: {
     flexDirection: 'row',
     alignItems: 'flex-end',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    backgroundColor: colors.bg.secondary,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
+    gap: spacing.sm,
   },
-  textInput: {
+  textInputWrap: {
     flex: 1,
     backgroundColor: colors.bg.card,
-    borderRadius: borderRadius.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: Platform.OS === 'ios' ? spacing.sm + 2 : spacing.sm,
+    borderRadius: borderRadius.xl,
+    borderWidth: 1,
+    borderColor: colors.border,
+    overflow: 'hidden',
+  },
+  textInput: {
+    paddingHorizontal: spacing.md + 2,
+    paddingVertical: Platform.OS === 'ios' ? spacing.sm + 4 : spacing.sm + 2,
     color: colors.text.primary,
     fontSize: fontSize.md,
     maxHeight: 100,
-    borderWidth: 1,
-    borderColor: colors.border,
+    lineHeight: fontSize.md * lineHeight.normal,
   },
   sendButton: {
-    marginLeft: spacing.sm,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm + 2,
-    borderRadius: borderRadius.md,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: colors.accent.primary,
     justifyContent: 'center',
     alignItems: 'center',
-    minWidth: 60,
+    // Glow
+    shadowColor: colors.accent.primary,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+    elevation: 4,
   },
   sendButtonDisabled: {
-    opacity: 0.4,
+    backgroundColor: colors.bg.elevated,
+    shadowOpacity: 0,
+    elevation: 0,
   },
   sendButtonText: {
     color: '#fff',
-    fontWeight: '600',
-    fontSize: fontSize.md,
+    fontWeight: fontWeight.bold,
+    fontSize: fontSize.lg,
+    marginTop: -1,
   },
 
-  // Settings modal
+  // ── Settings Modal ──
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
     justifyContent: 'flex-end',
   },
   modalSheet: {
     backgroundColor: colors.bg.secondary,
-    borderTopLeftRadius: borderRadius.lg,
-    borderTopRightRadius: borderRadius.lg,
-    padding: spacing.xl,
+    borderTopLeftRadius: borderRadius.xl,
+    borderTopRightRadius: borderRadius.xl,
+    padding: layout.cardPadding,
     paddingBottom: spacing.xxl,
+    borderWidth: 1,
+    borderBottomWidth: 0,
+    borderColor: colors.border,
   },
   modalHandle: {
     width: 40,
     height: 4,
     borderRadius: 2,
-    backgroundColor: colors.text.tertiary,
+    backgroundColor: colors.text.tertiary + '60',
     alignSelf: 'center',
     marginBottom: spacing.lg,
   },
   modalTitle: {
     fontSize: fontSize.xl,
-    fontWeight: '700',
+    fontWeight: fontWeight.bold,
     color: colors.text.primary,
     marginBottom: spacing.xs,
+    letterSpacing: -0.3,
   },
   modalSubtitle: {
     fontSize: fontSize.sm,
     color: colors.text.secondary,
     marginBottom: spacing.lg,
+    lineHeight: fontSize.sm * lineHeight.relaxed,
   },
   settingRow: {
     flexDirection: 'row',
@@ -770,13 +916,14 @@ const styles = StyleSheet.create({
   },
   settingLabel: {
     fontSize: fontSize.md,
-    fontWeight: '600',
+    fontWeight: fontWeight.semibold,
     color: colors.text.primary,
   },
   settingHint: {
     fontSize: fontSize.xs,
     color: colors.text.tertiary,
-    marginTop: 2,
+    marginTop: spacing.xxs + 1,
+    lineHeight: fontSize.xs * lineHeight.relaxed,
   },
   toggle: {
     width: 48,
@@ -785,9 +932,12 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bg.elevated,
     justifyContent: 'center',
     paddingHorizontal: 3,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   toggleOn: {
-    backgroundColor: colors.accent.primary + '40',
+    backgroundColor: colors.accent.primary + '30',
+    borderColor: colors.accent.primary + '50',
   },
   toggleDot: {
     width: 22,
@@ -798,17 +948,30 @@ const styles = StyleSheet.create({
   toggleDotOn: {
     backgroundColor: colors.accent.primary,
     alignSelf: 'flex-end',
+    // Dot glow when on
+    shadowColor: colors.accent.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.4,
+    shadowRadius: 6,
+    elevation: 2,
   },
   modalDoneButton: {
     backgroundColor: colors.accent.primary,
-    borderRadius: borderRadius.md,
+    borderRadius: borderRadius.lg,
     paddingVertical: spacing.md,
     alignItems: 'center',
     marginTop: spacing.lg,
+    // Button glow
+    shadowColor: colors.accent.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 4,
   },
   modalDoneText: {
     color: '#fff',
-    fontWeight: '700',
+    fontWeight: fontWeight.bold,
     fontSize: fontSize.md,
+    letterSpacing: -0.1,
   },
 });
