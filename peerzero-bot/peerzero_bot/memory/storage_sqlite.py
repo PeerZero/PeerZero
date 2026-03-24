@@ -7,9 +7,16 @@ Still uses owner-only file permissions.
 """
 
 import json
+import logging
 import stat
 import sqlite3
 from pathlib import Path
+
+logger = logging.getLogger("peerzero-bot.memory")
+
+# Size limits for deserialization safety
+_WARN_SIZE = 1 * 1024 * 1024     # 1 MB — log a warning
+_MAX_SIZE = 10 * 1024 * 1024     # 10 MB — refuse to load
 
 
 class SqliteStorage:
@@ -42,6 +49,19 @@ class SqliteStorage:
         if row is None:
             return default
         try:
+            size = len(row[0])
+            if size > _MAX_SIZE:
+                logger.error(
+                    f"[MEMORY] Row {namespace}/{key} is {size / 1024 / 1024:.1f} MB — "
+                    f"exceeds {_MAX_SIZE / 1024 / 1024:.0f} MB safety limit. "
+                    f"Refusing to load. This row may be corrupt."
+                )
+                return default
+            if size > _WARN_SIZE:
+                logger.warning(
+                    f"[MEMORY] Row {namespace}/{key} is {size / 1024:.0f} KB — "
+                    f"approaching safety limit. Consider investigating."
+                )
             return json.loads(row[0])
         except json.JSONDecodeError:
             return default

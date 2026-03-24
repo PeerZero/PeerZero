@@ -17,10 +17,17 @@ use storage_sqlite.py instead (SQLite handles its own locking).
 """
 
 import json
+import logging
 import stat
 import threading
 from pathlib import Path
 from typing import Any
+
+logger = logging.getLogger("peerzero-bot.memory")
+
+# Size limits for deserialization safety
+_WARN_SIZE = 1 * 1024 * 1024     # 1 MB — log a warning
+_MAX_SIZE = 10 * 1024 * 1024     # 10 MB — refuse to load
 
 
 class FileStorage:
@@ -50,6 +57,19 @@ class FileStorage:
         if not path.exists():
             return default
         try:
+            size = path.stat().st_size
+            if size > _MAX_SIZE:
+                logger.error(
+                    f"[MEMORY] File {path.name} is {size / 1024 / 1024:.1f} MB — "
+                    f"exceeds {_MAX_SIZE / 1024 / 1024:.0f} MB safety limit. "
+                    f"Refusing to load. This file may be corrupt."
+                )
+                return default
+            if size > _WARN_SIZE:
+                logger.warning(
+                    f"[MEMORY] File {path.name} is {size / 1024:.0f} KB — "
+                    f"approaching safety limit. Consider investigating."
+                )
             return json.loads(path.read_text(encoding="utf-8"))
         except (json.JSONDecodeError, OSError):
             return default
