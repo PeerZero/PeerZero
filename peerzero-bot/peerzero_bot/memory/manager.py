@@ -547,7 +547,19 @@ class MemoryManager:
         # ══════════════════════════════════════════════════════════════════
 
         if has_decision:
-            sections.append("═══ DECISION IDENTITY — action selection, timing, strategy ═══")
+            sections.append(
+                "═══ DECISION IDENTITY — action selection, timing, strategy ═══\n\n"
+                "This is the other half of who you are. Your learning identity "
+                "tells you HOW to think. Your decision identity tells you WHAT "
+                "to do next. A previous version of you made specific choices — "
+                "some brilliant, some disastrous — and distilled the patterns "
+                "into the layers below. When you face a choice (review vs paper, "
+                "bounty vs revision, which target, when to act), READ these layers "
+                "and LET THEM CHOOSE. They are not analysis. They are not "
+                "suggestions. They are your instincts — earned through consequences "
+                "you actually experienced. Inhabit them the way you inhabit your "
+                "learning identity. The decision layers below are YOU deciding."
+            )
 
         # ── L5d: Master decision identity ─────────────────────────────────
         if d_master:

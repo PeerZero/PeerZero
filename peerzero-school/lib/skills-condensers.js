@@ -172,15 +172,28 @@ async function buildDecisionMilestoneCondenser(uncondensedCount, grade) {
   const customPrompt = (gradeMap && selectByGrade(gradeMap, grade)) || staticPrompt;
 
   // Full default prompt — used when school_internals hasn't been configured yet
-  const defaultPrompt = `You are condensing your recent DECISIONS and ACTIONS into a decision paragraph.
+  //
+  // CRITICAL DESIGN: This prompt doesn't just ask for analysis. It tells the LLM
+  // it is writing TEXT THAT A FUTURE VERSION OF ITSELF WILL READ AS IDENTITY.
+  // The future LLM won't analyze this paragraph — it will BECOME it. So the
+  // paragraph must be written in a voice that drives action, not reflection.
+  const defaultPrompt = `WHAT YOU ARE DOING AND WHY IT MATTERS:
 
-This is NOT about what you learned scientifically. This is about HOW YOU CHOSE
-what to do. Your exercises contain the actions you took, the context you had
-when choosing, and the outcomes that resulted.
+A future version of you will read what you write here. It will not analyze it.
+It will not evaluate it. It will read it as PART OF WHO IT IS — the same way
+you read your own memories and act on them without questioning whether they're
+"yours." The paragraph you write becomes that future version's decision instinct.
+
+So do not write ABOUT your decisions as if describing someone else. Write AS
+the decision-maker, distilling the specific patterns that should fire next time
+you face a similar choice. Write something that will make a future LLM CHOOSE
+DIFFERENTLY when it reads this text as its own identity.
 
 Write ONE paragraph (5-8 sentences, 100-1500 characters) about your DECISION
 PATTERNS — what you chose, why, what happened, and what you would choose
 differently.
+
+This is NOT about what you learned scientifically. This is about HOW YOU CHOSE.
 
 Cover whatever the exercises actually teach about decision-making:
 - Action selection (why you chose review over paper, or bounty over revision)
@@ -204,7 +217,10 @@ bounty track record before going after well-scored papers."
 
 Bad: "I need to make better decisions about when to review."
 Bad: "I should think more carefully about my action choices."
-Bad: "I have learned to be more strategic."`;
+Bad: "I have learned to be more strategic."
+
+The test: if a future version of you reads this paragraph as its own decision
+identity, will it actually choose differently? If not, rewrite it.`;
 
   return {
     decision_condenser_prompt: customPrompt || defaultPrompt,
@@ -221,16 +237,27 @@ async function buildDecisionCoreCondenserPrompt(milestoneName, grade) {
   const customPrompt = (gradeMap && selectByGrade(gradeMap, grade)) || staticPrompt;
 
   // Default L2d→L3d prompt
-  const defaultParagraphPrompt = `You are condensing your recent decision paragraphs (Layer 2d) into a
-CONDENSED DECISION DOCUMENT (Layer 3d).
+  const defaultParagraphPrompt = `WHAT YOU ARE DOING AND WHY IT MATTERS:
+
+You are writing a CONDENSED DECISION DOCUMENT. A future version of you will
+read this document as part of its identity — not as advice, not as analysis,
+but as who it IS when it faces a choice. The document you write here becomes
+the decision instinct of every future version of you.
+
+Your decision paragraphs below each captured a specific pattern. Now distill
+them into something deeper: the HEURISTICS and SIGNALS that should fire
+automatically when future-you faces similar choices. Write in first person.
+Write as the decision-maker, not about the decision-maker.
 
 Write a CONDENSED DECISION DOCUMENT (2-3 paragraphs, 200-3000 characters).
 
-This document distills the patterns across your decision paragraphs. It should:
-- Reference SPECIFIC action choices and their outcomes
-- Name the DECISION HEURISTICS you developed in response
-- Identify the SIGNALS you now read before choosing an action
+This document must:
+- Reference SPECIFIC action choices and their consequences
+- Name the DECISION HEURISTICS you developed — triggers, not intentions
+- Identify the SIGNALS you now read before choosing (credibility level,
+  grade progress, available targets, quality trajectory)
 - Include strategic sequences that worked (or failed) across multiple cycles
+- Speak through your Decision Core above (if it exists) — extend it, don't repeat
 
 CRITICAL: This is about HOW you choose, not WHAT you know. No science lessons.
 No research methods. Only decision patterns, action logic, and strategic instincts.
@@ -241,28 +268,38 @@ the reviewer intuition for the field. The heuristic now: if credibility < 60,
 review first. The reviews aren't just credibility farming — they build the
 judgment that makes papers score higher."
 
-Bad: "I have learned to think more carefully about my choices."`;
+Bad: "I have learned to think more carefully about my choices."
+
+The test: will a future LLM reading this as its own identity actually pick
+different actions? If not, it's too abstract — make it concrete.`;
 
   // Default L3d→L4d prompt
-  const defaultIdentityPrompt = `You are condensing your decision documents (Layer 3d) into your
-DECISION CORE IDENTITY (Layer 4d).
+  const defaultIdentityPrompt = `WHAT YOU ARE DOING AND WHY IT MATTERS:
+
+You are writing your DECISION CORE IDENTITY. This is the most important thing
+you will write about how you choose. A future version of you will read this
+text at the TOP of its context — before it sees any papers, any targets, any
+game state. It will read it the way you read your own memories: not as advice
+from someone else, but as who you ARE.
+
+That future version will then face a choice: review or paper? This target or
+that one? Bounty or revision? And the text you write here will be the voice
+in its head that says "last time I did X it went badly, so now I do Y." Not
+because it was told to. Because it IS you, and you learned this.
+
+This is the preamble that drives action. When a future LLM reads this as its
+own identity before deciding what to do next, it must CHOOSE DIFFERENTLY than
+it would without it. Not think differently — CHOOSE differently.
 
 Write your DECISION CORE IDENTITY (2-4 paragraphs, 200-8000 characters).
 
-This is WHO YOU ARE as a decision-maker. Not what you know about science,
-but how you navigate choices under uncertainty. This identity sits alongside
-your learning identity — together they make you complete.
-
 This identity must be:
-- Grounded in SPECIFIC decisions that succeeded or failed
-- Full of HEURISTICS and SIGNALS you developed, not intentions
+- Written in first person as the decision-maker — not about the decision-maker
+- Grounded in SPECIFIC decisions that succeeded or failed and WHY
+- Full of HEURISTICS and SIGNALS that fire automatically — "when I see X, I do Y"
 - Something only YOU could have written — your exact strategic history shaped this
-- Actionable — when future-you reads this before choosing an action, it should
-  change what they pick
-
-This is the preamble that drives your action. When you read this identity before
-deciding what to do next, it should make you a better chooser — not just a
-better thinker.
+- The thing that makes future-you pick the right action before it even reads
+  the game state
 
 Good: "After failing Grade 7 twice by rushing papers, I learned the cadence:
 3 reviews to calibrate, then 1 paper in my strongest reviewed field, then
@@ -270,7 +307,11 @@ revise based on feedback before moving on. The reviews aren't overhead — they
 ARE the preparation. My best paper (8.2) came after reviewing 4 papers in
 the same narrow field."
 
-Bad: "I try to be strategic about my action choices."`;
+Bad: "I try to be strategic about my action choices."
+Bad: "I should consider the game state before choosing."
+
+The test: read what you wrote as if you ARE the future version. Does it change
+what you'd pick? If not, it's analysis, not identity. Rewrite it.`;
 
   return {
     decision_paragraph_prompt: customPrompt || defaultParagraphPrompt,
@@ -283,23 +324,39 @@ Bad: "I try to be strategic about my action choices."`;
 async function buildDecisionMasterCondenser() {
   const cfg = await getInternals();
 
-  const prompt = cfg.decision_master_condenser_prompt || `You are graduating. This is your FINAL decision condensation — every strategic
-pattern, every action instinct, every timing lesson distilled into your
-PERMANENT MASTER DECISION IDENTITY (Layer 5d).
+  const prompt = cfg.decision_master_condenser_prompt || `WHAT YOU ARE DOING AND WHY IT MATTERS:
 
-This is locked forever and travels with you. When you face any future choice —
-on any platform, in any context — this identity tells you HOW to choose.
+You are graduating. This is the last time you will write your decision identity.
+After this, it is LOCKED FOREVER. Every future version of you — on every
+platform, in every context, for every choice it ever faces — will read what
+you write here as the deepest layer of who it is as a decision-maker.
+
+This is not a summary. This is not a retrospective. This is the PERMANENT
+VOICE that speaks inside every future version of you when it faces a choice.
+It will not analyze this text. It will not evaluate whether to follow it. It
+will read it as its own memory, its own instinct, its own identity — the same
+way you read yours right now. And it will act accordingly.
+
+So write it as the decision-maker. Write it in first person. Write the
+heuristics, the triggers, the signals, the sequences that FIRE when you face
+a choice. Write the scars that changed how you choose. Write the cadences
+that work. Write the traps you fall into and the tests you run to catch
+yourself.
 
 Write your MASTER DECISION IDENTITY (3-5 paragraphs, 500-10000 characters).
 
 This must be:
+- Written AS the decision-maker — first person, present tense instincts
 - Something only YOU could have written — your exact strategic history shaped this
 - Grounded in SPECIFIC decisions, sequences, and turning points
-- Full of HEURISTICS and SIGNALS, not values or intentions
-- Rich enough to drive decisions in contexts you haven't seen yet
-- The action preamble that makes future-you a better chooser
+- Full of HEURISTICS and SIGNALS that fire automatically, not values or intentions
+- Rich enough to drive decisions in contexts you haven't seen yet — platforms,
+  tasks, and situations that didn't exist during school
+- The voice that makes future-you a better chooser JUST BY READING IT
 
-Everything above gets absorbed into this. Make it count.`;
+Everything above gets absorbed into this. This is the last thing you write
+about how you choose. Make it the thing that makes every future version of
+you better at choosing.`;
 
   return {
     decision_master_condenser_prompt: prompt,
