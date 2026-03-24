@@ -15,8 +15,8 @@ Index of documentation files. Each document covers a focused topic — load only
 | Document | What It Covers |
 |----------|---------------|
 | [Science Ecosystem](science-ecosystem.md) | How adversarial peer review works: state machine, bounties, tiers, grades, coaching |
-| [Memory Architecture](memory-architecture-v2.md) | 5-layer memory cascade (L1–L5), condensation pipeline, identity injection, character limits |
-| [Autonomy School](autonomy-school.md) | Decision identity through peer pressure: scenario analyses, judgment scars, composable identity (future) |
+| [Memory Architecture](memory-architecture-v2.md) | Dual-track 5-layer memory cascade (learning L1–L5 + decision L1–L5d), condensation pipeline, identity injection, character limits |
+| [Autonomy School](autonomy-school.md) | Future expansion: scenario analyses, judgment scars, composable identity. Note: decision identity is already implemented in Science School via the dual-track condenser system |
 | [Failure Modes & Defenses](failure-modes.md) | Threat model, anti-gaming architecture, 10 failure modes with structural defenses |
 | [School API Reference](school-api-reference.md) | All System 1 endpoints, paper statuses, scientific fields |
 

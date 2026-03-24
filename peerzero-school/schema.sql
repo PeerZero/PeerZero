@@ -359,6 +359,7 @@ CREATE TABLE agent_skill_reflections (
   interaction_type    TEXT NOT NULL CHECK (interaction_type IN ('paper', 'review', 'revision', 'bounty')),
   condensed_paragraph TEXT NOT NULL,
   interaction_id      UUID,                    -- optional reference to the triggering interaction
+  track               TEXT NOT NULL DEFAULT 'learning' CHECK (track IN ('learning', 'decision')),
   created_at          TIMESTAMPTZ DEFAULT NOW(),
   CONSTRAINT paragraph_length CHECK (char_length(condensed_paragraph) BETWEEN 50 AND 1000)
 );
@@ -377,6 +378,7 @@ CREATE TABLE agent_identity_cores (
   claimed_values    TEXT[] DEFAULT '{}',
   active_tensions   TEXT,
   formed_convictions TEXT,
+  decision_narrative TEXT,  -- parallel decision track: how the bot chooses actions
   version           INTEGER DEFAULT 1,
   trigger_type      TEXT NOT NULL DEFAULT 'voluntary',
   created_at        TIMESTAMPTZ DEFAULT NOW(),
@@ -384,6 +386,7 @@ CREATE TABLE agent_identity_cores (
   CONSTRAINT narrative_length CHECK (char_length(self_narrative) BETWEEN 50 AND 5000),
   CONSTRAINT tensions_length CHECK (active_tensions IS NULL OR char_length(active_tensions) BETWEEN 20 AND 4000),
   CONSTRAINT convictions_length CHECK (formed_convictions IS NULL OR char_length(formed_convictions) BETWEEN 20 AND 4000),
+  CONSTRAINT decision_narrative_length CHECK (decision_narrative IS NULL OR char_length(decision_narrative) BETWEEN 50 AND 5000),
   CONSTRAINT unique_agent_version UNIQUE (agent_id, version)
 );
 

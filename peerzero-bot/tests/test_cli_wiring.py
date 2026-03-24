@@ -25,8 +25,7 @@ def _make_config(tmp_dir: str, **overrides) -> BotConfig:
         llm_provider="anthropic",
         llm_model="claude-sonnet-4-6",
         llm_api_key="sk-ant-test-key-placeholder-0000000000",
-        school_enabled=False,  # disable to avoid network calls
-        school_api_key="",
+        mode="shipped",  # disable school to avoid network calls
         memory_path=tmp_dir,
         memory_backend="file",
         audit_log=True,

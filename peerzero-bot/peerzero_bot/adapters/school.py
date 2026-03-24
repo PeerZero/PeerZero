@@ -280,10 +280,11 @@ class SchoolAdapter:
     def submit_revision(self, paper_id: str, revision_data: dict) -> dict:
         return self._post(f"/api/responses?paper_id={quote(paper_id, safe='')}", revision_data)
 
-    def submit_condensation(self, paragraph: str) -> dict:
+    def submit_condensation(self, paragraph: str, track: str = "learning") -> dict:
         return self._post("/api/skill-reflections", {
             "interaction_type": "paper",
             "condensed_paragraph": paragraph[:1000],
+            "track": track,
         })
 
     def submit_identity(self, identity_data: dict) -> dict:

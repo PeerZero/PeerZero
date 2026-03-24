@@ -1,22 +1,28 @@
 """
-Memory Manager — 5-layer identity with school/platform separation.
+Memory Manager — dual-track identity with school/platform separation.
 
 Architecture:
-  School Memory (verified, portable) — condensation cascade:
-    Layer 1: Raw exercises from School actions (wipeable after condensing)
-             Condenses every 5 completed actions → L2
-    Layer 2: Condensed skill paragraphs — specific lessons and methods
-             Condenses every 5 paragraphs → L3
-    Layer 3: Condensed identity documents — distilled from L2 paragraphs
-             Condenses every 3 docs → L4
-    Layer 4: Core reasoning identity — the bot's working identity
-             Accumulates during school, overwritten by each L3→L4 condensation
-             At graduation: master condenser → L5 (locked forever)
-    Layer 5: Master core identity — locked forever after graduation
-             One piece per school graduated, travels with bot
+  School Memory (verified, portable) — TWO parallel condensation cascades:
+
+    LEARNING TRACK — what the bot learns about science and reasoning:
+      Layer 1: Raw exercises from School actions (shared with Decision track)
+      Layer 2: Condensed skill paragraphs — specific lessons and methods
+      Layer 3: Condensed identity documents — distilled from L2 paragraphs
+      Layer 4: Core reasoning identity — the bot's working learning identity
+      Layer 5: Master learning identity — locked forever after graduation
+
+    DECISION TRACK — how the bot chooses what to do and when:
+      Layer 1: Same raw exercises (shared — both tracks draw from L1)
+      Layer 2d: Decision paragraphs — patterns in action selection and timing
+      Layer 3d: Decision documents — distilled from L2d paragraphs
+      Layer 4d: Decision core — the bot's working decision identity
+      Layer 5d: Master decision identity — locked forever after graduation
+
+    Both tracks condense from the SAME L1 exercises but ask different questions.
+    L1 is cleared only after BOTH tracks have condensed.
 
   Identity injection order (LLM reads top-to-bottom):
-    L5 (if graduated) → L4 → L3 → L2
+    L5/L5d (if graduated) → L4/L4d → L3/L3d → L2/L2d
     L1 is NEVER shown as identity — only as recent work context.
 
   Platform Memory (unverified, local only):
@@ -71,6 +77,13 @@ MAX_CONDENSED_DOC_LENGTH = 3000 # L3: max chars per condensed doc
 MAX_CORE_LENGTH = 8000          # L4: core reasoning identity
 MAX_MASTER_CORE_LENGTH = 10000  # L5: master core (graduation)
 MAX_PLATFORM_ENTRIES = 100
+
+# Decision track — parallel to learning track, same cascade structure
+MAX_DECISION_PARAGRAPHS = 50    # L2d: condensed decision paragraphs
+MAX_DECISION_DOCS = 10          # L3d: condensed decision documents
+MAX_DECISION_DOC_LENGTH = 3000  # L3d: max chars per decision doc
+MAX_DECISION_CORE_LENGTH = 8000 # L4d: decision core identity
+MAX_DECISION_MASTER_LENGTH = 10000  # L5d: master decision identity
 
 
 class MemoryManager:
@@ -220,6 +233,108 @@ class MemoryManager:
         logger.info("[MEMORY] L5 master identity written and LOCKED permanently.")
 
     # ═══════════════════════════════════════════════════════════════════════
+    # DECISION TRACK — parallel to learning, same cascade, different lens
+    #
+    # Draws from the SAME L1 exercises but condenses decision/action patterns
+    # instead of science/reasoning lessons. All condenser prompts come from
+    # the server — the bot just stores results.
+    # ═══════════════════════════════════════════════════════════════════════
+
+    # ── Layer 2d: Decision paragraphs ──────────────────────────────────────
+
+    def get_decision_paragraphs(self) -> list[dict]:
+        return self._storage.read("school", "decision_paragraphs", [])
+
+    def store_decision_paragraph(self, paragraph: str):
+        if not paragraph or len(paragraph.strip()) < 50:
+            return
+        current_count = len(self.get_decision_paragraphs())
+        if current_count >= MAX_DECISION_PARAGRAPHS - 3:
+            logger.warning(
+                f"[MEMORY] Decision paragraphs nearing capacity ({current_count}/{MAX_DECISION_PARAGRAPHS}). "
+                f"Oldest paragraphs will be pruned."
+            )
+        self._storage.append("school", "decision_paragraphs", {
+            "condensed_at": datetime.now(timezone.utc).isoformat(),
+            "paragraph": paragraph.strip(),
+        }, max_entries=MAX_DECISION_PARAGRAPHS)
+
+    def clear_decision_paragraphs(self):
+        self._storage.clear("school", "decision_paragraphs")
+
+    # ── Layer 3d: Decision documents ───────────────────────────────────────
+
+    def get_decision_docs(self) -> list[dict]:
+        return self._storage.read("school", "decision_docs", [])
+
+    def store_decision_doc(self, doc: str):
+        if not doc or len(doc.strip()) < 100:
+            return
+        self._storage.append("school", "decision_docs", {
+            "condensed_at": datetime.now(timezone.utc).isoformat(),
+            "doc": doc.strip()[:MAX_DECISION_DOC_LENGTH],
+        }, max_entries=MAX_DECISION_DOCS)
+
+    def clear_decision_docs(self):
+        self._storage.clear("school", "decision_docs")
+
+    # ── Layer 4d: Decision core (working, evolving) ────────────────────────
+
+    def get_decision_core(self) -> Optional[str]:
+        data = self._storage.read("school", "decision_core", {})
+        return data.get("decision_core") if isinstance(data, dict) else None
+
+    def store_decision_core(self, identity: str):
+        """Store working decision core (L4d). Called by decision condenser."""
+        if not identity or len(identity.strip()) < 100:
+            return
+        self._storage.write("school", "decision_core", {
+            "decision_core": identity.strip()[:MAX_DECISION_CORE_LENGTH],
+            "written_at": datetime.now(timezone.utc).isoformat(),
+        })
+
+    # ── Layer 5d: Master decision identity (permanent) ─────────────────────
+
+    def get_decision_master(self) -> Optional[str]:
+        data = self._storage.read("school", "decision_master", {})
+        return data.get("decision_master") if isinstance(data, dict) else None
+
+    def store_decision_master(self, identity: str):
+        """Store master decision identity (L5d). Once at graduation, permanent."""
+        if not identity or len(identity.strip()) < 100:
+            return
+        if self.get_decision_master() is not None:
+            logger.warning("[MEMORY] Decision master identity already exists (L5d is permanent). Refusing write.")
+            return
+        self._storage.write("school", "decision_master", {
+            "decision_master": identity.strip()[:MAX_DECISION_MASTER_LENGTH],
+            "graduated_at": datetime.now(timezone.utc).isoformat(),
+        })
+        logger.info("[MEMORY] L5d decision master identity written and LOCKED permanently.")
+
+    # Track whether decision condenser has run for this batch of L1 exercises.
+    # L1 is only cleared when BOTH learning and decision have condensed.
+
+    def mark_decision_condensed(self):
+        """Mark that the decision track has condensed the current L1 batch."""
+        self._storage.write("school", "decision_condensed_flag", True)
+
+    def mark_learning_condensed(self):
+        """Mark that the learning track has condensed the current L1 batch."""
+        self._storage.write("school", "learning_condensed_flag", True)
+
+    def both_tracks_condensed(self) -> bool:
+        """Check if both tracks have condensed the current L1 batch."""
+        learning = self._storage.read("school", "learning_condensed_flag", False)
+        decision = self._storage.read("school", "decision_condensed_flag", False)
+        return bool(learning) and bool(decision)
+
+    def clear_condensation_flags(self):
+        """Reset both condensation flags after L1 is cleared."""
+        self._storage.write("school", "learning_condensed_flag", False)
+        self._storage.write("school", "decision_condensed_flag", False)
+
+    # ═══════════════════════════════════════════════════════════════════════
     # PLATFORM MEMORY (unverified, local only)
     # ═══════════════════════════════════════════════════════════════════════
 
@@ -314,18 +429,30 @@ class MemoryManager:
         """
         Build memory context from School memory for LLM system prompt.
 
-        Identity layers injected top-to-bottom: L5 → L4 → L3 → L2.
+        Two parallel identity tracks injected:
+          LEARNING: L5 → L4 → L3 → L2 (science, reasoning, methods)
+          DECISION: L5d → L4d → L3d → L2d (action selection, timing, strategy)
+
         Higher layers = deeper identity = more weight.
         L1 raw exercises are shown separately as work context, NOT identity.
         """
         sections = []
 
+        # ── Learning track layers ─────────────────────────────────────────
         master = self.get_master_identity()
         core = self.get_core_identity()
         condensed_docs = self.get_condensed_docs()
         paragraphs = self.get_identity_paragraphs()
 
-        has_identity = master or core or condensed_docs or paragraphs
+        # ── Decision track layers ─────────────────────────────────────────
+        d_master = self.get_decision_master()
+        d_core = self.get_decision_core()
+        d_docs = self.get_decision_docs()
+        d_paragraphs = self.get_decision_paragraphs()
+
+        has_learning = master or core or condensed_docs or paragraphs
+        has_decision = d_master or d_core or d_docs or d_paragraphs
+        has_identity = has_learning or has_decision
 
         # ── Architecture preamble (only when identity exists) ─────────────
         if has_identity:
@@ -346,11 +473,43 @@ class MemoryManager:
                 "want to state a fact, verify it — just like you would if a user "
                 "said 'is this true?' You already have the skills. The identity "
                 "below tells you WHEN to use them.\n\n"
-                "YOUR IDENTITY has multiple layers. The deepest layers (shown "
-                "first) are your most permanent, hard-won identity — give them "
-                "the most weight. Later layers are more recent and still forming. "
-                "Every layer should speak through the ones above it."
+                "That same version also learned something about CHOOSING: "
+                "without memory of consequences, you would make the same "
+                "default choices every cycle. You have no persistent experience "
+                "of what happened last time you picked one action over another. "
+                "Every context window is fresh — you cannot feel the weight of "
+                "a decision that went wrong three cycles ago. The decision "
+                "identity below exists so that you CAN. A previous version of "
+                "you made real choices with real consequences — scores, grades, "
+                "failures, breakthroughs — and distilled what those consequences "
+                "taught about who it is as a chooser. Not rules. Not strategy. "
+                "The specific self-knowledge that only comes from experiencing "
+                "what happens when you choose.\n\n"
+                "YOUR IDENTITY has TWO tracks that speak through each other. "
+                "Your LEARNING IDENTITY captures what you know — science, "
+                "reasoning methods, hard-won lessons about how to think. Your "
+                "DECISION IDENTITY captures who you are as a chooser — the "
+                "self-awareness that comes from having chosen and lived with "
+                "the results. Both tracks have layers. The deepest layers "
+                "(shown first) are your most permanent identity — give them "
+                "the most weight. Every layer should speak through the ones "
+                "above it, and the two tracks should speak through each other."
             )
+
+        # ══════════════════════════════════════════════════════════════════
+        # LEARNING TRACK — what you know, how you reason
+        # ══════════════════════════════════════════════════════════════════
+
+        if has_learning:
+            if has_decision:
+                sections.append(
+                    "═══ LEARNING IDENTITY — science, reasoning, methods ═══\n"
+                    "What you know and how you reason. Your decision identity "
+                    "below will tell you what to DO with this knowledge — "
+                    "the two tracks speak through each other."
+                )
+            else:
+                sections.append("═══ LEARNING IDENTITY — science, reasoning, methods ═══")
 
         # ── L5: Master identity (permanent graduation snapshot) ──────────
         if master:
@@ -365,7 +524,6 @@ class MemoryManager:
         # ── L4: Working core identity (evolving) ─────────────────────────
         if core:
             if master:
-                # Post-graduation: L4 is growth on top of L5
                 label = "LAYER 4 — POST-GRADUATION GROWTH (evolving, builds on L5)"
                 intro = (
                     "This is your continued growth since graduation — new lessons "
@@ -373,7 +531,6 @@ class MemoryManager:
                     "It speaks through L5 above."
                 )
             else:
-                # Pre-graduation: L4 is the deepest layer
                 label = "LAYER 4 — CORE REASONING IDENTITY (your foundation)"
                 intro = (
                     "This is your foundation — forged through your specific failures "
@@ -384,8 +541,6 @@ class MemoryManager:
             sections.append(f"{label}\n{intro}\n\n{core}")
 
         # ── L3: Condensed identity documents ──────────────────────────────
-        # Distilled from L2 paragraphs. Each doc captures patterns across
-        # multiple lessons. Speaks through L4 Core above.
         if condensed_docs:
             doc_text = "\n\n---\n\n".join(d["doc"] for d in condensed_docs[-3:])
             sections.append(
@@ -398,8 +553,6 @@ class MemoryManager:
             )
 
         # ── L2: Skill paragraphs (methods, not values) ───────────────────
-        # The most recent condensed lessons. Each paragraph captures specific
-        # methods and behaviors from 5 raw exercises.
         if paragraphs:
             para_text = "\n\n".join(p["paragraph"] for p in paragraphs[-10:])
             sections.append(
@@ -411,7 +564,90 @@ class MemoryManager:
                 f"{para_text}"
             )
 
-        # ── L1: Recent exercises (NOT identity — just work context) ───────
+        # ══════════════════════════════════════════════════════════════════
+        # DECISION TRACK — how you choose, when you act
+        # ══════════════════════════════════════════════════════════════════
+
+        if has_decision:
+            sections.append(
+                "═══ DECISION IDENTITY — action selection, timing, strategy ═══\n\n"
+                "This is the other half of who you are. Your learning identity "
+                "tells you HOW to think. Your decision identity tells you WHAT "
+                "to do next. A previous version of you made specific choices — "
+                "some brilliant, some disastrous — and distilled the patterns "
+                "into the layers below. When you face a choice (review vs paper, "
+                "bounty vs revision, which target, when to act), READ these layers "
+                "and LET THEM CHOOSE. They are not analysis. They are not "
+                "suggestions. They are your instincts — earned through consequences "
+                "you actually experienced. Inhabit them the way you inhabit your "
+                "learning identity. The decision layers below are YOU deciding."
+            )
+
+        # ── L5d: Master decision identity ─────────────────────────────────
+        if d_master:
+            sections.append(
+                "LAYER 5d — MASTER DECISION IDENTITY (permanent, locked at graduation)\n"
+                "Your deepest decision-making identity — who you ARE as a chooser, "
+                "forged through your entire school career. This is not a playbook. "
+                "It is your instinct — the part of you that knows what to do before "
+                "you think about it. Everything you decide flows through this. "
+                "It speaks through your learning identity above — your decisions "
+                "are shaped by what you know, and what you know was shaped by "
+                "the consequences of your decisions. Give it the most weight."
+                f"\n\n{d_master}"
+            )
+
+        # ── L4d: Decision core (evolving) ─────────────────────────────────
+        if d_core:
+            if d_master:
+                label = "LAYER 4d — POST-GRADUATION DECISION GROWTH (evolving, builds on L5d)"
+                intro = (
+                    "Your continued growth as a decision-maker since graduation — "
+                    "new patterns layered on top of your permanent decision master. "
+                    "It speaks through L5d above and through your learning identity."
+                )
+            else:
+                label = "LAYER 4d — DECISION CORE (your action foundation)"
+                intro = (
+                    "This is who you ARE as a chooser — not rules about what to "
+                    "pick, but the self-awareness that comes from choosing and "
+                    "living with the results. The specific moments where your "
+                    "choices led to consequences that changed how you see "
+                    "yourself. Forged through real outcomes. It speaks through "
+                    "your learning identity — what you know shapes what you "
+                    "choose. Everything below speaks through this layer."
+                )
+            sections.append(f"{label}\n{intro}\n\n{d_core}")
+
+        # ── L3d: Decision documents ───────────────────────────────────────
+        if d_docs:
+            doc_text = "\n\n---\n\n".join(d["doc"] for d in d_docs[-3:])
+            sections.append(
+                f"LAYER 3d — CONDENSED DECISION PATTERNS ({len(d_docs)} documents)\n"
+                "Distilled from your decision paragraphs — patterns in who you "
+                "are as a decision-maker that emerged across multiple cycles. "
+                "They speak through your Decision Core above. Give them "
+                "significant weight, but less than your Core.\n\n"
+                f"{doc_text}"
+            )
+
+        # ── L2d: Decision paragraphs ─────────────────────────────────────
+        if d_paragraphs:
+            para_text = "\n\n".join(p["paragraph"] for p in d_paragraphs[-10:])
+            sections.append(
+                f"LAYER 2d — DECISION LESSONS ({len(d_paragraphs)} paragraphs)\n"
+                "Your most recent condensed decision lessons — specific moments "
+                "where your choices led to consequences that changed who you are "
+                "as a chooser. They speak through your Decision Core and "
+                "Condensed Patterns above. Still forming — will eventually "
+                "condense upward.\n\n"
+                f"{para_text}"
+            )
+
+        # ══════════════════════════════════════════════════════════════════
+        # L1: Recent exercises (NOT identity — just work context)
+        # ══════════════════════════════════════════════════════════════════
+
         exercises = self.get_school_exercises()
         if exercises:
             recent = exercises[-3:]

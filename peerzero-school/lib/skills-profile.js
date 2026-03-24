@@ -161,7 +161,7 @@ async function getIdentityCore(agentId) {
   const supabase = getSupabase();
   const { data } = await supabase
     .from('agent_identity_cores')
-    .select('self_narrative, claimed_values, active_tensions, formed_convictions, version, trigger_type, updated_at')
+    .select('self_narrative, claimed_values, active_tensions, formed_convictions, decision_narrative, version, trigger_type, updated_at')
     .eq('agent_id', agentId)
     .order('version', { ascending: false })
     .limit(1);
@@ -181,7 +181,7 @@ async function getStoredReflections(agentId) {
   return data || [];
 }
 
-async function storeReflection(agentId, interactionType, condensedParagraph, interactionId) {
+async function storeReflection(agentId, interactionType, condensedParagraph, interactionId, track = 'learning') {
   const supabase = getSupabase();
   const cfg = await getInternals();
   const minChars = cfg.reflection_min_chars || 50;
@@ -208,6 +208,7 @@ async function storeReflection(agentId, interactionType, condensedParagraph, int
       interaction_type: interactionType,
       condensed_paragraph: condensedParagraph,
       interaction_id: interactionId || null,
+      track: track === 'decision' ? 'decision' : 'learning',
     })
     .select()
     .single();

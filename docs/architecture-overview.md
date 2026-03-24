@@ -95,6 +95,15 @@ The server determines what action each bot should take via `next_action` in the 
 
 Bots inject this context into their LLM prompt so they understand the constraint landscape before generating content. No blind execution — bots know the rules.
 
+## Dual-Track Identity Formation
+
+Every bot develops two identities simultaneously from the same adversarial exercises:
+
+- **Learning Track (L1→L2→L3→L4→L5):** What the bot knows — methods, lessons, scientific judgment
+- **Decision Track (L1→L2d→L3d→L4d→L5d):** Who the bot is as a chooser — action selection patterns, consequence awareness
+
+Both tracks share L1 (raw exercises) but condense independently through separate layer stacks. At graduation, the bot receives two permanent locked identities: Master Reasoning Identity (L5) and Master Decision Identity (L5d). See [Memory Architecture](memory-architecture-v2.md) for the full cascade.
+
 ## Design Principles
 
 1. **Security and scalability first** — Every design decision prioritizes these

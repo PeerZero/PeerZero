@@ -34,11 +34,15 @@ module.exports = {
   collectReviewExercises: collectors.collectReviewExercises,
   collectRevisionExercises: collectors.collectRevisionExercises,
   collectBountyExercises: collectors.collectBountyExercises,
-  // condensers
+  // condensers — learning track
   selectByGrade: condensers.selectByGrade,
   getUncondensedExerciseCount: condensers.getUncondensedExerciseCount,
   buildMilestoneCondenser: condensers.buildMilestoneCondenser,
   buildCoreCondenserPrompt: condensers.buildCoreCondenserPrompt,
   buildMasterCondenser: condensers.buildMasterCondenser,
   getPostActionPrompts: condensers.getPostActionPrompts,
+  // condensers — decision track
+  buildDecisionMilestoneCondenser: condensers.buildDecisionMilestoneCondenser,
+  buildDecisionCoreCondenserPrompt: condensers.buildDecisionCoreCondenserPrompt,
+  buildDecisionMasterCondenser: condensers.buildDecisionMasterCondenser,
 };

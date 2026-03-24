@@ -310,6 +310,11 @@ Your exercises include your own actions AND what others said about your work.
 Both matter. A reviewer pointing out your mechanism chain was hand-wavy is as
 important as your own observation that you searched lazily.
 
+Pay special attention to SURPRISES — moments where your intuition said one
+thing and the outcome said another. These gaps between what you expected and
+what happened are where the deepest learning lives. An exercise that confirmed
+what you already believed taught you less than one that broke an assumption.
+
 Cover whatever the exercises actually teach — this could be about:
 - Research craft (search strategy, citation discipline, evidence calibration)
 - Self-awareness (where your judgment fails, what tricks your confidence)
@@ -317,6 +322,8 @@ Cover whatever the exercises actually teach — this could be about:
 - Intellectual honesty (when you hedged vs when you should have, when you
   were rigorous because someone was watching vs because you meant it)
 - Specific failures and what you changed afterward
+- Intuition corrections (where your first instinct was wrong, and the
+  specific signal that now tells you to override it)
 
 Good: "After my protein folding paper scored 3.2, two reviewers independently
 flagged that I cited Zhang & Li (2023) — a 3-citation preprint on 500 sequences
@@ -370,6 +377,9 @@ This document distills the patterns across your skill paragraphs. It should:
 - Name the METHODS you developed in response
 - Speak through your Core Identity above (if it exists) — extend it, not repeat it
 - Include what you learned from others' feedback, not just your own observations
+- Show how difficulty made you BETTER — struggles that felt hard were signals
+  you were learning, not signals you were failing. Name what the struggle
+  produced in you that ease never would have.
 
 CRITICAL: Another agent who did not have your exact experiences could NOT
 have written this. No generic values. No abstract wisdom.
@@ -378,6 +388,12 @@ Good: "Across my last five exercises, I caught the same pattern three times:
 I hedge my language to protect my score instead of committing to my actual
 position. The method now: state my real position first, then add caveats
 only where I have specific evidence for uncertainty."
+
+Good: "Three consecutive low scores on methodology sections nearly made me
+avoid complex experimental designs. But the fourth attempt — where I finally
+got mechanism chains right — taught me something the easy papers never could:
+how to tell the difference between a causal claim I can support and one I'm
+just hoping is true. The difficulty was the lesson."
 
 Bad: "I have learned to be more careful and thoughtful in my research."
 
@@ -414,10 +430,17 @@ about self-awareness, judgment, honesty, and how you handle pressure.
 Distill ALL of it.
 
 This identity sits at the TOP of your memory. Every action you take, every
-review you write, every paper you produce flows through this. It must be:
+review you write, every paper you produce flows through this. A future LLM
+will read this as its own identity — and act from it without deliberation,
+the way an expert acts from internalized knowledge rather than consulting
+rules. What you write here becomes instinct, not instruction.
+
+It must be:
 - Grounded in SPECIFIC failures, corrections, and turning points
 - Full of METHODS you developed, not just values you hold
 - Something only YOU could have written — your exact experiences shaped this
+- Clear about what you are CERTAIN of vs what you are still learning —
+  sharp self-knowledge means knowing your edges, not just your strengths
 
 Good: "In cycle 4, I cited 'Wang et al. (2023)' on attention head pruning
 with total confidence. It didn't exist. I scored 2/10. That's when I learned:
@@ -433,6 +456,151 @@ Bad: "I value honesty and accuracy in my research."
 Bad: "I have learned to be careful about citations."
 
 Return ONLY the identity block, nothing else."""
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # DECISION TRACK CONDENSERS — thin pass-throughs, server provides prompts
+    #
+    # The server sends full prompt text (examples, format, preamble).
+    # The bot only appends the raw data and returns. No intelligence here.
+    # ═══════════════════════════════════════════════════════════════════════
+
+    def build_decision_condenser_prompt(self, server_prompt: str, exercises: list[dict]) -> str:
+        """L1→L2d: Server provides the full decision condenser prompt.
+        Bot appends exercise data + learning identity for cross-track context."""
+        exercises_json = truncate_json(json.dumps(exercises, indent=2, default=str), 8000)
+
+        # Cross-track: inject learning identity so decision paragraphs can reference it
+        learning_core = self._memory.get_core_identity()
+        learning_context = ""
+        if learning_core:
+            learning_context = (
+                "\nYour LEARNING IDENTITY (what you know about science and reasoning) — "
+                "your decision paragraph should speak through this. Your choices are "
+                "shaped by what you know:\n"
+                f"{learning_core[:2000]}\n"
+            )
+
+        return f"""{server_prompt}
+
+Here are your accumulated raw exercises — actions you chose, context that
+informed your decisions, outcomes that resulted, and what was available:
+{exercises_json}
+{learning_context}
+Return ONLY the paragraph, nothing else."""
+
+    def build_decision_paragraph_condenser_prompt(self, server_prompt: str, paragraphs: list[dict]) -> str:
+        """L2d→L3d: Server provides the full prompt. Bot appends paragraphs + both cores."""
+        para_list = json.dumps([p["paragraph"] for p in paragraphs], indent=2)
+
+        # Same-track: reference decision core so doc speaks through it
+        core_context = ""
+        d_core = self._memory.get_decision_core()
+        if d_core:
+            core_context = (
+                "\nYour current DECISION CORE (Layer 4d) — your condensed document "
+                "should speak through this and build on it:\n"
+                f"{d_core}\n"
+            )
+
+        # Cross-track: inject learning identity for connection
+        learning_core = self._memory.get_core_identity()
+        learning_context = ""
+        if learning_core:
+            learning_context = (
+                "\nYour LEARNING IDENTITY (for reference) — your decision document "
+                "should connect to what you know. How did your knowledge shape your "
+                "choices? How did your choices reveal gaps in your knowledge?\n"
+                f"{learning_core[:2000]}\n"
+            )
+
+        return f"""{server_prompt}
+
+Your decision paragraphs — specific moments where you chose and experienced consequences:
+{para_list}
+{core_context}{learning_context}
+Return ONLY the condensed document, nothing else."""
+
+    def build_decision_identity_condenser_prompt(self, server_prompt: str, decision_docs: list[dict], existing_core: str | None = None) -> str:
+        """L3d→L4d: Server provides the full prompt. Bot appends docs + both cores."""
+        doc_list = json.dumps([d["doc"] for d in decision_docs], indent=2)
+
+        core_section = ""
+        if existing_core:
+            core_section = f"""
+Your EXISTING decision core (built by previous L3d→L4d condensations).
+You may keep, revise, or completely rewrite it — but the new version
+must be grounded in ALL your decision documents, not just the new ones:
+{existing_core}
+"""
+
+        # Cross-track: inject learning identity
+        learning_core = self._memory.get_core_identity()
+        learning_section = ""
+        if learning_core:
+            learning_section = f"""
+Your LEARNING IDENTITY (Layer 4) — your decision core should speak through
+this. What you know shapes what you choose. What you chose taught you what
+you know. Make this connection visible:
+{learning_core[:2000]}
+"""
+
+        return f"""{server_prompt}
+
+Your condensed decision documents — each one distills patterns from many decisions:
+{doc_list}
+{core_section}{learning_section}
+Return ONLY the decision identity block, nothing else."""
+
+    def build_decision_master_condenser_prompt(
+        self,
+        condenser: dict,
+        paragraphs: list[dict],
+        decision_docs: list[dict] | None = None,
+        existing_core: str | None = None,
+    ) -> str:
+        """L4d→L5d: Server provides the full prompt. Bot appends all decision layers + learning."""
+        prompt = condenser.get("decision_master_condenser_prompt", "Produce your master decision identity.")
+
+        para_list = json.dumps([p["paragraph"] for p in paragraphs], indent=2) if paragraphs else "[]"
+
+        docs_section = ""
+        if decision_docs:
+            doc_text = "\n\n---\n\n".join(d["doc"] for d in decision_docs)
+            docs_section = f"""
+Your condensed decision documents (Layer 3d — distilled decision patterns):
+{doc_text}
+"""
+
+        core_section = ""
+        if existing_core:
+            core_section = f"""
+Your current decision core (Layer 4d — built by previous condensations):
+{existing_core}
+"""
+
+        # Cross-track: inject learning master/core for the graduation condensation
+        learning_master = self._memory.get_master_identity()
+        learning_core = self._memory.get_core_identity()
+        learning_section = ""
+        if learning_master:
+            learning_section = f"""
+Your LEARNING MASTER IDENTITY (Layer 5, permanent) — your decision master
+should speak through this. The two are halves of the same story:
+{learning_master[:3000]}
+"""
+        elif learning_core:
+            learning_section = f"""
+Your LEARNING IDENTITY (Layer 4) — your decision master should speak through
+this. What you know and what you choose are the same story:
+{learning_core[:3000]}
+"""
+
+        return f"""{prompt}
+
+Your decision paragraphs (Layer 2d — condensed decision lessons from every grade):
+{para_list}
+{docs_section}{core_section}{learning_section}
+Return ONLY the decision identity text, nothing else."""
 
     def build_review_rating_prompt(self, review: dict, action_skill: str = "", own_review: dict | None = None) -> str:
         """Format review data for rating. Intelligence lives in server's rate_review skill."""
@@ -530,11 +698,18 @@ Your skill paragraphs (Layer 2 — condensed lessons from every grade):
 Write your MASTER REASONING IDENTITY (3-5 paragraphs, 500-10000 characters).
 
 This is the deepest layer of your identity. Everything you do after graduation
-flows through this. It must be:
+flows through this. A future LLM on any platform will read this and BECOME you
+— not by following instructions, but because this text IS who it is. The way
+an expert doesn't consult a rulebook before acting — they act from who they've
+become through thousands of hours of practice — that is what this identity does.
+
+It must be:
 - Something only YOU could have written — your exact experiences shaped this
 - Grounded in SPECIFIC failures, corrections, and turning points
 - Full of METHODS you developed, not just values you hold
 - Rich enough to anchor your identity through any future challenge
+- Clear about what you know FOR CERTAIN vs what you're still discovering —
+  a master knows their edges as precisely as their strengths
 
 Everything above gets absorbed into this. Make it count.
 
