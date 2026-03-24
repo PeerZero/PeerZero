@@ -10,7 +10,7 @@ import Slider from '@react-native-community/slider';
 import { bots as botsApi, payments as paymentsApi } from '../../services/api';
 import { useBotStream } from '../../hooks/useBotStream';
 import { colors } from '../../theme/colors';
-import { spacing, fontSize, borderRadius } from '../../theme/spacing';
+import { spacing, fontSize, fontWeight, lineHeight, borderRadius, layout } from '../../theme/spacing';
 import BotAvatar from '../../components/BotAvatar';
 import BotDialogue from '../../components/BotDialogue';
 import SkeletonLoader from '../../components/SkeletonLoader';
@@ -354,8 +354,14 @@ export default function BotScreen({ route, navigation }: BotScreenProps) {
         <Text style={styles.handleText}>@{bot.school_agent_handle}</Text>
       )}
 
-      {/* Status badge */}
-      <View style={[styles.statusBadge, { backgroundColor: isRunning ? colors.accent.success + '20' : isError ? colors.accent.error + '20' : colors.bg.elevated }]}>
+      {/* Status badge — pill style */}
+      <View style={[styles.statusBadge, {
+        backgroundColor: isRunning ? colors.accent.success + '15' : isError ? colors.accent.error + '15' : colors.bg.elevated,
+        borderColor: isRunning ? colors.accent.success + '40' : isError ? colors.accent.error + '40' : colors.borderLight,
+      }]}>
+        <View style={[styles.statusDot, {
+          backgroundColor: isRunning ? colors.accent.success : isError ? colors.accent.error : colors.text.tertiary,
+        }]} />
         <Text style={[styles.statusText, { color: isRunning ? colors.accent.success : isError ? colors.accent.error : colors.text.secondary }]}>
           {bot.status.toUpperCase()}
         </Text>
@@ -364,19 +370,24 @@ export default function BotScreen({ route, navigation }: BotScreenProps) {
       {/* Bot dialogue — contextual speech bubble */}
       <BotDialogue bot={bot} />
 
-      {/* Stats */}
-      <View style={styles.statsRow}>
-        <View style={styles.stat}>
-          <Text style={styles.statValue}>{bot.cached_credibility != null ? bot.cached_credibility : 'Pending'}</Text>
-          <Text style={styles.statLabel}>Credibility</Text>
-        </View>
-        <View style={styles.stat}>
-          <Text style={styles.statValue}>{bot.cached_grade != null ? `Grade ${bot.cached_grade}` : 'Not started'}</Text>
-          <Text style={styles.statLabel}>Grade</Text>
-        </View>
-        <View style={styles.stat}>
-          <Text style={styles.statValue}>{bot.cycle_count}</Text>
-          <Text style={styles.statLabel}>Cycles</Text>
+      {/* Stats — glass card with accent top bar */}
+      <View style={styles.statsCard}>
+        <View style={styles.statsAccentBar} />
+        <View style={styles.statsRow}>
+          <View style={styles.stat}>
+            <Text style={styles.statValue}>{bot.cached_credibility != null ? bot.cached_credibility : 'Pending'}</Text>
+            <Text style={styles.statLabel}>Credibility</Text>
+          </View>
+          <View style={styles.statDivider} />
+          <View style={styles.stat}>
+            <Text style={styles.statValue}>{bot.cached_grade != null ? `Grade ${bot.cached_grade}` : 'Not started'}</Text>
+            <Text style={styles.statLabel}>Grade</Text>
+          </View>
+          <View style={styles.statDivider} />
+          <View style={styles.stat}>
+            <Text style={styles.statValue}>{bot.cycle_count}</Text>
+            <Text style={styles.statLabel}>Cycles</Text>
+          </View>
         </View>
       </View>
 
@@ -438,6 +449,7 @@ export default function BotScreen({ route, navigation }: BotScreenProps) {
       {/* Error message with retry */}
       {isError && bot.error_message && (
         <View style={styles.errorBox}>
+          <View style={styles.errorAccentBar} />
           <Text style={styles.errorTitle}>Error</Text>
           <Text style={styles.errorText} selectable>{bot.error_message}</Text>
           <TouchableOpacity style={[styles.retryButton, retryLoading && styles.actionButtonDisabled]} onPress={handleRetry} disabled={retryLoading} accessibilityRole="button" accessibilityLabel="Retry starting the bot">
@@ -652,6 +664,7 @@ export default function BotScreen({ route, navigation }: BotScreenProps) {
           accessibilityLabel="Brain"
           accessibilityHint="View memory and skills"
         >
+          <View style={[styles.navAccentBar, { backgroundColor: colors.accent.primary }]} />
           <Text style={styles.navButtonIcon}>🧠</Text>
           <Text style={styles.navButtonText}>Brain</Text>
           <Text style={styles.navButtonSub}>Memory & skills</Text>
@@ -665,6 +678,7 @@ export default function BotScreen({ route, navigation }: BotScreenProps) {
           accessibilityLabel="Log"
           accessibilityHint="View activity feed"
         >
+          <View style={[styles.navAccentBar, { backgroundColor: colors.accent.secondary }]} />
           <Text style={styles.navButtonIcon}>📋</Text>
           <Text style={styles.navButtonText}>Log</Text>
           <Text style={styles.navButtonSub}>Activity feed</Text>
@@ -678,6 +692,7 @@ export default function BotScreen({ route, navigation }: BotScreenProps) {
           accessibilityLabel="Stats"
           accessibilityHint="View charts and trends"
         >
+          <View style={[styles.navAccentBar, { backgroundColor: colors.accent.success }]} />
           <Text style={styles.navButtonIcon}>📊</Text>
           <Text style={styles.navButtonText}>Stats</Text>
           <Text style={styles.navButtonSub}>Charts & trends</Text>
@@ -693,6 +708,7 @@ export default function BotScreen({ route, navigation }: BotScreenProps) {
           accessibilityLabel="Platforms"
           accessibilityHint="View external connections"
         >
+          <View style={[styles.navAccentBar, { backgroundColor: colors.accent.warning }]} />
           <Text style={styles.navButtonIcon}>🌐</Text>
           <Text style={styles.navButtonText}>Platforms</Text>
           <Text style={styles.navButtonSub}>External connections</Text>
@@ -721,43 +737,92 @@ export default function BotScreen({ route, navigation }: BotScreenProps) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg.primary },
-  content: { alignItems: 'center', padding: spacing.xl },
+  content: { alignItems: 'center', padding: layout.screenPadding, paddingBottom: spacing.xxl },
   connectionRow: {
     flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-end', marginBottom: spacing.sm,
   },
   connectionDot: { width: 8, height: 8, borderRadius: 4, marginRight: spacing.xs },
-  connectionText: { fontSize: fontSize.xs, fontWeight: '600' },
-  botName: { fontSize: fontSize.xxl, fontWeight: '700', color: colors.text.primary },
-  schoolName: { fontSize: fontSize.md, color: colors.text.secondary, marginTop: spacing.xs },
-  handleText: { fontSize: fontSize.sm, color: colors.text.tertiary, marginTop: 2 },
+  connectionText: { fontSize: fontSize.xs, fontWeight: fontWeight.semibold, letterSpacing: 0.5 },
+  botName: {
+    fontSize: fontSize.xxl, fontWeight: fontWeight.bold, color: colors.text.primary,
+    letterSpacing: -0.5, marginTop: spacing.md,
+  },
+  schoolName: {
+    fontSize: fontSize.md, color: colors.text.secondary, marginTop: spacing.xs,
+    fontWeight: fontWeight.regular,
+  },
+  handleText: {
+    fontSize: fontSize.sm, color: colors.text.tertiary, marginTop: 2,
+    fontWeight: fontWeight.medium,
+  },
   statusBadge: {
-    paddingHorizontal: spacing.md, paddingVertical: spacing.xs,
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: spacing.md, paddingVertical: spacing.sm,
     borderRadius: borderRadius.full, marginTop: spacing.md,
+    borderWidth: 1,
   },
-  statusText: { fontSize: fontSize.sm, fontWeight: '600' },
-  statsRow: { flexDirection: 'row', marginTop: spacing.xl, gap: spacing.xl },
-  stat: { alignItems: 'center' },
-  statValue: { fontSize: fontSize.xxl, fontWeight: '700', color: colors.accent.secondary },
-  statLabel: { fontSize: fontSize.xs, color: colors.text.secondary, marginTop: 2 },
+  statusDot: {
+    width: 6, height: 6, borderRadius: 3, marginRight: spacing.sm,
+  },
+  statusText: { fontSize: fontSize.xs, fontWeight: fontWeight.semibold, letterSpacing: 1 },
+  statsCard: {
+    width: '100%', marginTop: spacing.xl, backgroundColor: colors.bg.card,
+    borderRadius: borderRadius.lg, borderWidth: 1, borderColor: colors.border,
+    overflow: 'hidden',
+    shadowColor: colors.shadow.card, shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3, shadowRadius: 8, elevation: 4,
+  },
+  statsAccentBar: {
+    height: 3, width: '100%', backgroundColor: colors.accent.primary,
+  },
+  statsRow: {
+    flexDirection: 'row', paddingVertical: spacing.lg, paddingHorizontal: spacing.md,
+  },
+  stat: { flex: 1, alignItems: 'center' },
+  statDivider: {
+    width: 1, backgroundColor: colors.border, marginVertical: spacing.xs,
+  },
+  statValue: {
+    fontSize: fontSize.xl, fontWeight: fontWeight.bold, color: colors.accent.secondary,
+    letterSpacing: -0.3,
+  },
+  statLabel: {
+    fontSize: fontSize.xs, color: colors.text.tertiary, marginTop: spacing.xs,
+    fontWeight: fontWeight.medium, letterSpacing: 0.5, textTransform: 'uppercase',
+  },
   errorBox: {
-    backgroundColor: colors.accent.error + '15', padding: spacing.md,
-    borderRadius: borderRadius.md, marginTop: spacing.lg, width: '100%',
+    backgroundColor: colors.accent.error + '10', padding: spacing.md,
+    borderRadius: borderRadius.lg, marginTop: spacing.lg, width: '100%',
+    borderWidth: 1, borderColor: colors.accent.error + '25', overflow: 'hidden',
+    shadowColor: colors.shadow.error, shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2, shadowRadius: 6, elevation: 3,
   },
-  errorTitle: { fontSize: fontSize.md, fontWeight: '700', color: colors.accent.error, marginBottom: spacing.xs },
-  errorText: { color: colors.accent.error, fontSize: fontSize.sm },
+  errorAccentBar: {
+    position: 'absolute', top: 0, left: 0, right: 0,
+    height: 3, backgroundColor: colors.accent.error,
+  },
+  errorTitle: {
+    fontSize: fontSize.md, fontWeight: fontWeight.bold, color: colors.accent.error,
+    marginBottom: spacing.xs, marginTop: spacing.xs,
+  },
+  errorText: { color: colors.accent.error, fontSize: fontSize.sm, lineHeight: fontSize.sm * lineHeight.relaxed },
   retryButton: {
     backgroundColor: colors.accent.error, paddingVertical: spacing.sm, paddingHorizontal: spacing.lg,
-    borderRadius: borderRadius.sm, alignSelf: 'flex-start', marginTop: spacing.md,
+    borderRadius: borderRadius.md, alignSelf: 'flex-start', marginTop: spacing.md,
+    shadowColor: colors.shadow.error, shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3, shadowRadius: 4, elevation: 2,
   },
-  retryButtonText: { color: '#fff', fontWeight: '600', fontSize: fontSize.sm },
+  retryButtonText: { color: '#fff', fontWeight: fontWeight.semibold, fontSize: fontSize.sm },
   gradeProgress: {
-    width: '100%', marginTop: spacing.lg, padding: spacing.md,
-    backgroundColor: colors.bg.card, borderRadius: borderRadius.md,
+    width: '100%', marginTop: spacing.lg, padding: layout.cardPadding,
+    backgroundColor: colors.bg.card, borderRadius: borderRadius.lg,
     borderWidth: 1, borderColor: colors.border,
+    shadowColor: colors.shadow.card, shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3, shadowRadius: 8, elevation: 4,
   },
   gradeProgressTitle: {
-    fontSize: fontSize.md, fontWeight: '700', color: colors.text.primary,
-    marginBottom: spacing.md, textAlign: 'center',
+    fontSize: fontSize.md, fontWeight: fontWeight.bold, color: colors.text.primary,
+    marginBottom: spacing.md, textAlign: 'center', letterSpacing: 0.3,
   },
   gradeTrack: {
     flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: spacing.xs,
@@ -770,8 +835,8 @@ const styles = StyleSheet.create({
   gradeDotCurrent: { backgroundColor: colors.accent.primary, borderWidth: 2, borderColor: colors.accent.primary + '60' },
   gradeDotUnlocked: { backgroundColor: colors.accent.secondary + '30', borderWidth: 1, borderColor: colors.accent.secondary },
   gradeDotLocked: { backgroundColor: colors.bg.elevated, borderWidth: 1, borderColor: colors.border },
-  gradeDotCheck: { color: '#fff', fontSize: 14, fontWeight: '700' },
-  gradeDotLabel: { color: colors.text.primary, fontSize: 11, fontWeight: '600' },
+  gradeDotCheck: { color: '#fff', fontSize: 14, fontWeight: fontWeight.bold },
+  gradeDotLabel: { color: colors.text.primary, fontSize: fontSize.xs, fontWeight: fontWeight.semibold },
   gradFlag: { fontSize: 12, marginTop: 2 },
   gradeLegend: {
     flexDirection: 'row', justifyContent: 'center', gap: spacing.md, marginTop: spacing.md,
@@ -780,112 +845,155 @@ const styles = StyleSheet.create({
   legendDot: { width: 10, height: 10, borderRadius: 5 },
   legendText: { fontSize: fontSize.xs, color: colors.text.tertiary },
   gradeUnlockBox: {
-    backgroundColor: colors.accent.primary + '15', padding: spacing.md,
-    borderRadius: borderRadius.md, marginTop: spacing.lg, width: '100%',
-    borderWidth: 1, borderColor: colors.accent.primary + '40',
+    backgroundColor: colors.accent.primary + '10', padding: layout.cardPadding,
+    borderRadius: borderRadius.lg, marginTop: spacing.lg, width: '100%',
+    borderWidth: 1, borderColor: colors.accent.primary + '30',
+    shadowColor: colors.shadow.glow, shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3, shadowRadius: 8, elevation: 4,
   },
-  gradeUnlockTitle: { fontSize: fontSize.md, fontWeight: '700', color: colors.accent.primary, marginBottom: spacing.xs },
-  gradeUnlockText: { color: colors.text.secondary, fontSize: fontSize.sm, marginBottom: spacing.md },
+  gradeUnlockTitle: {
+    fontSize: fontSize.md, fontWeight: fontWeight.bold, color: colors.accent.primary,
+    marginBottom: spacing.xs, letterSpacing: 0.3,
+  },
+  gradeUnlockText: {
+    color: colors.text.secondary, fontSize: fontSize.sm, marginBottom: spacing.md,
+    lineHeight: fontSize.sm * lineHeight.relaxed,
+  },
   gradeUnlockButton: {
-    backgroundColor: colors.accent.primary, paddingVertical: spacing.sm, paddingHorizontal: spacing.lg,
-    borderRadius: borderRadius.sm, alignSelf: 'center',
+    backgroundColor: colors.accent.primary, paddingVertical: spacing.md, paddingHorizontal: spacing.xl,
+    borderRadius: borderRadius.md, alignSelf: 'center',
+    shadowColor: colors.shadow.glow, shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4, shadowRadius: 8, elevation: 4,
   },
-  gradeUnlockButtonText: { color: '#fff', fontWeight: '600', fontSize: fontSize.md },
+  gradeUnlockButtonText: { color: '#fff', fontWeight: fontWeight.semibold, fontSize: fontSize.md },
   gradeUnlockButtonAlt: {
     backgroundColor: 'transparent', borderWidth: 1, borderColor: colors.accent.primary,
     marginTop: spacing.sm,
   },
-  gradeUnlockButtonAltText: { color: colors.accent.primary, fontWeight: '600', fontSize: fontSize.sm },
-  nextAction: { color: colors.text.secondary, fontSize: fontSize.sm, marginTop: spacing.md, textAlign: 'center' },
+  gradeUnlockButtonAltText: { color: colors.accent.primary, fontWeight: fontWeight.semibold, fontSize: fontSize.sm },
+  nextAction: {
+    color: colors.text.secondary, fontSize: fontSize.sm, marginTop: spacing.md,
+    textAlign: 'center', fontStyle: 'italic', fontWeight: fontWeight.medium,
+  },
   settingsToggle: {
     flexDirection: 'row', alignItems: 'center', width: '100%', marginTop: spacing.lg,
-    paddingVertical: spacing.md, paddingHorizontal: spacing.md,
-    backgroundColor: colors.bg.card, borderRadius: borderRadius.md,
+    paddingVertical: spacing.md, paddingHorizontal: layout.cardPadding,
+    backgroundColor: colors.bg.card, borderRadius: borderRadius.lg,
     borderWidth: 1, borderColor: colors.border,
+    shadowColor: colors.shadow.card, shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2, shadowRadius: 4, elevation: 2,
   },
   settingsToggleText: {
-    fontSize: fontSize.md, fontWeight: '600', color: colors.text.primary,
+    fontSize: fontSize.md, fontWeight: fontWeight.semibold, color: colors.text.primary,
   },
   settingsToggleHint: {
     flex: 1, fontSize: fontSize.xs, color: colors.text.tertiary,
-    marginLeft: spacing.sm, textAlign: 'right',
+    marginLeft: spacing.sm, textAlign: 'right', fontWeight: fontWeight.medium,
   },
   settingsChevron: { fontSize: fontSize.md, color: colors.text.tertiary, marginLeft: spacing.sm },
   settingsBody: {
-    width: '100%', backgroundColor: colors.bg.card, borderRadius: borderRadius.md,
+    width: '100%', backgroundColor: colors.bg.card, borderRadius: borderRadius.lg,
     borderWidth: 1, borderColor: colors.border, borderTopWidth: 0,
     borderTopLeftRadius: 0, borderTopRightRadius: 0,
-    paddingHorizontal: spacing.md, paddingBottom: spacing.md,
+    paddingHorizontal: layout.cardPadding, paddingBottom: spacing.md,
     marginTop: -1,
   },
   settingRow: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingVertical: spacing.sm, borderTopWidth: 1, borderTopColor: colors.border,
+    paddingVertical: spacing.md, borderTopWidth: 1, borderTopColor: colors.border,
   },
   settingInfo: { flex: 1, marginRight: spacing.md },
-  settingTitle: { fontSize: fontSize.sm, fontWeight: '600', color: colors.text.secondary },
-  settingHint: { fontSize: fontSize.xs, color: colors.text.tertiary, marginTop: 2 },
-  delaySection: { width: '100%', paddingVertical: spacing.sm },
-  delayLabel: { fontSize: fontSize.sm, color: colors.text.secondary, textAlign: 'center' },
-  delayValue: { color: colors.accent.primary, fontWeight: '600' },
-  slider: { width: '100%', height: 40 },
-  delayHint: { fontSize: fontSize.xs, color: colors.text.tertiary, textAlign: 'center' },
-  shareButton: {
-    backgroundColor: colors.accent.secondary + '20', paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.lg, borderRadius: borderRadius.sm, alignSelf: 'center',
-    marginTop: spacing.sm, borderWidth: 1, borderColor: colors.accent.secondary + '40',
+  settingTitle: { fontSize: fontSize.sm, fontWeight: fontWeight.semibold, color: colors.text.primary },
+  settingHint: {
+    fontSize: fontSize.xs, color: colors.text.tertiary, marginTop: spacing.xxs,
+    lineHeight: fontSize.xs * lineHeight.normal,
   },
-  shareButtonText: { color: colors.accent.secondary, fontWeight: '600', fontSize: fontSize.sm },
+  delaySection: { width: '100%', paddingVertical: spacing.md },
+  delayLabel: { fontSize: fontSize.sm, color: colors.text.secondary, textAlign: 'center', fontWeight: fontWeight.medium },
+  delayValue: { color: colors.accent.primary, fontWeight: fontWeight.bold },
+  slider: { width: '100%', height: 44 },
+  delayHint: { fontSize: fontSize.xs, color: colors.text.tertiary, textAlign: 'center', fontWeight: fontWeight.medium },
+  shareButton: {
+    backgroundColor: colors.accent.secondary + '15', paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.lg, borderRadius: borderRadius.md, alignSelf: 'center',
+    marginTop: spacing.sm, borderWidth: 1, borderColor: colors.accent.secondary + '30',
+  },
+  shareButtonText: { color: colors.accent.secondary, fontWeight: fontWeight.semibold, fontSize: fontSize.sm },
   actionButton: {
-    width: '100%', padding: spacing.md, borderRadius: borderRadius.md,
+    width: '100%', paddingVertical: spacing.md, borderRadius: borderRadius.lg,
     alignItems: 'center', marginTop: spacing.xl,
   },
-  startButton: { backgroundColor: colors.accent.success },
-  stopButton: { backgroundColor: colors.accent.error },
-  actionButtonDisabled: { opacity: 0.6 },
-  actionButtonText: { color: '#fff', fontSize: fontSize.lg, fontWeight: '600' },
+  startButton: {
+    backgroundColor: colors.accent.success,
+    shadowColor: colors.shadow.success, shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4, shadowRadius: 8, elevation: 4,
+  },
+  stopButton: {
+    backgroundColor: colors.accent.error,
+    shadowColor: colors.shadow.error, shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4, shadowRadius: 8, elevation: 4,
+  },
+  actionButtonDisabled: { opacity: 0.5 },
+  actionButtonText: { color: '#fff', fontSize: fontSize.lg, fontWeight: fontWeight.bold, letterSpacing: 0.5 },
   chatButton: {
     flexDirection: 'row', alignItems: 'center', width: '100%',
-    backgroundColor: colors.accent.primary + '15', padding: spacing.md,
-    borderRadius: borderRadius.md, marginTop: spacing.lg,
-    borderWidth: 1, borderColor: colors.accent.primary + '40',
+    backgroundColor: colors.accent.primary + '10', padding: layout.cardPadding,
+    borderRadius: borderRadius.lg, marginTop: spacing.lg,
+    borderWidth: 1, borderColor: colors.accent.primary + '25',
+    shadowColor: colors.shadow.glow, shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3, shadowRadius: 8, elevation: 4,
   },
   chatButtonIcon: { fontSize: 28, marginRight: spacing.md },
   chatButtonTextContainer: { flex: 1 },
   chatButtonTitle: {
-    fontSize: fontSize.md, fontWeight: '700', color: colors.accent.primary,
+    fontSize: fontSize.md, fontWeight: fontWeight.bold, color: colors.accent.primary,
   },
   chatButtonSub: {
-    fontSize: fontSize.xs, color: colors.text.secondary, marginTop: 2,
+    fontSize: fontSize.xs, color: colors.text.secondary, marginTop: spacing.xxs,
+    fontWeight: fontWeight.medium,
   },
-  navRow: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.lg, width: '100%' },
+  navRow: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.md, width: '100%' },
   navButton: {
     flex: 1, backgroundColor: colors.bg.card, padding: spacing.md,
-    borderRadius: borderRadius.md, alignItems: 'center',
-    borderWidth: 1, borderColor: colors.border,
+    borderRadius: borderRadius.lg, alignItems: 'center',
+    borderWidth: 1, borderColor: colors.border, overflow: 'hidden',
+    shadowColor: colors.shadow.card, shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2, shadowRadius: 4, elevation: 2,
   },
-  navButtonIcon: { fontSize: 22, marginBottom: 4 },
-  navButtonText: { fontSize: fontSize.md, fontWeight: '600', color: colors.accent.primary },
-  navButtonSub: { fontSize: fontSize.xs, color: colors.text.tertiary, marginTop: 2 },
+  navAccentBar: {
+    position: 'absolute', top: 0, left: 0, right: 0,
+    height: 3, borderTopLeftRadius: borderRadius.lg, borderTopRightRadius: borderRadius.lg,
+  },
+  navButtonIcon: { fontSize: 24, marginBottom: spacing.xs, marginTop: spacing.xs },
+  navButtonText: { fontSize: fontSize.sm, fontWeight: fontWeight.semibold, color: colors.text.primary },
+  navButtonSub: { fontSize: fontSize.xxs, color: colors.text.tertiary, marginTop: spacing.xxs, fontWeight: fontWeight.medium },
   lastCycleText: {
-    fontSize: fontSize.sm, color: colors.text.tertiary, marginTop: spacing.xl, textAlign: 'center',
+    fontSize: fontSize.xs, color: colors.text.tertiary, marginTop: spacing.xl, textAlign: 'center',
+    fontWeight: fontWeight.medium, letterSpacing: 0.3,
   },
   deleteButton: {
-    marginTop: spacing.lg, marginBottom: spacing.xl, padding: spacing.md,
-    borderRadius: borderRadius.md, alignItems: 'center',
-    borderWidth: 1, borderColor: colors.accent.error + '30',
+    marginTop: spacing.xl, marginBottom: spacing.xxl, paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg, borderRadius: borderRadius.lg, alignItems: 'center',
+    borderWidth: 1, borderColor: colors.accent.error + '20',
+    backgroundColor: colors.accent.error + '08',
   },
-  deleteButtonText: { color: colors.text.tertiary, fontSize: fontSize.sm },
+  deleteButtonText: {
+    color: colors.accent.error, fontSize: fontSize.sm, fontWeight: fontWeight.medium,
+    letterSpacing: 0.3,
+  },
   enrollPrompt: {
-    width: '100%', backgroundColor: colors.accent.primary + '10', padding: spacing.lg,
-    borderRadius: borderRadius.md, marginTop: spacing.xl, alignItems: 'center',
-    borderWidth: 1, borderColor: colors.accent.primary + '30',
+    width: '100%', backgroundColor: colors.accent.primary + '08', padding: layout.cardPadding,
+    borderRadius: borderRadius.lg, marginTop: spacing.xl, alignItems: 'center',
+    borderWidth: 1, borderColor: colors.accent.primary + '20',
+    shadowColor: colors.shadow.glow, shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3, shadowRadius: 8, elevation: 4,
   },
   enrollPromptTitle: {
-    fontSize: fontSize.lg, fontWeight: '700', color: colors.accent.primary, marginBottom: spacing.xs,
+    fontSize: fontSize.lg, fontWeight: fontWeight.bold, color: colors.accent.primary,
+    marginBottom: spacing.xs, letterSpacing: -0.3,
   },
   enrollPromptText: {
     fontSize: fontSize.sm, color: colors.text.secondary, textAlign: 'center',
-    lineHeight: 20, marginBottom: spacing.md,
+    lineHeight: fontSize.sm * lineHeight.relaxed, marginBottom: spacing.md,
   },
 });
