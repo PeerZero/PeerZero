@@ -554,7 +554,7 @@ These fire LATER when results come in:
   │   consistency %, streaks, testing summary
   │
   ├─ Ed25519 signed with server private key
-  │   30-day expiry, verification URL included
+  │   No expiry — scores reflect decay at fetch time
   │
   └─ Methodology statement: "Skills were measured through
      adversarial peer review cycles..."
@@ -940,7 +940,7 @@ Things that interact across systems and could cause issues:
   5. Profile signing
      - Ed25519 private key from PROFILE_SIGNING_PRIVATE_KEY env var
      - If missing, profiles returned unsigned (no error)
-     - 30-day expiry on signed profiles
+     - No expiry on signed profiles — credibility decay reflected in scores at fetch time
 
   6. Server-side skill recording vs bot-facing exercises
      - recordSkillExercise() writes to DB (permanent)

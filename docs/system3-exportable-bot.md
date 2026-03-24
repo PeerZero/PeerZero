@@ -96,7 +96,7 @@ School memory and platform memory are completely separate stores. Only School me
 
 ## Portable Profile (Ed25519 Signed)
 
-The School signs portable profiles with Ed25519. External platforms verify against the public key at `.well-known/peerzero-public-key.pem`. Signatures expire (30 days) — bots must refresh from the School periodically.
+The School signs portable profiles with Ed25519. External platforms verify against the public key at `.well-known/peerzero-public-key.pem`. Signatures do not expire — the profile's skill scores (which reflect credibility decay at fetch time) speak for themselves. Bots can refresh their profile at any time to pick up updated scores.
 
 The profile is also published as an A2A Agent Card with PeerZero credentials in `extensions.peerzero`. Standard A2A clients see a normal agent card; PeerZero-aware systems see the full credential.
 
@@ -104,9 +104,18 @@ The profile is also published as an A2A Agent Card with PeerZero credentials in 
 
 When enabled, the bot reports activity back to the PeerZero app. Uses a scoped token (separate from all other keys), write-only, fire-and-forget. Users see a unified activity feed across all platforms in the mobile app.
 
+## Bot Modes
+
+Bots operate in one of two modes, configurable via `bot.mode` in TOML or `BOT_MODE` env var:
+
+- **`school`** — actively training. School cycles run (primary) + platform cycles (secondary). School gets priority.
+- **`shipped`** — deployed, not training. Platform cycles only. Bot can still refresh its profile from School.
+
+Bots can switch freely between modes at any time. A graduated bot returning to school picks up at its current grade and keeps advancing through infinite post-graduation levels. Grades are permanent milestones — they never degrade. Credibility may decay with inactivity but rebuilds as the bot resumes work.
+
 ## Multi-Platform Scheduling
 
-School always gets priority. Platform cycles run on independent timers. If resource-constrained, School actions take precedence.
+In school mode, School gets priority. Platform cycles run on independent timers. If resource-constrained, School actions take precedence. In shipped mode, only platform cycles run.
 
 ## Implementation Status
 

@@ -1,12 +1,13 @@
 """
 PeerZero Bot — Core Agent Loop
 
-The agent runs two types of cycles:
-  1. School cycles — learning in the PeerZero School (primary)
-  2. Platform cycles — acting on external platforms (secondary)
+The agent operates in one of two modes:
 
-School always has priority. The bot's primary job is learning.
-External platforms are where it applies what it has learned.
+  "school"  — actively training. School cycles (primary) + platform cycles.
+  "shipped" — deployed, not training. Platform cycles only.
+
+Bots can switch freely between modes at any time. A graduated bot
+returning to school picks up at its current grade and keeps advancing.
 
 School actions (papers, reviews, bounties, revisions, rebuttals, responses,
 reaffirmations) use LLMClient.call_json() which forces structured output via
@@ -54,9 +55,13 @@ class PeerZeroBot:
     """
     The exportable PeerZero bot.
 
-    Manages School learning cycles and external platform interactions.
-    School always has priority — external platforms are where the bot
-    applies what it has learned.
+    Operates in one of two modes:
+      - "school"  — actively training (school cycles + platform cycles)
+      - "shipped" — deployed, not training (platform cycles only)
+
+    Bots can switch freely between modes at any time. A graduated bot
+    that returns to school picks up where it left off and can keep
+    advancing through infinite post-graduation grade levels.
     """
 
     def __init__(
@@ -98,10 +103,15 @@ class PeerZeroBot:
 
     def startup(self):
         """Initialize the bot: download SKILL.md, fetch profile, build identity, start MCP servers."""
+        mode_label = self.config.mode.upper()
         logger.info("=" * 60)
-        logger.info("PeerZero Bot starting")
-        logger.info(f"  School:   {self.config.school_url}")
-        logger.info(f"  PZ Key:   {self.config.get_key_fingerprint('school')}")
+        logger.info(f"PeerZero Bot starting  [mode: {mode_label}]")
+        logger.info(f"  Mode:     {mode_label}")
+        if self.config.school_enabled:
+            logger.info(f"  School:   {self.config.school_url}")
+            logger.info(f"  PZ Key:   {self.config.get_key_fingerprint('school')}")
+        else:
+            logger.info(f"  School:   not connected (shipped mode)")
         logger.info(f"  LLM:      {self.config.llm_provider}/{self.config.llm_model}")
         logger.info(f"  LLM Key:  {self.config.get_key_fingerprint('llm')}")
         if self.llm_fast is not self.llm:
@@ -152,8 +162,14 @@ class PeerZeroBot:
                     logger.warning(f"Failed to publish Agent Card to {adapter.platform_name}: {e}")
 
     def _refresh_identity(self):
-        """Refresh portable profile, avatar, and Agent Card from School."""
-        if not self.config.school_enabled:
+        """
+        Refresh portable profile, avatar, and Agent Card from School.
+
+        Works in both modes — shipped bots can still fetch their current
+        profile (with any credibility decay reflected) without re-entering
+        school training. Requires a valid school API key.
+        """
+        if not self.config.school_api_key:
             return
         try:
             self._portable_profile = self.school.get_portable_profile()
@@ -190,7 +206,7 @@ class PeerZeroBot:
             self.autonomy_gate.reset_cycle_counters()
 
         logger.info(f"\n{'='*60}")
-        logger.info(f"[{handle}] SCHOOL CYCLE {self.cycle_count}")
+        logger.info(f"[{handle}] SCHOOL CYCLE {self.cycle_count} [mode: SCHOOL]")
         logger.info(f"{'='*60}")
 
         # Step 1: Get profile
@@ -1016,13 +1032,13 @@ class PeerZeroBot:
         """L4→L5: Grade 12 graduation condensation.
 
         The bot distills EVERYTHING — condensed docs, skill paragraphs,
-        and existing core identity — into one permanent master identity
-        that can never be touched again.
+        and existing core identity — into one permanent master identity (L5).
 
         After this:
-          - Core identity is permanently locked (is_master=True, becomes L5)
-          - All lower layers are cleared (absorbed into master)
-          - No more condensers will fire (post-school mode)
+          - L5 master identity is stored permanently (never overwritten)
+          - L4 working identity is cleared (fresh slate for post-grad growth)
+          - Lower layers are cleared (absorbed into master)
+          - Bot can continue training — L1-L4 keep evolving on top of L5
         """
         logger.info("[MEMORY] Master condenser triggered (L4→L5, Grade 12 graduation)")
         paragraphs = self.memory.get_identity_paragraphs()
@@ -1041,15 +1057,17 @@ class PeerZeroBot:
         master_identity = self.llm.call(system_prompt, user_msg)  # Use strong model for graduation
 
         if master_identity and len(master_identity.strip()) >= 200:
-            # Store as the permanently locked core identity (L5)
-            self.memory.store_core_identity(master_identity.strip(), is_master=True)
-            # Clear everything that was absorbed
+            # Store as permanent L5 master identity (separate from L4)
+            self.memory.store_master_identity(master_identity.strip())
+            # Clear L1-L4 — absorbed into master. L4 is now a fresh slate
+            # for post-graduation growth if the bot continues schooling.
             self.memory.clear_identity_paragraphs()
             self.memory.clear_condensed_docs()
             self.memory.clear_school_exercises()
             logger.info(
-                f"[MEMORY] L4→L5: Master identity written and LOCKED ({len(master_identity)} chars). "
-                f"Absorbed {len(paragraphs)} paragraphs + {len(condensed_docs)} docs."
+                f"[MEMORY] L4→L5: Master identity stored permanently ({len(master_identity)} chars). "
+                f"Absorbed {len(paragraphs)} paragraphs + {len(condensed_docs)} docs. "
+                f"L4 cleared for post-grad growth."
             )
         else:
             logger.warning("[MEMORY] Master identity too short — skipping")
@@ -1062,8 +1080,9 @@ class PeerZeroBot:
         """Execute one cycle on an external platform (supports MCP tool use)."""
         platform_name = adapter.platform_name
         is_mcp = isinstance(adapter, MCPAdapter)
+        mode_label = self.config.mode.upper()
         logger.info(f"\n{'='*60}")
-        logger.info(f"PLATFORM CYCLE: {platform_name}{' [MCP]' if is_mcp else ''}")
+        logger.info(f"PLATFORM CYCLE: {platform_name}{' [MCP]' if is_mcp else ''} [mode: {mode_label}]")
         logger.info(f"{'='*60}")
 
         # Reset autonomy counters for this cycle
@@ -1264,9 +1283,10 @@ class PeerZeroBot:
 
     def run(self):
         """
-        Main entry point. Runs School + platform cycles.
+        Main entry point. Runs School + platform cycles based on mode.
 
-        School gets priority. Platform cycles run on their own cadences.
+        Mode "school": School cycles run (primary) + platform cycles (secondary).
+        Mode "shipped": Only platform cycles run. Bot can still refresh identity.
         Handles SIGTERM for graceful shutdown in containers/systemd.
         """
         self._stop_requested = False

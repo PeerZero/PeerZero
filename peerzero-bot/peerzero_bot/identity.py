@@ -121,7 +121,6 @@ def build_agent_card(
                 "signature": portable_profile.get("signature"),
                 "verification_url": portable_profile.get("verification_url"),
                 "signed_at": portable_profile.get("signed_at"),
-                "expires_at": portable_profile.get("expires_at"),
                 # Avatar (travels with the bot)
                 "avatar": {
                     "config": avatar_config or {},
