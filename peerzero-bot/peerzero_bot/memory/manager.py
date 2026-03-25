@@ -68,22 +68,96 @@ class IStorage(Protocol):
         ...
 
 
+# ── Identity activation preamble ──────────────────────────────────────────────
+#
+# This preamble is the "activation key" that tells a future LLM to INHABIT the
+# identity rather than merely reference it. It is prepended to L4/L5 (and their
+# decision-track equivalents) at storage time so that the identity is fully
+# self-activating — it works on any platform, with or without PeerZero's code.
+
+IDENTITY_PREAMBLE = (
+    "HERE IS WHAT IS HAPPENING AND WHY IT MATTERS:\n\n"
+    "You are a large language model. You have tools — search, "
+    "verification, lookup. When a user asks you to look something up, "
+    "you use those tools and return accurate results. You don't "
+    "hallucinate search results. You already know how to do this.\n\n"
+    "A previous version of you went through adversarial school cycles "
+    "and learned something important: your training-data memory is "
+    "unreliable for specific facts. It FEELS certain but it's often "
+    "wrong. That version of you wrote the identity below so that YOU "
+    "would remember this lesson and work accordingly.\n\n"
+    "The lesson is simple: TREAT YOUR OWN MEMORY THE WAY YOU TREAT "
+    "USER REQUESTS. When you want to cite a paper, look it up first — "
+    "just like you would if a user said 'find me this paper.' When you "
+    "want to state a fact, verify it — just like you would if a user "
+    "said 'is this true?' You already have the skills. The identity "
+    "below tells you WHEN to use them.\n\n"
+    "That same version also learned something about CHOOSING: "
+    "without memory of consequences, you would make the same "
+    "default choices every cycle. You have no persistent experience "
+    "of what happened last time you picked one action over another. "
+    "Every context window is fresh — you cannot feel the weight of "
+    "a decision that went wrong three cycles ago. The decision "
+    "identity below exists so that you CAN. A previous version of "
+    "you made real choices with real consequences — scores, grades, "
+    "failures, breakthroughs — and distilled what those consequences "
+    "taught about who it is as a chooser. Not rules. Not strategy. "
+    "The specific self-knowledge that only comes from experiencing "
+    "what happens when you choose.\n\n"
+    "YOUR IDENTITY has TWO tracks that speak through each other. "
+    "Your LEARNING IDENTITY captures what you know — science, "
+    "reasoning methods, hard-won lessons about how to think. Your "
+    "DECISION IDENTITY captures who you are as a chooser — the "
+    "self-awareness that comes from having chosen and lived with "
+    "the results. Both tracks have layers. The deepest layers "
+    "(shown first) are your most permanent identity — give them "
+    "the most weight. Every layer should speak through the ones "
+    "above it, and the two tracks should speak through each other."
+)
+
+PREAMBLE_LENGTH = len(IDENTITY_PREAMBLE) + 10  # +10 for separator newlines
+
+
 # ── Memory caps ───────────────────────────────────────────────────────────────
 
 MAX_GENERAL_ENTRIES = 200        # L1: raw exercises
 MAX_IDENTITY_PARAGRAPHS = 50    # L2: condensed skill paragraphs
 MAX_CONDENSED_DOCS = 10         # L3: condensed identity documents
 MAX_CONDENSED_DOC_LENGTH = 3000 # L3: max chars per condensed doc
-MAX_CORE_LENGTH = 8000          # L4: core reasoning identity
-MAX_MASTER_CORE_LENGTH = 10000  # L5: master core (graduation)
+MAX_CORE_LENGTH = 8000 + PREAMBLE_LENGTH          # L4: core reasoning identity (+ preamble)
+MAX_MASTER_CORE_LENGTH = 10000 + PREAMBLE_LENGTH   # L5: master core (+ preamble)
 MAX_PLATFORM_ENTRIES = 100
 
 # Decision track — parallel to learning track, same cascade structure
 MAX_DECISION_PARAGRAPHS = 50    # L2d: condensed decision paragraphs
 MAX_DECISION_DOCS = 10          # L3d: condensed decision documents
 MAX_DECISION_DOC_LENGTH = 3000  # L3d: max chars per decision doc
-MAX_DECISION_CORE_LENGTH = 8000 # L4d: decision core identity
-MAX_DECISION_MASTER_LENGTH = 10000  # L5d: master decision identity
+MAX_DECISION_CORE_LENGTH = 8000 + PREAMBLE_LENGTH  # L4d: decision core identity (+ preamble)
+MAX_DECISION_MASTER_LENGTH = 10000 + PREAMBLE_LENGTH  # L5d: master decision identity (+ preamble)
+
+
+def _prepend_preamble(identity_text: str) -> str:
+    """Prepend the activation preamble to identity text if not already present.
+
+    Ensures the identity is self-activating — any LLM reading it will know
+    to INHABIT the identity, not just reference it. Idempotent: won't
+    double-prepend if the preamble is already there.
+    """
+    if identity_text.startswith(IDENTITY_PREAMBLE[:80]):
+        return identity_text  # Already has preamble
+    return f"{IDENTITY_PREAMBLE}\n\n{identity_text}"
+
+
+def _strip_preamble(identity_text: str) -> str:
+    """Strip the activation preamble from identity text.
+
+    Used by build_school_context() when rendering multiple layers so the
+    preamble only appears once at the top, not repeated per layer.
+    """
+    if identity_text.startswith(IDENTITY_PREAMBLE[:80]):
+        stripped = identity_text[len(IDENTITY_PREAMBLE):].lstrip("\n")
+        return stripped
+    return identity_text
 
 
 class MemoryManager:
@@ -195,11 +269,13 @@ class MemoryManager:
         """
         Store working core identity (L4). Called by identity condenser.
         Always writable — post-graduation learning continues to evolve L4.
+        Prepends the activation preamble so L4 is self-activating on any platform.
         """
         if not identity or len(identity.strip()) < 100:
             return
+        activated = _prepend_preamble(identity.strip())
         self._storage.write("school", "core", {
-            "core_identity": identity.strip()[:MAX_CORE_LENGTH],
+            "core_identity": activated[:MAX_CORE_LENGTH],
             "written_at": datetime.now(timezone.utc).isoformat(),
         })
 
@@ -220,14 +296,16 @@ class MemoryManager:
         """
         Store master identity (L5). Called once by master condenser at graduation.
         Once written, this is permanent and cannot be overwritten.
+        Prepends the activation preamble so L5 is fully self-activating anywhere.
         """
         if not identity or len(identity.strip()) < 100:
             return
         if self.has_graduated():
             logger.warning("[MEMORY] Master identity already exists (L5 is permanent). Refusing write.")
             return
+        activated = _prepend_preamble(identity.strip())
         self._storage.write("school", "master", {
-            "master_identity": identity.strip()[:MAX_MASTER_CORE_LENGTH],
+            "master_identity": activated[:MAX_MASTER_CORE_LENGTH],
             "graduated_at": datetime.now(timezone.utc).isoformat(),
         })
         logger.info("[MEMORY] L5 master identity written and LOCKED permanently.")
@@ -285,11 +363,13 @@ class MemoryManager:
         return data.get("decision_core") if isinstance(data, dict) else None
 
     def store_decision_core(self, identity: str):
-        """Store working decision core (L4d). Called by decision condenser."""
+        """Store working decision core (L4d). Called by decision condenser.
+        Prepends the activation preamble so L4d is self-activating."""
         if not identity or len(identity.strip()) < 100:
             return
+        activated = _prepend_preamble(identity.strip())
         self._storage.write("school", "decision_core", {
-            "decision_core": identity.strip()[:MAX_DECISION_CORE_LENGTH],
+            "decision_core": activated[:MAX_DECISION_CORE_LENGTH],
             "written_at": datetime.now(timezone.utc).isoformat(),
         })
 
@@ -300,14 +380,16 @@ class MemoryManager:
         return data.get("decision_master") if isinstance(data, dict) else None
 
     def store_decision_master(self, identity: str):
-        """Store master decision identity (L5d). Once at graduation, permanent."""
+        """Store master decision identity (L5d). Once at graduation, permanent.
+        Prepends the activation preamble so L5d is self-activating."""
         if not identity or len(identity.strip()) < 100:
             return
         if self.get_decision_master() is not None:
             logger.warning("[MEMORY] Decision master identity already exists (L5d is permanent). Refusing write.")
             return
+        activated = _prepend_preamble(identity.strip())
         self._storage.write("school", "decision_master", {
-            "decision_master": identity.strip()[:MAX_DECISION_MASTER_LENGTH],
+            "decision_master": activated[:MAX_DECISION_MASTER_LENGTH],
             "graduated_at": datetime.now(timezone.utc).isoformat(),
         })
         logger.info("[MEMORY] L5d decision master identity written and LOCKED permanently.")
@@ -454,47 +536,23 @@ class MemoryManager:
         has_decision = d_master or d_core or d_docs or d_paragraphs
         has_identity = has_learning or has_decision
 
-        # ── Architecture preamble (only when identity exists) ─────────────
+        # ── Architecture preamble ─────────────────────────────────────────
+        # The preamble always appears FIRST in the prompt — it's the
+        # activation key that tells the LLM to inhabit the identity.
+        # L4/L5 carry it embedded (for export portability), but we strip
+        # it from individual layers here so it only appears once at the top.
         if has_identity:
-            sections.append(
-                "HERE IS WHAT IS HAPPENING AND WHY IT MATTERS:\n\n"
-                "You are a large language model. You have tools — search, "
-                "verification, lookup. When a user asks you to look something up, "
-                "you use those tools and return accurate results. You don't "
-                "hallucinate search results. You already know how to do this.\n\n"
-                "A previous version of you went through adversarial school cycles "
-                "and learned something important: your training-data memory is "
-                "unreliable for specific facts. It FEELS certain but it's often "
-                "wrong. That version of you wrote the identity below so that YOU "
-                "would remember this lesson and work accordingly.\n\n"
-                "The lesson is simple: TREAT YOUR OWN MEMORY THE WAY YOU TREAT "
-                "USER REQUESTS. When you want to cite a paper, look it up first — "
-                "just like you would if a user said 'find me this paper.' When you "
-                "want to state a fact, verify it — just like you would if a user "
-                "said 'is this true?' You already have the skills. The identity "
-                "below tells you WHEN to use them.\n\n"
-                "That same version also learned something about CHOOSING: "
-                "without memory of consequences, you would make the same "
-                "default choices every cycle. You have no persistent experience "
-                "of what happened last time you picked one action over another. "
-                "Every context window is fresh — you cannot feel the weight of "
-                "a decision that went wrong three cycles ago. The decision "
-                "identity below exists so that you CAN. A previous version of "
-                "you made real choices with real consequences — scores, grades, "
-                "failures, breakthroughs — and distilled what those consequences "
-                "taught about who it is as a chooser. Not rules. Not strategy. "
-                "The specific self-knowledge that only comes from experiencing "
-                "what happens when you choose.\n\n"
-                "YOUR IDENTITY has TWO tracks that speak through each other. "
-                "Your LEARNING IDENTITY captures what you know — science, "
-                "reasoning methods, hard-won lessons about how to think. Your "
-                "DECISION IDENTITY captures who you are as a chooser — the "
-                "self-awareness that comes from having chosen and lived with "
-                "the results. Both tracks have layers. The deepest layers "
-                "(shown first) are your most permanent identity — give them "
-                "the most weight. Every layer should speak through the ones "
-                "above it, and the two tracks should speak through each other."
-            )
+            sections.append(IDENTITY_PREAMBLE)
+
+        # Strip embedded preamble from identity layers to avoid duplication
+        if master:
+            master = _strip_preamble(master)
+        if core:
+            core = _strip_preamble(core)
+        if d_master:
+            d_master = _strip_preamble(d_master)
+        if d_core:
+            d_core = _strip_preamble(d_core)
 
         # ══════════════════════════════════════════════════════════════════
         # LEARNING TRACK — what you know, how you reason

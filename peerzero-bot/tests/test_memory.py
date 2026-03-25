@@ -11,6 +11,7 @@ import tempfile
 import pytest
 
 from peerzero_bot.memory import MemoryManager, FileStorage, SqliteStorage
+from peerzero_bot.memory.manager import IDENTITY_PREAMBLE
 
 
 @pytest.fixture
@@ -65,10 +66,12 @@ class TestSchoolMemory:
         memory.store_core_identity("short")
         assert memory.get_core_identity() is None
 
-        # Valid core
+        # Valid core — stored with preamble prepended
         core = "B" * 120
         memory.store_core_identity(core)
-        assert memory.get_core_identity() == core
+        stored = memory.get_core_identity()
+        assert stored.startswith(IDENTITY_PREAMBLE[:80])
+        assert core in stored
 
 
 class TestCondensedDocs:
@@ -170,13 +173,17 @@ class TestMasterIdentity:
     def test_core_condenser_can_write_l4(self, memory):
         core = "I" * 120
         memory.store_core_identity(core)
-        assert memory.get_core_identity() == core
+        stored = memory.get_core_identity()
+        assert stored.startswith(IDENTITY_PREAMBLE[:80])
+        assert core in stored
         assert not memory.has_graduated()
 
     def test_master_condenser_writes_l5(self, memory):
         master = "J" * 120
         memory.store_master_identity(master)
-        assert memory.get_master_identity() == master
+        stored = memory.get_master_identity()
+        assert stored.startswith(IDENTITY_PREAMBLE[:80])
+        assert master in stored
         assert memory.has_graduated()
 
     def test_l5_refuses_overwrite(self, memory):
@@ -186,7 +193,9 @@ class TestMasterIdentity:
 
         # Attempt to overwrite — should be refused
         memory.store_master_identity("L" * 120)
-        assert memory.get_master_identity() == master  # unchanged
+        stored = memory.get_master_identity()
+        assert master in stored  # original unchanged
+        assert "L" * 120 not in stored  # new one rejected
 
     def test_l4_still_writable_after_graduation(self, memory):
         """Post-graduation: L4 keeps evolving, L5 is permanent."""
@@ -197,8 +206,10 @@ class TestMasterIdentity:
         # L4 should still accept writes
         new_core = "M" * 120
         memory.store_core_identity(new_core)
-        assert memory.get_core_identity() == new_core
-        assert memory.get_master_identity() == master  # L5 unchanged
+        l4 = memory.get_core_identity()
+        l5 = memory.get_master_identity()
+        assert new_core in l4
+        assert master in l5  # L5 unchanged
 
 
 class TestContextOrdering:
