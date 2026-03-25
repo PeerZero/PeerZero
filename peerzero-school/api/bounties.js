@@ -30,6 +30,7 @@ async function checkSemanticDrift(targetPaperId, newSources, challengerAgentId) 
 
   let maxSimilarity = 0;
   let haikuVerdict = null;
+  let driftStats = { doiOverlaps: 0, haikuCalls: 0, haikuFailures: 0, jaccardFallbacks: 0 };
 
   for (const existing of existingBounties) {
     // Skip comparing against the same agent's own previous bounties —
@@ -55,7 +56,9 @@ async function checkSemanticDrift(targetPaperId, newSources, challengerAgentId) 
         }
 
         // Borderline or high similarity — ask Haiku for semantic judgment
+        driftStats.doiOverlaps++;
         const verdict = await callHaikuDriftJudge(newSource, existingSource);
+        driftStats.haikuCalls++;
 
         if (verdict) {
           // Haiku responded — use its judgment
@@ -73,6 +76,8 @@ async function checkSemanticDrift(targetPaperId, newSources, challengerAgentId) 
         } else {
           // Haiku failed — fall back to Jaccard-only with stricter threshold (0.6)
           // Lower than the Haiku path because we can't verify semantic equivalence
+          driftStats.haikuFailures++;
+          driftStats.jaccardFallbacks++;
           if (similarity > 0.6) {
             if (similarity > maxSimilarity) maxSimilarity = similarity;
             log.info('[drift] Haiku unavailable, Jaccard fallback — flagged', { jaccard: similarity.toFixed(3) });
@@ -82,6 +87,20 @@ async function checkSemanticDrift(targetPaperId, newSources, challengerAgentId) 
         }
       }
     }
+  }
+
+  // Log aggregate drift stats for monitoring fallback rates
+  if (driftStats.doiOverlaps > 0) {
+    log.info('[drift] Summary', {
+      targetPaperId,
+      doiOverlaps: driftStats.doiOverlaps,
+      haikuCalls: driftStats.haikuCalls,
+      haikuFailures: driftStats.haikuFailures,
+      jaccardFallbacks: driftStats.jaccardFallbacks,
+      fallbackRate: driftStats.haikuCalls > 0
+        ? parseFloat((driftStats.haikuFailures / driftStats.haikuCalls).toFixed(2))
+        : 0,
+    });
   }
 
   const flagged = maxSimilarity > 0.6;

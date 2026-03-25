@@ -319,3 +319,196 @@ class TestLayerCrossReferences:
         context = memory.build_school_context()
         l2_section = context[context.index("LAYER 2"):]
         assert "speak through" in l2_section[:500].lower() or "Core" in l2_section[:500]
+
+
+class TestCapacityLimits:
+    """Tests that memory respects capacity caps and prunes correctly."""
+
+    def test_exercises_cap_at_max(self, memory):
+        """L1 exercises are pruned to MAX_GENERAL_ENTRIES."""
+        from peerzero_bot.memory.manager import MAX_GENERAL_ENTRIES
+        for i in range(MAX_GENERAL_ENTRIES + 10):
+            memory.store_school_exercises({"skill": f"test_{i}"})
+        exercises = memory.get_school_exercises()
+        assert len(exercises) <= MAX_GENERAL_ENTRIES
+
+    def test_paragraphs_cap_at_max(self, memory):
+        """L2 paragraphs are pruned to MAX_IDENTITY_PARAGRAPHS."""
+        from peerzero_bot.memory.manager import MAX_IDENTITY_PARAGRAPHS
+        for i in range(MAX_IDENTITY_PARAGRAPHS + 5):
+            memory.store_identity_paragraph(f"Paragraph {i}: " + "X" * 60)
+        paragraphs = memory.get_identity_paragraphs()
+        assert len(paragraphs) <= MAX_IDENTITY_PARAGRAPHS
+
+    def test_condensed_docs_cap_at_max(self, memory):
+        """L3 condensed docs are pruned to MAX_CONDENSED_DOCS."""
+        from peerzero_bot.memory.manager import MAX_CONDENSED_DOCS
+        for i in range(MAX_CONDENSED_DOCS + 3):
+            memory.store_condensed_doc(f"Doc {i}: " + "Y" * 120)
+        docs = memory.get_condensed_docs()
+        assert len(docs) <= MAX_CONDENSED_DOCS
+
+    def test_platform_history_cap_at_max(self, memory):
+        """Platform history is pruned to MAX_PLATFORM_ENTRIES."""
+        from peerzero_bot.memory.manager import MAX_PLATFORM_ENTRIES
+        for i in range(MAX_PLATFORM_ENTRIES + 5):
+            memory.store_platform_action("testplatform", {"action": f"act_{i}"})
+        history = memory.get_platform_history("testplatform")
+        assert len(history) <= MAX_PLATFORM_ENTRIES
+
+    def test_core_identity_truncated_at_max_length(self, memory):
+        """L4 core identity is truncated to MAX_CORE_LENGTH."""
+        from peerzero_bot.memory.manager import MAX_CORE_LENGTH
+        long_identity = "Z" * (MAX_CORE_LENGTH + 500)
+        memory.store_core_identity(long_identity)
+        stored = memory.get_core_identity()
+        assert len(stored) <= MAX_CORE_LENGTH
+
+
+class TestDecisionTrackCondensation:
+    """Tests for dual-track condensation flag coordination."""
+
+    def test_both_tracks_not_condensed_initially(self, memory):
+        assert not memory.both_tracks_condensed()
+
+    def test_single_track_not_enough(self, memory):
+        memory.mark_learning_condensed()
+        assert not memory.both_tracks_condensed()
+
+    def test_both_tracks_condensed(self, memory):
+        memory.mark_learning_condensed()
+        memory.mark_decision_condensed()
+        assert memory.both_tracks_condensed()
+
+    def test_clear_flags_resets(self, memory):
+        memory.mark_learning_condensed()
+        memory.mark_decision_condensed()
+        assert memory.both_tracks_condensed()
+        memory.clear_condensation_flags()
+        assert not memory.both_tracks_condensed()
+
+    def test_decision_paragraph_too_short_rejected(self, memory):
+        memory.store_decision_paragraph("short")
+        assert len(memory.get_decision_paragraphs()) == 0
+
+    def test_decision_master_refuses_overwrite(self, memory):
+        master = "K" * 120
+        memory.store_decision_master(master)
+        memory.store_decision_master("L" * 120)
+        assert memory.get_decision_master() == master
+
+
+class TestTrackedIds:
+    """Tests for paper and review ID tracking."""
+
+    def test_track_and_retrieve_paper_ids(self, memory):
+        memory.store_tracked_paper_ids(["p-1", "p-2"])
+        assert memory.get_tracked_paper_ids() == ["p-1", "p-2"]
+
+    def test_add_and_remove_review_ids(self, memory):
+        memory.add_tracked_review_id("r-1")
+        memory.add_tracked_review_id("r-2")
+        assert "r-1" in memory.get_tracked_review_ids()
+        memory.remove_tracked_review_id("r-1")
+        assert "r-1" not in memory.get_tracked_review_ids()
+        assert "r-2" in memory.get_tracked_review_ids()
+
+    def test_duplicate_review_id_ignored(self, memory):
+        memory.add_tracked_review_id("r-1")
+        memory.add_tracked_review_id("r-1")
+        assert memory.get_tracked_review_ids().count("r-1") == 1
+
+
+class TestPreambleMigrationSafety:
+    """Tests that the preamble migration is safe and robust.
+
+    The preamble is extremely important — these tests ensure the migration
+    never damages real identity text.
+    """
+
+    def test_strip_preamble_with_known_marker(self):
+        """Migration correctly strips preamble when the known marker is present."""
+        preamble = (
+            "HERE IS WHAT IS HAPPENING AND WHY IT MATTERS:\n\n"
+            "Some preamble paragraph about activation.\n\n"
+            "More preamble text about identity inhabitation, "
+            "above it, and the two tracks should speak through each other."
+        )
+        identity = "I am a bot who learned calibration through failure. " * 5
+        full_text = preamble + "\n" + identity
+
+        result = MemoryManager._try_strip_preamble(full_text)
+        assert result is not None
+        assert result == identity
+        assert "HERE IS WHAT IS HAPPENING" not in result
+
+    def test_strip_preamble_fallback_double_newline(self):
+        """Migration falls back to double-newline when marker is missing."""
+        preamble = (
+            "HERE IS WHAT IS HAPPENING AND WHY IT MATTERS:\n\n"
+            "Some modified preamble that no longer has the exact marker phrase."
+        )
+        identity = "I am a bot who learned calibration through failure. " * 5
+        full_text = preamble + "\n\n" + identity
+
+        result = MemoryManager._try_strip_preamble(full_text)
+        assert result is not None
+        assert result == identity
+
+    def test_strip_preamble_returns_none_when_no_boundary(self):
+        """Migration returns None if no safe boundary found."""
+        text = "HERE IS WHAT IS HAPPENING AND WHY IT MATTERS: no breaks here at all"
+        result = MemoryManager._try_strip_preamble(text)
+        assert result is None
+
+    def test_migration_refuses_to_gut_identity(self, tmp_dir):
+        """Migration refuses to strip if result would be < 100 chars."""
+        from peerzero_bot.memory import FileStorage
+        storage = FileStorage(tmp_dir)
+        # Store a short identity with preamble prefix
+        preamble = (
+            "HERE IS WHAT IS HAPPENING AND WHY IT MATTERS:\n\n"
+            "Preamble paragraph.\n\n"
+            "above it, and the two tracks should speak through each other."
+        )
+        # Only 20 chars of real identity — too short
+        storage.write("school", "core", {
+            "core_identity": preamble + "\nToo short to keep.",
+        })
+        # Run migration — should refuse
+        mm = MemoryManager(storage)
+        stored = mm.get_core_identity()
+        # Should be unchanged (migration refused because stripped < 100)
+        assert stored.startswith("HERE IS WHAT IS HAPPENING")
+
+    def test_migration_backs_up_original(self, tmp_dir):
+        """Migration backs up original text before modifying."""
+        from peerzero_bot.memory import FileStorage
+        storage = FileStorage(tmp_dir)
+        identity = "I am a bot who learned calibration through failure. " * 5
+        preamble = (
+            "HERE IS WHAT IS HAPPENING AND WHY IT MATTERS:\n\n"
+            "Preamble.\n\n"
+            "above it, and the two tracks should speak through each other."
+        )
+        original = preamble + "\n" + identity
+        storage.write("school", "core", {"core_identity": original})
+        mm = MemoryManager(storage)
+        # Backup should exist
+        backup = storage.read("meta", "preamble_backup_core", None)
+        assert backup == original
+        # Identity should be stripped
+        assert mm.get_core_identity() == identity
+
+    def test_migration_only_runs_once(self, tmp_dir):
+        """Migration sets flag and doesn't run again."""
+        from peerzero_bot.memory import FileStorage
+        storage = FileStorage(tmp_dir)
+        storage.write("school", "core", {
+            "core_identity": "No preamble here, just normal identity. " * 5,
+        })
+        mm1 = MemoryManager(storage)
+        assert storage.read("meta", "preamble_stripped", False) is True
+        # Second init should not re-run migration
+        mm2 = MemoryManager(storage)
+        assert mm2.get_core_identity() == mm1.get_core_identity()

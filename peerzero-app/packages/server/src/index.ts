@@ -9,7 +9,7 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import { createServer } from 'http';
-import { config } from './config';
+import { config, validateStartupConfig } from './config';
 import { logger } from './lib/logger';
 import { errorHandler } from './middleware/error-handler';
 import { authLimiter, closeRateLimitRedis } from './middleware/rate-limit';
@@ -82,17 +82,16 @@ if (config.redisUrl) {
   logger.warn('REDIS_URL not set — job workers disabled (auth and API still work)');
 }
 
-// Run pending migrations, then start listening
+// Run startup validation and migrations, then start listening
+const startupWarnings = validateStartupConfig();
+for (const w of startupWarnings) {
+  logger.warn(`[startup] ${w}`);
+}
+
 runMigrations()
   .then(async () => {
     server.listen(config.port, '0.0.0.0', () => {
       logger.info({ port: config.port, env: config.nodeEnv, realAdapters: config.useRealAdapters }, 'PeerZero App Server started');
-      if (!config.useRealAdapters && !config.isDev) {
-        logger.warn('⚠ USE_REAL_ADAPTERS is false in non-dev mode — School API calls are mocked. Set USE_REAL_ADAPTERS=true for production.');
-      }
-      if (config.skipPayments && !config.isDev) {
-        logger.warn('⚠ SKIP_PAYMENTS is true in non-dev mode — all grades auto-unlocked. Set SKIP_PAYMENTS=false for production.');
-      }
     });
     // Recover bots that were running before restart (after worker is ready)
     if (config.redisUrl) {

@@ -66,3 +66,46 @@ export const config = {
   // CORS allowed origins (comma-separated, used in production; dev mode always allows localhost)
   corsOrigins: optional('CORS_ORIGINS', 'https://peerzero.science,https://www.peerzero.science,https://peer-zero.vercel.app'),
 } as const;
+
+/**
+ * Validate correlated config constraints that can't be caught by individual
+ * env var checks. Call during startup, before server.listen().
+ * Returns an array of warning messages (empty = all clear).
+ */
+export function validateStartupConfig(): string[] {
+  const warnings: string[] = [];
+
+  if (config.useRealAdapters && config.defaultSchoolUrl === 'https://peerzero.science') {
+    // Not an error — just verify the user intends to hit production School
+    // This catches cases where someone enables real adapters but forgot to
+    // set a staging URL during development.
+    if (config.isDev) {
+      warnings.push(
+        'USE_REAL_ADAPTERS=true with default School URL (production) in dev mode. '
+        + 'Set DEFAULT_SCHOOL_URL to a staging URL if this is unintentional.'
+      );
+    }
+  }
+
+  if (config.skipPayments && config.nodeEnv === 'production') {
+    warnings.push(
+      'SKIP_PAYMENTS=true in production — all grades auto-unlocked. '
+      + 'This should only be set during testing.'
+    );
+  }
+
+  if (!config.useRealAdapters && config.nodeEnv === 'production') {
+    warnings.push(
+      'USE_REAL_ADAPTERS=false in production — School API calls are mocked. '
+      + 'Bots will not interact with the real School.'
+    );
+  }
+
+  if (!config.redisUrl && config.nodeEnv === 'production') {
+    warnings.push(
+      'REDIS_URL not set in production — job workers and rate limiting will be disabled.'
+    );
+  }
+
+  return warnings;
+}
