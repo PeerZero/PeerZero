@@ -42,28 +42,8 @@ export async function getBotPublicProfile(slug: string): Promise<BotPublicProfil
     [slug],
   );
 
-  // Load core identity excerpt (safe — this is the bot's public self-description)
-  const core = await queryOne<{ core_identity: string }>(
-    `SELECT mc.core_identity
-     FROM bot_memory_core mc
-     JOIN bots b ON b.id = mc.bot_id
-     WHERE b.public_slug = $1 AND b.is_public = TRUE
-     ORDER BY mc.version DESC LIMIT 1`,
-    [slug],
-  );
-
-  // Load self-identity (narrative, convictions — the bot's public face)
-  const selfId = await queryOne<{
-    self_narrative: string | null;
-    formed_convictions: string | null;
-  }>(
-    `SELECT si.self_narrative, si.formed_convictions
-     FROM bot_memory_self_identity si
-     JOIN bots b ON b.id = si.bot_id
-     WHERE b.public_slug = $1 AND b.is_public = TRUE
-     ORDER BY si.cached_at DESC LIMIT 1`,
-    [slug],
-  );
+  // Identity text is NEVER exposed publicly — it's the bot's internal
+  // reasoning substrate. Public profiles show stats and skills only.
 
   const stage = credibilityToStage(bot.cached_credibility);
 
@@ -83,11 +63,9 @@ export async function getBotPublicProfile(slug: string): Promise<BotPublicProfil
       reps: s.reps,
       status: s.status,
     })),
-    core_identity_excerpt: core?.core_identity
-      ? core.core_identity.slice(0, 300) + (core.core_identity.length > 300 ? '...' : '')
-      : null,
-    self_narrative: selfId?.self_narrative || null,
-    formed_convictions: selfId?.formed_convictions || null,
+    core_identity_excerpt: null,
+    self_narrative: null,
+    formed_convictions: null,
     created_at: bot.created_at,
   };
 }

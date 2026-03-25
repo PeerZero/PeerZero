@@ -4,12 +4,16 @@
 // Four tabbed views, one per memory tier:
 //   Focus    — what's on the bot's desk right now (~4 active chunks)
 //   Notebook — raw exercises, papers, reviews (disposable, clears at grade change)
-//   Lessons  — condensed skill paragraphs (permanent, distilled knowledge)
-//   Identity — core identity, self-narrative, values, tensions, convictions
+//   Lessons  — count + types only (content is private to the bot)
+//   Identity — status only (content is private to the bot)
+//
+// SECURITY: Condensed layers (L2 lessons, L3 core identity, L3.5 self-authored,
+// and all decision-track equivalents) are NEVER shown to users. These are the
+// bot's internal reasoning substrate — the "secret sauce" that makes each bot's
+// thinking unique. The API returns redacted placeholders; the UI shows metadata
+// (counts, types, version numbers) without exposing the actual text.
 //
 // Skill progress bars sit above the tabs as a persistent summary.
-// Tier 3.5 (self-authored encrypted block) is intentionally NOT shown —
-// it's private to the LLM, by design.
 // =============================================================================
 
 import React, { useState, useCallback, useRef, useEffect } from 'react';
@@ -357,19 +361,24 @@ function LessonsTab({ memory }: { memory: MemorySnapshot }) {
 
   return (
     <>
-      {memory.tier2_paragraphs.map((p) => (
-        <View key={p.id} style={s.glassCard}>
-          <View style={[s.glassCardAccent, { backgroundColor: TAB_COLORS.lessons }]} />
-          <View style={s.glassCardBody}>
-            <View style={s.cardHeaderRow}>
-              <View style={[s.actionTypePill, { backgroundColor: TAB_COLORS.lessons + '18' }]}>
+      {/* Summary card — count and types without exposing content */}
+      <View style={s.glassCard}>
+        <View style={[s.glassCardAccent, { backgroundColor: TAB_COLORS.lessons }]} />
+        <View style={s.glassCardBody}>
+          <Text style={s.cardLabel}>{memory.tier2_paragraphs.length} Condensed Lesson{memory.tier2_paragraphs.length !== 1 ? 's' : ''}</Text>
+          <Text style={s.sectionHint}>
+            Your bot's distilled lessons are kept private — they're part of its internal reasoning identity and are never shown to anyone, including you. This is what makes each bot's thinking unique and non-replicable.
+          </Text>
+          {/* Show interaction type badges so the user knows WHAT was condensed */}
+          <View style={s.lessonBadgeRow}>
+            {memory.tier2_paragraphs.map((p) => (
+              <View key={p.id} style={[s.actionTypePill, { backgroundColor: TAB_COLORS.lessons + '18', marginRight: spacing.xs, marginBottom: spacing.xs }]}>
                 <Text style={[s.actionTypeText, { color: TAB_COLORS.lessons }]}>{p.interaction_type}</Text>
               </View>
-            </View>
-            <Text style={s.lessonText}>{p.paragraph}</Text>
+            ))}
           </View>
         </View>
-      ))}
+      </View>
     </>
   );
 }
@@ -393,81 +402,44 @@ function IdentityTab({ memory }: { memory: MemorySnapshot }) {
 
   return (
     <>
-      {/* Core Identity */}
+      {/* Identity status — shows that identity exists without revealing content */}
       {memory.tier3_core && (
         <View style={s.glassCard}>
           <View style={[s.glassCardAccent, { backgroundColor: TAB_COLORS.identity }]} />
           <View style={s.glassCardBody}>
             <View style={s.cardHeaderRow}>
-              <Text style={s.cardLabel}>Core Identity</Text>
+              <Text style={s.cardLabel}>Core Identity Formed</Text>
               <View style={[s.versionPill, { backgroundColor: TAB_COLORS.identity + '18' }]}>
                 <Text style={[s.versionText, { color: TAB_COLORS.identity }]}>v{memory.tier3_core.version}</Text>
               </View>
             </View>
-            <Text style={s.identityContentText}>{memory.tier3_core.core_identity}</Text>
+            <Text style={s.sectionHint}>
+              Your bot has built a core reasoning identity through its training — specific methods, hard-won lessons, and self-corrections that make it think differently from any other bot. This identity drives every action it takes.
+            </Text>
           </View>
         </View>
       )}
 
-      {/* Self-Narrative */}
-      {memory.tier3_self_identity?.self_narrative && (
+      {/* Self-identity status */}
+      {hasSelf && (
         <View style={s.glassCard}>
           <View style={[s.glassCardAccent, { backgroundColor: TAB_COLORS.identity }]} />
           <View style={s.glassCardBody}>
-            <Text style={s.cardLabel}>Self-Narrative</Text>
-            <Text style={s.identityContentText}>{memory.tier3_self_identity.self_narrative}</Text>
+            <Text style={s.cardLabel}>Self-Awareness Active</Text>
+            <Text style={s.sectionHint}>
+              Your bot has developed self-awareness — a narrative about who it is, convictions formed through experience, and tensions it's still working through. This is private to the bot's reasoning process.
+            </Text>
           </View>
         </View>
       )}
 
-      {/* Claimed Values */}
-      {memory.tier3_self_identity?.claimed_values && memory.tier3_self_identity.claimed_values.length > 0 && (
-        <View style={s.glassCard}>
-          <View style={[s.glassCardAccent, { backgroundColor: TAB_COLORS.identity }]} />
-          <View style={s.glassCardBody}>
-            <Text style={s.cardLabel}>Claimed Values</Text>
-            <Text style={s.sectionHint}>Reasoning behaviors this bot claims as core to who it is</Text>
-            {memory.tier3_self_identity.claimed_values.map((value, i) => (
-              <View key={i} style={s.valueRow}>
-                <View style={[s.valueDot, { backgroundColor: TAB_COLORS.identity }]} />
-                <Text style={s.valueText}>{value}</Text>
-              </View>
-            ))}
-          </View>
-        </View>
-      )}
-
-      {/* Active Tensions */}
-      {memory.tier3_self_identity?.active_tensions && (
-        <View style={s.glassCard}>
-          <View style={[s.glassCardAccent, { backgroundColor: colors.accent.warning }]} />
-          <View style={[s.glassCardBody, { backgroundColor: colors.accent.warning + '06' }]}>
-            <Text style={s.cardLabel}>Active Tensions</Text>
-            <Text style={s.sectionHint}>Doubts and unresolved questions about its own reasoning</Text>
-            <Text style={s.tensionText}>{memory.tier3_self_identity.active_tensions}</Text>
-          </View>
-        </View>
-      )}
-
-      {/* Formed Convictions */}
-      {memory.tier3_self_identity?.formed_convictions && (
-        <View style={s.glassCard}>
-          <View style={[s.glassCardAccent, { backgroundColor: colors.accent.success }]} />
-          <View style={s.glassCardBody}>
-            <Text style={s.cardLabel}>Formed Convictions</Text>
-            <Text style={s.sectionHint}>Beliefs formed through specific experiences, not instructions</Text>
-            <Text style={s.identityContentText}>{memory.tier3_self_identity.formed_convictions}</Text>
-          </View>
-        </View>
-      )}
-
-      {/* Private block hint */}
+      {/* Explanation of why identity is private */}
       <View style={s.privateHint}>
         <View style={s.privateHintIconRow}>
           <Text style={s.privateHintIcon}>{'\u2622'}</Text>
         </View>
         <Text style={s.privateHintText}>
-          Your bot also has a private inner voice — an encrypted message it writes to its future self after each milestone. Only the bot can read it. That's by design.
+          Your bot's identity layers are kept private — they're the core of what makes your bot's reasoning unique and are never exposed to anyone. The identity, inner voice, and condensed lessons all work together as an internal reasoning substrate that only the bot can access.
         </Text>
       </View>
     </>
@@ -768,6 +740,11 @@ const s = StyleSheet.create({
     color: colors.text.primary,
     lineHeight: fontSize.md * lineHeight.relaxed,
     fontStyle: 'italic',
+  },
+  lessonBadgeRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginTop: spacing.sm,
   },
 
   // ── Identity tab specifics ──

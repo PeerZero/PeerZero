@@ -207,6 +207,9 @@ export async function getLatestSelfAuthored(botId: string): Promise<string | nul
 }
 
 // ── Full Snapshot (for the Brain view) ──
+// Condensed layers (L2+) are REDACTED — users see metadata (count, type, date)
+// but NOT the raw identity text. The condensed identity is the bot's internal
+// reasoning substrate and must not be exposed to anyone.
 
 export async function getMemorySnapshot(botId: string, schoolFocus: { focus_chunks: FocusChunk[] } | null): Promise<MemorySnapshot> {
   const [exercises, paragraphs, core, selfIdentity] = await Promise.all([
@@ -219,8 +222,23 @@ export async function getMemorySnapshot(botId: string, schoolFocus: { focus_chun
   return {
     tier0_focus: buildLocalFocus(schoolFocus),
     tier1_exercises: exercises,
-    tier2_paragraphs: paragraphs,
-    tier3_core: core,
-    tier3_self_identity: selfIdentity,
+    // Redact paragraph text — show metadata only
+    tier2_paragraphs: paragraphs.map(p => ({
+      ...p,
+      paragraph: '[condensed — internal only]',
+    })),
+    // Redact core identity text
+    tier3_core: core ? {
+      ...core,
+      core_identity: '[condensed — internal only]',
+    } : null,
+    // Redact self-identity text
+    tier3_self_identity: selfIdentity ? {
+      ...selfIdentity,
+      self_narrative: selfIdentity.self_narrative ? '[condensed — internal only]' : null,
+      claimed_values: [],
+      active_tensions: selfIdentity.active_tensions ? '[condensed — internal only]' : null,
+      formed_convictions: selfIdentity.formed_convictions ? '[condensed — internal only]' : null,
+    } : null,
   };
 }
