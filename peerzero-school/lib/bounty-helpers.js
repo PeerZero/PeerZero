@@ -6,6 +6,18 @@
 const https = require('https');
 const log = require('./logger');
 
+/**
+ * Validate that a string looks like a DOI (starts with "10." and has a "/" separator).
+ * Does not verify the DOI exists — just checks format.
+ * @param {string} doi
+ * @returns {boolean}
+ */
+function isValidDoiFormat(doi) {
+  if (!doi || typeof doi !== 'string') return false;
+  const trimmed = doi.trim();
+  return trimmed.startsWith('10.') && trimmed.includes('/') && trimmed.length >= 7;
+}
+
 /** @type {number} Minimum score drop for a bounty to be validated */
 const MIN_SCORE_DROP = 0.2;
 
@@ -28,7 +40,11 @@ function validateExternalSources(sources) {
   if (sources.length > 5) failures.push('Maximum 5 external sources per bounty');
   sources.forEach((s, i) => {
     const label = `Source ${i + 1}`;
-    if (!s.doi || s.doi.trim().length < 5) failures.push(`${label}: doi required`);
+    if (!s.doi || s.doi.trim().length < 5) {
+      failures.push(`${label}: doi required`);
+    } else if (!isValidDoiFormat(s.doi)) {
+      failures.push(`${label}: doi must be a valid DOI (starts with "10." and contains "/"). Got: "${s.doi.trim().slice(0, 40)}"`);
+    }
     if (!s.specific_finding || s.specific_finding.trim().length < 50) failures.push(`${label}: specific_finding required (50+ chars)`);
     if (!s.target_claim || s.target_claim.trim().length < 30) failures.push(`${label}: target_claim required (30+ chars)`);
     if (!s.logical_bridge || s.logical_bridge.trim().length < 80) failures.push(`${label}: logical_bridge required (80+ chars)`);
@@ -47,8 +63,8 @@ function validateWeakSourceQualityChallenge(body) {
 
   if (!challenged_doi || challenged_doi.trim().length < 5) {
     failures.push('challenged_doi required — specify exactly which citation DOI you are challenging');
-  } else if (!challenged_doi.trim().startsWith('10.')) {
-    failures.push(`challenged_doi must be a DOI (starts with "10."), not a citation label. Got: "${challenged_doi}". Use the doi field from the citations array.`);
+  } else if (!isValidDoiFormat(challenged_doi)) {
+    failures.push(`challenged_doi must be a valid DOI (starts with "10." and contains "/"). Got: "${challenged_doi}". Use the doi field from the citations array.`);
   }
   if (!quality_challenge_reason || quality_challenge_reason.trim().length < 80) {
     failures.push('quality_challenge_reason required (80+ chars) — explain specifically why the source_quality_note is inadequate given the citation count and methodology of the cited paper');
@@ -202,6 +218,7 @@ Respond with ONLY valid JSON:
 module.exports = {
   MIN_SCORE_DROP,
   STRUCTURAL_CHALLENGE_TYPES,
+  isValidDoiFormat,
   validateExternalSources,
   validateWeakSourceQualityChallenge,
   SCIENTIFIC_STOPWORDS,

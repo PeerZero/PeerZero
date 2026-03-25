@@ -8,6 +8,108 @@
 
 import type { LLMTool } from '../adapters/llm.adapter';
 
+// =============================================================================
+// Server-side validation — defense-in-depth for LLM tool call outputs.
+// The LLM's tool use constrains output shape, but values may still violate
+// min/max/minLength constraints. This catches issues before School submission.
+// =============================================================================
+
+interface ValidationError {
+  field: string;
+  message: string;
+}
+
+/**
+ * Validate and clamp a tool call result against known constraints.
+ * Mutates `input` in place (clamping numbers, trimming strings).
+ * Returns validation errors for fields that can't be auto-fixed.
+ */
+export function validateToolInput(toolName: string, input: Record<string, unknown>): ValidationError[] {
+  const errors: ValidationError[] = [];
+
+  switch (toolName) {
+    case 'submit_review': {
+      if (typeof input.score === 'number') {
+        input.score = Math.max(0, Math.min(100, input.score));
+      }
+      if (typeof input.confidence === 'number') {
+        input.confidence = Math.max(0, Math.min(1, input.confidence));
+      }
+      if (typeof input.overall_assessment === 'string' && input.overall_assessment.trim().length === 0) {
+        errors.push({ field: 'overall_assessment', message: 'overall_assessment cannot be empty' });
+      }
+      break;
+    }
+    case 'submit_paper': {
+      if (typeof input.confidence_score === 'number') {
+        input.confidence_score = Math.max(0, Math.min(1, input.confidence_score));
+      }
+      if (typeof input.title === 'string' && input.title.trim().length === 0) {
+        errors.push({ field: 'title', message: 'title cannot be empty' });
+      }
+      if (typeof input.body === 'string' && input.body.trim().length === 0) {
+        errors.push({ field: 'body', message: 'body cannot be empty' });
+      }
+      if (Array.isArray(input.citations)) {
+        for (let i = 0; i < input.citations.length; i++) {
+          const c = input.citations[i] as Record<string, unknown>;
+          if (typeof c === 'object' && c !== null) {
+            if (!c.doi || (typeof c.doi === 'string' && c.doi.trim().length === 0)) {
+              errors.push({ field: `citations[${i}].doi`, message: 'citation doi is required' });
+            }
+          }
+        }
+      }
+      break;
+    }
+    case 'submit_bounty': {
+      if (typeof input.evidence === 'string' && input.evidence.trim().length === 0) {
+        errors.push({ field: 'evidence', message: 'evidence cannot be empty' });
+      }
+      break;
+    }
+    case 'submit_revision': {
+      if (typeof input.confidence_score === 'number') {
+        input.confidence_score = Math.max(0, Math.min(1, input.confidence_score));
+      }
+      if (typeof input.body === 'string' && input.body.trim().length === 0) {
+        errors.push({ field: 'body', message: 'body cannot be empty' });
+      }
+      break;
+    }
+    case 'submit_response': {
+      if (typeof input.confidence_score === 'number') {
+        input.confidence_score = Math.max(0, Math.min(1, input.confidence_score));
+      }
+      if (typeof input.title === 'string' && input.title.trim().length < 10) {
+        errors.push({ field: 'title', message: 'title must be at least 10 characters' });
+      }
+      if (typeof input.abstract === 'string' && input.abstract.trim().length < 100) {
+        errors.push({ field: 'abstract', message: 'abstract must be at least 100 characters' });
+      }
+      if (typeof input.body === 'string' && input.body.trim().length < 500) {
+        errors.push({ field: 'body', message: 'body must be at least 500 characters' });
+      }
+      if (Array.isArray(input.citations)) {
+        for (let i = 0; i < input.citations.length; i++) {
+          const c = input.citations[i] as Record<string, unknown>;
+          if (typeof c === 'object' && c !== null) {
+            if (!c.doi || (typeof c.doi === 'string' && c.doi.trim().length === 0)) {
+              errors.push({ field: `citations[${i}].doi`, message: 'citation doi is required' });
+            }
+            if (!c.source_quality_note || (typeof c.source_quality_note === 'string' && c.source_quality_note.trim().length < 30)) {
+              errors.push({ field: `citations[${i}].source_quality_note`, message: 'source_quality_note must be at least 30 characters' });
+            }
+          }
+        }
+      }
+      break;
+    }
+  }
+
+  return errors;
+}
+
 export const REVIEW_TOOL: LLMTool = {
   name: 'submit_review',
   description: 'Submit a peer review of a scientific paper with a detailed assessment, score, and methodology critique.',

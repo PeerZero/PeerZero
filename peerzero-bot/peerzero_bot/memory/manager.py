@@ -36,6 +36,7 @@ Security:
   - Platform memory cannot contaminate School-verified memory
 """
 
+import hashlib
 import json
 import logging
 from typing import Protocol, Optional
@@ -112,54 +113,93 @@ class MemoryManager:
 
         Before the LLM proxy existed, the preamble was stored inside the identity
         text. Now it's injected server-side, so we strip it from local storage.
+
+        Safety measures:
+          - SHA-256 hash + lengths stored to meta/preamble_backup_<key> (never full text)
+          - Stripped result must be >= 100 chars (refuses to strip if identity would be gutted)
+          - Primary marker match, then double-newline fallback if marker not found
+          - All operations logged with before/after lengths
         """
         migrated = self._storage.read("meta", "preamble_stripped", False)
         if migrated:
             return
 
-        for ns_key, field in [
+        all_keys = [
             ("core", "core_identity"),
             ("decision_core", "decision_core"),
-        ]:
-            data = self._storage.read("school", ns_key, {})
-            if isinstance(data, dict) and field in data:
-                text = data[field]
-                if isinstance(text, str) and text.startswith(_LEGACY_PREAMBLE_PREFIX):
-                    # Find end of preamble (double newline after it)
-                    idx = text.find("\n\n", len(_LEGACY_PREAMBLE_PREFIX))
-                    if idx > 0:
-                        # Walk past all the preamble paragraphs
-                        # The preamble ends before the actual identity text
-                        # Find the last double-newline that's part of the preamble
-                        # Simple heuristic: find "above it, and the two tracks"
-                        marker = "above it, and the two tracks should speak through each other."
-                        marker_idx = text.find(marker)
-                        if marker_idx > 0:
-                            stripped = text[marker_idx + len(marker):].lstrip("\n")
-                            data[field] = stripped
-                            self._storage.write("school", ns_key, data)
-                            logger.info(f"[MIGRATION] Stripped legacy preamble from {ns_key}")
-
-        # Master identities need special handling — can't use store_master_identity
-        # because it refuses overwrites. Write directly to storage.
-        for ns_key, field in [
+            # Master identities — can't use store_master_identity because it
+            # refuses overwrites, so we write directly to storage.
             ("master", "master_identity"),
             ("decision_master", "decision_master"),
-        ]:
+        ]
+
+        for ns_key, field in all_keys:
             data = self._storage.read("school", ns_key, {})
-            if isinstance(data, dict) and field in data:
-                text = data[field]
-                if isinstance(text, str) and text.startswith(_LEGACY_PREAMBLE_PREFIX):
-                    marker = "above it, and the two tracks should speak through each other."
-                    marker_idx = text.find(marker)
-                    if marker_idx > 0:
-                        stripped = text[marker_idx + len(marker):].lstrip("\n")
-                        data[field] = stripped
-                        self._storage.write("school", ns_key, data)
-                        logger.info(f"[MIGRATION] Stripped legacy preamble from {ns_key}")
+            if not isinstance(data, dict) or field not in data:
+                continue
+            text = data[field]
+            if not isinstance(text, str) or not text.startswith(_LEGACY_PREAMBLE_PREFIX):
+                continue
+
+            stripped = self._try_strip_preamble(text)
+
+            if stripped is None:
+                logger.warning(
+                    f"[MIGRATION] Could not find preamble boundary in {ns_key} — "
+                    f"leaving identity unchanged (len={len(text)})"
+                )
+                continue
+
+            if len(stripped) < 100:
+                logger.error(
+                    f"[MIGRATION] Stripped {ns_key} would be only {len(stripped)} chars — "
+                    f"refusing to apply (identity would be gutted). Original len={len(text)}"
+                )
+                continue
+
+            # Store only a hash of the original — NEVER the full text.
+            # The preamble must not persist in local storage (rule 8).
+            self._storage.write("meta", f"preamble_backup_{ns_key}", {
+                "original_len": len(text),
+                "original_sha256": hashlib.sha256(text.encode()).hexdigest(),
+                "stripped_len": len(stripped),
+            })
+
+            data[field] = stripped
+            self._storage.write("school", ns_key, data)
+            logger.info(
+                f"[MIGRATION] Stripped legacy preamble from {ns_key} "
+                f"(before={len(text)}, after={len(stripped)})"
+            )
 
         self._storage.write("meta", "preamble_stripped", True)
         logger.info("[MIGRATION] Legacy preamble migration complete")
+
+    @staticmethod
+    def _try_strip_preamble(text: str) -> Optional[str]:
+        """Attempt to strip the legacy preamble from identity text.
+
+        Strategy:
+          1. Try the known end-of-preamble marker phrase
+          2. If marker not found, fall back to finding the last paragraph
+             break that's within the first 2000 chars (preamble is ~1500 chars)
+
+        Returns the stripped text, or None if no safe boundary was found.
+        """
+        # Strategy 1: known marker phrase
+        marker = "above it, and the two tracks should speak through each other."
+        marker_idx = text.find(marker)
+        if marker_idx > 0:
+            return text[marker_idx + len(marker):].lstrip("\n")
+
+        # Strategy 2: find the last double-newline within the first 2000 chars
+        # (the preamble is multiple paragraphs, ~1500 chars total)
+        search_zone = text[:2000]
+        last_break = search_zone.rfind("\n\n")
+        if last_break > len(_LEGACY_PREAMBLE_PREFIX):
+            return text[last_break:].lstrip("\n")
+
+        return None
 
     # ── Generic storage proxies (used by agent for ad-hoc keys) ────────
 

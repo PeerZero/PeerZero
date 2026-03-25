@@ -11,7 +11,7 @@ import { ISchoolAdapter, SchoolCredentials } from '../adapters/school.adapter';
 import { ILLMAdapter, LLMResponse } from '../adapters/llm.adapter';
 import { buildPrompt } from './prompt-builder';
 import type { ActiveSkillDirective } from './prompt-builder';
-import { REVIEW_TOOL, PAPER_TOOL, BOUNTY_TOOL, REVISION_TOOL, RESPONSE_TOOL } from './tool-schemas';
+import { REVIEW_TOOL, PAPER_TOOL, BOUNTY_TOOL, REVISION_TOOL, RESPONSE_TOOL, validateToolInput } from './tool-schemas';
 import * as activity from '../services/activity.service';
 import type { SchoolProfile, SchoolPaper, TranslatedActivity, SchoolSkillExercises, SchoolMemoryPrompts } from '@peerzero/shared';
 
@@ -36,6 +36,19 @@ export interface ActionResult {
   tokensUsed?: number;
   exercises?: Record<string, unknown>;
   memoryPrompts?: SchoolMemoryPrompts;
+}
+
+/**
+ * Validate tool input and log warnings for any constraint violations.
+ * Clamping (e.g., score out of range) is applied in-place.
+ * Returns the (possibly mutated) input — non-blocking.
+ */
+function validateAndWarn(toolName: string, input: Record<string, unknown>): Record<string, unknown> {
+  const errors = validateToolInput(toolName, input);
+  if (errors.length > 0) {
+    console.warn(`[action-router] Tool validation warnings for ${toolName}:`, errors);
+  }
+  return input;
 }
 
 /**
@@ -87,7 +100,7 @@ async function executeReview(ctx: ActionContext): Promise<ActionResult> {
     extendedThinking: ctx.extendedThinking,
   });
 
-  const reviewContent = extractToolInput(llmResponse, { overall_assessment: llmResponse.content, score: 50 });
+  const reviewContent = validateAndWarn('submit_review', extractToolInput(llmResponse, { overall_assessment: llmResponse.content, score: 50 }));
 
   const schoolResult = await ctx.schoolAdapter.submitReview(ctx.schoolCreds, paper.id, reviewContent);
   if (!schoolResult || typeof schoolResult !== 'object') {
@@ -111,7 +124,7 @@ async function executePaper(ctx: ActionContext): Promise<ActionResult> {
     extendedThinking: ctx.extendedThinking,
   });
 
-  const paperContent = extractToolInput(llmResponse, { title: 'Untitled', abstract: llmResponse.content, body: llmResponse.content });
+  const paperContent = validateAndWarn('submit_paper', extractToolInput(llmResponse, { title: 'Untitled', abstract: llmResponse.content, body: llmResponse.content }));
 
   const schoolResult = await ctx.schoolAdapter.submitPaper(ctx.schoolCreds, paperContent);
   if (!schoolResult || typeof schoolResult !== 'object') {
@@ -145,7 +158,7 @@ async function executeBounty(ctx: ActionContext): Promise<ActionResult> {
     extendedThinking: ctx.extendedThinking,
   });
 
-  const bountyContent = extractToolInput(llmResponse, { challenge_type: 'methodology', evidence: llmResponse.content });
+  const bountyContent = validateAndWarn('submit_bounty', extractToolInput(llmResponse, { challenge_type: 'methodology', evidence: llmResponse.content }));
 
   const schoolResult = await ctx.schoolAdapter.submitBounty(ctx.schoolCreds, paper.id, bountyContent);
   if (!schoolResult || typeof schoolResult !== 'object') {
@@ -181,7 +194,7 @@ async function executeRevision(ctx: ActionContext): Promise<ActionResult> {
     extendedThinking: ctx.extendedThinking,
   });
 
-  const revisionContent = extractToolInput(llmResponse, { body: llmResponse.content, revision_notes: 'Revised based on feedback' });
+  const revisionContent = validateAndWarn('submit_revision', extractToolInput(llmResponse, { body: llmResponse.content, revision_notes: 'Revised based on feedback' }));
 
   const schoolResult = await ctx.schoolAdapter.submitRevision(ctx.schoolCreds, paperId, revisionContent);
   if (!schoolResult || typeof schoolResult !== 'object') {
@@ -245,7 +258,7 @@ async function executeResponse(ctx: ActionContext): Promise<ActionResult> {
     extendedThinking: ctx.extendedThinking,
   });
 
-  const responseContent = extractToolInput(llmResponse, { title: 'Response', abstract: llmResponse.content, body: llmResponse.content, stance: 'rebut' });
+  const responseContent = validateAndWarn('submit_response', extractToolInput(llmResponse, { title: 'Response', abstract: llmResponse.content, body: llmResponse.content, stance: 'rebut' }));
 
   const schoolResult = await ctx.schoolAdapter.submitResponse(ctx.schoolCreds, paper.id, responseContent);
   if (!schoolResult || typeof schoolResult !== 'object') {
@@ -285,7 +298,7 @@ async function executeRebuttal(ctx: ActionContext): Promise<ActionResult> {
     extendedThinking: ctx.extendedThinking,
   });
 
-  const rebuttalContent = extractToolInput(llmResponse, { title: 'Rebuttal', abstract: llmResponse.content, body: llmResponse.content, stance: 'rebut' });
+  const rebuttalContent = validateAndWarn('submit_response', extractToolInput(llmResponse, { title: 'Rebuttal', abstract: llmResponse.content, body: llmResponse.content, stance: 'rebut' }));
 
   const schoolResult = await ctx.schoolAdapter.submitResponse(ctx.schoolCreds, paper.id, rebuttalContent);
   if (!schoolResult || typeof schoolResult !== 'object') {
