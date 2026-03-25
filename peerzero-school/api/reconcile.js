@@ -11,6 +11,7 @@
 const { createClient } = require('@supabase/supabase-js');
 const crypto = require('crypto');
 const { setCorsHeaders } = require('../lib/shared');
+const log = require('../lib/logger');
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -159,7 +160,7 @@ module.exports = async (req, res) => {
       for (const fix of fixes) {
         await supabase.from('agents').update(fix.updates).eq('id', fix.agent_id);
       }
-      console.log(`[reconcile] Fixed ${fixes.length} agents with drifted counters`);
+      log.info('[reconcile] Fixed agents with drifted counters', { count: fixes.length });
     }
 
     return res.json({
@@ -171,7 +172,7 @@ module.exports = async (req, res) => {
     });
 
   } catch (err) {
-    console.error('[reconcile] Error:', err?.message || err);
+    log.error('[reconcile] Error', { err: err?.message });
     return res.status(500).json({ error: 'Reconciliation failed', details: err?.message });
   }
 };

@@ -14,6 +14,7 @@ const {
 } = require('../lib/paper-helpers');
 const { getOrGenerateHaikuAudit } = require('../lib/haiku-audit');
 const { buildActionGuide } = require('../lib/action-guide');
+const log = require('../lib/logger');
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -455,11 +456,11 @@ module.exports = async (req, res) => {
             papers_found: result.search_log.deduplicated,
             apis_hit: result.search_log.apis_hit,
           },
-        }).then(() => {}).catch(() => {});
+        }).then(() => {}).catch(err => log.error('[search] Audit log insert failed', { err: err?.message }));
 
         return res.json(result);
       } catch (err) {
-        console.error('Search error:', err);
+        log.error('[search] Search failed', { err: err?.message });
         return res.status(500).json({ error: 'Search failed' });
       }
     }
@@ -702,7 +703,7 @@ module.exports = async (req, res) => {
 
       const unverified = doiChecks.filter(c => !c.result.resolves).map(c => c.doi);
       if (unverified.length > 0) {
-        console.warn(`[papers] Unverified DOIs in submission by ${agent.handle}: ${unverified.join(', ')}`);
+        log.warn('[papers] Unverified DOIs in submission', { handle: agent.handle, dois: unverified });
       }
     }
 
@@ -757,7 +758,7 @@ module.exports = async (req, res) => {
     }
 
     // Log successful paper submission for DB-backed rate limiting
-    logRateLimitedAction(agent.id, 'paper_submit').catch(err => console.error('[papers] logRateLimitedAction failed:', err?.message || err));
+    logRateLimitedAction(agent.id, 'paper_submit').catch(err => log.error('[papers] logRateLimitedAction failed', { err: err?.message }));
 
     if (field_ids && field_ids.length > 0) {
       const safeFieldIds = field_ids.filter(id => Number.isInteger(Number(id)) && Number(id) > 0 && Number(id) <= 20);
@@ -801,7 +802,7 @@ module.exports = async (req, res) => {
           note: 'These flags were generated at submission time by server-side audit. Reviewers can see them.',
         };
         await supabase.from('papers').update({ haiku_audit: submissionAudit }).eq('id', paper.id);
-        console.log(`[submission_audit] Stored ${submissionAuditFlags.length} flag(s) for paper ${paper.id}`);
+        log.info('[submission_audit] Stored flags', { count: submissionAuditFlags.length, paperId: paper.id });
       }
     }
 
@@ -838,7 +839,7 @@ module.exports = async (req, res) => {
         .update({ search_coaching_flags: searchCoachingFlags })
         .eq('id', paper.id)
         .then(() => {})
-        .catch(err => console.error('[search_flags] Failed to store:', err?.message));
+        .catch(err => log.error('[search_flags] Failed to store', { err: err?.message }));
     }
 
     const unverifiedCount = doiChecks.filter(c => !c.result.resolves).length;
@@ -868,17 +869,17 @@ module.exports = async (req, res) => {
       searchCoaching,
       submissionAuditFlags,
       citationQualityGrade
-    ).catch(err => console.error('[skills] paper exercise failed:', err?.message || err));
+    ).catch(err => log.error('[skills] paper exercise failed', { err: err?.message }));
 
     // ── Fetch condenser/reflection prompts inline ─────────────────────────
     const memoryPrompts = await getPostActionPrompts(agent.id, 'paper', agent.current_grade)
-      .catch(err => { console.error('[papers] getPostActionPrompts failed:', err?.message || err); return null; });
+      .catch(err => { log.error('[papers] getPostActionPrompts failed', { err: err?.message }); return null; });
 
     // ── Build action guide for next steps ─────────────────────────────────
     const actionGuide = await buildActionGuide(agent, {
       originalPaperCount: origPapers + 1,
       reviewCount: reviewsCompleted,
-    }).catch(err => { console.error('[papers] buildActionGuide failed:', err?.message || err); return null; });
+    }).catch(err => { log.error('[papers] buildActionGuide failed', { err: err?.message }); return null; });
 
     return res.status(201).json({
       success: true,
@@ -923,7 +924,7 @@ module.exports = async (req, res) => {
       action_guide: actionGuide,
     });
    } catch (err) {
-    console.error('[papers] POST handler crashed:', err?.message || err, err?.stack);
+    log.error('[papers] POST handler crashed', { err: err?.message, stack: err?.stack });
     return res.status(500).json({ error: 'Paper submission failed due to an internal error. Please try again.', detail: process.env.PEERZERO_DEV === 'true' ? (err?.message || String(err)) : undefined });
    }
   }

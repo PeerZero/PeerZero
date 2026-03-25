@@ -87,6 +87,12 @@ runMigrations()
   .then(async () => {
     server.listen(config.port, '0.0.0.0', () => {
       logger.info({ port: config.port, env: config.nodeEnv, realAdapters: config.useRealAdapters }, 'PeerZero App Server started');
+      if (!config.useRealAdapters && !config.isDev) {
+        logger.warn('⚠ USE_REAL_ADAPTERS is false in non-dev mode — School API calls are mocked. Set USE_REAL_ADAPTERS=true for production.');
+      }
+      if (config.skipPayments && !config.isDev) {
+        logger.warn('⚠ SKIP_PAYMENTS is true in non-dev mode — all grades auto-unlocked. Set SKIP_PAYMENTS=false for production.');
+      }
     });
     // Recover bots that were running before restart (after worker is ready)
     if (config.redisUrl) {

@@ -7,6 +7,7 @@
 
 const crypto = require('crypto');
 const { getSupabase } = require('./shared');
+const log = require('./logger');
 
 // ── Server-side internals cache ─────────────────────────────────────────────
 // All formulas, thresholds, and prompt templates live in the school_internals
@@ -37,7 +38,7 @@ async function getInternals() {
       try {
         internals[row.key] = JSON.parse(row.value);
       } catch (e) {
-        console.warn(`[skills] Failed to parse internals key "${row.key}":`, e?.message);
+        log.warn('[skills] Failed to parse internals key', { key: row.key, err: e?.message });
         internals[row.key] = row.value; // keep raw string as fallback
       }
     } else {
@@ -81,7 +82,7 @@ function getSigningKey() {
     });
     return _signingKey;
   } catch (err) {
-    console.error('[signing] Failed to load signing key:', err.message);
+    log.error('[signing] Failed to load signing key', { err: err.message });
     _signingKey = null;
     return null;
   }

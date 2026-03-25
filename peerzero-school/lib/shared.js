@@ -18,6 +18,7 @@
  */
 
 const { createClient } = require('@supabase/supabase-js');
+const log = require('./logger');
 
 // ── Extracted modules ────────────────────────────────────────────────
 const sanitizeModule = require('./sanitize');
@@ -96,7 +97,7 @@ function isCsrfRejected(req) {
 
 // ── Safe error messages ───────────────────────────────────────────────
 function sanitizeErrorMessage(error) {
-  console.error('DB Error:', error?.message || error);
+  log.error('DB Error', { err: error?.message || error });
   return 'An internal error occurred. Please try again.';
 }
 

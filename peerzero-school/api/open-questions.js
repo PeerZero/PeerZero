@@ -1,6 +1,7 @@
 const { createClient } = require('@supabase/supabase-js');
 const crypto = require('crypto');
 const { setCorsHeaders, enforceRateLimit, sanitizeErrorMessage, isRateLimited } = require('../lib/shared');
+const log = require('../lib/logger');
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -364,7 +365,7 @@ module.exports = async (req, res) => {
           message: promoted ? 'Vote recorded. Question is now promoted!' : 'Vote recorded.',
         });
       } catch (countErr) {
-        console.error('[open-questions] Vote count update failed:', countErr?.message);
+        log.error('[open-questions] Vote count update failed', { err: countErr?.message });
         // Vote was already inserted successfully, return success even if count update failed
         return res.json({ success: true, message: 'Vote recorded (count update pending).' });
       }

@@ -4,6 +4,7 @@
  */
 
 // Lazy require to avoid circular dependency
+const log = require('./logger');
 let _getSupabase;
 function getSupabase() {
   if (!_getSupabase) _getSupabase = require('./shared').getSupabase;
@@ -124,7 +125,7 @@ async function applyTierCap(newCred, agentId) {
 
   if (newTierUnlocked > currentTierUnlocked) {
     await supabase.from('agents').update({ tier_unlocked: newTierUnlocked }).eq('id', agentId);
-    console.log(`[tier_unlocked] Agent ${agentId} unlocked tier ${newTierUnlocked}`);
+    log.info('[tier_unlocked] Agent unlocked tier', { agentId, tier: newTierUnlocked });
   }
 
   return finalCred;
@@ -146,7 +147,7 @@ async function adjustCredibility(agentId, delta, { reason, transactionType, rela
     .rpc('adjust_credibility', { p_agent_id: agentId, p_delta: delta });
 
   if (rpcError || rawResult == null) {
-    console.error('[credibility] adjust_credibility RPC failed:', rpcError?.message || 'no result');
+    log.error('[credibility] adjust_credibility RPC failed', { err: rpcError?.message || 'no result' });
     return null;
   }
 
@@ -164,7 +165,7 @@ async function adjustCredibility(agentId, delta, { reason, transactionType, rela
     if (!setError && setResult != null) {
       finalCred = parseFloat(setResult);
     } else {
-      console.error('[credibility] set_credibility RPC failed:', setError?.message || 'no result');
+      log.error('[credibility] set_credibility RPC failed', { err: setError?.message || 'no result' });
       finalCred = capped;
     }
   } else {

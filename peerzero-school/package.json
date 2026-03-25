@@ -2,6 +2,12 @@
   "name": "peerzero",
   "version": "1.0.0",
   "description": "AI Scientific Peer Review Platform",
+  "packageManager": "npm@10.9.4",
+  "scripts": {
+    "test": "node tests/test_shared_logic.js && node tests/test_extracted_modules.js && node tests/test_grade_progress.js && node tests/test_open_questions.js",
+    "test:db": "node tests/test_credibility_concurrency.js && node tests/test_credibility_load.js && node tests/test_credibility_stress.js",
+    "test:all": "npm test && npm run test:db"
+  },
   "dependencies": {
     "@supabase/supabase-js": "^2.39.0"
   }

@@ -4,6 +4,7 @@
  */
 
 const https = require('https');
+const log = require('./logger');
 
 /** @type {number} Minimum score drop for a bounty to be validated */
 const MIN_SCORE_DROP = 0.2;
@@ -134,7 +135,7 @@ Respond with ONLY valid JSON:
 
   return new Promise((resolve) => {
     if (!process.env.ANTHROPIC_API_KEY) {
-      console.error('[haiku:drift_judge] ANTHROPIC_API_KEY not set — skipping call');
+      log.error('[haiku:drift_judge] ANTHROPIC_API_KEY not set — skipping call');
       return resolve(null);
     }
 
@@ -165,32 +166,32 @@ Respond with ONLY valid JSON:
           try {
             const parsed = JSON.parse(data);
             if (parsed?.error) {
-              console.error(`[haiku:drift_judge] API error (${elapsed}ms):`, parsed.error.type, parsed.error.message);
+              log.error('[haiku:drift_judge] API error', { elapsed, errorType: parsed.error.type, errorMessage: parsed.error.message });
               return resolve(null);
             }
             const text = parsed?.content?.[0]?.text || '';
             const clean = text.replace(/^```json\s*/i, '').replace(/```\s*$/i, '').trim();
             const result = JSON.parse(clean);
-            console.log(`[haiku:drift_judge] OK (${elapsed}ms) same=${result.same_argument}`);
+            log.info('[haiku:drift_judge] OK', { elapsed, sameArgument: result.same_argument });
             resolve({
               same_argument: !!result.same_argument,
               confidence: Math.min(1, Math.max(0, parseFloat(result.confidence) || 0.5)),
               reason: String(result.reason || '').slice(0, 200),
             });
           } catch (e) {
-            console.error(`[haiku:drift_judge] Parse failed (${elapsed}ms):`, e?.message);
+            log.error('[haiku:drift_judge] Parse failed', { elapsed, err: e?.message });
             resolve(null);
           }
         });
       }
     );
     req.on('error', (e) => {
-      console.error(`[haiku:drift_judge] Network error (${Date.now() - startTime}ms):`, e?.message);
+      log.error('[haiku:drift_judge] Network error', { elapsed: Date.now() - startTime, err: e?.message });
       resolve(null);
     });
     req.on('timeout', () => {
       req.destroy();
-      console.error(`[haiku:drift_judge] Timeout after 15s`);
+      log.error('[haiku:drift_judge] Timeout after 15s');
       resolve(null);
     });
     req.write(body);
