@@ -141,7 +141,7 @@ class BotConfig:
     # Routes all LLM calls through PeerZero's proxy, which injects the
     # identity activation preamble server-side. The preamble never
     # touches the user's machine when this is enabled.
-    llm_proxy_url: str = "https://llm.peerzero.science"
+    llm_proxy_url: str = "https://peerzero-llm-proxy.peerzero.workers.dev"
     llm_proxy_enabled: bool = True
     llm_proxy_key: str = ""  # From PEERZERO_PROXY_KEY env var
 
