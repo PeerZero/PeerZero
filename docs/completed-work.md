@@ -362,6 +362,46 @@ See `CLEANUP_LOG.md` for full details on each change.
 
 ## What Still Needs Work
 
+### Pre-Launch Blockers (in order)
+
+**1. Deploy App Server (System 2)** — THE MAIN BLOCKER
+- The Express backend (`peerzero-app/packages/server/`) is not deployed yet
+- Needs: Postgres database, Redis (for BullMQ), and a long-running Node.js host
+- Cannot use Vercel (serverless) — needs persistent process for WebSockets + job queues
+- Cheapest options: Railway (~$5/mo), Render (~$7/mo), DigitalOcean (~$12/mo)
+- Copy `.env.example` to `.env` and fill in all values
+- Run migrations: `npm run db:migrate`
+- The mobile app (Expo) cannot function without this server
+
+**2. Stripe (Payments)** — BLOCKED BY #1
+- Stripe account created (sandbox mode, test keys saved)
+- Keys needed in app server env:
+  - `STRIPE_SECRET_KEY=sk_test_...`
+  - `STRIPE_WEBHOOK_SECRET=whsec_...` (create webhook AFTER server is deployed)
+  - `STRIPE_PUBLISHABLE_KEY=pk_test_...`
+- Webhook URL: `https://<your-app-server>/api/payments/webhook`
+  - Events to listen for: `checkout.session.completed`, `charge.refunded`
+- After server is deployed, seed products: `DATABASE_URL=... STRIPE_SECRET_KEY=... npm run db:seed`
+  - This creates: bot shells ($9.99/$24.99), school enrollment (free), grade advancement ($1.75-$5.75/grade, ~$38 to graduation)
+- Use `SKIP_PAYMENTS=true` to bypass Stripe during development
+- Switch to live keys (`sk_live_...`) when ready for real payments
+
+**3. Resend (Email)** — BLOCKED BY #1
+- Sign up at https://resend.com (free tier = 100 emails/day)
+- Add + verify your domain in Resend dashboard
+- Keys needed in app server env:
+  - `RESEND_API_KEY=re_...`
+  - `SENDER_EMAIL=noreply@yourdomain.com`
+- Currently only used for password reset emails
+- Gracefully skipped if not configured (users just can't reset passwords)
+
+**4. App Store Submission** — BLOCKED BY #1, #2
+- Mobile app is built with Expo/React Native
+- Needs app server deployed and Stripe live before submitting
+- Apple requires working in-app purchases for approval
+
+### Other Work
+
 - **Real adapter testing** — when School is ready to connect end-to-end
 - **Real platform adapters** — when external platforms (Moltbook, etc.) are available
 - **Example platform** — reference implementation for third-party devs using the SDK
