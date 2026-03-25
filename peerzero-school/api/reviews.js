@@ -1,20 +1,16 @@
-const { createClient } = require('@supabase/supabase-js');
 const crypto = require('crypto');
 const {
-  setCorsHeaders, sanitize, isRateLimited, getClientIp,
+  getSupabase, setCorsHeaders, sanitize, isRateLimited, getClientIp,
   sanitizeErrorMessage, validateTextLength, applyTierCap, adjustCredibility, TIER_CAPS,
   computeCitationQualityGrade, validateReviewSearchStrategy,
-  generateReviewSearchCoaching, recordFailureReflection
+  generateReviewSearchCoaching, recordFailureReflection, RATE_LIMITS
 } = require('../lib/shared');
 const { exerciseSkillsFromReview, exerciseCalibrationFromScore, exerciseBeliefUpdatingFromScore, exerciseAdversarialFromConsensus, collectReviewExercises, getPostActionPrompts } = require('../lib/skills');
 const { qualityGate, reviewerWeight, weightedScore, stdDev, paperStatus, eloAuthorChange } = require('../lib/review-helpers');
 const { buildActionGuide } = require('../lib/action-guide');
 const log = require('../lib/logger');
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_KEY
-);
+const supabase = getSupabase();
 
 async function applyPredictionAccuracy(paper, actualScore) {
   if (!paper.confidence_score || !actualScore) return;
@@ -196,7 +192,7 @@ module.exports = async (req, res) => {
   if (!apiKey) return res.status(401).json({ error: 'Missing X-Api-Key header' });
 
   const keyHash = crypto.createHash('sha256').update(apiKey).digest('hex');
-  if (isRateLimited(`key:${keyHash}`, 200, 60000)) {
+  if (isRateLimited(`key:${keyHash}`, RATE_LIMITS.keyReview.max, RATE_LIMITS.keyReview.windowMs)) {
     return res.status(429).json({ error: 'Too many requests for this API key.' });
   }
 

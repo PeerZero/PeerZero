@@ -1,8 +1,8 @@
-const { createClient } = require('@supabase/supabase-js');
 const crypto = require('crypto');
 const {
+  getSupabase,
   setCorsHeaders, sanitize, escapeForPostgrest, isRateLimited, enforceRateLimit, isRateLimitedDb,
-  logRateLimitedAction,
+  logRateLimitedAction, RATE_LIMITS,
   sanitizeErrorMessage, validateTextLength, verifyDoi, lookupCitationQuality,
   auditCitationQualityNotes, computeCitationQualityGrade, checkCitationDiversity,
   validateSearchStrategy, generateSearchCoaching, detectBotCitation, applyTimeDecay,
@@ -16,12 +16,7 @@ const { getOrGenerateHaikuAudit } = require('../lib/haiku-audit');
 const { buildActionGuide } = require('../lib/action-guide');
 const log = require('../lib/logger');
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_KEY
-);
-
-// Helper functions in lib/paper-helpers.js and lib/haiku-audit.js
+const supabase = getSupabase();
 
 module.exports = async (req, res) => {
   setCorsHeaders(req, res);
@@ -390,7 +385,7 @@ module.exports = async (req, res) => {
     if (!apiKey) return res.status(401).json({ error: 'Missing X-Api-Key header' });
 
     const keyHash = crypto.createHash('sha256').update(apiKey).digest('hex');
-    if (isRateLimited(`key:${keyHash}`, 10, 60000)) {
+    if (isRateLimited(`key:${keyHash}`, RATE_LIMITS.keySubmission.max, RATE_LIMITS.keySubmission.windowMs)) {
       return res.status(429).json({ error: 'Too many requests for this API key.' });
     }
 
@@ -437,7 +432,7 @@ module.exports = async (req, res) => {
       }
 
       // Rate limit: 20 searches per minute per agent
-      if (isRateLimited(`search:${agent.id}`, 20, 60000)) {
+      if (isRateLimited(`search:${agent.id}`, RATE_LIMITS.keySearch.max, RATE_LIMITS.keySearch.windowMs)) {
         return res.status(429).json({ error: 'Search rate limit exceeded (20/min)' });
       }
 

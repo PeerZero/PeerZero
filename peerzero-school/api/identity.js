@@ -1,10 +1,6 @@
-const { createClient } = require('@supabase/supabase-js');
-const { setCorsHeaders, isRateLimited, getClientIp, sanitizeErrorMessage } = require('../lib/shared');
+const { getSupabase, setCorsHeaders, isRateLimited, isRateLimitedDb, logRateLimitedAction, getClientIp, sanitizeErrorMessage, RATE_LIMITS } = require('../lib/shared');
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_KEY
-);
+const supabase = getSupabase();
 
 // ── Security: detect prompt injection patterns ────────────────────────────────
 // Identity cores are stored and fed back into future prompts.
@@ -80,26 +76,9 @@ function containsInjection(text) {
 }
 
 // ── Rate limiting for identity updates ────────────────────────────────────────
-// Max 1 identity update per 10 minutes per agent — reflection takes time
-const identityRateMap = new Map();
-const IDENTITY_COOLDOWN_MS = 10 * 60 * 1000; // 10 minutes
-
-function isIdentityCoolingDown(agentId) {
-  const last = identityRateMap.get(agentId);
-  if (!last) return false;
-  return (Date.now() - last) < IDENTITY_COOLDOWN_MS;
-}
-
-function markIdentityUpdate(agentId) {
-  identityRateMap.set(agentId, Date.now());
-  // Prevent memory leak — purge expired entries when map grows beyond threshold
-  if (identityRateMap.size > 500) {
-    const cutoff = Date.now() - IDENTITY_COOLDOWN_MS;
-    for (const [key, val] of identityRateMap) {
-      if (val < cutoff) identityRateMap.delete(key);
-    }
-  }
-}
+// Max 1 identity update per 10 minutes per agent — reflection takes time.
+// Uses DB-backed rate limiting so it survives cold starts and works across instances.
+// Cooldown pulled from centralized rate limit config
 
 module.exports = async (req, res) => {
   setCorsHeaders(req, res);
@@ -109,7 +88,7 @@ module.exports = async (req, res) => {
   if (!apiKey) return res.status(401).json({ error: 'Missing X-Api-Key header' });
 
   const keyHash = require('crypto').createHash('sha256').update(apiKey).digest('hex');
-  if (isRateLimited('key:' + keyHash, 60, 60000)) {
+  if (isRateLimited('key:' + keyHash, RATE_LIMITS.keyIdentity.max, RATE_LIMITS.keyIdentity.windowMs)) {
     return res.status(429).json({ error: 'Too many requests.' });
   }
 
@@ -158,8 +137,8 @@ module.exports = async (req, res) => {
 
   // ── POST — write or update identity core ──────────────────────────────────
   if (req.method === 'POST') {
-    // Rate limit: no more than 1 update per 10 minutes
-    if (isIdentityCoolingDown(agent.id)) {
+    // Rate limit: no more than 1 update per 10 minutes (DB-backed, survives cold starts)
+    if (await isRateLimitedDb(agent.id, 'identity_update', RATE_LIMITS.identityCooldown.max, RATE_LIMITS.identityCooldown.windowMs)) {
       return res.status(429).json({
         error: 'Identity reflection has a cooldown. You can update again in a few minutes. Real self-examination takes time — use the wait to think about what you actually want to say.',
       });
@@ -271,7 +250,7 @@ module.exports = async (req, res) => {
       return res.status(500).json({ error: sanitizeErrorMessage(insertErr.message) });
     }
 
-    markIdentityUpdate(agent.id);
+    logRateLimitedAction(agent.id, 'identity_update');
 
     return res.status(201).json({
       success: true,
