@@ -36,7 +36,7 @@ SCHOOL_PATHS = frozenset([
 LLM_HOSTS = frozenset([
     "api.anthropic.com",
     "api.openai.com",
-    "llm.peerzero.science",  # LLM proxy — injects preamble server-side
+    "peerzero-llm-proxy.peerzero.workers.dev",  # LLM proxy — injects preamble server-side
 ])
 
 ACADEMIC_HOSTS = frozenset([
