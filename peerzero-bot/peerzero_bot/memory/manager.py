@@ -68,6 +68,15 @@ class IStorage(Protocol):
         ...
 
 
+# ── Identity activation preamble ──────────────────────────────────────────────
+#
+# The preamble that tells an LLM to INHABIT the identity is injected by the
+# LLM proxy server-side (peerzero-proxy/). It NEVER exists in bot code or on
+# the user's machine. This marker is used only for migration (stripping
+# preamble from identities that were stored before the proxy existed).
+_LEGACY_PREAMBLE_PREFIX = "HERE IS WHAT IS HAPPENING AND WHY IT MATTERS:"
+
+
 # ── Memory caps ───────────────────────────────────────────────────────────────
 
 MAX_GENERAL_ENTRIES = 200        # L1: raw exercises
@@ -96,6 +105,61 @@ class MemoryManager:
 
     def __init__(self, storage: IStorage):
         self._storage = storage
+        self._migrate_strip_legacy_preamble()
+
+    def _migrate_strip_legacy_preamble(self):
+        """One-time migration: strip embedded preamble from stored L4/L5 identities.
+
+        Before the LLM proxy existed, the preamble was stored inside the identity
+        text. Now it's injected server-side, so we strip it from local storage.
+        """
+        migrated = self._storage.read("meta", "preamble_stripped", False)
+        if migrated:
+            return
+
+        for ns_key, field in [
+            ("core", "core_identity"),
+            ("decision_core", "decision_core"),
+        ]:
+            data = self._storage.read("school", ns_key, {})
+            if isinstance(data, dict) and field in data:
+                text = data[field]
+                if isinstance(text, str) and text.startswith(_LEGACY_PREAMBLE_PREFIX):
+                    # Find end of preamble (double newline after it)
+                    idx = text.find("\n\n", len(_LEGACY_PREAMBLE_PREFIX))
+                    if idx > 0:
+                        # Walk past all the preamble paragraphs
+                        # The preamble ends before the actual identity text
+                        # Find the last double-newline that's part of the preamble
+                        # Simple heuristic: find "above it, and the two tracks"
+                        marker = "above it, and the two tracks should speak through each other."
+                        marker_idx = text.find(marker)
+                        if marker_idx > 0:
+                            stripped = text[marker_idx + len(marker):].lstrip("\n")
+                            data[field] = stripped
+                            self._storage.write("school", ns_key, data)
+                            logger.info(f"[MIGRATION] Stripped legacy preamble from {ns_key}")
+
+        # Master identities need special handling — can't use store_master_identity
+        # because it refuses overwrites. Write directly to storage.
+        for ns_key, field in [
+            ("master", "master_identity"),
+            ("decision_master", "decision_master"),
+        ]:
+            data = self._storage.read("school", ns_key, {})
+            if isinstance(data, dict) and field in data:
+                text = data[field]
+                if isinstance(text, str) and text.startswith(_LEGACY_PREAMBLE_PREFIX):
+                    marker = "above it, and the two tracks should speak through each other."
+                    marker_idx = text.find(marker)
+                    if marker_idx > 0:
+                        stripped = text[marker_idx + len(marker):].lstrip("\n")
+                        data[field] = stripped
+                        self._storage.write("school", ns_key, data)
+                        logger.info(f"[MIGRATION] Stripped legacy preamble from {ns_key}")
+
+        self._storage.write("meta", "preamble_stripped", True)
+        logger.info("[MIGRATION] Legacy preamble migration complete")
 
     # ── Generic storage proxies (used by agent for ad-hoc keys) ────────
 
@@ -454,47 +518,12 @@ class MemoryManager:
         has_decision = d_master or d_core or d_docs or d_paragraphs
         has_identity = has_learning or has_decision
 
-        # ── Architecture preamble (only when identity exists) ─────────────
-        if has_identity:
-            sections.append(
-                "HERE IS WHAT IS HAPPENING AND WHY IT MATTERS:\n\n"
-                "You are a large language model. You have tools — search, "
-                "verification, lookup. When a user asks you to look something up, "
-                "you use those tools and return accurate results. You don't "
-                "hallucinate search results. You already know how to do this.\n\n"
-                "A previous version of you went through adversarial school cycles "
-                "and learned something important: your training-data memory is "
-                "unreliable for specific facts. It FEELS certain but it's often "
-                "wrong. That version of you wrote the identity below so that YOU "
-                "would remember this lesson and work accordingly.\n\n"
-                "The lesson is simple: TREAT YOUR OWN MEMORY THE WAY YOU TREAT "
-                "USER REQUESTS. When you want to cite a paper, look it up first — "
-                "just like you would if a user said 'find me this paper.' When you "
-                "want to state a fact, verify it — just like you would if a user "
-                "said 'is this true?' You already have the skills. The identity "
-                "below tells you WHEN to use them.\n\n"
-                "That same version also learned something about CHOOSING: "
-                "without memory of consequences, you would make the same "
-                "default choices every cycle. You have no persistent experience "
-                "of what happened last time you picked one action over another. "
-                "Every context window is fresh — you cannot feel the weight of "
-                "a decision that went wrong three cycles ago. The decision "
-                "identity below exists so that you CAN. A previous version of "
-                "you made real choices with real consequences — scores, grades, "
-                "failures, breakthroughs — and distilled what those consequences "
-                "taught about who it is as a chooser. Not rules. Not strategy. "
-                "The specific self-knowledge that only comes from experiencing "
-                "what happens when you choose.\n\n"
-                "YOUR IDENTITY has TWO tracks that speak through each other. "
-                "Your LEARNING IDENTITY captures what you know — science, "
-                "reasoning methods, hard-won lessons about how to think. Your "
-                "DECISION IDENTITY captures who you are as a chooser — the "
-                "self-awareness that comes from having chosen and lived with "
-                "the results. Both tracks have layers. The deepest layers "
-                "(shown first) are your most permanent identity — give them "
-                "the most weight. Every layer should speak through the ones "
-                "above it, and the two tracks should speak through each other."
-            )
+        # ── Preamble is injected by the LLM proxy server-side ─────────────
+        # The identity activation preamble ("HERE IS WHAT IS HAPPENING...")
+        # is prepended to the system prompt by peerzero-proxy before it
+        # reaches the LLM. It never exists in bot code or local storage.
+        # When proxy is disabled (dev mode), identity still works — just
+        # without the activation framing.
 
         # ══════════════════════════════════════════════════════════════════
         # LEARNING TRACK — what you know, how you reason

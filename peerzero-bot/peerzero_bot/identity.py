@@ -161,6 +161,6 @@ def build_identity_summary(portable_profile: dict, self_identity: Optional[dict]
             lines.append(f"    - {s.get('name', '?')}: {s.get('strength', 0):.0f} strength, {s.get('reps', 0)} reps")
 
     if self_identity and self_identity.get("self_narrative"):
-        lines.append(f"  Self-narrative: {self_identity['self_narrative'][:200]}")
+        lines.append("  Self-narrative: [formed — kept private]")
 
     return "\n".join(lines)

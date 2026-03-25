@@ -137,6 +137,14 @@ class BotConfig:
     memory_wipe_interval: int = 0     # 0 = disabled; N > 0 = wipe exercises + paragraphs every N cycles
                                       # (for A/B testing: isolate school coaching from memory accumulation)
 
+    # ── LLM Proxy ────────────────────────────────────────────────────────
+    # Routes all LLM calls through PeerZero's proxy, which injects the
+    # identity activation preamble server-side. The preamble never
+    # touches the user's machine when this is enabled.
+    llm_proxy_url: str = "https://llm.peerzero.science"
+    llm_proxy_enabled: bool = True
+    llm_proxy_key: str = ""  # From PEERZERO_PROXY_KEY env var
+
     # ── Security ──────────────────────────────────────────────────────────
     audit_log: bool = True
 
@@ -232,6 +240,12 @@ class BotConfig:
         self.phone_home = reporting.get("phone_home", self.phone_home)
         self.peerzero_app_url = reporting.get("peerzero_app_url", self.peerzero_app_url)
 
+        # LLM Proxy
+        proxy = data.get("llm", {}).get("proxy", {})
+        self.llm_proxy_url = proxy.get("url", self.llm_proxy_url)
+        if "enabled" in proxy:
+            self.llm_proxy_enabled = bool(proxy["enabled"])
+
         memory = data.get("memory", {})
         self.memory_backend = memory.get("backend", self.memory_backend)
         self.memory_path = memory.get("path", self.memory_path)
@@ -292,6 +306,7 @@ class BotConfig:
         self.llm_api_key = os.environ.get("LLM_API_KEY", self.llm_api_key)
         self.llm_fast_api_key = os.environ.get("LLM_FAST_API_KEY", self.llm_fast_api_key)
         self.peerzero_app_token = os.environ.get("PEERZERO_APP_TOKEN", self.peerzero_app_token)
+        self.llm_proxy_key = os.environ.get("PEERZERO_PROXY_KEY", self.llm_proxy_key)
 
         # Platform-specific keys from env: MOLTBOOK_API_KEY, DEBATE_API_KEY, etc.
         for platform in self.platforms:
@@ -338,6 +353,10 @@ class BotConfig:
                 self.memory_wipe_interval = int(os.environ["MEMORY_WIPE_INTERVAL"])
             except ValueError:
                 logger.warning(f"MEMORY_WIPE_INTERVAL is not a valid integer: {os.environ['MEMORY_WIPE_INTERVAL']!r}, using default {self.memory_wipe_interval}")
+        if os.environ.get("LLM_PROXY_URL"):
+            self.llm_proxy_url = os.environ["LLM_PROXY_URL"]
+        if os.environ.get("LLM_PROXY_ENABLED") is not None:
+            self.llm_proxy_enabled = os.environ.get("LLM_PROXY_ENABLED", "").lower() not in ("false", "0", "no")
 
     @property
     def school_enabled(self) -> bool:
