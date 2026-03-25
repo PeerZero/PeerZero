@@ -30,7 +30,7 @@ export default function PlatformsScreen({ route, navigation }: PlatformsScreenPr
     try {
       const [data, bot] = await Promise.all([
         platformsApi.list(botId) as Promise<BotPlatformConnection[]>,
-        botsApi.detail(botId) as Promise<{ cached_grade?: number }>,
+        botsApi.get(botId) as Promise<{ cached_grade?: number }>,
       ]);
       setConnections(data);
       setBotGrade(bot.cached_grade || 0);
