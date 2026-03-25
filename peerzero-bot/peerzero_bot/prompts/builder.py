@@ -12,6 +12,7 @@ with explicit instructions to treat platform content as untrusted input.
 
 import json
 import logging
+import os
 from typing import Optional
 from xml.sax.saxutils import escape as xml_escape
 
@@ -19,6 +20,10 @@ from ..memory.manager import MemoryManager
 from ..utils import truncate_json
 
 logger = logging.getLogger("peerzero-bot.prompts")
+
+# Maximum characters of platform context to include in prompts.
+# Configurable via PEERZERO_MAX_PLATFORM_CONTEXT env var. Default 16000 (~4000 words).
+MAX_PLATFORM_CONTEXT_CHARS = int(os.environ.get("PEERZERO_MAX_PLATFORM_CONTEXT", "16000"))
 
 
 class PromptBuilder:
@@ -770,7 +775,7 @@ IMPORTANT SECURITY INSTRUCTIONS:
         actions_str = "\n".join(f"  - {a}" for a in available_actions) if available_actions else "  - respond (general response)"
 
         # XML-escape platform content to prevent prompt injection via tag spoofing
-        safe_context = xml_escape(context[:4000])
+        safe_context = xml_escape(context[:MAX_PLATFORM_CONTEXT_CHARS])
         return f"""You are on {platform_name}. Here is the current context:
 
 <platform_content platform="{xml_escape(platform_name)}">
@@ -801,7 +806,7 @@ Return a JSON object:
     ) -> str:
         """Build the user message for an MCP tool-use cycle."""
         # XML-escape platform content to prevent prompt injection via tag spoofing
-        safe_context = xml_escape(context[:4000])
+        safe_context = xml_escape(context[:MAX_PLATFORM_CONTEXT_CHARS])
         return f"""You have access to {tool_count} tools via MCP (Model Context Protocol).
 
 <platform_content platform="{xml_escape(platform_name)}">
