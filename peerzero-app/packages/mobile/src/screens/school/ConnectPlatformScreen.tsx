@@ -27,7 +27,7 @@ export default function ConnectPlatformScreen({ route, navigation }: ConnectPlat
         try {
           const [data, bot] = await Promise.all([
             platformsApi.registry() as Promise<PlatformRegistryEntry[]>,
-            botsApi.detail(botId) as Promise<{ cached_grade?: number }>,
+            botsApi.get(botId) as Promise<{ cached_grade?: number }>,
           ]);
           setRegistry(data.filter(p => p.is_active));
           setBotGrade(bot.cached_grade || 0);
