@@ -5,7 +5,7 @@
 import React, { useState, useCallback } from 'react';
 import { View, Text, FlatList, TouchableOpacity, TextInput, StyleSheet, Alert, ActivityIndicator, KeyboardAvoidingView, TouchableWithoutFeedback, Keyboard, Platform } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { platforms as platformsApi } from '../../services/api';
+import { platforms as platformsApi, bots as botsApi } from '../../services/api';
 import { colors } from '../../theme/colors';
 import { spacing, fontSize, borderRadius } from '../../theme/spacing';
 import TutorialTip from '../../components/TutorialTip';
@@ -19,40 +19,66 @@ export default function ConnectPlatformScreen({ route, navigation }: ConnectPlat
   const [selected, setSelected] = useState<PlatformRegistryEntry | null>(null);
   const [apiKey, setApiKey] = useState('');
   const [connecting, setConnecting] = useState(false);
+  const [botGrade, setBotGrade] = useState<number>(0);
 
   useFocusEffect(
     useCallback(() => {
       (async () => {
         try {
-          const data = await platformsApi.registry() as PlatformRegistryEntry[];
+          const [data, bot] = await Promise.all([
+            platformsApi.registry() as Promise<PlatformRegistryEntry[]>,
+            botsApi.detail(botId) as Promise<{ cached_grade?: number }>,
+          ]);
           setRegistry(data.filter(p => p.is_active));
+          setBotGrade(bot.cached_grade || 0);
         } catch (err: unknown) {
           Alert.alert('Connection Error', err instanceof Error ? err.message : 'Could not load available platforms. Check your connection and try again.');
         } finally {
           setLoading(false);
         }
       })();
-    }, []),
+    }, [botId]),
   );
 
-  const handleConnect = async () => {
-    if (!selected || !apiKey.trim()) {
-      Alert.alert('Missing Info', 'Please select a platform and enter an API key.');
-      return;
-    }
+  const doConnect = async () => {
     setConnecting(true);
     try {
       await platformsApi.connect(botId, {
-        platform_slug: selected.slug,
+        platform_slug: selected!.slug,
         api_key: apiKey.trim(),
       });
-      Alert.alert('Connected', `${selected.name} connected successfully.`);
+      Alert.alert('Connected', `${selected!.name} connected successfully.`);
       navigation.goBack();
     } catch (err: unknown) {
       Alert.alert('Connection Failed', err instanceof Error ? err.message : 'Could not connect to platform. Check your API key and try again.');
     } finally {
       setConnecting(false);
     }
+  };
+
+  const handleConnect = async () => {
+    if (!selected || !apiKey.trim()) {
+      Alert.alert('Missing Info', 'Please select a platform and enter an API key.');
+      return;
+    }
+
+    // Warn if bot hasn't graduated
+    if (botGrade < 12) {
+      Alert.alert(
+        'Your bot hasn\'t graduated yet',
+        `Your bot is at Grade ${botGrade}/12. Bots that leave school early don't have a solid identity foundation. `
+        + 'On external platforms, your bot will develop new patterns without the rigorous training that shapes who it becomes. '
+        + 'That identity could go in any direction — good or bad.\n\n'
+        + 'Are you sure you want to connect now?',
+        [
+          { text: 'Go Back to School', style: 'cancel' },
+          { text: 'Connect Anyway', style: 'destructive', onPress: doConnect },
+        ],
+      );
+      return;
+    }
+
+    doConnect();
   };
 
   if (loading) {

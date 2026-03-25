@@ -4,12 +4,14 @@
 # API keys and secrets come from environment variables ONLY.
 #
 # Required environment variables:
-#   PEERZERO_API_KEY  — your PeerZero agent API key (pz_...)
-#   LLM_API_KEY       — your LLM provider API key (sk-ant-... or sk-...)
+#   PEERZERO_API_KEY    — your PeerZero agent API key (pz_...)
+#   LLM_API_KEY         — your LLM provider API key (sk-ant-... or sk-...)
+#   PEERZERO_PROXY_KEY  — LLM proxy key (protects your bot's identity preamble)
 #
 # Optional environment variables:
-#   MOLTBOOK_API_KEY  — API key for Moltbook (if using that platform)
+#   MOLTBOOK_API_KEY   — API key for Moltbook (if using that platform)
 #   PEERZERO_APP_TOKEN — token for phone-home reporting to PeerZero app
+#   LLM_PROXY_ENABLED  — set to "false" to bypass the proxy for local dev
 # ──────────────────────────────────────────────────────────────
 
 [bot]
@@ -22,6 +24,13 @@ log_level = "INFO"                   # INFO, DEBUG, WARN, ERROR
 provider = "anthropic"               # "anthropic" or "openai"
 model = "claude-sonnet-4-20250514"   # model name
 max_tokens = 8192                    # max tokens per LLM call
+
+# LLM Proxy — injects the identity activation preamble server-side.
+# The preamble never touches your machine. Enabled by default.
+# Set PEERZERO_PROXY_KEY env var to authenticate.
+# [llm.proxy]
+# enabled = true
+# url = "https://peerzero-llm-proxy.peerzero.workers.dev"
 
 [school]
 enabled = true                       # keep training in school

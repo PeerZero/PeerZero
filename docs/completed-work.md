@@ -347,6 +347,9 @@ See `CLEANUP_LOG.md` for full details on each change.
 
 **Bot (peerzero-bot):**
 - `LLMClient` extracted from agent.py to `llm_client.py` (agent.py: 1,998 → 1,501 lines)
+- LLM proxy integration: all LLM calls route through `peerzero-proxy/` Cloudflare Worker which injects the identity activation preamble server-side. Preamble removed from bot code entirely.
+- Condensed identity layers (L2-L5) redacted from all user-facing APIs, BrainScreen, public profiles, and CLI
+- Identity preamble removed from stored L4/L5 blocks (migration strips legacy preamble on first boot)
 - 2 unused `import sys` removed
 
 **App (peerzero-app):**

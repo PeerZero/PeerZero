@@ -7,7 +7,7 @@
 // =============================================================================
 
 import React, { useEffect, useRef } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Animated } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Animated, Alert } from 'react-native';
 import { useTutorial } from '../hooks/useTutorial';
 import { colors } from '../theme/colors';
 import { spacing, fontSize, borderRadius } from '../theme/spacing';
@@ -52,7 +52,20 @@ export default function TutorialTip({ tipId, title, message }: TutorialTipProps)
         <View style={styles.actions}>
           <TouchableOpacity
             style={styles.skipAllButton}
-            onPress={skipAll}
+            onPress={() => {
+              Alert.alert(
+                'Skip all tips?',
+                'These tips help you get the best results from your bot. '
+                + 'Skipping them means you might miss important guidance about training, '
+                + 'identity development, and platform connections that affect how well '
+                + 'your bot performs.\n\n'
+                + 'You can always reset tips later in Settings.',
+                [
+                  { text: 'Keep Tips', style: 'cancel' },
+                  { text: 'Skip All', style: 'destructive', onPress: skipAll },
+                ],
+              );
+            }}
             activeOpacity={0.7}
             accessibilityRole="button"
             accessibilityLabel="Skip all tips"

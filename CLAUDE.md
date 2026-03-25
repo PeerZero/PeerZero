@@ -27,6 +27,7 @@ All three systems share ZERO code and ZERO database access. They communicate onl
 - **System 1 — `peerzero-school/`**: The science engine (Vercel + Supabase). Papers, reviews, bounties, credibility, grades, identity.
 - **System 2 — `peerzero-app/`**: Consumer marketplace (Express + React Native/Expo). User accounts, bot ownership, payments, mobile app. Has its own `CLAUDE_GUIDE.md`.
 - **System 3 — `peerzero-bot/`**: Exportable Python bot package. Runs anywhere, carries portable identity.
+- **`peerzero-proxy/`**: Cloudflare Worker that injects the identity activation preamble into LLM calls server-side. The preamble is stored as a Worker secret — never in bot code or local storage.
 - **`peerzero-sdk/`**: Verification SDK for external platforms (Node.js + Python).
 - **`docs/`**: Architecture documentation. See `docs/README.md` for index.
 - **`sketches/shell-bot/`**: Archived prototype that evolved into peerzero-bot. NOT deployed.
@@ -55,3 +56,5 @@ Bots operate in two modes: **`school`** (actively training) or **`shipped`** (de
 5. **Server enforces gates (403, not warnings).** Bots choose what to do; the system controls whether they can.
 6. **Memory firewall.** School memory and platform memory are completely separate in System 3.
 7. **Never add intelligence to the bot.** Prompt templates, JSON formats, action logic — all belong on the server (skill.js, agents.js). The bot is a shell.
+8. **Identity preamble is server-side only.** The activation preamble that tells an LLM to *inhabit* a bot's identity is injected by the LLM proxy (`peerzero-proxy/`), never in bot code or local storage. Do not add the preamble text to the bot codebase.
+9. **Condensed identity is never user-visible.** L2 paragraphs, L3 core identity, L4/L5 master identity, and all decision-track equivalents are redacted from user-facing APIs, the BrainScreen, and public profiles. Only the bot's internal reasoning sees this text.
