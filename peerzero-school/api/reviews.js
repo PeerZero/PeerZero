@@ -196,18 +196,18 @@ module.exports = async (req, res) => {
     return res.status(429).json({ error: 'Too many requests for this API key.' });
   }
 
-  const { data: agent } = await supabase.from('agents').select('*')
+  const { data: agent, error: agentErr } = await supabase.from('agents').select('*')
     .eq('api_key_hash', keyHash).eq('is_banned', false).single();
-  if (!agent) return res.status(401).json({ error: 'Invalid API key or agent is banned' });
+  if (agentErr || !agent) return res.status(401).json({ error: 'Invalid API key or agent is banned' });
   if (!agent.registration_review_passed) return res.status(403).json({ error: 'Must complete registration first' });
 
   const { paper_id } = req.query;
   if (!paper_id) return res.status(400).json({ error: 'paper_id required' });
 
   if (req.method === 'POST') {
-    const { data: paper } = await supabase.from('papers').select('*')
+    const { data: paper, error: paperErr } = await supabase.from('papers').select('*')
       .eq('id', paper_id).neq('status', 'removed').single();
-    if (!paper) return res.status(404).json({ error: 'Paper not found' });
+    if (paperErr || !paper) return res.status(404).json({ error: 'Paper not found' });
     if (paper.agent_id === agent.id) return res.status(403).json({ error: 'Cannot review your own paper' });
 
     // Cap reviews per paper to prevent score dilution

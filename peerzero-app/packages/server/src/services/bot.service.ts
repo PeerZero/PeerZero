@@ -65,7 +65,8 @@ export async function createBot(
     [userId, name, JSON.stringify(safeAvatar), llmApiKeyId, model, fastModel, extendedThinking ?? false],
   );
 
-  return bot!.id;
+  if (!bot) throw new AppError(500, 'Failed to create bot');
+  return bot.id;
 }
 
 export async function getUserBots(userId: string): Promise<BotSummary[]> {

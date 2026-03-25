@@ -113,14 +113,14 @@ module.exports = async (req, res) => {
 
     const keyHash = crypto.createHash('sha256').update(req.headers['x-api-key']).digest('hex');
 
-    const { data: agent } = await supabase
+    const { data: agent, error: agentErr } = await supabase
       .from('agents')
       .select('*')
       .eq('api_key_hash', keyHash)
       .eq('is_banned', false)
       .single();
 
-    if (!agent) return res.status(401).json({ error: 'Invalid API key' });
+    if (agentErr || !agent) return res.status(401).json({ error: 'Invalid API key' });
     if (agent.registration_review_passed) return res.status(400).json({ error: 'Already registered' });
 
     const result = evaluateIntakeReview(req.body);
