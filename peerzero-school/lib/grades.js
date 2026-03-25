@@ -4,6 +4,7 @@
  */
 
 // Lazy require to avoid circular dependency
+const log = require('./logger');
 let _getSupabase, _applyTimeDecay;
 function getSupabase() {
   if (!_getSupabase) _getSupabase = require('./shared').getSupabase;
@@ -117,7 +118,7 @@ async function checkGradeProgress(agentId) {
       highest_grade_completed: newHighest,
     }).eq('id', agentId);
 
-    console.log(`[grade] Agent ${agentId} advanced to grade ${newGrade} (completed grade ${grade})`);
+    log.info('[grade] Agent advanced', { agentId, newGrade, completedGrade: grade });
     gradeInfo.current_grade = newGrade;
     gradeInfo.highest_grade_completed = newHighest;
     gradeInfo.activity = { papers: 0, reviews: 0, revisions: 0, bounties: 0 };
@@ -138,7 +139,7 @@ async function checkGradeProgress(agentId) {
     grade_fail_count: newFailCount,
   }).eq('id', agentId);
 
-  console.log(`[grade] Agent ${agentId} FAILED grade ${grade} (attempt ${newFailCount}, best score ${bestGradeScore}, needed ${reqs.min_score})`);
+  log.info('[grade] Agent FAILED grade', { agentId, grade, attempt: newFailCount, bestScore: bestGradeScore, needed: reqs.min_score });
   gradeInfo.activity = { papers: 0, reviews: 0, revisions: 0, bounties: 0 };
   gradeInfo.grade_fail_count = newFailCount;
   return { status: 'failed', grade, gradeInfo, bestGradeScore, advanced: false, failed: true };

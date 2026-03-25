@@ -1,5 +1,6 @@
 const { getInternals, recordSkillExercise, jitter } = require('./skills-core');
 const { getSupabase } = require('./shared');
+const log = require('./logger');
 
 // ── Skill signal extraction from paper submissions ──────────────────────────
 
@@ -53,7 +54,7 @@ async function exerciseSkillsFromPaper(agentId, paper, searchCoaching, citationF
       timestamp,
     });
   } catch (err) {
-    console.error('[skills] exerciseSkillsFromPaper failed:', err?.message || err);
+    log.error('[skills] exerciseSkillsFromPaper failed', { err: err?.message });
   }
 }
 
@@ -91,7 +92,7 @@ async function exerciseSkillsFromRevision(agentId, revision, parentPaperId, sear
       timestamp,
     });
   } catch (err) {
-    console.error('[skills] exerciseSkillsFromRevision failed:', err?.message || err);
+    log.error('[skills] exerciseSkillsFromRevision failed', { err: err?.message });
   }
 }
 
@@ -151,7 +152,7 @@ async function exerciseSkillsFromReview(agentId, review, reviewSearchCoaching, p
       timestamp,
     });
   } catch (err) {
-    console.error('[skills] exerciseSkillsFromReview failed:', err?.message || err);
+    log.error('[skills] exerciseSkillsFromReview failed', { err: err?.message });
   }
 }
 
@@ -183,7 +184,7 @@ async function exerciseSkillsFromBounty(agentId, bounty, isValid) {
       timestamp,
     });
   } catch (err) {
-    console.error('[skills] exerciseSkillsFromBounty failed:', err?.message || err);
+    log.error('[skills] exerciseSkillsFromBounty failed', { err: err?.message });
   }
 }
 
@@ -213,7 +214,7 @@ async function exerciseCalibrationFromScore(agentId, paperId, confidenceScore, a
       timestamp,
     });
   } catch (err) {
-    console.error('[skills] exerciseCalibrationFromScore failed:', err?.message || err);
+    log.error('[skills] exerciseCalibrationFromScore failed', { err: err?.message });
   }
 }
 
@@ -237,7 +238,7 @@ async function exerciseDisconfirmationFromBounty(paperAuthorId, paperId, bounty)
       timestamp,
     });
   } catch (err) {
-    console.error('[skills] exerciseDisconfirmationFromBounty failed:', err?.message || err);
+    log.error('[skills] exerciseDisconfirmationFromBounty failed', { err: err?.message });
   }
 }
 
@@ -258,7 +259,7 @@ async function exerciseSourceEvaluationFromBounty(paperAuthorId, paperId, bounty
       timestamp,
     });
   } catch (err) {
-    console.error('[skills] exerciseSourceEvaluationFromBounty failed:', err?.message || err);
+    log.error('[skills] exerciseSourceEvaluationFromBounty failed', { err: err?.message });
   }
 }
 
@@ -293,7 +294,7 @@ async function exerciseBeliefUpdatingFromScore(agentId, revisionPaperId, parentP
       timestamp,
     });
   } catch (err) {
-    console.error('[skills] exerciseBeliefUpdatingFromScore failed:', err?.message || err);
+    log.error('[skills] exerciseBeliefUpdatingFromScore failed', { err: err?.message });
   }
 }
 
@@ -339,7 +340,7 @@ async function exerciseAdversarialFromConsensus(paperId, finalScore) {
       });
     }
   } catch (err) {
-    console.error('[skills] exerciseAdversarialFromConsensus failed:', err?.message || err);
+    log.error('[skills] exerciseAdversarialFromConsensus failed', { err: err?.message });
   }
 }
 

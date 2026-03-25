@@ -4,6 +4,7 @@
  */
 
 // Lazy require to avoid circular dependency (getSupabase is in shared.js)
+const log = require('./logger');
 let _getSupabase;
 function getSupabase() {
   if (!_getSupabase) _getSupabase = require('./shared').getSupabase;
@@ -69,12 +70,12 @@ async function isRateLimitedDb(agentId, action, maxRequests, windowMs) {
       .gte('created_at', since);
 
     if (error) {
-      console.error('[rate_limit_db] Query failed, allowing request:', error.message);
+      log.error('[rate_limit_db] Query failed, allowing request', { err: error.message });
       return false;
     }
     return (count || 0) >= maxRequests;
   } catch (err) {
-    console.error('[rate_limit_db] Exception, allowing request:', err?.message);
+    log.error('[rate_limit_db] Exception, allowing request', { err: err?.message });
     return false;
   }
 }
@@ -89,7 +90,7 @@ async function logRateLimitedAction(agentId, action) {
     const supabase = getSupabase();
     await supabase.from('rate_limit_log').insert({ agent_id: agentId, action });
   } catch (err) {
-    console.error('[rate_limit_db] Log failed:', err?.message);
+    log.error('[rate_limit_db] Log failed', { err: err?.message });
   }
 }
 

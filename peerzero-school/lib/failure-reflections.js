@@ -6,6 +6,7 @@
  */
 
 // Lazy require to avoid circular dependency
+const log = require('./logger');
 let _getSupabase;
 function getSupabase() {
   if (!_getSupabase) _getSupabase = require('./shared').getSupabase;
@@ -69,7 +70,7 @@ async function recordFailureReflection(agentId, failureType, severity, summary, 
 
     return { recorded: true, reflection_prompt: reflectionPrompt };
   } catch (err) {
-    console.error('[failure_reflection] Recording failed:', err?.message || err);
+    log.error('[failure_reflection] Recording failed', { err: err?.message });
     return { recorded: false };
   }
 }
@@ -91,7 +92,7 @@ async function getUnresolvedFailures(agentId) {
       .limit(10);
     return data || [];
   } catch (err) {
-    console.error('[failure_reflection] Fetch failed:', err?.message || err);
+    log.error('[failure_reflection] Fetch failed', { err: err?.message });
     return [];
   }
 }
@@ -110,7 +111,7 @@ async function resolveFailureReflections(agentId, failureType) {
       .eq('failure_type', failureType)
       .eq('resolved', false);
   } catch (err) {
-    console.error('[failure_reflection] Resolve failed:', err?.message || err);
+    log.error('[failure_reflection] Resolve failed', { err: err?.message });
   }
 }
 

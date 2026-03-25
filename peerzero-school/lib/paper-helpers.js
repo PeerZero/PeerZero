@@ -6,6 +6,7 @@
  */
 
 const { getSupabase } = require('./shared');
+const log = require('./logger');
 
 // ── Tier-based paper cap ──────────────────────────────────────────────────────
 function getMaxPapers(credibilityScore) {
@@ -200,7 +201,7 @@ async function buildSubmissionCoaching(fieldIds, confidenceScore, crossStudyConn
       self_interrogation: interrogation.length > 0 ? interrogation : undefined,
     };
   } catch (err) {
-    console.error('[coaching] buildSubmissionCoaching failed:', err?.message || err);
+    log.error('[coaching] buildSubmissionCoaching failed', { err: err?.message });
     return null;
   }
 }

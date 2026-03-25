@@ -1,6 +1,7 @@
 const { getInternals } = require('./skills-core');
 const { getSupabase } = require('./shared');
 const { getSkillProfile, getIdentityCore } = require('./skills-profile');
+const log = require('./logger');
 
 // ── Milestone detection ─────────────────────────────────────────────────────
 
@@ -428,7 +429,7 @@ async function getPostActionPrompts(agentId, actionType, grade) {
       uncondensed_exercises: uncondensedCount,
     };
   } catch (err) {
-    console.error('[skills] getPostActionPrompts failed:', err?.message || err);
+    log.error('[skills] getPostActionPrompts failed', { err: err?.message });
     return null;
   }
 }

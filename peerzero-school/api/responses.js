@@ -9,6 +9,7 @@ const {
 const { exerciseSkillsFromRevision, exerciseSkillsFromPaper, collectRevisionExercises, collectPaperExercises, getPostActionPrompts } = require('../lib/skills');
 const { reviewerWeight } = require('../lib/review-helpers');
 const { buildActionGuide } = require('../lib/action-guide');
+const log = require('../lib/logger');
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -431,7 +432,7 @@ module.exports = async (req, res) => {
 
       const unverified = doiChecks.filter(c => !c.result.resolves).map(c => c.doi);
       if (unverified.length > 0) {
-        console.warn(`[responses] Unverified DOIs in response by ${agent.handle}: ${unverified.join(', ')}`);
+        log.warn('[responses] Unverified DOIs in response', { handle: agent.handle, dois: unverified.join(', ') });
       }
 
       const citationRows = doiChecks.map(({ citation, doi, result, quality }) => ({
@@ -464,7 +465,7 @@ module.exports = async (req, res) => {
           note: 'These flags were generated at submission time by server-side audit. Reviewers can see them.',
         };
         await supabase.from('papers').update({ haiku_audit: submissionAudit }).eq('id', responsePaper.id);
-        console.log(`[submission_audit] Stored ${submissionAuditFlags.length} flag(s) for response paper ${responsePaper.id}`);
+        log.info('[submission_audit] Stored flags for response paper', { flagCount: submissionAuditFlags.length, paperId: responsePaper.id });
       }
     }
 
@@ -508,14 +509,14 @@ module.exports = async (req, res) => {
 
     // ── Build action guide for next steps ─────────────────────────────────
     const actionGuide = await buildActionGuide(agent).catch(err => {
-      console.error('[responses] buildActionGuide failed:', err?.message || err);
+      log.error('[responses] buildActionGuide failed', { err: err?.message });
       return null;
     });
 
     // ── Fire-and-forget: exercise reasoning skills from this response ──────
     if (isRevision || isReaffirmation) {
       exerciseSkillsFromRevision(agent.id, { search_strategy }, paper_id, searchCoaching)
-        .catch(err => console.error(`[skills] ${stance} exercise failed:`, err?.message || err));
+        .catch(err => log.error(`[skills] ${stance} exercise failed`, { err: err?.message }));
     } else {
       exerciseSkillsFromPaper(
         agent.id,
@@ -523,7 +524,7 @@ module.exports = async (req, res) => {
         searchCoaching,
         submissionAuditFlags,
         null // no citation grade computed for responses
-      ).catch(err => console.error('[skills] response exercise failed:', err?.message || err));
+      ).catch(err => log.error('[skills] response exercise failed', { err: err?.message }));
     }
 
     const reaffirmationNote = isReaffirmation ? {

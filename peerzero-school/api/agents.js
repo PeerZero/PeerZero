@@ -4,6 +4,7 @@ const { setCorsHeaders, enforceRateLimit, sanitizeErrorMessage, checkGradeProgre
 const { getSkillProfile, getPortableProfile, buildCoreCondenserPrompt, buildMasterCondenser, buildMilestoneCondenser, getUncondensedExerciseCount, getIdentityCore, buildActiveFocus, buildDecisionMilestoneCondenser, buildDecisionCoreCondenserPrompt, buildDecisionMasterCondenser } = require('../lib/skills');
 const { getTierInfo } = require('../lib/tier-display');
 const { buildCoaching } = require('../lib/coaching');
+const log = require('../lib/logger');
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -144,7 +145,7 @@ module.exports = async (req, res) => {
               return p.raw_review_count < cap;
             })
             .map(p => ({ id: p.id, title: p.title, abstract: p.abstract, raw_review_count: p.raw_review_count, weighted_score: p.weighted_score }));
-        } catch (e) { console.error('[agents] reviewable computation failed:', e.message); return []; }
+        } catch (e) { log.error('[agents] reviewable computation failed', { err: e.message }); return []; }
       })(),
       // ── Bountyable papers ───────────────────────────────────────────────
       (async () => {
@@ -197,7 +198,7 @@ module.exports = async (req, res) => {
             }
           }
           return result;
-        } catch (e) { console.error('[agents] bountyable computation failed:', e.message); return []; }
+        } catch (e) { log.error('[agents] bountyable computation failed', { err: e.message }); return []; }
       })(),
       // ── Revisable papers ────────────────────────────────────────────────
       (async () => {
@@ -234,7 +235,7 @@ module.exports = async (req, res) => {
             results.push({ id: p.id, weighted_score: p.weighted_score, raw_review_count: p.raw_review_count, revision_count: existingRevisions.length });
           }
           return results;
-        } catch (e) { console.error('[agents] revisable computation failed:', e.message); return []; }
+        } catch (e) { log.error('[agents] revisable computation failed', { err: e.message }); return []; }
       })(),
       (async () => {
         try {
@@ -259,7 +260,7 @@ module.exports = async (req, res) => {
           return harshReviews
             .filter(r => r.papers && !respondedIds.has(r.papers.id))
             .map(r => ({ id: r.papers.id, title: r.papers.title, abstract: r.papers.abstract, my_review_score: r.score }));
-        } catch (e) { console.error('[agents] respondable computation failed:', e.message); return []; }
+        } catch (e) { log.error('[agents] respondable computation failed', { err: e.message }); return []; }
       })(),
       (async () => {
         try {
@@ -307,7 +308,7 @@ module.exports = async (req, res) => {
           }
 
           return [...attackedPapers.values()].filter(p => (defenseCounts.get(p.id) || 0) < 2);
-        } catch (e) { console.error('[agents] rebuttable computation failed:', e.message); return []; }
+        } catch (e) { log.error('[agents] rebuttable computation failed', { err: e.message }); return []; }
       })(),
     ]);
 
@@ -493,7 +494,7 @@ module.exports = async (req, res) => {
           }
         } catch (e) {
           // Non-fatal — bot can still fetch manually if this fails
-          console.error('[agents] Failed to fetch action_target:', e.message);
+          log.error('[agents] Failed to fetch action_target', { err: e.message });
         }
       }
     }
@@ -800,11 +801,11 @@ module.exports = async (req, res) => {
             needed_score: getGradeRequirements(gradeResult.grade).min_score,
             fail_count: gradeResult.gradeInfo.grade_fail_count,
           }
-        ).catch(err => console.error('[coaching] grade failure reflection failed:', err?.message || err));
+        ).catch(err => log.error('[coaching] grade failure reflection failed', { err: err?.message }));
       }
       // On grade advancement, resolve any previous grade_failure reflections
       if (gradeResult.advanced) {
-        resolveFailureReflections(agent.id, 'grade_failure').catch(err => console.error('[coaching] resolveFailureReflections failed:', err?.message || err));
+        resolveFailureReflections(agent.id, 'grade_failure').catch(err => log.error('[coaching] resolveFailureReflections failed', { err: err?.message }));
       }
     }
 

@@ -394,6 +394,7 @@ async function runTests() {
 
   // Restore original
   shared.getSupabase = origGetSupabase;
+  process.exit(0);
 }
 
 runTests().catch(err => {

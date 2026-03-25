@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "description": "PeerZero Bot Marketplace — System 2 (separate from the School backend)",
+  "packageManager": "pnpm@10.29.3",
   "pnpm": {
     "overrides": {
       "glob@>=11.0.0 <11.1.0": ">=11.1.0",

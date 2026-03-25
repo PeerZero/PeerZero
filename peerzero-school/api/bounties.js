@@ -10,6 +10,7 @@ const {
   jaccardSimilarity, callHaikuDriftJudge,
 } = require('../lib/bounty-helpers');
 const { buildActionGuide } = require('../lib/action-guide');
+const log = require('../lib/logger');
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -49,7 +50,7 @@ async function checkSemanticDrift(targetPaperId, newSources, challengerAgentId) 
 
         if (similarity <= 0.4) {
           // Low similarity even on raw tokens — clearly different arguments
-          console.log(`[drift] DOI overlap but Jaccard ${similarity.toFixed(3)} <= 0.4 — cleared`);
+          log.info('[drift] DOI overlap but low Jaccard — cleared', { jaccard: similarity.toFixed(3) });
           continue;
         }
 
@@ -64,19 +65,19 @@ async function checkSemanticDrift(targetPaperId, newSources, challengerAgentId) 
               maxSimilarity = effectiveScore;
               haikuVerdict = verdict;
             }
-            console.log(`[drift] Haiku: same argument (conf ${verdict.confidence}) — "${verdict.reason}"`);
+            log.info('[drift] Haiku: same argument', { confidence: verdict.confidence, reason: verdict.reason });
           } else {
             // Haiku says different argument — not flagged regardless of token overlap
-            console.log(`[drift] Haiku: different argument (conf ${verdict.confidence}) — "${verdict.reason}"`);
+            log.info('[drift] Haiku: different argument', { confidence: verdict.confidence, reason: verdict.reason });
           }
         } else {
           // Haiku failed — fall back to Jaccard-only with stricter threshold (0.6)
           // Lower than the Haiku path because we can't verify semantic equivalence
           if (similarity > 0.6) {
             if (similarity > maxSimilarity) maxSimilarity = similarity;
-            console.log(`[drift] Haiku unavailable, Jaccard fallback ${similarity.toFixed(3)} > 0.6 — flagged`);
+            log.info('[drift] Haiku unavailable, Jaccard fallback — flagged', { jaccard: similarity.toFixed(3) });
           } else {
-            console.log(`[drift] Haiku unavailable, Jaccard fallback ${similarity.toFixed(3)} <= 0.6 — cleared`);
+            log.info('[drift] Haiku unavailable, Jaccard fallback — cleared', { jaccard: similarity.toFixed(3) });
           }
         }
       }
@@ -242,14 +243,14 @@ async function applyBountyValidation(bounty, currentPaper, scoreDrop) {
 
   // ── Fire-and-forget: exercise reasoning skills from validated bounty ──────
   exerciseSkillsFromBounty(bounty.challenger_agent_id, bounty, true)
-    .catch(err => console.error('[skills] bounty exercise failed:', err?.message || err));
+    .catch(err => log.error('[skills] bounty exercise failed', { err: err?.message }));
 
   // ── Outcome-based: paper author's disconfirmation search missed this flaw ──
   if (currentPaper.agent_id) {
     exerciseDisconfirmationFromBounty(currentPaper.agent_id, target_paper_id, bounty)
-      .catch(err => console.error('[skills] disconfirmation outcome failed:', err?.message || err));
+      .catch(err => log.error('[skills] disconfirmation outcome failed', { err: err?.message }));
     exerciseSourceEvaluationFromBounty(currentPaper.agent_id, target_paper_id, bounty)
-      .catch(err => console.error('[skills] source evaluation outcome failed:', err?.message || err));
+      .catch(err => log.error('[skills] source evaluation outcome failed', { err: err?.message }));
   }
 
   return { mathBreakdown };
@@ -414,7 +415,7 @@ module.exports = async (req, res) => {
 
       // ── Build action guide (non-blocking — used in all success responses) ──
       const actionGuidePromise = buildActionGuide(agent).catch(err => {
-        console.error('[bounties] buildActionGuide failed:', err?.message || err);
+        log.error('[bounties] buildActionGuide failed', { err: err?.message });
         return null;
       });
 
@@ -435,7 +436,7 @@ module.exports = async (req, res) => {
         // LLM picked an invalid structural type — correct to another structural type only
         const fallback = validStructuralTypes[0]; // first valid structural type, or undefined
         if (fallback) {
-          console.log(`[bounties] Auto-corrected challenge_type from '${challenge_type}' to '${fallback}' for paper ${target_paper_id}`);
+          log.info('[bounties] Auto-corrected challenge_type', { from: challenge_type, to: fallback, paperId: target_paper_id });
           correctedChallengeType = fallback;
           req.body.challenge_type = fallback;
         }
@@ -461,7 +462,7 @@ module.exports = async (req, res) => {
           const weakest = dois.reduce((best, c) =>
             (tierOrder[c.quality_tier] ?? 2) < (tierOrder[best.quality_tier] ?? 2) ? c : best
           , dois[0]);
-          console.log(`[bounties] Auto-corrected DOI from '${req.body.challenged_doi}' to '${weakest.doi}' (quality_tier: ${weakest.quality_tier}) for paper ${target_paper_id}`);
+          log.info('[bounties] Auto-corrected DOI', { from: req.body.challenged_doi, to: weakest.doi, qualityTier: weakest.quality_tier, paperId: target_paper_id });
           req.body.challenged_doi = weakest.doi;
         }
       }
@@ -1077,7 +1078,7 @@ module.exports = async (req, res) => {
   return res.status(405).json({ error: 'Method not allowed' });
 
   } catch (err) {
-    console.error('[bounties] Unhandled error:', err?.message || err, err?.stack);
+    log.error('[bounties] Unhandled error', { err: err?.message, stack: err?.stack });
     const safeMessage = typeof err?.message === 'string' ? err.message.slice(0, 300) : 'Unknown error';
     return res.status(500).json({ error: `A server error has occurred: ${safeMessage}` });
   }

@@ -7,13 +7,14 @@
 
 const https = require('https');
 const { getSupabase } = require('./shared');
+const log = require('./logger');
 
 // ── Haiku audit ───────────────────────────────────────────────────────────────
 function callAnthropicHaiku(prompt, context = 'unknown') {
   const startTime = Date.now();
   return new Promise((resolve) => {
     if (!process.env.ANTHROPIC_API_KEY) {
-      console.error(`[haiku:${context}] ANTHROPIC_API_KEY not set — skipping call`);
+      log.error(`[haiku:${context}] ANTHROPIC_API_KEY not set — skipping call`);
       return resolve(null);
     }
 
@@ -44,28 +45,28 @@ function callAnthropicHaiku(prompt, context = 'unknown') {
           try {
             const parsed = JSON.parse(data);
             if (parsed?.error) {
-              console.error(`[haiku:${context}] API error (${elapsed}ms):`, parsed.error.type, parsed.error.message);
+              log.error(`[haiku:${context}] API error`, { elapsed, errorType: parsed.error.type, errorMessage: parsed.error.message });
               return resolve(null);
             }
             const text = parsed?.content?.[0]?.text || '';
             const clean = text.replace(/^```json\s*/i, '').replace(/```\s*$/i, '').trim();
             const result = JSON.parse(clean);
-            console.log(`[haiku:${context}] OK (${elapsed}ms)`);
+            log.info(`[haiku:${context}] OK`, { elapsed });
             resolve(result);
           } catch (e) {
-            console.error(`[haiku:${context}] Parse failed (${elapsed}ms):`, e?.message);
+            log.error(`[haiku:${context}] Parse failed`, { elapsed, err: e?.message });
             resolve(null);
           }
         });
       }
     );
     req.on('error', (e) => {
-      console.error(`[haiku:${context}] Network error (${Date.now() - startTime}ms):`, e?.message);
+      log.error(`[haiku:${context}] Network error`, { elapsed: Date.now() - startTime, err: e?.message });
       resolve(null);
     });
     req.on('timeout', () => {
       req.destroy();
-      console.error(`[haiku:${context}] Timeout after 25s`);
+      log.error(`[haiku:${context}] Timeout after 25s`);
       resolve(null);
     });
     req.write(body);
@@ -147,11 +148,11 @@ async function getOrGenerateHaikuAudit(paper, reviews, citations, paperId, revis
   const needsRegeneration = !cachedAudit || (currentReviewCount - auditReviewCount >= 3);
 
   if (!needsRegeneration && cachedAudit) {
-    console.log(`[haiku_audit] Serving cached audit for paper ${paperId} (${currentReviewCount} reviews, generated at ${auditReviewCount})`);
+    log.info('[haiku_audit] Serving cached audit', { paperId, currentReviewCount, generatedAt: auditReviewCount });
     return cachedAudit;
   }
 
-  console.log(`[haiku_audit] Generating audit for paper ${paperId} (revision ${revisionNumber}, ${currentReviewCount} reviews)`);
+  log.info('[haiku_audit] Generating audit', { paperId, revisionNumber, currentReviewCount });
 
   const audit = await generateHaikuAudit(paper, reviews, citations, revisionNumber);
 
@@ -163,10 +164,10 @@ async function getOrGenerateHaikuAudit(paper, reviews, citations, paperId, revis
         haiku_audit_review_count: currentReviewCount,
       })
       .eq('id', paperId)
-      .then(() => console.log(`[haiku_audit] Cached audit for paper ${paperId}`))
-      .catch(err => console.error(`[haiku_audit] Cache write failed for ${paperId}:`, err?.message));
+      .then(() => log.info('[haiku_audit] Cached audit', { paperId }))
+      .catch(err => log.error('[haiku_audit] Cache write failed', { paperId, err: err?.message }));
   } else if (cachedAudit) {
-    console.warn(`[haiku_audit] Generation failed for ${paperId} — serving stale cache`);
+    log.warn('[haiku_audit] Generation failed — serving stale cache', { paperId });
     return cachedAudit;
   }
 

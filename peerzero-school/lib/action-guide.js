@@ -11,6 +11,7 @@
  */
 
 const { createClient } = require('@supabase/supabase-js');
+const log = require('./logger');
 
 let _supabase;
 function getSupabase() {
@@ -408,7 +409,7 @@ async function buildActionGuide(agent, opts = {}) {
       }
     }
   } catch (err) {
-    console.error('[action-guide] Failed to check revision eligibility:', err?.message || err);
+    log.error('[action-guide] Failed to check revision eligibility', { err: err?.message });
     // Non-fatal — guide still works without eligible_papers
   }
 

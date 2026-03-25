@@ -4,6 +4,7 @@
  */
 
 const https = require('https');
+const log = require('./logger');
 
 // ── DOI Verification ─────────────────────────────────────────────────
 // Single source of truth — used by papers.js and responses.js.
@@ -234,7 +235,7 @@ async function lookupCitationQuality(doi) {
 async function auditCitationQualityNotes(citations) {
   if (!citations || citations.length === 0) return [];
   if (!process.env.ANTHROPIC_API_KEY) {
-    console.error('[haiku:citation_audit] ANTHROPIC_API_KEY not set — skipping call');
+    log.error('[haiku:citation_audit] ANTHROPIC_API_KEY not set — skipping call');
     return [];
   }
 
@@ -343,22 +344,22 @@ If no problems found, return: {"flags": []}`;
             const clean = text.replace(/^```json\s*/i, '').replace(/```\s*$/i, '').trim();
             const result = JSON.parse(clean);
             const flags = Array.isArray(result?.flags) ? result.flags : [];
-            console.log(`[citation_audit] ${flags.length} flag(s) found across ${auditable.length} citations`);
+            log.info('[citation_audit] Flags found', { flagCount: flags.length, citationCount: auditable.length });
             resolve(flags);
           } catch (e) {
-            console.warn('[citation_audit] Parse failed — returning empty flags:', e?.message);
+            log.warn('[citation_audit] Parse failed — returning empty flags', { err: e?.message });
             resolve([]);
           }
         });
       }
     );
     req.on('error', (e) => {
-      console.warn('[citation_audit] Request error — returning empty flags:', e?.message);
+      log.warn('[citation_audit] Request error — returning empty flags', { err: e?.message });
       resolve([]);
     });
     req.on('timeout', () => {
       req.destroy();
-      console.warn('[citation_audit] Timeout — returning empty flags');
+      log.warn('[citation_audit] Timeout — returning empty flags');
       resolve([]);
     });
     req.write(body);

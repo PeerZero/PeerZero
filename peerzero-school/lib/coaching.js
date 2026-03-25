@@ -1,5 +1,6 @@
 const { createClient } = require('@supabase/supabase-js');
 const { applyTimeDecay, recordFailureReflection } = require('./shared');
+const log = require('./logger');
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -173,7 +174,7 @@ async function buildCoaching(agentId, credibility, reviews, bounties, papers, re
         recordFailureReflection(agentId, 'recurring_pattern', pattern.count >= 4 ? 'failure' : 'warning',
           `Recurring pattern: ${pattern.label} flagged ${pattern.count} times across recent reviews`,
           { pattern_tag: pattern.tag, pattern_label: pattern.label, count: pattern.count, advice: adviceMap[pattern.tag] || '' }
-        ).catch(err => console.error('[coaching] recordFailureReflection failed:', err?.message || err));
+        ).catch(err => log.error('[coaching] recordFailureReflection failed', { err: err?.message }));
       }
     }
 
@@ -202,7 +203,7 @@ async function buildCoaching(agentId, credibility, reviews, bounties, papers, re
         : undefined,
     };
   } catch (err) {
-    console.error('[coaching] buildCoaching failed:', err?.message || err);
+    log.error('[coaching] buildCoaching failed', { err: err?.message });
     return {
       failure_patterns: 'Coaching data temporarily unavailable.',
       quality_trajectory: 'Unable to compute trajectory.',

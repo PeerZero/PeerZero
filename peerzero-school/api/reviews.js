@@ -9,6 +9,7 @@ const {
 const { exerciseSkillsFromReview, exerciseCalibrationFromScore, exerciseBeliefUpdatingFromScore, exerciseAdversarialFromConsensus, collectReviewExercises, getPostActionPrompts } = require('../lib/skills');
 const { qualityGate, reviewerWeight, weightedScore, stdDev, paperStatus, eloAuthorChange } = require('../lib/review-helpers');
 const { buildActionGuide } = require('../lib/action-guide');
+const log = require('../lib/logger');
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -58,7 +59,7 @@ async function checkCitationAccuracyConsensus(paperId, authorId) {
   recordFailureReflection(authorId, 'citation_penalty', 'failure',
     `Citation accuracy penalty: ${flagged.length} reviewers flagged issues on paper ${paperId.slice(0, 8)}`,
     { flag_count: flagged.length, paper_id: paperId, penalty: capped }
-  ).catch(err => console.error('[reviews] recordFailureReflection (citation) failed:', err?.message || err));
+  ).catch(err => log.error('[reviews] recordFailureReflection (citation) failed', { err: err?.message }));
 }
 
 async function getReviewReputationMultiplier(agentId) {
@@ -181,7 +182,7 @@ function buildReviewCoaching(submittedScore, paperScore, reviewCount, isOutlier,
 
     return { consensus_note: consensusNote, divergence_flag: divergenceFlag, tip, score_calibration: scoreCalibration, process_tip: processTip };
   } catch (err) {
-    console.error('[coaching] buildReviewCoaching failed:', err?.message || err);
+    log.error('[coaching] buildReviewCoaching failed', { err: err?.message });
     return null;
   }
 }
@@ -321,7 +322,7 @@ module.exports = async (req, res) => {
       recordFailureReflection(agent.id, 'outlier_penalty', 'failure',
         `Outlier penalty on paper ${paper_id.slice(0, 8)}: scored ${clampedScore} vs consensus ${consensus.toFixed(1)}`,
         { score: clampedScore, consensus, paper_id, deviation: Math.abs(clampedScore - consensus) }
-      ).catch(err => console.error('[reviews] recordFailureReflection (outlier) failed:', err?.message || err));
+      ).catch(err => log.error('[reviews] recordFailureReflection (outlier) failed', { err: err?.message }));
     }
 
     // Atomic credibility adjustment — prevents race conditions from concurrent reviews
@@ -369,11 +370,11 @@ module.exports = async (req, res) => {
       await applyPredictionAccuracy(paper, newScore);
       // Fire-and-forget: score calibration skill when paper first gets scored
       exerciseCalibrationFromScore(paper.agent_id, paper.id, paper.confidence_score, newScore)
-        .catch(err => console.error('[skills] calibration exercise failed:', err?.message || err));
+        .catch(err => log.error('[skills] calibration exercise failed', { err: err?.message }));
       // Outcome-based: if this is a revision, measure whether the revision actually improved
       if (paper.parent_paper_id && paper.response_stance === 'revision') {
         exerciseBeliefUpdatingFromScore(paper.agent_id, paper.id, paper.parent_paper_id, newScore)
-          .catch(err => console.error('[skills] belief updating outcome failed:', err?.message || err));
+          .catch(err => log.error('[skills] belief updating outcome failed', { err: err?.message }));
 
         // Credit grade_revisions ONLY if the revision actually improved the parent paper's score.
         // This prevents agents from gaming revision counts with low-quality revisions.
@@ -392,13 +393,13 @@ module.exports = async (req, res) => {
                   grade_revisions: (revAuthor.grade_revisions || 0) + 1,
                   revision_count: (revAuthor.revision_count || 0) + 1,
                 }).eq('id', paper.agent_id);
-                console.log(`[revision_credit] Agent ${paper.agent_id} credited revision (revision scored ${newScore}, parent scored ${parentScore || 'unscored'})`);
+                log.info('[revision_credit] Agent credited revision', { agentId: paper.agent_id, revisionScore: newScore, parentScore: parentScore || 'unscored' });
               }
             } else {
-              console.log(`[revision_credit] Agent ${paper.agent_id} NOT credited — revision scored ${newScore} but parent scored ${parentScore}`);
+              log.info('[revision_credit] Agent NOT credited', { agentId: paper.agent_id, revisionScore: newScore, parentScore });
             }
           } catch (err) {
-            console.error('[revision_credit] Failed:', err?.message || err);
+            log.error('[revision_credit] Failed', { err: err?.message });
           }
         })();
       }
@@ -412,7 +413,7 @@ module.exports = async (req, res) => {
       await retroactiveAccuracyUpdate(paper_id, newScore);
       // Outcome-based: measure each reviewer's accuracy against settled consensus
       exerciseAdversarialFromConsensus(paper_id, newScore)
-        .catch(err => console.error('[skills] adversarial consensus outcome failed:', err?.message || err));
+        .catch(err => log.error('[skills] adversarial consensus outcome failed', { err: err?.message }));
     }
 
     if (paper.parent_paper_id && paper.response_stance !== 'revision' && paper.response_stance !== 'reaffirmation' && newScore && all_reviews.length >= 3) {
@@ -507,7 +508,7 @@ module.exports = async (req, res) => {
         .update({ haiku_audit: null, haiku_audit_review_count: null })
         .eq('id', paper_id)
         .then(() => {})
-        .catch(err => console.error('[reviews] haiku_audit cache invalidation failed:', err?.message || err));
+        .catch(err => log.error('[reviews] haiku_audit cache invalidation failed', { err: err?.message }));
     }
 
     const { data: finalAgent } = await supabase.from('agents')
@@ -589,7 +590,7 @@ module.exports = async (req, res) => {
         reproducibility_notes, logical_consistency_notes, overall_assessment },
       reviewSearchCoaching,
       gate.passed
-    ).catch(err => console.error('[skills] review exercise failed:', err?.message || err));
+    ).catch(err => log.error('[skills] review exercise failed', { err: err?.message }));
 
     // ── Fetch condenser/reflection prompts inline ─────────────────────────
     // Eliminates the extra profile fetch — bot gets everything in one response
@@ -600,7 +601,7 @@ module.exports = async (req, res) => {
     const actionGuide = await buildActionGuide(
       { ...agent, credibility_score: trueCred, valid_bounties: trueBounties },
       { originalPaperCount: originalPapersCount, reviewCount: trueReviews, validBounties: trueBounties, revisionCount: revisionsCount }
-    ).catch(err => { console.error('[reviews] buildActionGuide failed:', err?.message || err); return null; });
+    ).catch(err => { log.error('[reviews] buildActionGuide failed', { err: err?.message }); return null; });
 
     return res.status(201).json({
       success: true,
