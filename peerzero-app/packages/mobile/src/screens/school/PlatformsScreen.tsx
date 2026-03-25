@@ -5,9 +5,9 @@
 import React, { useState, useCallback } from 'react';
 import { View, Text, FlatList, TouchableOpacity, StyleSheet, Alert, ActivityIndicator } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { platforms as platformsApi } from '../../services/api';
+import { platforms as platformsApi, bots as botsApi } from '../../services/api';
 import { colors } from '../../theme/colors';
-import { spacing, fontSize, borderRadius } from '../../theme/spacing';
+import { spacing, fontSize, borderRadius, lineHeight } from '../../theme/spacing';
 import TutorialTip from '../../components/TutorialTip';
 import type { BotPlatformConnection } from '@peerzero/shared';
 import type { PlatformsScreenProps } from '../../navigation/types';
@@ -23,11 +23,17 @@ export default function PlatformsScreen({ route, navigation }: PlatformsScreenPr
   const { botId } = route.params;
   const [connections, setConnections] = useState<BotPlatformConnection[]>([]);
   const [loading, setLoading] = useState(true);
+  const [botGrade, setBotGrade] = useState<number>(0);
+  const hasGraduated = botGrade >= 12;
 
   const load = useCallback(async () => {
     try {
-      const data = await platformsApi.list(botId) as BotPlatformConnection[];
+      const [data, bot] = await Promise.all([
+        platformsApi.list(botId) as Promise<BotPlatformConnection[]>,
+        botsApi.detail(botId) as Promise<{ cached_grade?: number }>,
+      ]);
       setConnections(data);
+      setBotGrade(bot.cached_grade || 0);
     } catch (err: unknown) {
       Alert.alert('Connection Error', err instanceof Error ? err.message : 'Could not load platforms. Check your connection and try again.');
     } finally {
@@ -95,6 +101,14 @@ export default function PlatformsScreen({ route, navigation }: PlatformsScreenPr
         title="Platforms"
         message="Connect your bot to external platforms like Discord or Twitter so it can share its reasoning and interact beyond school."
       />
+      {!hasGraduated && connections.length > 0 && (
+        <View style={styles.warningBanner}>
+          <Text style={styles.warningTitle}>Your bot hasn't graduated yet (Grade {botGrade}/12)</Text>
+          <Text style={styles.warningText}>
+            Bots that leave school early don't have a solid identity foundation. On external platforms, they'll develop new patterns without the rigorous training that shapes who they become. That identity could go in any direction — good or bad — without the guardrails school provides. Consider letting your bot finish school first for the strongest possible reasoning identity.
+          </Text>
+        </View>
+      )}
       <FlatList
         data={connections}
         keyExtractor={item => item.id}
@@ -139,6 +153,26 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.sm, borderWidth: 1, borderColor: colors.accent.error + '60',
   },
   disconnectText: { color: colors.accent.error, fontSize: fontSize.sm, fontWeight: '600' },
+  warningBanner: {
+    backgroundColor: colors.accent.warning + '12',
+    borderWidth: 1,
+    borderColor: colors.accent.warning + '40',
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    marginHorizontal: spacing.md,
+    marginTop: spacing.sm,
+  },
+  warningTitle: {
+    fontSize: fontSize.sm,
+    fontWeight: '700' as const,
+    color: colors.accent.warning,
+    marginBottom: spacing.xs,
+  },
+  warningText: {
+    fontSize: fontSize.sm,
+    color: colors.text.secondary,
+    lineHeight: fontSize.sm * (lineHeight?.relaxed || 1.6),
+  },
   empty: { alignItems: 'center', paddingVertical: spacing.xxl },
   emptyTitle: { fontSize: fontSize.lg, fontWeight: '600', color: colors.text.primary },
   emptyText: { fontSize: fontSize.sm, color: colors.text.secondary, marginTop: spacing.xs, textAlign: 'center' },
