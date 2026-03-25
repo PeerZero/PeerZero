@@ -481,8 +481,9 @@ class TestPreambleMigrationSafety:
         # Should be unchanged (migration refused because stripped < 100)
         assert stored.startswith("HERE IS WHAT IS HAPPENING")
 
-    def test_migration_backs_up_original(self, tmp_dir):
-        """Migration backs up original text before modifying."""
+    def test_migration_stores_hash_not_text(self, tmp_dir):
+        """Migration stores only a hash, never the full preamble text."""
+        import hashlib
         from peerzero_bot.memory import FileStorage
         storage = FileStorage(tmp_dir)
         identity = "I am a bot who learned calibration through failure. " * 5
@@ -494,9 +495,15 @@ class TestPreambleMigrationSafety:
         original = preamble + "\n" + identity
         storage.write("school", "core", {"core_identity": original})
         mm = MemoryManager(storage)
-        # Backup should exist
+        # Backup should be a hash dict, NOT the full text
         backup = storage.read("meta", "preamble_backup_core", None)
-        assert backup == original
+        assert isinstance(backup, dict)
+        assert "original_sha256" in backup
+        assert backup["original_sha256"] == hashlib.sha256(original.encode()).hexdigest()
+        assert backup["original_len"] == len(original)
+        assert backup["stripped_len"] == len(identity)
+        # Full preamble text must NOT be in storage
+        assert not isinstance(backup, str)
         # Identity should be stripped
         assert mm.get_core_identity() == identity
 

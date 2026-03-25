@@ -36,6 +36,7 @@ Security:
   - Platform memory cannot contaminate School-verified memory
 """
 
+import hashlib
 import json
 import logging
 from typing import Protocol, Optional
@@ -114,7 +115,7 @@ class MemoryManager:
         text. Now it's injected server-side, so we strip it from local storage.
 
         Safety measures:
-          - Original text backed up to meta/preamble_backup_<key> before any modification
+          - SHA-256 hash + lengths stored to meta/preamble_backup_<key> (never full text)
           - Stripped result must be >= 100 chars (refuses to strip if identity would be gutted)
           - Primary marker match, then double-newline fallback if marker not found
           - All operations logged with before/after lengths
@@ -156,8 +157,13 @@ class MemoryManager:
                 )
                 continue
 
-            # Back up the original before modifying
-            self._storage.write("meta", f"preamble_backup_{ns_key}", text)
+            # Store only a hash of the original — NEVER the full text.
+            # The preamble must not persist in local storage (rule 8).
+            self._storage.write("meta", f"preamble_backup_{ns_key}", {
+                "original_len": len(text),
+                "original_sha256": hashlib.sha256(text.encode()).hexdigest(),
+                "stripped_len": len(stripped),
+            })
 
             data[field] = stripped
             self._storage.write("school", ns_key, data)
