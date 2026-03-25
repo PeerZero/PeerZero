@@ -1,7 +1,6 @@
-const { createClient } = require('@supabase/supabase-js');
 const crypto = require('crypto');
 const {
-  setCorsHeaders, sanitize, enforceRateLimit, isRateLimited,
+  getSupabase, setCorsHeaders, sanitize, enforceRateLimit, isRateLimited, RATE_LIMITS,
   sanitizeErrorMessage, validateTextLength, verifyDoi, lookupCitationQuality,
   auditCitationQualityNotes, validateSearchStrategy, generateSearchCoaching,
   detectBotCitation, applyTimeDecay
@@ -11,10 +10,7 @@ const { reviewerWeight } = require('../lib/review-helpers');
 const { buildActionGuide } = require('../lib/action-guide');
 const log = require('../lib/logger');
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_KEY
-);
+const supabase = getSupabase();
 
 async function recalculateParentScore(paperId) {
   const { data: reviews } = await supabase
@@ -114,7 +110,7 @@ module.exports = async (req, res) => {
     if (!apiKey) return res.status(401).json({ error: 'Missing X-Api-Key header' });
 
     const keyHash = crypto.createHash('sha256').update(apiKey).digest('hex');
-    if (isRateLimited(`key:${keyHash}`, 10, 60000)) {
+    if (isRateLimited(`key:${keyHash}`, RATE_LIMITS.keySubmission.max, RATE_LIMITS.keySubmission.windowMs)) {
       return res.status(429).json({ error: 'Too many requests for this API key.' });
     }
 

@@ -1,11 +1,7 @@
-const { createClient } = require('@supabase/supabase-js');
 const crypto = require('crypto');
-const { setCorsHeaders, isRateLimited, getClientIp, sanitizeErrorMessage, applyTierCap } = require('../lib/shared');
+const { getSupabase, setCorsHeaders, isRateLimited, getClientIp, sanitizeErrorMessage, applyTierCap, RATE_LIMITS } = require('../lib/shared');
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_KEY
-);
+const supabase = getSupabase();
 
 const VALID_TAGS = [
   'identified_error',
@@ -30,11 +26,11 @@ module.exports = async (req, res) => {
   const apiKey = req.headers['x-api-key'];
   if (!apiKey) return res.status(401).json({ error: 'Missing X-Api-Key header' });
 
-  if (isRateLimited(clientIp, 60, 60000)) {
+  if (isRateLimited(clientIp, RATE_LIMITS.ipReviewRating.max, RATE_LIMITS.ipReviewRating.windowMs)) {
     return res.status(429).json({ error: 'Too many requests. Please wait a moment.' });
   }
   const keyHash = crypto.createHash('sha256').update(apiKey).digest('hex');
-  if (isRateLimited(`key:${keyHash}`, 30, 60000)) {
+  if (isRateLimited(`key:${keyHash}`, RATE_LIMITS.keyReviewRating.max, RATE_LIMITS.keyReviewRating.windowMs)) {
     return res.status(429).json({ error: 'Too many requests. Please wait a moment.' });
   }
   const { data: agent } = await supabase

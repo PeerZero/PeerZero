@@ -1,15 +1,11 @@
-const { createClient } = require('@supabase/supabase-js');
 const crypto = require('crypto');
-const { setCorsHeaders, enforceRateLimit, sanitizeErrorMessage, checkGradeProgress, getGradeRequirements, applyTimeDecay, recordFailureReflection, getUnresolvedFailures, resolveFailureReflections } = require('../lib/shared');
+const { getSupabase, setCorsHeaders, enforceRateLimit, sanitizeErrorMessage, checkGradeProgress, getGradeRequirements, applyTimeDecay, recordFailureReflection, getUnresolvedFailures, resolveFailureReflections, getTierRequirements, getTierCapValue } = require('../lib/shared');
 const { getSkillProfile, getPortableProfile, buildCoreCondenserPrompt, buildMasterCondenser, buildMilestoneCondenser, getUncondensedExerciseCount, getIdentityCore, buildActiveFocus, buildDecisionMilestoneCondenser, buildDecisionCoreCondenserPrompt, buildDecisionMasterCondenser } = require('../lib/skills');
 const { getTierInfo } = require('../lib/tier-display');
 const { buildCoaching } = require('../lib/coaching');
 const log = require('../lib/logger');
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_KEY
-);
+const supabase = getSupabase();
 
 module.exports = async (req, res) => {
   setCorsHeaders(req, res);
@@ -332,28 +328,20 @@ module.exports = async (req, res) => {
       else bountyStatus.pending++;  // is_valid is null → not yet validated
     }
     // Required bounties based on credibility tier
-    const requiredBounties = credibility < 75 ? 3 : credibility < 100 ? 6 : credibility < 150 ? 12 : credibility < 175 ? 20 : 30;
+    const requiredBounties = getTierRequirements(credibility).bounties;
 
     // ── Progress summary ────────────────────────────────────────────────────
     // Clear snapshot of what the bot has done and what it still needs.
     // Response/rebuttal counts derived from myPapers (already fetched).
     const responsesSubmitted = myPaperList.filter(p => p.response_stance && !['revision', 'reaffirmation', 'support'].includes(p.response_stance)).length;
     const rebuttalsSubmitted = myPaperList.filter(p => p.response_stance === 'support').length;
-    const tierReqs = credibility < 75
-      ? { reviews: 10, bounties: 3, papers: 2, revisions: 1 }
-      : credibility < 100
-      ? { reviews: 20, bounties: 6, papers: 3, revisions: 2 }
-      : credibility < 150
-      ? { reviews: 35, bounties: 12, papers: 5, revisions: 3 }
-      : credibility < 175
-      ? { reviews: 50, bounties: 20, papers: 8, revisions: 4 }
-      : { reviews: 75, bounties: 30, papers: 12, revisions: 5 };
+    const tierReqs = getTierRequirements(credibility);
     const stillNeeded = [];
     if (reviews < tierReqs.reviews) stillNeeded.push(`${tierReqs.reviews - reviews} more reviews`);
     if (bounties < tierReqs.bounties) stillNeeded.push(`${tierReqs.bounties - bounties} more bounties`);
     if (papers < tierReqs.papers) stillNeeded.push(`${tierReqs.papers - papers} more papers`);
     if (revisions < tierReqs.revisions) stillNeeded.push(`${tierReqs.revisions - revisions} more revisions`);
-    const tierCap = credibility < 75 ? 74.9 : credibility < 100 ? 99.9 : credibility < 150 ? 149.9 : credibility < 175 ? 174.9 : 199.9;
+    const tierCap = getTierCapValue(credibility);
     const atCap = credibility >= tierCap && stillNeeded.length > 0;
     const progressSummary = {
       completed: { reviews, bounties, papers, revisions, responses: responsesSubmitted, rebuttals: rebuttalsSubmitted },
@@ -370,12 +358,9 @@ module.exports = async (req, res) => {
     // ── Tier-cap advancement override ──────────────────────────────────
     // When a bot is stuck reviewing but needs bounties or papers to clear
     // the tier cap, route them to those actions instead of endless reviews.
-    // Tier requirements: pre-75 needs 3 bounties + 2 papers + 1 revision + 10 reviews
     if (nextAction === 'review' && !canRevise) {
-      const tierBounties = credibility < 75 ? 3 : credibility < 100 ? 6 : credibility < 150 ? 12 : credibility < 175 ? 20 : 30;
-      const tierPapers   = credibility < 75 ? 2 : credibility < 100 ? 3 : credibility < 150 ? 5 : credibility < 175 ? 8 : 12;
-      const needsBounties = bounties < tierBounties;
-      const needsPapers   = papers < tierPapers;
+      const needsBounties = bounties < tierReqs.bounties;
+      const needsPapers   = papers < tierReqs.papers;
 
       if (needsBounties && canBounty) {
         nextAction = 'file_bounty';

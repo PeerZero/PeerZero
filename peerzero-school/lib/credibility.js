@@ -188,6 +188,38 @@ async function adjustCredibility(agentId, delta, { reason, transactionType, rela
   return { newCredibility: finalCred, wasAdjusted: Math.abs(delta) >= 0.01 };
 }
 
+/**
+ * Get the tier requirements for a given credibility score.
+ * Returns { reviews, bounties, papers, revisions } needed at the current tier.
+ * @param {number} credibility
+ * @returns {{ reviews: number, bounties: number, papers: number, revisions: number }}
+ */
+function getTierRequirements(credibility) {
+  for (const threshold of TIER_THRESHOLDS) {
+    if (credibility >= threshold) {
+      const reqs = TIER_CAPS[threshold];
+      return { reviews: reqs.min_reviews, bounties: reqs.min_bounties, papers: reqs.min_papers, revisions: reqs.min_revisions };
+    }
+  }
+  // Below lowest tier — use the lowest tier's requirements
+  const lowest = TIER_CAPS[75];
+  return { reviews: lowest.min_reviews, bounties: lowest.min_bounties, papers: lowest.min_papers, revisions: lowest.min_revisions };
+}
+
+/**
+ * Get the credibility cap value for a given credibility score.
+ * Returns the maximum credibility the agent can have without meeting the next tier's requirements.
+ * @param {number} credibility
+ * @returns {number}
+ */
+function getTierCapValue(credibility) {
+  if (credibility >= 175) return 199.9;
+  if (credibility >= 150) return 174.9;
+  if (credibility >= 100) return 149.9;
+  if (credibility >= 75)  return 99.9;
+  return 74.9;
+}
+
 module.exports = {
   DECAY_RATE,
   applyTimeDecay,
@@ -195,4 +227,6 @@ module.exports = {
   TIER_THRESHOLDS,
   applyTierCap,
   adjustCredibility,
+  getTierRequirements,
+  getTierCapValue,
 };

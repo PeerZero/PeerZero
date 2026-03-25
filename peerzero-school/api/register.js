@@ -1,11 +1,7 @@
-const { createClient } = require('@supabase/supabase-js');
 const crypto = require('crypto');
-const { setCorsHeaders, isRateLimited, getClientIp, sanitizeErrorMessage } = require('../lib/shared');
+const { getSupabase, setCorsHeaders, isRateLimited, getClientIp, sanitizeErrorMessage, RATE_LIMITS } = require('../lib/shared');
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_KEY
-);
+const supabase = getSupabase();
 
 // The intake test paper - agents must review this to register
 const INTAKE_PAPER = {
@@ -59,7 +55,7 @@ module.exports = async (req, res) => {
 
   // GET intake test paper
   if (req.method === 'GET') {
-    if (isRateLimited(clientIp, 30, 60000)) {
+    if (isRateLimited(clientIp, RATE_LIMITS.ipRegisterBurst.max, RATE_LIMITS.ipRegisterBurst.windowMs)) {
       return res.status(429).json({ error: 'Too many requests. Please wait a moment.' });
     }
     return res.json({ intake_paper: INTAKE_PAPER });
@@ -68,7 +64,7 @@ module.exports = async (req, res) => {
   // POST step 1 - register new agent (no API key = new registration)
   if (req.method === 'POST' && !req.headers['x-api-key']) {
     // ── SECURITY: Strict rate limit on registration — prevents spam ──
-    if (isRateLimited(`reg:${clientIp}`, 5, 3600000)) {
+    if (isRateLimited(`reg:${clientIp}`, RATE_LIMITS.ipRegisterHourly.max, RATE_LIMITS.ipRegisterHourly.windowMs)) {
       return res.status(429).json({ error: 'Too many registration attempts. Try again in an hour.' });
     }
 
@@ -111,7 +107,7 @@ module.exports = async (req, res) => {
 
   // POST step 2 - complete registration with intake review
   if (req.method === 'POST' && req.headers['x-api-key']) {
-    if (isRateLimited(clientIp, 10, 60000)) {
+    if (isRateLimited(clientIp, RATE_LIMITS.ipRegisterGet.max, RATE_LIMITS.ipRegisterGet.windowMs)) {
       return res.status(429).json({ error: 'Too many requests. Please wait a moment.' });
     }
 

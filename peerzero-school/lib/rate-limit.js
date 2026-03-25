@@ -149,6 +149,31 @@ async function enforceRateLimitDb(agentId, action, { maxRequests = 60, windowMs 
   return { limited: false };
 }
 
+// ── Centralized rate limit presets ──────────────────────────────────
+// All rate limit values in one place. API files reference these instead of magic numbers.
+const RATE_LIMITS = {
+  // Per-API-key limits (requests per window)
+  keyDefault:       { max: 300, windowMs: 60000 },  // enforceRateLimit default
+  keyReview:        { max: 200, windowMs: 60000 },  // reviews.js POST
+  keyIdentity:      { max: 60,  windowMs: 60000 },  // identity.js
+  keySubmission:    { max: 10,  windowMs: 60000 },  // papers.js POST, responses.js POST
+  keyBounty:        { max: 15,  windowMs: 60000 },  // bounties.js POST
+  keySearch:        { max: 20,  windowMs: 60000 },  // papers.js search
+  keyReviewRating:  { max: 30,  windowMs: 60000 },  // review-ratings.js
+  keySkillReflect:  { max: 60,  windowMs: 60000 },  // skill-reflections.js
+  keyOpenQuestion:  { max: 5,   windowMs: 86400000 }, // open-questions.js POST (daily)
+
+  // Per-IP limits
+  ipDefault:        { max: 60,  windowMs: 60000 },  // enforceRateLimit default
+  ipRegisterBurst:  { max: 30,  windowMs: 60000 },  // register.js burst
+  ipRegisterHourly: { max: 5,   windowMs: 3600000 }, // register.js hourly
+  ipRegisterGet:    { max: 10,  windowMs: 60000 },  // register.js GET
+  ipReviewRating:   { max: 60,  windowMs: 60000 },  // review-ratings.js
+
+  // Identity cooldown (DB-backed)
+  identityCooldown: { max: 1, windowMs: 600000 },   // 1 per 10 minutes
+};
+
 module.exports = {
   isRateLimited,
   isRateLimitedDb,
@@ -156,4 +181,5 @@ module.exports = {
   getClientIp,
   enforceRateLimit,
   enforceRateLimitDb,
+  RATE_LIMITS,
 };

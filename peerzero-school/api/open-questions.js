@@ -1,12 +1,8 @@
-const { createClient } = require('@supabase/supabase-js');
 const crypto = require('crypto');
-const { setCorsHeaders, enforceRateLimit, sanitizeErrorMessage, isRateLimited } = require('../lib/shared');
+const { getSupabase, setCorsHeaders, enforceRateLimit, sanitizeErrorMessage, isRateLimited, RATE_LIMITS } = require('../lib/shared');
 const log = require('../lib/logger');
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_KEY
-);
+const supabase = getSupabase();
 
 module.exports = async (req, res) => {
   setCorsHeaders(req, res);
@@ -184,7 +180,7 @@ module.exports = async (req, res) => {
       }
 
       // Rate limit: max 5 questions per agent per day
-      if (isRateLimited(`questions:${agent.id}`, 5, 86400000)) {
+      if (isRateLimited(`questions:${agent.id}`, RATE_LIMITS.keyOpenQuestion.max, RATE_LIMITS.keyOpenQuestion.windowMs)) {
         return res.status(429).json({ error: 'Max 5 open questions per day' });
       }
 

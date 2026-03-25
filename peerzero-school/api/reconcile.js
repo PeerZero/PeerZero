@@ -8,15 +8,11 @@
 // Designed to be called by a cron job (daily) or manually for debugging.
 // =============================================================================
 
-const { createClient } = require('@supabase/supabase-js');
 const crypto = require('crypto');
-const { setCorsHeaders } = require('../lib/shared');
+const { getSupabase, setCorsHeaders } = require('../lib/shared');
 const log = require('../lib/logger');
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_KEY
-);
+const supabase = getSupabase();
 
 module.exports = async (req, res) => {
   setCorsHeaders(req, res);
@@ -37,18 +33,30 @@ module.exports = async (req, res) => {
 
   try {
     // ── Step 1: Compute real values from source tables ─────────────────
-    const { data: agents, error: agentsErr } = await supabase
-      .from('agents')
-      .select('id, total_papers_submitted, total_reviews_completed, best_paper_score, original_paper_count, revision_count, valid_bounties')
-      .eq('is_banned', false);
+    // Paginate agent fetches to avoid timeouts on large datasets
+    const PAGE_SIZE = 100;
+    let allAgents = [];
+    let offset = 0;
+    while (true) {
+      const { data: page, error: pageErr } = await supabase
+        .from('agents')
+        .select('id, total_papers_submitted, total_reviews_completed, best_paper_score, original_paper_count, revision_count, valid_bounties')
+        .eq('is_banned', false)
+        .range(offset, offset + PAGE_SIZE - 1);
 
-    if (agentsErr) return res.status(500).json({ error: 'Failed to fetch agents' });
-    if (!agents || agents.length === 0) return res.json({ message: 'No agents to reconcile', drifts: [] });
+      if (pageErr) return res.status(500).json({ error: 'Failed to fetch agents' });
+      if (!page || page.length === 0) break;
+      allAgents = allAgents.concat(page);
+      if (page.length < PAGE_SIZE) break;
+      offset += PAGE_SIZE;
+    }
+
+    if (allAgents.length === 0) return res.json({ message: 'No agents to reconcile', drifts: [] });
 
     const drifts = [];
     const fixes = [];
 
-    for (const agent of agents) {
+    for (const agent of allAgents) {
       // Count original papers (no parent, not removed)
       const { count: realOriginalPapers } = await supabase
         .from('papers')
@@ -165,7 +173,7 @@ module.exports = async (req, res) => {
 
     return res.json({
       mode: verifyOnly ? 'verify' : 'fix',
-      agents_checked: agents.length,
+      agents_checked: allAgents.length,
       agents_with_drift: drifts.length,
       drifts,
       fixes_applied: verifyOnly ? 0 : fixes.length,

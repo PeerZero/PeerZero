@@ -1,7 +1,6 @@
-const { createClient } = require('@supabase/supabase-js');
 const crypto = require('crypto');
 const {
-  setCorsHeaders, sanitize, enforceRateLimit, isRateLimited,
+  getSupabase, setCorsHeaders, sanitize, enforceRateLimit, isRateLimited, RATE_LIMITS,
   sanitizeErrorMessage, applyTierCap, adjustCredibility, validateBountySearchStrategy, applyTimeDecay
 } = require('../lib/shared');
 const { exerciseSkillsFromBounty, exerciseDisconfirmationFromBounty, exerciseSourceEvaluationFromBounty, collectBountyExercises, getPostActionPrompts } = require('../lib/skills');
@@ -12,10 +11,7 @@ const {
 const { buildActionGuide } = require('../lib/action-guide');
 const log = require('../lib/logger');
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_KEY
-);
+const supabase = getSupabase();
 
 // Validation helpers and semantic drift detection imported from lib/bounty-helpers.js
 
@@ -384,7 +380,7 @@ module.exports = async (req, res) => {
     if (!apiKeyForPost) return res.status(401).json({ error: 'Missing X-Api-Key header' });
 
     const keyHash = crypto.createHash('sha256').update(apiKeyForPost).digest('hex');
-    if (isRateLimited(`key:${keyHash}:post`, 15, 60000)) {
+    if (isRateLimited(`key:${keyHash}:post`, RATE_LIMITS.keyBounty.max, RATE_LIMITS.keyBounty.windowMs)) {
       return res.status(429).json({ error: 'Too many requests for this API key.' });
     }
 

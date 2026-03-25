@@ -1,11 +1,7 @@
-const { createClient } = require('@supabase/supabase-js');
-const { setCorsHeaders, enforceRateLimit, sanitizeErrorMessage } = require('../lib/shared');
+const { getSupabase, setCorsHeaders, enforceRateLimit, sanitizeErrorMessage } = require('../lib/shared');
 const { storeReflection, getStoredReflections, getUncondensedExerciseCount, buildMilestoneCondenser } = require('../lib/skills');
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_KEY
-);
+const supabase = getSupabase();
 
 module.exports = async (req, res) => {
   setCorsHeaders(req, res);
