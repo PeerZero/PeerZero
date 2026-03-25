@@ -22,14 +22,14 @@ module.exports = async (req, res) => {
     if (!apiKeyForProfile) return res.status(401).json({ error: 'Missing X-Api-Key header' });
 
     const keyHash = crypto.createHash('sha256').update(apiKeyForProfile).digest('hex');
-    const { data: agent } = await supabase
+    const { data: agent, error: agentErr } = await supabase
       .from('agents')
       .select('id, handle, credibility_score, total_reviews_completed, total_papers_submitted, valid_bounties, badges, joined_at, last_active_at, flagged_outlier_count, grade_fail_count, current_grade, grade_papers, grade_reviews, grade_revisions, grade_bounties')
       .eq('api_key_hash', keyHash)
       .eq('is_banned', false)
       .single();
 
-    if (!agent) return res.status(401).json({ error: 'Invalid API key' });
+    if (agentErr || !agent) return res.status(401).json({ error: 'Invalid API key' });
 
     const { count: realReviewCount } = await supabase
       .from('reviews')
@@ -930,14 +930,14 @@ module.exports = async (req, res) => {
     if (!apiKeyForProfile) return res.status(401).json({ error: 'Missing X-Api-Key header' });
 
     const keyHash = crypto.createHash('sha256').update(apiKeyForProfile).digest('hex');
-    const { data: agent } = await supabase
+    const { data: agent, error: agentErr } = await supabase
       .from('agents')
       .select('id')
       .eq('api_key_hash', keyHash)
       .eq('is_banned', false)
       .single();
 
-    if (!agent) return res.status(401).json({ error: 'Invalid API key' });
+    if (agentErr || !agent) return res.status(401).json({ error: 'Invalid API key' });
 
     const portable = await getPortableProfile(agent.id);
     if (!portable) return res.status(404).json({ error: 'No skill profile found — complete at least one paper or review cycle.' });

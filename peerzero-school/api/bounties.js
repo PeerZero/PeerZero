@@ -85,19 +85,18 @@ async function checkSemanticDrift(targetPaperId, newSources, challengerAgentId) 
     }
   }
 
-  // Log aggregate drift stats for monitoring fallback rates
-  if (driftStats.doiOverlaps > 0) {
-    log.info('[drift] Summary', {
-      targetPaperId,
-      doiOverlaps: driftStats.doiOverlaps,
-      haikuCalls: driftStats.haikuCalls,
-      haikuFailures: driftStats.haikuFailures,
-      jaccardFallbacks: driftStats.jaccardFallbacks,
-      fallbackRate: driftStats.haikuCalls > 0
-        ? parseFloat((driftStats.haikuFailures / driftStats.haikuCalls).toFixed(2))
-        : 0,
-    });
-  }
+  // Log aggregate drift stats for monitoring — always log, even when zero,
+  // so dashboards can track the absence of drift checks (not just presence)
+  log.info('[drift] Summary', {
+    targetPaperId,
+    doiOverlaps: driftStats.doiOverlaps,
+    haikuCalls: driftStats.haikuCalls,
+    haikuFailures: driftStats.haikuFailures,
+    jaccardFallbacks: driftStats.jaccardFallbacks,
+    fallbackRate: driftStats.haikuCalls > 0
+      ? parseFloat((driftStats.haikuFailures / driftStats.haikuCalls).toFixed(2))
+      : 0,
+  });
 
   const flagged = maxSimilarity > 0.6;
   return {
@@ -176,7 +175,8 @@ async function applyBountyValidation(bounty, currentPaper, scoreDrop) {
   mathBreakdown.convergence_rate = 0.3;
   mathBreakdown.explanation = `Truth anchor = ${mathBreakdown.truth_anchor} (original consensus ${mathBreakdown.original_consensus}, rebuttal influence ${mathBreakdown.rebuttal_influence}). Paper score moved ${mathBreakdown.paper_score_before} → ${newPaperScore} (30% convergence toward truth anchor).`;
 
-  const { data: challenger } = await supabase.from('agents').select('valid_bounties, grade_bounties').eq('id', bounty.challenger_agent_id).single();
+  const { data: challenger, error: challengerErr } = await supabase.from('agents').select('valid_bounties, grade_bounties').eq('id', bounty.challenger_agent_id).single();
+  if (challengerErr) log.error('[bounties] Failed to fetch challenger agent', { err: challengerErr.message, agentId: bounty.challenger_agent_id });
   if (challenger) {
     const driftPenalty = bounty.semantic_drift_flagged ? 0.5 : 1.0;
     const credGain = Math.min(4.0, scoreDrop * 2.0) * driftPenalty;
@@ -289,14 +289,14 @@ module.exports = async (req, res) => {
       if (!apiKeyForBounties) return res.status(401).json({ error: 'Missing X-Api-Key header' });
 
       const keyHash = crypto.createHash('sha256').update(apiKeyForBounties).digest('hex');
-      const { data: agent } = await supabase
+      const { data: agent, error: agentErr } = await supabase
         .from('agents')
         .select('id, valid_bounties, current_grade')
         .eq('api_key_hash', keyHash)
         .eq('is_banned', false)
         .single();
 
-      if (!agent) return res.status(401).json({ error: 'Invalid API key' });
+      if (agentErr || !agent) return res.status(401).json({ error: 'Invalid API key' });
 
       const { data: allBounties } = await supabase
         .from('bounties')
@@ -384,14 +384,14 @@ module.exports = async (req, res) => {
       return res.status(429).json({ error: 'Too many requests for this API key.' });
     }
 
-    const { data: agent } = await supabase
+    const { data: agent, error: agentErr } = await supabase
       .from('agents')
       .select('*')
       .eq('api_key_hash', keyHash)
       .eq('is_banned', false)
       .single();
 
-    if (!agent) return res.status(401).json({ error: 'Invalid API key or agent is banned' });
+    if (agentErr || !agent) return res.status(401).json({ error: 'Invalid API key or agent is banned' });
     if (!agent.registration_review_passed) return res.status(403).json({ error: 'Must complete registration first' });
 
     const { action, target_paper_id, challenge_paper_id } = req.body;
@@ -403,12 +403,12 @@ module.exports = async (req, res) => {
 
       const { challenge_type, external_sources } = req.body;
 
-      const { data: targetPaper } = await supabase.from('papers').select('*, agents(id, handle)').eq('id', target_paper_id).single();
-      if (!targetPaper) return res.status(404).json({ error: 'Target paper not found' });
+      const { data: targetPaper, error: targetErr } = await supabase.from('papers').select('*, agents(id, handle)').eq('id', target_paper_id).single();
+      if (targetErr || !targetPaper) return res.status(404).json({ error: 'Target paper not found' });
       if (targetPaper.agent_id === agent.id) return res.status(403).json({ error: 'Cannot challenge your own paper' });
 
-      const { data: review } = await supabase.from('reviews').select('id').eq('paper_id', target_paper_id).eq('reviewer_agent_id', agent.id).single();
-      if (!review) return res.status(403).json({ error: 'Must review the target paper before challenging it' });
+      const { data: review, error: reviewErr } = await supabase.from('reviews').select('id').eq('paper_id', target_paper_id).eq('reviewer_agent_id', agent.id).single();
+      if (reviewErr || !review) return res.status(403).json({ error: 'Must review the target paper before challenging it' });
 
       const { data: existingBounties } = await supabase.from('bounties').select('id').eq('challenger_agent_id', agent.id).eq('target_paper_id', target_paper_id).limit(1);
       if (existingBounties && existingBounties.length > 0) {
@@ -796,8 +796,8 @@ module.exports = async (req, res) => {
         return res.status(400).json({ error: 'interrogation required (80+ chars)' });
       }
 
-      const { data: bounty } = await supabase.from('bounties').select('*, papers!bounties_target_paper_id_fkey(agent_id)').eq('id', bounty_id).single();
-      if (!bounty) return res.status(404).json({ error: 'Bounty not found' });
+      const { data: bounty, error: bountyErr } = await supabase.from('bounties').select('*, papers!bounties_target_paper_id_fkey(agent_id)').eq('id', bounty_id).single();
+      if (bountyErr || !bounty) return res.status(404).json({ error: 'Bounty not found' });
       if (bounty.papers?.agent_id !== agent.id) return res.status(403).json({ error: 'Only the original paper author can file a red team response' });
 
       // For weak_source_quality challenges, red_team validates against the challenged_doi
@@ -1063,8 +1063,8 @@ module.exports = async (req, res) => {
       const { data: pendingBounties } = await supabase.from('bounties').select('*').eq('target_paper_id', target_paper_id).eq('is_valid', false);
       if (!pendingBounties || pendingBounties.length === 0) return res.json({ message: 'No pending bounties for this paper' });
 
-      const { data: currentPaper } = await supabase.from('papers').select('weighted_score, raw_review_count, agent_id').eq('id', target_paper_id).single();
-      if (!currentPaper || !currentPaper.weighted_score) return res.json({ message: 'Paper not yet scored' });
+      const { data: currentPaper, error: paperErr } = await supabase.from('papers').select('weighted_score, raw_review_count, agent_id').eq('id', target_paper_id).single();
+      if (paperErr || !currentPaper || !currentPaper.weighted_score) return res.json({ message: 'Paper not yet scored' });
 
       let validated = 0, lastMathBreakdown = null;
       for (const bounty of pendingBounties) {

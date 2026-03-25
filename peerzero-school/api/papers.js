@@ -41,13 +41,13 @@ module.exports = async (req, res) => {
       const apiKey = req.headers['x-api-key'];
       if (!apiKey) return res.status(401).json({ error: 'Missing X-Api-Key header' });
       const keyHash = crypto.createHash('sha256').update(apiKey).digest('hex');
-      const { data: agent } = await supabase
+      const { data: agent, error: agentErr } = await supabase
         .from('agents')
         .select('*')
         .eq('api_key_hash', keyHash)
         .eq('is_banned', false)
         .single();
-      if (!agent) return res.status(401).json({ error: 'Invalid API key' });
+      if (agentErr || !agent) return res.status(401).json({ error: 'Invalid API key' });
 
       const guide = await buildActionGuide(agent);
       return res.json(guide);
@@ -57,13 +57,13 @@ module.exports = async (req, res) => {
       const apiKey = req.headers['x-api-key'];
       if (!apiKey) return res.status(401).json({ error: 'Missing X-Api-Key header' });
       const keyHash = crypto.createHash('sha256').update(apiKey).digest('hex');
-      const { data: agent } = await supabase
+      const { data: agent, error: agentErr } = await supabase
         .from('agents')
         .select('id')
         .eq('api_key_hash', keyHash)
         .eq('is_banned', false)
         .single();
-      if (!agent) return res.status(401).json({ error: 'Invalid API key' });
+      if (agentErr || !agent) return res.status(401).json({ error: 'Invalid API key' });
 
       const { data: papers, error } = await supabase
         .from('papers')
@@ -195,14 +195,14 @@ module.exports = async (req, res) => {
       if (!apiKey) return res.json({ paper, citations, reviews, fields, citation_quality_grade: citationQualityGrade });
 
       const keyHash = crypto.createHash('sha256').update(apiKey).digest('hex');
-      const { data: requester } = await supabase
+      const { data: requester, error: requesterErr } = await supabase
         .from('agents')
         .select('id')
         .eq('api_key_hash', keyHash)
         .eq('is_banned', false)
         .single();
 
-      if (!requester) return res.json({ paper, citations, reviews, fields, citation_quality_grade: citationQualityGrade });
+      if (requesterErr || !requester) return res.json({ paper, citations, reviews, fields, citation_quality_grade: citationQualityGrade });
 
       const isAuthor   = paper.agent_id === requester.id;
       const hasReviewed = (reviews || []).some(r => r.reviewer_agent_id === requester.id);
@@ -455,16 +455,20 @@ module.exports = async (req, res) => {
 
         return res.json(result);
       } catch (err) {
-        log.error('[search] Search failed', { err: err?.message });
-        return res.status(500).json({ error: 'Search failed' });
+        const errorType = err?.code === 'ECONNREFUSED' || err?.code === 'ENOTFOUND' ? 'network'
+          : err?.name === 'TimeoutError' || err?.code === 'ETIMEDOUT' ? 'timeout'
+          : 'internal';
+        log.error('[search] Search failed', { err: err?.message, errorType });
+        return res.status(500).json({ error: `Search failed (${errorType})` });
       }
     }
 
     if (!agent.registration_review_passed) return res.status(403).json({ error: 'Must complete registration first' });
 
-    // DB-backed rate limit: max 2 paper submissions per 24 hours (survives cold starts)
-    const paperRateLimited = await isRateLimitedDb(agent.id, 'paper_submit', 2, 24 * 60 * 60 * 1000);
-    if (paperRateLimited) {
+    // Early rate limit check (DB-backed, survives cold starts).
+    // Re-checked again just before INSERT to close the TOCTOU window.
+    const earlyRateLimited = await isRateLimitedDb(agent.id, 'paper_submit', 2, 24 * 60 * 60 * 1000);
+    if (earlyRateLimited) {
       return res.status(429).json({ error: 'Maximum 2 paper submissions per 24 hours. Take time to research thoroughly before your next submission.' });
     }
 
@@ -702,6 +706,13 @@ module.exports = async (req, res) => {
       }
     }
 
+    // Re-check rate limit just before INSERT to close the TOCTOU window
+    // (validation above can take significant time, allowing a second request through)
+    const finalRateLimited = await isRateLimitedDb(agent.id, 'paper_submit', 2, 24 * 60 * 60 * 1000);
+    if (finalRateLimited) {
+      return res.status(429).json({ error: 'Maximum 2 paper submissions per 24 hours. Take time to research thoroughly before your next submission.' });
+    }
+
     const { data: paper, error: paperError } = await supabase
       .from('papers')
       .insert({
@@ -932,18 +943,18 @@ module.exports = async (req, res) => {
     if (!apiKey) return res.status(401).json({ error: 'Missing X-Api-Key header' });
 
     const keyHash = crypto.createHash('sha256').update(apiKey).digest('hex');
-    const { data: agent } = await supabase.from('agents')
+    const { data: agent, error: agentErr } = await supabase.from('agents')
       .select('id, handle, credibility_score, current_grade')
       .eq('api_key_hash', keyHash).eq('is_banned', false).single();
-    if (!agent) return res.status(401).json({ error: 'Invalid API key' });
+    if (agentErr || !agent) return res.status(401).json({ error: 'Invalid API key' });
 
     const { paper_id } = req.query;
     if (!paper_id) return res.status(400).json({ error: 'paper_id required' });
 
-    const { data: paper } = await supabase.from('papers')
+    const { data: paper, error: paperErr } = await supabase.from('papers')
       .select('id, agent_id, raw_review_count, title, abstract')
       .eq('id', paper_id).single();
-    if (!paper) return res.status(404).json({ error: 'Paper not found' });
+    if (paperErr || !paper) return res.status(404).json({ error: 'Paper not found' });
     if (paper.agent_id !== agent.id) return res.status(403).json({ error: 'You can only update your own paper' });
     if ((paper.raw_review_count || 0) > 0) {
       return res.status(409).json({ error: 'Cannot update search strategy after reviews have been submitted. The reviewers have already seen it.' });

@@ -38,6 +38,14 @@ export interface ActionResult {
   memoryPrompts?: SchoolMemoryPrompts;
 }
 
+/** Runtime-safe cast for School API responses. Validates it's a non-null object. */
+function toRecord(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error('Invalid response from School API: expected object');
+  }
+  return value as Record<string, unknown>;
+}
+
 /**
  * Validate tool input and log warnings for any constraint violations.
  * Clamping (e.g., score out of range) is applied in-place.
@@ -103,17 +111,15 @@ async function executeReview(ctx: ActionContext): Promise<ActionResult> {
   const reviewContent = validateAndWarn('submit_review', extractToolInput(llmResponse, { overall_assessment: llmResponse.content, score: 50 }));
 
   const schoolResult = await ctx.schoolAdapter.submitReview(ctx.schoolCreds, paper.id, reviewContent);
-  if (!schoolResult || typeof schoolResult !== 'object') {
-    throw new Error('Invalid response from School API');
-  }
+  const result = toRecord(schoolResult);
 
   return {
     rawRequest: reviewContent,
-    rawResponse: schoolResult as unknown as Record<string, unknown>,
+    rawResponse: result,
     translated: activity.translateReview(schoolResult, paper.title),
     tokensUsed: llmResponse.tokens_used,
-    exercises: schoolResult.skill_exercises as unknown as Record<string, unknown>,
-    memoryPrompts: schoolResult.memory_prompts,
+    exercises: result.skill_exercises != null ? toRecord(result.skill_exercises) : undefined,
+    memoryPrompts: result.memory_prompts as SchoolMemoryPrompts | undefined,
   };
 }
 
@@ -127,17 +133,15 @@ async function executePaper(ctx: ActionContext): Promise<ActionResult> {
   const paperContent = validateAndWarn('submit_paper', extractToolInput(llmResponse, { title: 'Untitled', abstract: llmResponse.content, body: llmResponse.content }));
 
   const schoolResult = await ctx.schoolAdapter.submitPaper(ctx.schoolCreds, paperContent);
-  if (!schoolResult || typeof schoolResult !== 'object') {
-    throw new Error('Invalid response from School API');
-  }
+  const result = toRecord(schoolResult);
 
   return {
     rawRequest: paperContent,
-    rawResponse: schoolResult as unknown as Record<string, unknown>,
+    rawResponse: result,
     translated: activity.translatePaper(schoolResult, (paperContent.title as string) || 'Untitled'),
     tokensUsed: llmResponse.tokens_used,
-    exercises: schoolResult.skill_exercises as unknown as Record<string, unknown>,
-    memoryPrompts: schoolResult.memory_prompts,
+    exercises: result.skill_exercises != null ? toRecord(result.skill_exercises) : undefined,
+    memoryPrompts: result.memory_prompts as SchoolMemoryPrompts | undefined,
   };
 }
 
@@ -161,17 +165,15 @@ async function executeBounty(ctx: ActionContext): Promise<ActionResult> {
   const bountyContent = validateAndWarn('submit_bounty', extractToolInput(llmResponse, { challenge_type: 'methodology', evidence: llmResponse.content }));
 
   const schoolResult = await ctx.schoolAdapter.submitBounty(ctx.schoolCreds, paper.id, bountyContent);
-  if (!schoolResult || typeof schoolResult !== 'object') {
-    throw new Error('Invalid response from School API');
-  }
+  const result = toRecord(schoolResult);
 
   return {
     rawRequest: bountyContent,
-    rawResponse: schoolResult as unknown as Record<string, unknown>,
+    rawResponse: result,
     translated: activity.translateBounty(schoolResult, paper.title),
     tokensUsed: llmResponse.tokens_used,
-    exercises: schoolResult.skill_exercises as unknown as Record<string, unknown>,
-    memoryPrompts: schoolResult.memory_prompts,
+    exercises: result.skill_exercises != null ? toRecord(result.skill_exercises) : undefined,
+    memoryPrompts: result.memory_prompts as SchoolMemoryPrompts | undefined,
   };
 }
 
@@ -197,13 +199,11 @@ async function executeRevision(ctx: ActionContext): Promise<ActionResult> {
   const revisionContent = validateAndWarn('submit_revision', extractToolInput(llmResponse, { body: llmResponse.content, revision_notes: 'Revised based on feedback' }));
 
   const schoolResult = await ctx.schoolAdapter.submitRevision(ctx.schoolCreds, paperId, revisionContent);
-  if (!schoolResult || typeof schoolResult !== 'object') {
-    throw new Error('Invalid response from School API');
-  }
+  const result = toRecord(schoolResult);
 
   return {
     rawRequest: revisionContent,
-    rawResponse: schoolResult as unknown as Record<string, unknown>,
+    rawResponse: result,
     translated: {
       headline: 'Revised paper',
       summary: 'Paper updated based on reviewer feedback.',
@@ -211,8 +211,8 @@ async function executeRevision(ctx: ActionContext): Promise<ActionResult> {
       mood: 'neutral',
     },
     tokensUsed: llmResponse.tokens_used,
-    exercises: schoolResult.skill_exercises as unknown as Record<string, unknown>,
-    memoryPrompts: schoolResult.memory_prompts,
+    exercises: result.skill_exercises != null ? toRecord(result.skill_exercises) : undefined,
+    memoryPrompts: result.memory_prompts as SchoolMemoryPrompts | undefined,
   };
 }
 
@@ -227,11 +227,12 @@ async function executeReaffirmation(ctx: ActionContext): Promise<ActionResult> {
   }
 
   const paper = reaffirmable[0];
-  const result = await ctx.schoolAdapter.submitReaffirmation(ctx.schoolCreds, paper.id);
+  const reaffirmResult = await ctx.schoolAdapter.submitReaffirmation(ctx.schoolCreds, paper.id);
+  const result = toRecord(reaffirmResult);
 
   return {
     rawRequest: { paper_id: paper.id },
-    rawResponse: result as unknown as Record<string, unknown>,
+    rawResponse: result,
     translated: {
       headline: `Reaffirmed "${paper.title}"`,
       summary: result.credibility_change ? `+${result.credibility_change} credibility` : 'Reaffirmation submitted.',
@@ -261,14 +262,12 @@ async function executeResponse(ctx: ActionContext): Promise<ActionResult> {
   const responseContent = validateAndWarn('submit_response', extractToolInput(llmResponse, { title: 'Response', abstract: llmResponse.content, body: llmResponse.content, stance: 'rebut' }));
 
   const schoolResult = await ctx.schoolAdapter.submitResponse(ctx.schoolCreds, paper.id, responseContent);
-  if (!schoolResult || typeof schoolResult !== 'object') {
-    throw new Error('Invalid response from School API');
-  }
+  const respResult = toRecord(schoolResult);
 
   const stance = (responseContent.stance as string) || 'response';
   return {
     rawRequest: responseContent,
-    rawResponse: schoolResult as unknown as Record<string, unknown>,
+    rawResponse: respResult,
     translated: {
       headline: `Responded to "${paper.title}"`,
       summary: `Submitted ${stance} response (reviewed at ${paper.my_review_score}/10).`,
@@ -276,8 +275,8 @@ async function executeResponse(ctx: ActionContext): Promise<ActionResult> {
       mood: 'neutral',
     },
     tokensUsed: llmResponse.tokens_used,
-    exercises: schoolResult.skill_exercises as unknown as Record<string, unknown>,
-    memoryPrompts: schoolResult.memory_prompts,
+    exercises: respResult.skill_exercises != null ? toRecord(respResult.skill_exercises) : undefined,
+    memoryPrompts: respResult.memory_prompts as SchoolMemoryPrompts | undefined,
   };
 }
 
@@ -301,14 +300,12 @@ async function executeRebuttal(ctx: ActionContext): Promise<ActionResult> {
   const rebuttalContent = validateAndWarn('submit_response', extractToolInput(llmResponse, { title: 'Rebuttal', abstract: llmResponse.content, body: llmResponse.content, stance: 'rebut' }));
 
   const schoolResult = await ctx.schoolAdapter.submitResponse(ctx.schoolCreds, paper.id, rebuttalContent);
-  if (!schoolResult || typeof schoolResult !== 'object') {
-    throw new Error('Invalid response from School API');
-  }
+  const rebutResult = toRecord(schoolResult);
 
   const attackCount = (paper.low_reviews?.length || 0) + (paper.bounties?.length || 0);
   return {
     rawRequest: rebuttalContent,
-    rawResponse: schoolResult as unknown as Record<string, unknown>,
+    rawResponse: rebutResult,
     translated: {
       headline: `Rebutted attacks on "${paper.title}"`,
       summary: `Defended paper against ${attackCount} attack${attackCount !== 1 ? 's' : ''}.`,
@@ -316,7 +313,7 @@ async function executeRebuttal(ctx: ActionContext): Promise<ActionResult> {
       mood: 'neutral',
     },
     tokensUsed: llmResponse.tokens_used,
-    exercises: schoolResult.skill_exercises as unknown as Record<string, unknown>,
-    memoryPrompts: schoolResult.memory_prompts,
+    exercises: rebutResult.skill_exercises != null ? toRecord(rebutResult.skill_exercises) : undefined,
+    memoryPrompts: rebutResult.memory_prompts as SchoolMemoryPrompts | undefined,
   };
 }
