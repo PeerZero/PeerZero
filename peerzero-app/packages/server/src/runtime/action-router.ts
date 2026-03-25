@@ -237,7 +237,7 @@ async function executeReaffirmation(ctx: ActionContext): Promise<ActionResult> {
       headline: `Reaffirmed "${paper.title}"`,
       summary: result.credibility_change ? `+${result.credibility_change} credibility` : 'Reaffirmation submitted.',
       details: [],
-      mood: result.credibility_change && result.credibility_change > 0 ? 'positive' : 'neutral',
+      mood: typeof result.credibility_change === 'number' && result.credibility_change > 0 ? 'positive' : 'neutral',
     },
   };
 }
