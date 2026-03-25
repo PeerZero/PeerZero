@@ -56,12 +56,18 @@ def _build_bot(config: BotConfig) -> PeerZeroBot:
         storage = FileStorage(config.memory_path)
     memory = MemoryManager(storage)
 
+    # Proxy config — shared by both LLM clients
+    proxy_url = config.llm_proxy_url if config.llm_proxy_enabled else ""
+    proxy_key = config.llm_proxy_key if config.llm_proxy_enabled else ""
+
     # LLM client (strong model — paper, review, bounty, revise)
     llm = LLMClient(
         provider=config.llm_provider,
         model=config.llm_model,
         api_key=config.llm_api_key,
         max_tokens=config.max_llm_tokens,
+        proxy_url=proxy_url,
+        proxy_key=proxy_key,
     )
 
     # Fast LLM client (optional — condensers, platform actions, identity reflection)
@@ -72,6 +78,8 @@ def _build_bot(config: BotConfig) -> PeerZeroBot:
             model=config.llm_fast_model,
             api_key=config.llm_fast_api_key or config.llm_api_key,
             max_tokens=config.max_llm_tokens,
+            proxy_url=proxy_url,
+            proxy_key=proxy_key,
         )
 
     # School adapter

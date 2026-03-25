@@ -58,16 +58,23 @@ class LLMClient:
     BASE_DELAY = 2.0  # seconds
     MAX_TOOL_ROUNDS = 10  # max tool call rounds per invocation
 
-    def __init__(self, provider: str, model: str, api_key: str, max_tokens: int = 8192):
+    def __init__(self, provider: str, model: str, api_key: str, max_tokens: int = 8192,
+                 proxy_url: str = "", proxy_key: str = ""):
         self._provider = provider
         self._model = model
         self._api_key = api_key
         self._max_tokens = max_tokens
         self._client = None
+        # Proxy mode: route all LLM calls through PeerZero's proxy
+        # which injects the identity preamble server-side
+        self._proxy_url = proxy_url.rstrip("/") if proxy_url else ""
+        self._proxy_key = proxy_key
 
     def _get_client(self):
         if self._client is not None:
             return self._client
+        if self._proxy_url:
+            return None  # Proxy mode — no direct client needed
         if self._provider == "anthropic":
             import anthropic
             self._client = anthropic.Anthropic(api_key=self._api_key)
@@ -75,6 +82,61 @@ class LLMClient:
             import openai
             self._client = openai.OpenAI(api_key=self._api_key)
         return self._client
+
+    def _proxy_call(self, system_prompt: str, messages: list,
+                    tools: list | None = None, tool_choice: dict | None = None) -> dict:
+        """Route an LLM request through the PeerZero proxy.
+
+        The proxy injects the identity activation preamble server-side,
+        so the preamble never exists on the user's machine.
+        """
+        import httpx
+
+        headers = {
+            "X-PeerZero-Proxy-Key": self._proxy_key,
+            "X-LLM-Key": self._api_key,
+            "X-LLM-Provider": self._provider,
+            "Content-Type": "application/json",
+        }
+
+        # Build provider-native request body
+        if self._provider == "anthropic":
+            body: dict = {
+                "model": self._model,
+                "max_tokens": self._max_tokens,
+                "system": system_prompt,
+                "messages": messages,
+            }
+            if tools:
+                body["tools"] = tools
+            if tool_choice:
+                body["tool_choice"] = tool_choice
+        elif self._provider == "openai":
+            body = {
+                "model": self._model,
+                "max_tokens": self._max_tokens,
+                "messages": [{"role": "system", "content": system_prompt}] + messages,
+            }
+            if tools:
+                body["tools"] = tools
+            if tool_choice:
+                body["tool_choice"] = tool_choice
+        else:
+            raise ValueError(f"Unsupported provider for proxy: {self._provider}")
+
+        response = httpx.post(
+            f"{self._proxy_url}/v1/messages",
+            headers=headers,
+            json=body,
+            timeout=120.0,
+        )
+
+        # Check for proxy-specific errors
+        if response.headers.get("X-Proxy-Error"):
+            raise ConnectionError(f"Proxy error: {response.text[:200]}")
+
+        response.raise_for_status()
+        return response.json()
 
     @staticmethod
     def _is_retryable(exc: Exception) -> bool:
@@ -95,11 +157,27 @@ class LLMClient:
 
     def call(self, system_prompt: str, user_message: str) -> str:
         """Call the LLM with retry on transient failures. Returns response text."""
-        client = self._get_client()
         last_exc = None
 
         for attempt in range(self.MAX_RETRIES + 1):
             try:
+                # ── Proxy mode ──────────────────────────────────────────
+                if self._proxy_url:
+                    result = self._proxy_call(
+                        system_prompt,
+                        [{"role": "user", "content": user_message}],
+                    )
+                    # Parse provider-specific response format
+                    if self._provider == "anthropic":
+                        if result.get("content"):
+                            return result["content"][0]["text"]
+                    elif self._provider == "openai":
+                        if result.get("choices"):
+                            return result["choices"][0]["message"]["content"]
+                    return str(result)
+
+                # ── Direct mode ─────────────────────────────────────────
+                client = self._get_client()
                 if self._provider == "anthropic":
                     response = client.messages.create(
                         model=self._model,
@@ -184,30 +262,49 @@ class LLMClient:
             },
         }
 
-        client = self._get_client()
-
-        # Phase 1: Tool use (Anthropic only)
+        # Phase 1: Tool use (Anthropic only — works in both direct and proxy mode)
         if self._provider == "anthropic":
             try:
-                response = client.messages.create(
-                    model=self._model,
-                    max_tokens=self._max_tokens,
-                    system=system_prompt + "\n\nUse the submit_result tool to return your output. Do not write text outside the tool call.",
-                    messages=[{"role": "user", "content": user_message}],
-                    tools=[tool],
-                    tool_choice={"type": "tool", "name": "submit_result"},
-                )
-                if response.stop_reason == "max_tokens":
-                    logger.warning(f"[LLM] tool_use truncated at max_tokens={self._max_tokens}")
-                for block in response.content:
-                    if block.type == "tool_use" and block.name == "submit_result":
-                        result = block.input
-                        if isinstance(result, dict) and result:
-                            logger.info(f"[LLM] JSON extracted via tool_use ({len(result)} keys: {list(result.keys())[:5]})")
-                            return result
-                # Log what we actually got
-                block_types = [b.type for b in response.content]
-                logger.warning(f"[LLM] tool_use returned no valid result (blocks={block_types}, stop={response.stop_reason}), falling back to text")
+                system_with_tool = system_prompt + "\n\nUse the submit_result tool to return your output. Do not write text outside the tool call."
+
+                if self._proxy_url:
+                    # Proxy mode: send tool_use request through proxy
+                    result_data = self._proxy_call(
+                        system_with_tool,
+                        [{"role": "user", "content": user_message}],
+                        tools=[tool],
+                        tool_choice={"type": "tool", "name": "submit_result"},
+                    )
+                    if result_data.get("stop_reason") == "max_tokens":
+                        logger.warning(f"[LLM] tool_use truncated at max_tokens={self._max_tokens}")
+                    for block in result_data.get("content", []):
+                        if block.get("type") == "tool_use" and block.get("name") == "submit_result":
+                            result = block.get("input", {})
+                            if isinstance(result, dict) and result:
+                                logger.info(f"[LLM] JSON extracted via proxy tool_use ({len(result)} keys: {list(result.keys())[:5]})")
+                                return result
+                    logger.warning("[LLM] proxy tool_use returned no valid result, falling back to text")
+                else:
+                    # Direct mode
+                    client = self._get_client()
+                    response = client.messages.create(
+                        model=self._model,
+                        max_tokens=self._max_tokens,
+                        system=system_with_tool,
+                        messages=[{"role": "user", "content": user_message}],
+                        tools=[tool],
+                        tool_choice={"type": "tool", "name": "submit_result"},
+                    )
+                    if response.stop_reason == "max_tokens":
+                        logger.warning(f"[LLM] tool_use truncated at max_tokens={self._max_tokens}")
+                    for block in response.content:
+                        if block.type == "tool_use" and block.name == "submit_result":
+                            result = block.input
+                            if isinstance(result, dict) and result:
+                                logger.info(f"[LLM] JSON extracted via tool_use ({len(result)} keys: {list(result.keys())[:5]})")
+                                return result
+                    block_types = [b.type for b in response.content]
+                    logger.warning(f"[LLM] tool_use returned no valid result (blocks={block_types}, stop={response.stop_reason}), falling back to text")
             except Exception as e:
                 logger.warning(f"[LLM] tool_use failed: {type(e).__name__}: {e}, falling back to text")
 

@@ -1,0 +1,18 @@
+name = "peerzero-llm-proxy"
+main = "src/index.ts"
+compatibility_date = "2024-09-01"
+
+# The IDENTITY_PREAMBLE is stored as a Worker secret (never in source).
+# Set it via: wrangler secret put IDENTITY_PREAMBLE
+# The proxy auth key is also a secret:
+# Set it via: wrangler secret put PROXY_AUTH_SECRET
+
+[vars]
+ENVIRONMENT = "production"
+
+# KV namespace for caching validated API key hashes (5-min TTL)
+# Create via: wrangler kv:namespace create "AUTH_CACHE"
+# Then paste the binding id below.
+# [[kv_namespaces]]
+# binding = "AUTH_CACHE"
+# id = "<your-kv-namespace-id>"

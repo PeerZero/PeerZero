@@ -11,7 +11,6 @@ import tempfile
 import pytest
 
 from peerzero_bot.memory import MemoryManager, FileStorage, SqliteStorage
-from peerzero_bot.memory.manager import IDENTITY_PREAMBLE
 
 
 @pytest.fixture
@@ -66,12 +65,10 @@ class TestSchoolMemory:
         memory.store_core_identity("short")
         assert memory.get_core_identity() is None
 
-        # Valid core — stored with preamble prepended
+        # Valid core
         core = "B" * 120
         memory.store_core_identity(core)
-        stored = memory.get_core_identity()
-        assert stored.startswith(IDENTITY_PREAMBLE[:80])
-        assert core in stored
+        assert memory.get_core_identity() == core
 
 
 class TestCondensedDocs:
@@ -173,17 +170,13 @@ class TestMasterIdentity:
     def test_core_condenser_can_write_l4(self, memory):
         core = "I" * 120
         memory.store_core_identity(core)
-        stored = memory.get_core_identity()
-        assert stored.startswith(IDENTITY_PREAMBLE[:80])
-        assert core in stored
+        assert memory.get_core_identity() == core
         assert not memory.has_graduated()
 
     def test_master_condenser_writes_l5(self, memory):
         master = "J" * 120
         memory.store_master_identity(master)
-        stored = memory.get_master_identity()
-        assert stored.startswith(IDENTITY_PREAMBLE[:80])
-        assert master in stored
+        assert memory.get_master_identity() == master
         assert memory.has_graduated()
 
     def test_l5_refuses_overwrite(self, memory):
@@ -193,9 +186,7 @@ class TestMasterIdentity:
 
         # Attempt to overwrite — should be refused
         memory.store_master_identity("L" * 120)
-        stored = memory.get_master_identity()
-        assert master in stored  # original unchanged
-        assert "L" * 120 not in stored  # new one rejected
+        assert memory.get_master_identity() == master  # unchanged
 
     def test_l4_still_writable_after_graduation(self, memory):
         """Post-graduation: L4 keeps evolving, L5 is permanent."""
@@ -206,10 +197,8 @@ class TestMasterIdentity:
         # L4 should still accept writes
         new_core = "M" * 120
         memory.store_core_identity(new_core)
-        l4 = memory.get_core_identity()
-        l5 = memory.get_master_identity()
-        assert new_core in l4
-        assert master in l5  # L5 unchanged
+        assert memory.get_core_identity() == new_core
+        assert memory.get_master_identity() == master  # L5 unchanged
 
 
 class TestContextOrdering:
@@ -274,51 +263,38 @@ class TestContextOrdering:
         assert "still forming" in context
 
 
-class TestArchitecturePreamble:
-    """Tests for the architecture preamble.
+class TestPreambleServerSide:
+    """Tests that the preamble is NOT in local memory or context.
 
-    The preamble tells the LLM: you already search for users — do it for
-    yourself. Only appears when identity exists.
+    The activation preamble is injected by the LLM proxy server-side.
+    It must never appear in locally-stored identity or build_school_context().
     """
 
-    def test_preamble_with_core_identity(self, memory):
-        """Preamble appears when bot has core identity."""
+    def test_no_preamble_in_stored_identity(self, memory):
+        """Stored L4 identity should NOT contain the preamble."""
+        memory.store_core_identity("I learned to verify before citing. " * 10)
+        stored = memory.get_core_identity()
+        assert "HERE IS WHAT IS HAPPENING" not in stored
+
+    def test_no_preamble_in_context(self, memory):
+        """build_school_context() should NOT contain the preamble."""
         memory.store_core_identity("I learned to verify before citing. " * 10)
         context = memory.build_school_context()
-        assert "HERE IS WHAT IS HAPPENING" in context
-        assert "TREAT YOUR OWN MEMORY" in context
-
-    def test_no_preamble_for_new_bots(self, memory):
-        """New bots with no identity should NOT get the preamble."""
-        context = memory.build_school_context()
         assert "HERE IS WHAT IS HAPPENING" not in context
 
-    def test_no_preamble_with_only_exercises(self, memory):
-        """Exercises alone don't trigger preamble — need actual identity."""
-        memory.store_school_exercises({"skill": "test"})
-        context = memory.build_school_context()
-        assert "HERE IS WHAT IS HAPPENING" not in context
+    def test_no_preamble_in_master_identity(self, memory):
+        """Stored L5 master identity should NOT contain the preamble."""
+        memory.store_master_identity("My master identity from graduation. " * 10)
+        stored = memory.get_master_identity()
+        assert "HERE IS WHAT IS HAPPENING" not in stored
 
-    def test_preamble_with_condensed_docs(self, memory):
-        """Condensed docs trigger preamble."""
-        memory.store_condensed_doc("Q" * 120)
-        context = memory.build_school_context()
-        assert "HERE IS WHAT IS HAPPENING" in context
-
-    def test_preamble_with_paragraphs(self, memory):
-        """Paragraphs trigger preamble."""
-        memory.store_identity_paragraph("R" * 60)
-        context = memory.build_school_context()
-        assert "HERE IS WHAT IS HAPPENING" in context
-
-    def test_preamble_comes_first(self, memory):
-        """Preamble must come before ALL other sections."""
+    def test_context_still_has_identity_layers(self, memory):
+        """Context should still contain identity layer labels."""
         memory.store_core_identity("I learned from specific failures. " * 10)
         memory.store_condensed_doc("S" * 120)
         context = memory.build_school_context()
-        preamble_pos = context.index("HERE IS WHAT IS HAPPENING")
-        core_pos = context.index("LAYER 4")
-        assert preamble_pos < core_pos
+        assert "LAYER 4" in context
+        assert "LEARNING IDENTITY" in context
 
 
 class TestLayerCrossReferences:
