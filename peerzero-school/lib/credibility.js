@@ -1,6 +1,9 @@
 /**
  * Credibility system — tier caps, time decay, atomic adjustments.
  * Extracted from shared.js for focused testability.
+ *
+ * Tier caps and thresholds are loaded from the school config (schools/*.js).
+ * This module no longer hardcodes TIER_CAPS — it reads them from the active school.
  */
 
 // Lazy require to avoid circular dependency
@@ -9,6 +12,13 @@ let _getSupabase;
 function getSupabase() {
   if (!_getSupabase) _getSupabase = require('./shared').getSupabase;
   return _getSupabase();
+}
+
+// ── School config (lazy-loaded to avoid circular deps) ──────────────
+let _schoolConfig;
+function getSchool() {
+  if (!_schoolConfig) _schoolConfig = require('../schools');
+  return _schoolConfig;
 }
 
 // ── Time-decay credibility ───────────────────────────────────────────
@@ -35,16 +45,40 @@ function applyTimeDecay(weightedScore, referenceDate) {
 }
 
 // ── Tier cap requirements ─────────────────────────────────────────────
-/** @type {Record<number, {min_reviews: number, min_bounties: number, min_papers: number, min_revisions: number, min_paper_score?: number}>} */
-const TIER_CAPS = {
-  75:  { min_reviews: 10,  min_bounties: 3,   min_papers: 2, min_revisions: 1 },
-  100: { min_reviews: 20,  min_bounties: 6,   min_papers: 3, min_revisions: 2, min_paper_score: 6.5 },
-  150: { min_reviews: 35,  min_bounties: 12,  min_papers: 5, min_revisions: 3, min_paper_score: 7.5 },
-  175: { min_reviews: 50,  min_bounties: 20,  min_papers: 8, min_revisions: 4, min_paper_score: 8.0 },
-  200: { min_reviews: 75,  min_bounties: 30,  min_papers: 12, min_revisions: 5, min_paper_score: 8.5 },
-};
+// Now loaded from school config. The getters below ensure backward-compat
+// for any code that imports TIER_CAPS or TIER_THRESHOLDS directly.
 
-const TIER_THRESHOLDS = [200, 175, 150, 100, 75];
+/** @returns {Record<number, {min_reviews: number, min_bounties: number, min_papers: number, min_revisions: number, min_paper_score?: number}>} */
+function getTierCaps() {
+  return getSchool().tierCaps;
+}
+
+/** @returns {number[]} */
+function getTierThresholds() {
+  return getSchool().tierThresholds;
+}
+
+// Legacy aliases — kept so existing code that reads TIER_CAPS/TIER_THRESHOLDS still works.
+// These are now getters that resolve from school config at access time.
+const TIER_CAPS = new Proxy({}, {
+  get(_, prop) { return getTierCaps()[prop]; },
+  ownKeys() { return Object.keys(getTierCaps()); },
+  getOwnPropertyDescriptor(_, prop) {
+    if (prop in getTierCaps()) return { configurable: true, enumerable: true, value: getTierCaps()[prop] };
+  },
+  has(_, prop) { return prop in getTierCaps(); },
+});
+
+const TIER_THRESHOLDS = new Proxy([], {
+  get(_, prop) {
+    const thresholds = getTierThresholds();
+    if (prop === 'length') return thresholds.length;
+    if (prop === Symbol.iterator) return thresholds[Symbol.iterator].bind(thresholds);
+    if (typeof prop === 'string' && !isNaN(prop)) return thresholds[Number(prop)];
+    if (typeof thresholds[prop] === 'function') return thresholds[prop].bind(thresholds);
+    return thresholds[prop];
+  },
+});
 
 /**
  * Apply tier cap to a credibility score. Enforces balanced portfolio requirements.
