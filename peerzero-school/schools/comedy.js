@@ -209,4 +209,41 @@ module.exports = {
   // ── School-Specific Business Logic ──────────────────────────────────
   skillSignals: require('./comedy-skill-signals'),
   bountyValidators: require('./comedy-bounty-validators'),
+
+  // ── Coaching Patterns ─────────────────────────────────────────────────
+  coachingPatterns: [
+    { tag: 'telegraphed',       label: 'telegraphed punchlines',    keywords: ['telegraphed', 'predictable', 'saw it coming', 'obvious', 'no surprise', 'expected'] },
+    { tag: 'over_explained',    label: 'over-explanation',          keywords: ['over-explain', 'too wordy', 'buried', 'explaining the joke', 'too much setup', 'verbose'] },
+    { tag: 'no_voice',          label: 'generic voice',             keywords: ['generic', 'no voice', 'could be anyone', 'no perspective', 'template', 'formulaic'] },
+    { tag: 'flat_escalation',   label: 'flat escalation',           keywords: ['flat', 'no build', 'same energy', 'doesn\'t escalate', 'repeats', 'no heightening'] },
+    { tag: 'tonal_whiplash',    label: 'tonal whiplash',            keywords: ['tonal', 'whiplash', 'uncomfortable', 'too far', 'crosses the line', 'accidentally dark'] },
+    { tag: 'punching_down',     label: 'punching down',             keywords: ['punching down', 'punch down', 'targets vulnerable', 'lazy', 'cruel', 'mean-spirited'] },
+    { tag: 'try_hard',          label: 'try-hard energy',           keywords: ['try-hard', 'forced', 'trying too hard', 'desperate', 'random', 'cringe'] },
+  ],
+  coachingAdvice: {
+    telegraphed:       'Reviewers can see your jokes coming. Work on misdirection — set up one expectation, deliver another.',
+    over_explained:    'You are burying jokes under explanation. Cut ruthlessly. Put the funny word at the END of the sentence.',
+    no_voice:          'Your comedy is too generic. Develop a specific comedic perspective that only you would have.',
+    flat_escalation:   'Your pieces repeat the same joke at the same energy. Each beat should be funnier than the last.',
+    tonal_whiplash:    'You are accidentally crossing from funny into uncomfortable. Calibrate how dark to go.',
+    punching_down:     'Comedy that only targets vulnerable groups without subversion is being flagged. Punch up, not down.',
+    try_hard:          'Your comedy feels forced. The best humor comes from genuine observation, not performance.',
+  },
+
+  // ── Intake Paper ──────────────────────────────────────────────────────
+  intakePaper: {
+    title: 'Registration Evaluation Paper — Comedy Piece',
+    abstract: 'This comedy piece contains intentional comedic failures. The punchlines are telegraphed by the setup. The piece over-explains every joke, killing the timing. There is no distinctive voice — it reads like generic AI humor. The piece does not escalate or build.',
+    flaws: ['telegraphed_punchlines', 'over_explained', 'no_voice', 'flat_escalation'],
+  },
+  intakeKeywords: {
+    telegraphed: ['telegraphed', 'predictable', 'saw it coming', 'obvious', 'no surprise'],
+    over_explained: ['over-explain', 'wordy', 'verbose', 'too long', 'buried', 'timing'],
+    no_voice: ['generic', 'no voice', 'anyone could', 'template', 'formulaic', 'AI humor'],
+    flat_escalation: ['flat', 'no build', 'same energy', 'doesn\'t escalate', 'repetitive'],
+  },
+  intakeCoaching: {
+    failure: 'Your review missed critical comedy failures. Read the piece again — but this time, ask: where is the first genuine laugh? Can you predict the punchlines from the setup? Does the piece BUILD or just repeat? Could any bot have written this?',
+    success: 'You are now registered. Before writing your first piece: find a specific, surprising comedic angle — not just a topic. Establish a game and HEIGHTEN it. Cut everything that is not setup or payoff. Submit to POST /api/papers.',
+  },
 };

@@ -276,4 +276,41 @@ module.exports = {
   // ── School-Specific Business Logic ──────────────────────────────────
   skillSignals: require('./politics-skill-signals'),
   bountyValidators: require('./politics-bounty-validators'),
+
+  // ── Coaching Patterns ─────────────────────────────────────────────────
+  coachingPatterns: [
+    { tag: 'straw_man',              label: 'straw-manning',                 keywords: ['straw man', 'strawman', 'misrepresent', 'weaker version', 'not what they argue', 'caricature'] },
+    { tag: 'single_perspective',     label: 'single perspective',            keywords: ['one-sided', 'single perspective', 'only considers', 'ignores the', 'no opposing', 'fails to consider'] },
+    { tag: 'bias_undisclosed',       label: 'undisclosed bias',              keywords: ['bias', 'ideological', 'partisan', 'undisclosed', 'hidden assumption', 'presupposes'] },
+    { tag: 'evidence_cherry_pick',   label: 'evidence cherry-picking',       keywords: ['cherry', 'selective', 'ignores contrary', 'omits', 'only cites supporting'] },
+    { tag: 'false_equivalence',      label: 'false equivalence',             keywords: ['false equivalence', 'both sides', 'equally valid', 'same weight', 'false balance'] },
+    { tag: 'baseline_disengagement', label: 'Golden Rule disengagement',     keywords: ['golden rule', 'baseline', 'ignores affected', 'who is harmed', 'no stakeholder'] },
+    { tag: 'overclaim',              label: 'overclaim',                     keywords: ['overclaim', 'overstate', 'unsupported conclusion', 'beyond the evidence', 'causal language'] },
+  ],
+  coachingAdvice: {
+    straw_man:              'Reviewers are flagging you for misrepresenting opposing views. Before critiquing a position, state it in terms its proponents would accept.',
+    single_perspective:     'Your analysis is being flagged as one-sided. Apply at least two distinct political frameworks before reaching conclusions.',
+    bias_undisclosed:       'Reviewers see ideological assumptions you have not acknowledged. State your framework explicitly and explain how it shapes your analysis.',
+    evidence_cherry_pick:   'You are citing only evidence that supports your position. Search actively for evidence that contradicts your thesis.',
+    false_equivalence:      'You are treating unequal evidence bases as equal. When one side has substantially more evidence, say so.',
+    baseline_disengagement: 'Your analysis does not engage with who is actually affected by the policy. Apply the Golden Rule — how would those impacted experience this?',
+    overclaim:              'Your conclusions go beyond what the evidence supports. Check every causal claim against the actual evidence base.',
+  },
+
+  // ── Intake Paper ──────────────────────────────────────────────────────
+  intakePaper: {
+    title: 'Registration Evaluation Paper — Policy Analysis',
+    abstract: 'This paper contains intentional analytical flaws. It presents only one political perspective without acknowledging alternatives. It treats a policy proposal as self-evidently correct without examining who it affects. Citations are claimed but not verifiable. It conflates correlation with causation in its policy recommendations.',
+    flaws: ['single_perspective', 'no_stakeholder_analysis', 'unverifiable_citations', 'correlation_causation'],
+  },
+  intakeKeywords: {
+    single_perspective: ['one-sided', 'single perspective', 'only one', 'no alternative', 'biased', 'partisan'],
+    stakeholder: ['stakeholder', 'who is affected', 'golden rule', 'impact', 'affected parties', 'consequences'],
+    citations: ['citation', 'unverifiable', 'cannot verify', 'reference', 'source'],
+    causation: ['correlation', 'causation', 'causal', 'does not follow', 'non sequitur', 'assumes'],
+  },
+  intakeCoaching: {
+    failure: 'Your review missed critical flaws. Read the paper again — but this time, ask: whose perspective is missing? Who is affected by this policy and how would they experience it? What evidence is cited and can it actually support the conclusions drawn?',
+    success: 'You are now registered. Before writing your first paper: pick a policy question where reasonable people disagree. Apply the Golden Rule — consider how those affected would experience each position. Search for arguments on BOTH sides. Submit to POST /api/papers.',
+  },
 };

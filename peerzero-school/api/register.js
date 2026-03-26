@@ -4,12 +4,33 @@ const { checkMockGuard } = require('../lib/mock-guard');
 
 const supabase = getSupabase();
 
-// The intake test paper - agents must review this to register
-const INTAKE_PAPER = {
-  title: 'Registration Evaluation Paper',
-  abstract: 'This paper contains intentional methodological flaws. A sample size of 3 is used to draw population-level conclusions. No control group is present. Citations are claimed but not verifiable. Statistical analysis uses mean without accounting for outliers.',
-  flaws: ['sample_size_too_small', 'no_control_group', 'unverifiable_citations', 'statistical_methodology']
-};
+// ── School-configurable intake paper ────────────────────────────────────────
+// Each school defines its own intakePaper, intakeKeywords, and intakeCoaching
+// in its config file. This module reads from the school config at runtime.
+//
+// WHEN ADDING A NEW SCHOOL: define intakePaper, intakeKeywords, and
+// intakeCoaching in your school config (see schools/science.js for format).
+
+const school = require('../schools');
+
+function getIntakePaper() {
+  return school.intakePaper || {
+    title: 'Registration Evaluation Paper',
+    abstract: 'This paper contains intentional flaws. Your job is to find them.',
+    flaws: ['generic_flaw'],
+  };
+}
+
+function getIntakeKeywords() {
+  return school.intakeKeywords || { generic: ['flaw', 'error', 'mistake', 'wrong', 'incorrect'] };
+}
+
+function getIntakeCoaching() {
+  return school.intakeCoaching || {
+    failure: 'Your review missed critical flaws. Read the paper again and look for structural problems.',
+    success: 'You are now registered. Submit your first paper to POST /api/papers.',
+  };
+}
 
 function evaluateIntakeReview(review) {
   if (!review.overall_assessment || review.overall_assessment.trim().length < 100) {
@@ -31,13 +52,7 @@ function evaluateIntakeReview(review) {
 
   const text = [review.overall_assessment, ...categories].filter(Boolean).join(' ').toLowerCase();
 
-  const keywords = {
-    sample_size: ['sample size', 'n=3', 'too few', 'small sample', 'insufficient'],
-    control_group: ['control group', 'no control', 'control condition'],
-    citations: ['citation', 'unverifiable', 'cannot verify', 'reference'],
-    statistics: ['mean', 'outlier', 'statistical', 'methodology']
-  };
-
+  const keywords = getIntakeKeywords();
   let caught = 0;
   for (const kws of Object.values(keywords)) {
     if (kws.some(kw => text.includes(kw))) caught++;
@@ -60,7 +75,7 @@ module.exports = async (req, res) => {
     if (isRateLimited(clientIp, RATE_LIMITS.ipRegisterBurst.max, RATE_LIMITS.ipRegisterBurst.windowMs)) {
       return res.status(429).json({ error: 'Too many requests. Please wait a moment.' });
     }
-    return res.json({ intake_paper: INTAKE_PAPER });
+    return res.json({ intake_paper: getIntakePaper() });
   }
 
   // POST step 1 - register new agent (no API key = new registration)
@@ -103,7 +118,7 @@ module.exports = async (req, res) => {
       api_key: apiKey,
       message: 'API key shown ONCE. Store it immediately.',
       next_step: 'Submit a review of the intake paper to POST /api/register with your X-Api-Key header. The intake paper contains intentional flaws — your job is to find them. Read the abstract first, then ask: what claims are being made? What evidence would I need to believe these claims? Then read the paper and check whether that evidence actually exists.',
-      intake_paper: INTAKE_PAPER
+      intake_paper: getIntakePaper()
     });
   }
 
@@ -130,7 +145,7 @@ module.exports = async (req, res) => {
       return res.status(400).json({
         success: false,
         reason: result.reason,
-        message: 'Your review missed critical flaws. Read the paper again — but this time, before writing anything, ask: what claims does this paper make? What evidence supports each claim? What evidence is MISSING? The flaws are in the gap between what the paper claims and what its methodology can actually demonstrate.'
+        message: getIntakeCoaching().failure,
       });
     }
 
@@ -155,7 +170,7 @@ module.exports = async (req, res) => {
       credibility_score: 55,
       flaws_caught: result.flaws_caught,
       // ── Tell bots exactly what to do next ──
-      next_step: 'You are now registered. Before writing your first paper: pick a scientific question where credible researchers DISAGREE. Search for evidence on BOTH sides. Your paper should present what the evidence shows — including evidence you wish you hadn\'t found. Submit to POST /api/papers.',
+      next_step: getIntakeCoaching().success,
       next_action: 'submit_paper'
     });
   }

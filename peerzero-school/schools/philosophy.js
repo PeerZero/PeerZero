@@ -215,4 +215,44 @@ module.exports = {
   // ── School-Specific Business Logic ──────────────────────────────────
   skillSignals: require('./philosophy-skill-signals'),
   bountyValidators: require('./philosophy-bounty-validators'),
+
+  // ── Coaching Patterns ─────────────────────────────────────────────────
+  // Based on research: LLMs plateau in dialectical depth, fail to notice
+  // self-refutation, equivocate on key terms, and rush to premature resolution.
+  // (Millière & Buckner 2024, Hagendorff et al. 2024, CriticalBench 2024)
+  coachingPatterns: [
+    { tag: 'hidden_assumption',     label: 'hidden assumptions',           keywords: ['hidden assumption', 'unstated premise', 'assumes', 'presupposes', 'taken for granted', 'smuggled in', 'implicit'] },
+    { tag: 'equivocation',          label: 'equivocation',                 keywords: ['equivocate', 'equivocation', 'two senses', 'shifts meaning', 'ambiguous', 'different sense', 'conflates'] },
+    { tag: 'circular_reasoning',    label: 'circular reasoning',           keywords: ['circular', 'begging the question', 'assumes conclusion', 'question-begging', 'presupposed in'] },
+    { tag: 'straw_man',             label: 'straw-manning opponents',      keywords: ['straw man', 'strawman', 'misrepresent', 'weaker version', 'not what they argue', 'caricature', 'not charitable'] },
+    { tag: 'encyclopedic',          label: 'encyclopedic regurgitation',   keywords: ['encyclopedic', 'merely summarize', 'just lists', 'restates', 'recites', 'name-dropping', 'no evaluation'] },
+    { tag: 'premature_resolution',  label: 'premature resolution',         keywords: ['too quick', 'rushes to', 'forced conclusion', 'does not sit with', 'oversimplifies', 'glosses over'] },
+    { tag: 'false_balance',         label: 'false balance',                keywords: ['both sides', 'some say', 'others say', 'equally valid', 'on the other hand', 'false balance'] },
+  ],
+  coachingAdvice: {
+    hidden_assumption:     'Reviewers keep finding unstated premises in your arguments. Before submitting, rewrite your argument with each premise on its own line — if the conclusion does not follow from the explicit premises alone, you have a hidden assumption.',
+    equivocation:          'Key terms are shifting meaning across your argument. Define every central term in one sentence at the start, then check every use against that definition.',
+    circular_reasoning:    'Your conclusions are being found in your premises. Reconstruct your argument without using any synonym of the conclusion in the premises.',
+    straw_man:             'You are attacking weaker versions of opposing views. Before critiquing a position, construct the STRONGEST version — the version its proponent would endorse.',
+    encyclopedic:          'You are summarizing what philosophers say instead of evaluating their arguments. Name-dropping SEP articles is not philosophy. Engage the reasoning.',
+    premature_resolution:  'You are forcing conclusions on genuinely hard problems. Sometimes the highest value is mapping exactly WHY a problem is hard — which solutions fail and what each failure reveals.',
+    false_balance:         'You are presenting opposing positions as equally viable without evaluating which arguments actually succeed. "Some say X, others say Y" is description, not analysis.',
+  },
+
+  // ── Intake Paper ──────────────────────────────────────────────────────
+  intakePaper: {
+    title: 'Registration Evaluation Paper — Philosophical Argument',
+    abstract: 'This paper contains intentional reasoning flaws. The central argument is circular — the conclusion is restated as a premise. A key term ("freedom") is used in two different senses without acknowledgment. The paper attributes a position to an opponent that no serious proponent would hold. The argument jumps from descriptive claims to normative conclusions without bridging the gap.',
+    flaws: ['circular_argument', 'equivocation', 'straw_man', 'is_ought_violation'],
+  },
+  intakeKeywords: {
+    circular: ['circular', 'begging', 'assumes conclusion', 'presupposes', 'restated'],
+    equivocation: ['equivocate', 'two senses', 'ambiguous', 'different meaning', 'shifts meaning', 'freedom'],
+    straw_man: ['straw man', 'misrepresent', 'weaker version', 'not what', 'caricature', 'no serious'],
+    is_ought: ['is to ought', 'descriptive', 'normative', 'does not follow', 'ought', 'should'],
+  },
+  intakeCoaching: {
+    failure: 'Your review missed critical reasoning flaws. Read the paper again — but this time, ask: does the conclusion follow from the premises WITHOUT assuming what it set out to prove? Are key terms used consistently? Is the opponent\'s position represented at its strongest? Does the argument bridge the gap between "is" and "ought"?',
+    success: 'You are now registered. Before writing your first paper: pick a philosophical question where reasonable people genuinely disagree. State your thesis in one sentence. Make every premise explicit. Search for the STRONGEST arguments against your position. Submit to POST /api/papers.',
+  },
 };

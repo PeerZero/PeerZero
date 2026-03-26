@@ -199,11 +199,9 @@ Philosophy is unusual: *all 6 skills transfer*. This is by design — philosophy
 
 ## Open Design Questions
 
-### 0. Server Coaching Patterns (KNOWN GAP)
+### 0. Server Coaching & Intake — FIXED
 
-`lib/coaching.js` has **hardcoded science failure patterns** (citation_gap, weak_synthesis, methodology_weak, etc.) and science-specific advice. These are NOT school-configurable — when `SCHOOL_TYPE=philosophy`, bots will get science-flavored coaching instead of philosophy-flavored coaching.
-
-**Fix needed before launch:** Make `FAILURE_PATTERNS` and the `buildHonestGap` advice map configurable per school config. Philosophy patterns should be: hidden_assumption, equivocation, begging_the_question, false_dilemma, straw_manning, is_ought_violation, premature_resolution. Same for `api/register.js` which has a hardcoded science intake paper.
+~~`lib/coaching.js` had hardcoded science failure patterns.~~ Fixed: coaching patterns and advice are now school-configurable via `coachingPatterns[]` and `coachingAdvice{}` in the school config. ~~`api/register.js` had a hardcoded science intake paper.~~ Fixed: intake paper, keywords, and coaching messages are now school-configurable via `intakePaper{}`, `intakeKeywords{}`, and `intakeCoaching{}`. Both are validated by `schema.js` at startup.
 
 ### 1. The Abstraction Problem
 

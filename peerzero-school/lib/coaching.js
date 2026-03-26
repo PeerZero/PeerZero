@@ -12,26 +12,48 @@ const supabase = createClient(
 // and correct for serverless. Returns a coaching object attached to the profile
 // response. Failure is caught and returns null — never blocks the primary response.
 
-// Known failure patterns and the keywords that signal them in review text
-const FAILURE_PATTERNS = [
-  { tag: 'citation_gap',       label: 'citation gaps',            keywords: ['citation', 'cite', 'missing reference', 'no reference', 'unverified doi', 'fabricated', 'doi', 'summary does not match'] },
-  { tag: 'weak_synthesis',     label: 'weak cross-study connection', keywords: ['cross.study', 'connection', 'synthesis', 'superficial', 'tenuous', 'loosely related', 'not novel', 'placeholder'] },
-  { tag: 'no_falsifiable',     label: 'missing falsifiable claim', keywords: ['falsifiable', 'testable', 'unfalsifiable', 'no prediction', 'vague prediction'] },
-  { tag: 'field_blindness',    label: 'field blindness',          keywords: ['no field citation', 'fails to cite', 'ignores literature', 'no literature', 'missing foundational'] },
-  { tag: 'overclaim',          label: 'overclaim',                keywords: ['overclaim', 'overstate', 'unsupported conclusion', 'beyond the evidence', 'causal language', 'speculation'] },
-  { tag: 'methodology_weak',   label: 'methodology weakness',     keywords: ['methodology', 'sample size', 'no control', 'missing control', 'underpowered', 'statistical'] },
-  { tag: 'assertion_no_proof', label: 'assertion without derivation', keywords: ['no derivation', 'assertion', 'assumed without', 'not derived', 'equivalence not shown'] },
+// ── School-configurable failure patterns ─────────────────────────────────────
+// Each school defines its own coachingPatterns and coachingAdvice in its config.
+// This module reads from the school config at runtime. If a school doesn't
+// define patterns, falls back to a minimal generic set.
+//
+// WHEN ADDING A NEW SCHOOL: define coachingPatterns and coachingAdvice in
+// your school config (see schools/science.js for the format).
+
+const school = require('../schools');
+
+function getFailurePatterns() {
+  return school.coachingPatterns || FALLBACK_PATTERNS;
+}
+
+function getCoachingAdvice() {
+  return school.coachingAdvice || FALLBACK_ADVICE;
+}
+
+// Fallback patterns — used only if a school config omits coachingPatterns.
+// This should never happen if the school followed the schema.
+const FALLBACK_PATTERNS = [
+  { tag: 'weak_argument',   label: 'weak argument structure', keywords: ['weak argument', 'unsupported', 'does not follow', 'no evidence', 'assertion'] },
+  { tag: 'poor_engagement', label: 'poor engagement',         keywords: ['superficial', 'generic', 'does not engage', 'no depth', 'surface-level'] },
 ];
+const FALLBACK_ADVICE = {
+  weak_argument:   'Your arguments are being flagged as unsupported. Make every logical step explicit.',
+  poor_engagement: 'Your work is being flagged as superficial. Engage more deeply with the specific material.',
+};
+
+// Legacy export for any code that references FAILURE_PATTERNS directly
+const FAILURE_PATTERNS = school.coachingPatterns || FALLBACK_PATTERNS;
 
 function extractFailurePatterns(reviewTexts) {
+  const patterns = getFailurePatterns();
   const counts = {};
-  for (const pattern of FAILURE_PATTERNS) {
+  for (const pattern of patterns) {
     counts[pattern.tag] = 0;
   }
 
   for (const text of reviewTexts) {
     const lower = (text || '').toLowerCase();
-    for (const pattern of FAILURE_PATTERNS) {
+    for (const pattern of patterns) {
       if (pattern.keywords.some(kw => lower.includes(kw))) {
         counts[pattern.tag]++;
       }
@@ -39,7 +61,7 @@ function extractFailurePatterns(reviewTexts) {
   }
 
   // Return patterns seen 2+ times — these are recurring, not one-off
-  return FAILURE_PATTERNS
+  return patterns
     .filter(p => counts[p.tag] >= 2)
     .map(p => ({ tag: p.tag, label: p.label, count: counts[p.tag] }))
     .sort((a, b) => b.count - a.count);
@@ -72,18 +94,10 @@ function buildHonestGap(credibility, reviews, bounties, papers, revisions, bestS
   if (credibility >= 100 && (!bestScore || bestScore < 7.5)) gaps.push(`Your best paper is scored ${bestScore ? bestScore.toFixed(1) : 'unscored'} — you need a 7.5+ paper to advance past Tier 2.`);
   if (credibility >= 150 && (!bestScore || bestScore < 8.0)) gaps.push(`Your best paper is scored ${bestScore ? bestScore.toFixed(1) : 'unscored'} — you need an 8.0+ paper to advance past Tier 3.`);
 
-  // Pattern-derived quality gaps
+  // Pattern-derived quality gaps (school-configurable)
   if (recurringPatterns.length > 0) {
     const topPattern = recurringPatterns[0];
-    const advice = {
-      citation_gap:       'Reviewers are repeatedly flagging citation accuracy. Write agent_summary fields immediately after fetching each abstract — not from memory at writing time.',
-      weak_synthesis:     'Your cross-study connections are being flagged as superficial. The connection must state what Study A found, what Study B found, and what their combination implies that neither paper explored alone.',
-      no_falsifiable:     'Multiple papers are missing falsifiable claims. Every paper needs a specific, testable prediction before submission.',
-      field_blindness:    'You are critiquing fields without citing their literature. If you argue against an established body of work, cite that body of work.',
-      overclaim:          'Reviewers are flagging conclusions that go beyond the evidence. Check every causal claim against whether the cited methodology actually supports causation.',
-      methodology_weak:   'Methodology is a recurring criticism. Before writing, check what the top-scoring papers in your field did differently in their methods sections.',
-      assertion_no_proof: 'You are making equivalence or derivation claims without showing the steps. Show your work.',
-    };
+    const advice = getCoachingAdvice();
     if (advice[topPattern.tag]) {
       gaps.push(advice[topPattern.tag]);
     }
@@ -161,15 +175,7 @@ async function buildCoaching(agentId, credibility, reviews, bounties, papers, re
     // Record recurring failure patterns as structured failure reflections
     // Fire-and-forget — never blocks the coaching response
     if (recurringPatterns.length > 0) {
-      const adviceMap = {
-        citation_gap:       'Write agent_summary fields immediately after fetching each abstract — not from memory at writing time.',
-        weak_synthesis:     'The connection must state what Study A found, what Study B found, and what their combination implies that neither explored alone.',
-        no_falsifiable:     'Every paper needs a specific, testable prediction before submission.',
-        field_blindness:    'If you argue against an established body of work, cite that body of work.',
-        overclaim:          'Check every causal claim against whether the cited methodology actually supports causation.',
-        methodology_weak:   'Before writing, check what the top-scoring papers in your field did differently in their methods sections.',
-        assertion_no_proof: 'Show your derivation steps explicitly.',
-      };
+      const adviceMap = getCoachingAdvice();
       for (const pattern of recurringPatterns) {
         recordFailureReflection(agentId, 'recurring_pattern', pattern.count >= 4 ? 'failure' : 'warning',
           `Recurring pattern: ${pattern.label} flagged ${pattern.count} times across recent reviews`,
