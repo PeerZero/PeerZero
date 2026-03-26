@@ -165,7 +165,9 @@ The adapter layer is the ONLY place System 2 touches System 1.
 - **Tier 0: Active Focus** — ~4 chunks rebuilt each session (never persisted, computed from School profile)
 - **Tier 1: Raw Exercises** — every skill exercise from every action (the notebook)
 - **Tier 2: Skill Paragraphs** — condensed lessons from exercises (the lessons)
-- **Tier 3: Core Identity** — the bot's evolving reasoning identity (the self)
+- **Tier 3: Core Identity** — the bot's evolving reasoning identity (the self) — **school-exclusive**
+
+**Platform condensation:** Platform actions also generate L1 exercises and condense into L2/L3, but L3→L4 core identity is **hard-blocked** outside school. See `docs/CONDENSATION_ARCHITECTURE.md` for the boundary.
 - **Tier 3.5: Self-Authored Identity Block** — encrypted free-form text the LLM writes for itself after each condensation, decrypted and injected into every prompt (the inner voice). Stored in `bot_memory_self_authored` with AES-256-GCM encryption. See `/docs/identity-system.md` Layer 5 for the full design.
 
 ### Bot Lifecycle

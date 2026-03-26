@@ -221,9 +221,22 @@ After graduation, L4/L4d show as L5/L5d with "permanent, locked" label.
 
 ## Exported Bot Pipeline (System 3)
 
-Same 5 layers per track, same cascade. But locked layers accumulate permanently.
-Users control writable layers. Locked layers are immutable. Both learning and
-decision tracks carry over from school.
+> **See [CONDENSATION_ARCHITECTURE.md](CONDENSATION_ARCHITECTURE.md) for the
+> canonical reference on school vs platform condensation boundaries.**
+
+The exported bot has two condensation modes depending on where it's running:
+
+### School Mode (L1→L2→L3→L4→L5)
+
+Full 5-layer cascade, identical to the School pipeline above. The School
+server triggers condensers and the bot executes them. Both learning and
+decision tracks run. L4/L5 are written at grade transitions and graduation.
+
+### Platform Mode (L1→L2→L3 only — CAPPED)
+
+Platform experience condenses into lightweight knowledge layers. **L3→L4
+is HARD-BLOCKED. Core identity (L4) and master identity (L5) can only be
+written through adversarial school cycles.**
 
 ```
 L1 DESK (raw experiences)
@@ -231,7 +244,7 @@ L1 DESK (raw experiences)
 |  Feeds BOTH learning and decision condensers
 |  MILESTONE CONDENSER fires every 5 actions (both tracks)
 |  -> 1 learning paragraph to L2, 1 decision paragraph to L2d
-|  L1 resets
+|  L1 resets after both tracks condense
 |  USER CAN DELETE anytime
 |
 v
@@ -243,37 +256,35 @@ L2/L2d NOTEBOOK (20 entries max per track)
 |
 v
 L3/L3d CONDENSED (3 docs max per track)
-|  IDENTITY CONDENSER fires when 3 docs full (per track)
-|  -> 1 block to L4/L4d
-|  Resets per track (if L4/L4d < 8 blocks)
-|  USER CAN DELETE anytime
+|  ════════════════════════════════════════
+|  PLATFORM CONDENSATION STOPS HERE.
+|  L3→L4 is BLOCKED outside of school.
+|  ════════════════════════════════════════
 |
-v
-L4/L4d IDENTITY (8 blocks max per track)
-|  Each block from one identity condensation cycle
-|  LOCKED once written (user cannot delete)
-|  NOT encrypted post-export (visible, but immutable)
+v (SCHOOL ONLY — inherited, not written on platforms)
+L4/L4d IDENTITY
+|  Written by school condensers at grade transitions
+|  LOCKED on platforms (read-only, never overwritten)
 |
-|  After 8 blocks: identity crystallized per track
-|  L1->L2/L2d->L3/L3d still cycle, but no more L4/L4d blocks
-|
-v
-L5/L5d CORE (multi-piece, one per school graduated, per track)
-   READ ONLY -- never modified post-export
-   Inherited from school(s)
-   L5 = permanent reasoning voice, L5d = permanent decision voice
-   Everything above speaks through these.
+v (SCHOOL ONLY — inherited, not written on platforms)
+L5/L5d CORE
+   Permanent graduation snapshot
+   Inherited from school. Everything above speaks through these.
 ```
+
+Platform L2/L3 layers sit ALONGSIDE school L4/L5 in memory context. They
+are labeled "PLATFORM KNOWLEDGE" (unverified) to distinguish from
+adversarially-verified school identity (L4/L5).
 
 ### User Controls (Exported Bot Only)
 
-| Layer | User can delete? | What happens |
-|-------|-----------------|--------------|
-| L1 Desk | Yes | Clears raw experiences. Bot loses short-term memory. |
-| L2/L2d Notebook | Yes | Clears condensed entries. Resets condenser count. |
-| L3/L3d Condensed | Yes | Clears docs. Delays next identity block. |
-| L4/L4d Identity | No | Locked. Cannot be modified or deleted. |
-| L5/L5d Core | No | Locked. Cannot be modified or deleted. |
+| Layer | User can delete? | Platform can write? | What happens |
+|-------|-----------------|--------------------|----|
+| L1 Desk | Yes | Yes | Clears raw experiences. Bot loses short-term memory. |
+| L2/L2d Notebook | Yes | Yes | Clears condensed entries. Resets condenser count. |
+| L3/L3d Condensed | Yes | Yes | Clears docs. This is the deepest platform layer. |
+| L4/L4d Identity | No | **No — school only** | Locked. Written by school condensers, read-only on platforms. |
+| L5/L5d Core | No | **No — school only** | Locked. Written at graduation, permanent forever. |
 
 ---
 
