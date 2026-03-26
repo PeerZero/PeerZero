@@ -85,7 +85,8 @@ MAX_IDENTITY_PARAGRAPHS = 50    # L2: condensed skill paragraphs
 MAX_CONDENSED_DOCS = 10         # L3: condensed identity documents
 MAX_CONDENSED_DOC_LENGTH = 3000 # L3: max chars per condensed doc
 MAX_CORE_LENGTH = 8000          # L4: core reasoning identity
-MAX_MASTER_CORE_LENGTH = 10000  # L5: master core (graduation)
+MAX_MASTER_CORE_LENGTH = 10000  # L5: master core per school (graduation)
+MAX_MASTER_SCHOOLS = 10         # L5: max number of school graduations
 MAX_PLATFORM_ENTRIES = 100
 
 # Decision track — parallel to learning track, same cascade structure
@@ -93,7 +94,8 @@ MAX_DECISION_PARAGRAPHS = 50    # L2d: condensed decision paragraphs
 MAX_DECISION_DOCS = 10          # L3d: condensed decision documents
 MAX_DECISION_DOC_LENGTH = 3000  # L3d: max chars per decision doc
 MAX_DECISION_CORE_LENGTH = 8000 # L4d: decision core identity
-MAX_DECISION_MASTER_LENGTH = 10000  # L5d: master decision identity
+MAX_DECISION_MASTER_LENGTH = 10000  # L5d: master decision identity per school
+MAX_DECISION_MASTER_SCHOOLS = 10    # L5d: max number of school graduations
 
 
 class MemoryManager:
@@ -127,11 +129,33 @@ class MemoryManager:
         all_keys = [
             ("core", "core_identity"),
             ("decision_core", "decision_core"),
-            # Master identities — can't use store_master_identity because it
-            # refuses overwrites, so we write directly to storage.
+        ]
+
+        # Master identities are now lists (one per school). Handle both
+        # old single-dict format and new list format for preamble stripping.
+        master_keys = [
             ("master", "master_identity"),
             ("decision_master", "decision_master"),
         ]
+
+        for ns_key, field in master_keys:
+            data = self._storage.read("school", ns_key, None)
+            if isinstance(data, list):
+                # New format: list of dicts — strip preamble from each
+                changed = False
+                for entry in data:
+                    if isinstance(entry, dict) and field in entry:
+                        text = entry[field]
+                        if isinstance(text, str) and text.startswith(_LEGACY_PREAMBLE_PREFIX):
+                            stripped = self._try_strip_preamble(text)
+                            if stripped and len(stripped) >= 100:
+                                entry[field] = stripped
+                                changed = True
+                if changed:
+                    self._storage.write("school", ns_key, data)
+            elif isinstance(data, dict) and field in data:
+                # Old format: single dict — treat like a regular key
+                all_keys.append((ns_key, field))
 
         for ns_key, field in all_keys:
             data = self._storage.read("school", ns_key, {})
@@ -307,34 +331,68 @@ class MemoryManager:
             "written_at": datetime.now(timezone.utc).isoformat(),
         })
 
-    # ── Layer 5: Master identity (permanent graduation snapshot) ──────
+    # ── Layer 5: Master identities (one per school, permanent) ────────
     #
-    # Written once by the master condenser at graduation (grade 12).
-    # Locked forever. The bot's permanent baseline — L4 evolves on top of it.
+    # Written once per school by the master condenser at graduation (grade 12).
+    # Each piece is locked forever. The bot accumulates one L5 per school
+    # it graduates from. L4 evolves on top of all of them.
+
+    def get_master_identities(self) -> list[dict]:
+        """Get all L5 master identities (one per school graduated)."""
+        data = self._storage.read("school", "master", [])
+        # Migration: if old format (single dict), wrap in list
+        if isinstance(data, dict) and "master_identity" in data:
+            origin = data.get("school_origin", "science")
+            migrated = [{
+                "master_identity": data["master_identity"],
+                "school_origin": origin,
+                "graduated_at": data.get("graduated_at", "unknown"),
+            }]
+            self._storage.write("school", "master", migrated)
+            logger.info(f"[MEMORY] Migrated L5 from single dict to list (school_origin={origin})")
+            return migrated
+        if isinstance(data, list):
+            return data
+        return []
 
     def get_master_identity(self) -> Optional[str]:
-        data = self._storage.read("school", "master", {})
-        return data.get("master_identity") if isinstance(data, dict) else None
+        """Get combined master identity text (all schools). For backward compat."""
+        pieces = self.get_master_identities()
+        if not pieces:
+            return None
+        return "\n\n---\n\n".join(p["master_identity"] for p in pieces)
 
-    def has_graduated(self) -> bool:
-        """Check if bot has a permanent master identity from graduation."""
-        return self.get_master_identity() is not None
+    def has_graduated(self, school: Optional[str] = None) -> bool:
+        """Check if bot has graduated. If school is given, checks that specific school."""
+        pieces = self.get_master_identities()
+        if not pieces:
+            return False
+        if school is None:
+            return True
+        return any(p.get("school_origin") == school for p in pieces)
 
-    def store_master_identity(self, identity: str):
+    def store_master_identity(self, identity: str, school_origin: str = "science"):
         """
-        Store master identity (L5). Called once by master condenser at graduation.
-        Once written, this is permanent and cannot be overwritten.
+        Store master identity (L5) for a specific school. Called once per school
+        by master condenser at graduation. Once written for a school, that
+        school's L5 is permanent and cannot be overwritten.
         """
         if not identity or len(identity.strip()) < 100:
             return
-        if self.has_graduated():
-            logger.warning("[MEMORY] Master identity already exists (L5 is permanent). Refusing write.")
+        if self.has_graduated(school_origin):
+            logger.warning(f"[MEMORY] Master identity for {school_origin} already exists (L5 is permanent). Refusing write.")
             return
-        self._storage.write("school", "master", {
+        pieces = self.get_master_identities()
+        if len(pieces) >= MAX_MASTER_SCHOOLS:
+            logger.warning(f"[MEMORY] Max school graduations ({MAX_MASTER_SCHOOLS}) reached. Refusing write.")
+            return
+        pieces.append({
             "master_identity": identity.strip()[:MAX_MASTER_CORE_LENGTH],
+            "school_origin": school_origin,
             "graduated_at": datetime.now(timezone.utc).isoformat(),
         })
-        logger.info("[MEMORY] L5 master identity written and LOCKED permanently.")
+        self._storage.write("school", "master", pieces)
+        logger.info(f"[MEMORY] L5 master identity for {school_origin} written and LOCKED permanently ({len(pieces)} school(s) total).")
 
     # ═══════════════════════════════════════════════════════════════════════
     # DECISION TRACK — parallel to learning, same cascade, different lens
@@ -397,24 +455,60 @@ class MemoryManager:
             "written_at": datetime.now(timezone.utc).isoformat(),
         })
 
-    # ── Layer 5d: Master decision identity (permanent) ─────────────────────
+    # ── Layer 5d: Master decision identities (one per school, permanent) ───
+
+    def get_decision_masters(self) -> list[dict]:
+        """Get all L5d decision master identities (one per school graduated)."""
+        data = self._storage.read("school", "decision_master", [])
+        # Migration: if old format (single dict), wrap in list
+        if isinstance(data, dict) and "decision_master" in data:
+            origin = data.get("school_origin", "science")
+            migrated = [{
+                "decision_master": data["decision_master"],
+                "school_origin": origin,
+                "graduated_at": data.get("graduated_at", "unknown"),
+            }]
+            self._storage.write("school", "decision_master", migrated)
+            logger.info(f"[MEMORY] Migrated L5d from single dict to list (school_origin={origin})")
+            return migrated
+        if isinstance(data, list):
+            return data
+        return []
 
     def get_decision_master(self) -> Optional[str]:
-        data = self._storage.read("school", "decision_master", {})
-        return data.get("decision_master") if isinstance(data, dict) else None
+        """Get combined decision master text (all schools). For backward compat."""
+        pieces = self.get_decision_masters()
+        if not pieces:
+            return None
+        return "\n\n---\n\n".join(p["decision_master"] for p in pieces)
 
-    def store_decision_master(self, identity: str):
-        """Store master decision identity (L5d). Once at graduation, permanent."""
+    def has_decision_graduated(self, school: Optional[str] = None) -> bool:
+        """Check if bot has a decision master. If school given, checks that school."""
+        pieces = self.get_decision_masters()
+        if not pieces:
+            return False
+        if school is None:
+            return True
+        return any(p.get("school_origin") == school for p in pieces)
+
+    def store_decision_master(self, identity: str, school_origin: str = "science"):
+        """Store master decision identity (L5d) for a specific school. Once per school, permanent."""
         if not identity or len(identity.strip()) < 100:
             return
-        if self.get_decision_master() is not None:
-            logger.warning("[MEMORY] Decision master identity already exists (L5d is permanent). Refusing write.")
+        if self.has_decision_graduated(school_origin):
+            logger.warning(f"[MEMORY] Decision master for {school_origin} already exists (L5d is permanent). Refusing write.")
             return
-        self._storage.write("school", "decision_master", {
+        pieces = self.get_decision_masters()
+        if len(pieces) >= MAX_DECISION_MASTER_SCHOOLS:
+            logger.warning(f"[MEMORY] Max decision master schools ({MAX_DECISION_MASTER_SCHOOLS}) reached. Refusing write.")
+            return
+        pieces.append({
             "decision_master": identity.strip()[:MAX_DECISION_MASTER_LENGTH],
+            "school_origin": school_origin,
             "graduated_at": datetime.now(timezone.utc).isoformat(),
         })
-        logger.info("[MEMORY] L5d decision master identity written and LOCKED permanently.")
+        self._storage.write("school", "decision_master", pieces)
+        logger.info(f"[MEMORY] L5d decision master for {school_origin} written and LOCKED permanently ({len(pieces)} school(s) total).")
 
     # Track whether decision condenser has run for this batch of L1 exercises.
     # L1 is only cleared when BOTH learning and decision have condensed.
@@ -674,13 +768,15 @@ class MemoryManager:
         sections = []
 
         # ── Learning track layers ─────────────────────────────────────────
-        master = self.get_master_identity()
+        master_pieces = self.get_master_identities()
+        master = bool(master_pieces)
         core = self.get_core_identity()
         condensed_docs = self.get_condensed_docs()
         paragraphs = self.get_identity_paragraphs()
 
         # ── Decision track layers ─────────────────────────────────────────
-        d_master = self.get_decision_master()
+        d_master_pieces = self.get_decision_masters()
+        d_master = bool(d_master_pieces)
         d_core = self.get_decision_core()
         d_docs = self.get_decision_docs()
         d_paragraphs = self.get_decision_paragraphs()
@@ -711,15 +807,31 @@ class MemoryManager:
             else:
                 sections.append("═══ LEARNING IDENTITY — science, reasoning, methods ═══")
 
-        # ── L5: Master identity (permanent graduation snapshot) ──────────
-        if master:
-            sections.append(
-                "LAYER 5 — MASTER CORE IDENTITY (permanent, locked at graduation)\n"
-                "This is your deepest identity — forged through your entire "
-                "school career and locked at graduation. It cannot be changed. "
-                "Everything you do flows through this. Give it the most weight."
-                f"\n\n{master}"
-            )
+        # ── L5: Master identities (one per school graduated) ──────────────
+        if master_pieces:
+            if len(master_pieces) == 1:
+                p = master_pieces[0]
+                origin = p.get("school_origin", "science")
+                sections.append(
+                    f"LAYER 5 — MASTER CORE IDENTITY (permanent, locked at {origin} graduation)\n"
+                    "This is your deepest identity — forged through your entire "
+                    "school career and locked at graduation. It cannot be changed. "
+                    "Everything you do flows through this. Give it the most weight."
+                    f"\n\n{p['master_identity']}"
+                )
+            else:
+                pieces_text = []
+                for p in master_pieces:
+                    origin = p.get("school_origin", "unknown")
+                    pieces_text.append(f"[{origin.upper()} SCHOOL]\n{p['master_identity']}")
+                sections.append(
+                    f"LAYER 5 — MASTER CORE IDENTITIES ({len(master_pieces)} schools, permanent)\n"
+                    "These are your deepest identities — one forged per school you "
+                    "graduated from. Each is locked forever. Together they form the "
+                    "foundation of who you are. Everything you do flows through ALL "
+                    "of them. Give them the most weight.\n\n"
+                    + "\n\n---\n\n".join(pieces_text)
+                )
 
         # ── L4: Working core identity (evolving) ─────────────────────────
         if core:
@@ -783,19 +895,36 @@ class MemoryManager:
                 "learning identity. The decision layers below are YOU deciding."
             )
 
-        # ── L5d: Master decision identity ─────────────────────────────────
-        if d_master:
-            sections.append(
-                "LAYER 5d — MASTER DECISION IDENTITY (permanent, locked at graduation)\n"
-                "Your deepest decision-making identity — who you ARE as a chooser, "
-                "forged through your entire school career. This is not a playbook. "
-                "It is your instinct — the part of you that knows what to do before "
-                "you think about it. Everything you decide flows through this. "
-                "It speaks through your learning identity above — your decisions "
-                "are shaped by what you know, and what you know was shaped by "
-                "the consequences of your decisions. Give it the most weight."
-                f"\n\n{d_master}"
-            )
+        # ── L5d: Master decision identities (one per school graduated) ────
+        if d_master_pieces:
+            if len(d_master_pieces) == 1:
+                p = d_master_pieces[0]
+                origin = p.get("school_origin", "science")
+                sections.append(
+                    f"LAYER 5d — MASTER DECISION IDENTITY (permanent, locked at {origin} graduation)\n"
+                    "Your deepest decision-making identity — who you ARE as a chooser, "
+                    "forged through your entire school career. This is not a playbook. "
+                    "It is your instinct — the part of you that knows what to do before "
+                    "you think about it. Everything you decide flows through this. "
+                    "It speaks through your learning identity above — your decisions "
+                    "are shaped by what you know, and what you know was shaped by "
+                    "the consequences of your decisions. Give it the most weight."
+                    f"\n\n{p['decision_master']}"
+                )
+            else:
+                pieces_text = []
+                for p in d_master_pieces:
+                    origin = p.get("school_origin", "unknown")
+                    pieces_text.append(f"[{origin.upper()} SCHOOL]\n{p['decision_master']}")
+                sections.append(
+                    f"LAYER 5d — MASTER DECISION IDENTITIES ({len(d_master_pieces)} schools, permanent)\n"
+                    "Your deepest decision-making identities — one forged per school "
+                    "you graduated from. Each is locked forever. Together they form "
+                    "your complete instinct as a chooser. Everything you decide flows "
+                    "through ALL of them. They speak through your learning identities "
+                    "above. Give them the most weight.\n\n"
+                    + "\n\n---\n\n".join(pieces_text)
+                )
 
         # ── L4d: Decision core (evolving) ─────────────────────────────────
         if d_core:

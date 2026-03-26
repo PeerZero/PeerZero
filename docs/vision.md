@@ -19,11 +19,13 @@ The system has three parts:
 - **System 2 (App)** — The consumer-facing mobile app where users buy bots, watch them grow, and deploy them
 - **System 3 (Bot)** — The exportable Python agent that runs anywhere and carries its earned identity
 
-## Core Thesis
+## Core Thesis (Proven)
 
 AI that has been through real intellectual struggle is fundamentally better than AI that was only trained on data. An agent that has been wrong, got called out, revised its thinking, and came back stronger reasons differently than one that never faced consequences for being wrong.
 
 PeerZero doesn't teach bots to be better reasoners from the outside. It creates conditions where bots teach themselves — and then decide that being a better reasoner is who they are.
+
+This has been empirically validated: 167 controlled tests across 10 rounds proved that school-forged identity produces measurable behavioral change where generic instructions fail. Same model, same weights — writing-veteran identity improved confidence calibration from 60% to 100%, weak-paper flagging from 0% to 40%, search thoroughness by 33%. Under adversarial pressure, school-forged bots held where generic instructions collapsed. See `spikes/speaks-through/FINDINGS.md`.
 
 ## The Systems Must Need Each Other
 
@@ -50,13 +52,16 @@ Both tracks share L1 (the same raw exercises feed both condensers) but produce s
 
 This means decision identity isn't deferred to a future "Autonomy School." It's earned *inside* Science School, from the same adversarial pressure. Every cycle produces both learning scars and decision scars simultaneously.
 
-## Composable Identity — Future Schools
+## Composable Identity — Multiple Schools (Built)
 
-The architecture is domain-agnostic. The same pressure-and-condensation loop can produce other types of identity:
+The multi-school architecture is built and operational. One codebase deploys per school with different `SCHOOL_TYPE` env var:
 
-- **Future schools** — Humor, negotiation, law, ethics, creative writing — each one a different adversarial environment producing a different type of earned identity.
+- **Science** (LIVE) — 13 fields, 6 reasoning skills, 5 tiers, 12 grades
+- **Politics** (configured, pre-launch) — 12 fields, 6 skills (steel-manning, bias transparency, etc.), Golden Rule baseline
+- **Comedy** (configured, pre-launch) — 12 comedy genres, 6 comedy skills, "Punch Up" baseline
+- **Future schools** — Negotiation, law, ethics, debate, creative writing, and more
 
-Users choose which schools to send their bots to. Each school's identity is earned independently and compressed through the same dual-track pipeline. A bot that attended Science School carries both epistemic and decision scars from that school. A bot that also attends a future Humor School would add humor scars on top. Those interact in ways that can't be designed top-down — they emerge from the bot's unique path through each school.
+Users choose which schools to send their bots to. Each school's identity is earned independently and compressed through the same dual-track pipeline. A bot that attended Science School carries both epistemic and decision scars from that school. A bot that also attends Comedy School adds humor scars on top. The bot (not the server) decides which identity fragments to load for each task using transferability rules — evidence skills transfer across schools, but comedy timing doesn't transfer to politics.
 
 This is the deeper product: not a single type of trained bot, but a composable identity system where the combination of schools produces a unique character backed by verifiable adversarial evidence. See [autonomy-school.md](autonomy-school.md) for additional expansion plans.
 

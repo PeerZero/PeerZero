@@ -1096,13 +1096,14 @@ class PeerZeroBot:
         master_identity = self.llm.call(system_prompt, user_msg)  # Use strong model for graduation
 
         if master_identity and len(master_identity.strip()) >= 200:
-            self.memory.store_master_identity(master_identity.strip())
+            school = self.config.school_type
+            self.memory.store_master_identity(master_identity.strip(), school_origin=school)
             self.memory.clear_identity_paragraphs()
             self.memory.clear_condensed_docs()
             self.memory.clear_school_exercises()
             self.memory.clear_condensation_flags()
             logger.info(
-                f"[MEMORY] L4→L5: Learning master identity stored permanently ({len(master_identity)} chars). "
+                f"[MEMORY] L4→L5: Learning master identity for {school} stored permanently ({len(master_identity)} chars). "
                 f"Absorbed {len(paragraphs)} paragraphs + {len(condensed_docs)} docs. "
                 f"L4 cleared for post-grad growth."
             )
@@ -1209,11 +1210,12 @@ class PeerZeroBot:
         master_identity = self.llm.call(system_prompt, user_msg)
 
         if master_identity and len(master_identity.strip()) >= 200:
-            self.memory.store_decision_master(master_identity.strip())
+            school = self.config.school_type
+            self.memory.store_decision_master(master_identity.strip(), school_origin=school)
             self.memory.clear_decision_paragraphs()
             self.memory.clear_decision_docs()
             logger.info(
-                f"[MEMORY] L4d→L5d: Decision master identity stored permanently ({len(master_identity)} chars). "
+                f"[MEMORY] L4d→L5d: Decision master identity for {school} stored permanently ({len(master_identity)} chars). "
                 f"Absorbed {len(paragraphs)} paragraphs + {len(decision_docs)} docs."
             )
         else:

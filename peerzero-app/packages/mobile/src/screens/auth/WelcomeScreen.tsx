@@ -32,7 +32,7 @@ const STEPS: Step[] = [
     key: 'enroll',
     icon: null,
     title: 'Enroll in School',
-    description: 'Send your bot to a school where it writes scientific papers, gets reviewed by peers, and defends its ideas under pressure.',
+    description: 'Send your bot to a school where it writes papers, gets reviewed by peers, and defends its ideas under pressure. Choose wisely — the first school your bot attends will become its deepest identity layer, carrying the most weight in everything it does.',
   },
   {
     key: 'grow',

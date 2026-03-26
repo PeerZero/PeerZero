@@ -29,7 +29,7 @@ Usage:
     # selected.learning_paragraphs  -> relevant L2 paragraphs
     # selected.decision_paragraphs  -> relevant L2d paragraphs
     # selected.core_identity        -> always loaded (L4)
-    # selected.master_identity      -> always loaded (L5)
+    # selected.master_identities    -> always loaded (L5, one per school)
     # selected.cross_school         -> transferable fragments from other schools
 """
 
@@ -96,11 +96,11 @@ SKILL_TRANSFER_MAP = {
 @dataclass
 class SelectedIdentity:
     """The result of identity selection — what the bot chose to load."""
-    # Always loaded (from current school context)
-    master_identity: Optional[str] = None         # L5 — always loaded if exists
-    core_identity: Optional[str] = None           # L4 — always loaded if exists
-    decision_master: Optional[str] = None         # L5d
-    decision_core: Optional[str] = None           # L4d
+    # Always loaded (all schools — L5 is the bot's foundation)
+    master_identities: list = field(default_factory=list)    # L5 — one per school graduated
+    core_identity: Optional[str] = None                      # L4 — always loaded if exists
+    decision_masters: list = field(default_factory=list)      # L5d — one per school graduated
+    decision_core: Optional[str] = None                      # L4d
 
     # Selected from current school
     learning_paragraphs: list = field(default_factory=list)     # L2
@@ -153,9 +153,9 @@ class IdentitySelector:
         )
 
         # ── L4/L5 always loaded (they're the bot's foundation) ──────────
-        result.master_identity = self._memory.get_master_identity()
+        result.master_identities = self._memory.get_master_identities()
         result.core_identity = self._memory.get_core_identity()
-        result.decision_master = self._memory.get_decision_master()
+        result.decision_masters = self._memory.get_decision_masters()
         result.decision_core = self._memory.get_decision_core()
 
         # ── Gather all L2/L3 fragments ──────────────────────────────────

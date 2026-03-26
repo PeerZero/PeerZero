@@ -175,30 +175,47 @@ class TestMasterIdentity:
 
     def test_master_condenser_writes_l5(self, memory):
         master = "J" * 120
-        memory.store_master_identity(master)
-        assert memory.get_master_identity() == master
+        memory.store_master_identity(master, school_origin="science")
+        assert master in memory.get_master_identity()
         assert memory.has_graduated()
+        assert memory.has_graduated("science")
 
-    def test_l5_refuses_overwrite(self, memory):
+    def test_l5_refuses_overwrite_same_school(self, memory):
         master = "K" * 120
-        memory.store_master_identity(master)
-        assert memory.has_graduated()
+        memory.store_master_identity(master, school_origin="science")
+        assert memory.has_graduated("science")
 
-        # Attempt to overwrite — should be refused
-        memory.store_master_identity("L" * 120)
-        assert memory.get_master_identity() == master  # unchanged
+        # Attempt to overwrite same school — should be refused
+        memory.store_master_identity("L" * 120, school_origin="science")
+        pieces = memory.get_master_identities()
+        assert len(pieces) == 1
+        assert pieces[0]["master_identity"] == master
+
+    def test_l5_accepts_different_school(self, memory):
+        """Each school gets its own L5 piece."""
+        science_master = "S" * 120
+        comedy_master = "C" * 120
+        memory.store_master_identity(science_master, school_origin="science")
+        memory.store_master_identity(comedy_master, school_origin="comedy")
+        pieces = memory.get_master_identities()
+        assert len(pieces) == 2
+        origins = {p["school_origin"] for p in pieces}
+        assert origins == {"science", "comedy"}
+        assert memory.has_graduated("science")
+        assert memory.has_graduated("comedy")
+        assert not memory.has_graduated("politics")
 
     def test_l4_still_writable_after_graduation(self, memory):
         """Post-graduation: L4 keeps evolving, L5 is permanent."""
         master = "K" * 120
-        memory.store_master_identity(master)
+        memory.store_master_identity(master, school_origin="science")
         assert memory.has_graduated()
 
         # L4 should still accept writes
         new_core = "M" * 120
         memory.store_core_identity(new_core)
         assert memory.get_core_identity() == new_core
-        assert memory.get_master_identity() == master  # L5 unchanged
+        assert master in memory.get_master_identity()  # L5 unchanged
 
 
 class TestContextOrdering:
@@ -227,15 +244,15 @@ class TestContextOrdering:
 
     def test_graduated_shows_l5(self, memory):
         """After graduation, master identity shows as L5 (locked)."""
-        memory.store_master_identity("M" * 120)
+        memory.store_master_identity("M" * 120, school_origin="science")
         context = memory.build_school_context()
         assert "LAYER 5" in context
         assert "permanent" in context.lower()
-        assert "locked" in context.lower()
+        assert "locked" in context.lower() or "graduation" in context.lower()
 
     def test_graduated_with_post_grad_growth(self, memory):
         """Post-grad bot shows both L5 (master) and L4 (growth)."""
-        memory.store_master_identity("M" * 120)
+        memory.store_master_identity("M" * 120, school_origin="science")
         memory.store_core_identity("N" * 120)
         context = memory.build_school_context()
         assert "LAYER 5" in context
@@ -243,6 +260,16 @@ class TestContextOrdering:
         l5_pos = context.index("LAYER 5")
         l4_pos = context.index("LAYER 4")
         assert l5_pos < l4_pos  # L5 comes first (deepest)
+
+    def test_multi_school_l5_in_context(self, memory):
+        """Multi-school bot shows all L5 pieces with school labels."""
+        memory.store_master_identity("S" * 120, school_origin="science")
+        memory.store_master_identity("C" * 120, school_origin="comedy")
+        context = memory.build_school_context()
+        assert "LAYER 5" in context
+        assert "SCIENCE" in context
+        assert "COMEDY" in context
+        assert "2 schools" in context
 
     def test_l1_not_identity(self, memory):
         """L1 raw exercises are NOT labeled as identity."""
@@ -284,7 +311,7 @@ class TestPreambleServerSide:
 
     def test_no_preamble_in_master_identity(self, memory):
         """Stored L5 master identity should NOT contain the preamble."""
-        memory.store_master_identity("My master identity from graduation. " * 10)
+        memory.store_master_identity("My master identity from graduation. " * 10, school_origin="science")
         stored = memory.get_master_identity()
         assert "HERE IS WHAT IS HAPPENING" not in stored
 
@@ -391,11 +418,21 @@ class TestDecisionTrackCondensation:
         memory.store_decision_paragraph("short")
         assert len(memory.get_decision_paragraphs()) == 0
 
-    def test_decision_master_refuses_overwrite(self, memory):
+    def test_decision_master_refuses_overwrite_same_school(self, memory):
         master = "K" * 120
-        memory.store_decision_master(master)
-        memory.store_decision_master("L" * 120)
-        assert memory.get_decision_master() == master
+        memory.store_decision_master(master, school_origin="science")
+        memory.store_decision_master("L" * 120, school_origin="science")
+        pieces = memory.get_decision_masters()
+        assert len(pieces) == 1
+        assert pieces[0]["decision_master"] == master
+
+    def test_decision_master_accepts_different_school(self, memory):
+        memory.store_decision_master("S" * 120, school_origin="science")
+        memory.store_decision_master("C" * 120, school_origin="comedy")
+        pieces = memory.get_decision_masters()
+        assert len(pieces) == 2
+        assert memory.has_decision_graduated("science")
+        assert memory.has_decision_graduated("comedy")
 
 
 class TestTrackedIds:
