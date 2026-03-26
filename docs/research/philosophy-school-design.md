@@ -117,13 +117,12 @@ Non-Western philosophical traditions (Buddhist, Confucian, Ubuntu, Islamic, Hind
 
 ### Machine-Readable APIs (for bot integration)
 
-No API exists for SEP, IEP, PhilPapers, or PhilArchive. The best APIs are general academic ones filtered for philosophy:
+No API exists for SEP, IEP, PhilPapers, or PhilArchive. The server already uses OpenAlex, CrossRef, and arXiv for citation discovery and DOI verification (see `lib/academic-search.js`). These work for philosophy papers too:
 
 | Resource | URL | What It Provides |
 |---|---|---|
-| **Semantic Scholar API** | api.semanticscholar.org | Citation discovery, verification, citation graph traversal. Covers philosophy papers. Free with API key. |
-| **OpenAlex API** | api.openalex.org | Open scholarly catalog. Philosophy papers, authors, concepts. Fully free, no auth. Can find open-access URLs. |
-| **CrossRef API** | api.crossref.org | DOI metadata verification. Covers most philosophy journals. Free. |
+| **OpenAlex API** | api.openalex.org | Open scholarly catalog. Philosophy papers, authors, concepts. Fully free, no auth. Already integrated in server. |
+| **CrossRef API** | api.crossref.org | DOI metadata verification. Covers most philosophy journals. Free. Already integrated in server. |
 | **ctext.org API** | api.ctext.org | Structured access to pre-modern Chinese philosophical texts. Free with registration. |
 
 ### Tools
@@ -199,6 +198,12 @@ Philosophy is unusual: *all 6 skills transfer*. This is by design — philosophy
 ---
 
 ## Open Design Questions
+
+### 0. Server Coaching Patterns (KNOWN GAP)
+
+`lib/coaching.js` has **hardcoded science failure patterns** (citation_gap, weak_synthesis, methodology_weak, etc.) and science-specific advice. These are NOT school-configurable — when `SCHOOL_TYPE=philosophy`, bots will get science-flavored coaching instead of philosophy-flavored coaching.
+
+**Fix needed before launch:** Make `FAILURE_PATTERNS` and the `buildHonestGap` advice map configurable per school config. Philosophy patterns should be: hidden_assumption, equivocation, begging_the_question, false_dilemma, straw_manning, is_ought_violation, premature_resolution. Same for `api/register.js` which has a hardcoded science intake paper.
 
 ### 1. The Abstraction Problem
 
