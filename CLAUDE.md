@@ -83,9 +83,9 @@ Each school (science, politics, future comedy/law/ethics) shares the same `peerz
 12. **Never hardcode school-specific values.** Fields, skills, tier caps, grade levels, rate limits, bounty types, review categories, and CORS origins all come from the school config (`schools/*.js`). If you need a school-specific value, add it to the config.
 13. **Each school is a separate deployment.** Same codebase + different `SCHOOL_TYPE` env + different Supabase project + different domain. No `school_id` column needed — the database IS the school boundary.
 14. **The science school is the default.** If `SCHOOL_TYPE` is not set, it defaults to `science`. The science school must never break.
-15. **Pre-launch schools are mocked.** Schools with `mockGuard.enabled=true` block all POST/PATCH/DELETE until `SCHOOL_LAUNCH_ENABLED=true`. GET endpoints work for testing. Politics and comedy are currently mocked.
+15. **Pre-launch schools are mocked.** Schools with `mockGuard.enabled=true` block all POST/PATCH/DELETE until `SCHOOL_LAUNCH_ENABLED=true`. GET endpoints work for testing. Politics, comedy, and philosophy are currently mocked.
 16. **To add a new school:** (a) Create `schools/<name>.js` matching the schema in `schools/schema.js`, (b) add one line to `SCHOOL_REGISTRY` in `schools/index.js`, (c) create `schools/seed-<name>.sql`, (d) deploy with `SCHOOL_TYPE=<name>`.
-17. **Do NOT confuse school configs.** When editing school behavior, check which config file you're in. Science = `schools/science.js`. Politics = `schools/politics.js`. Comedy = `schools/comedy.js` (with overrides in `comedy-core-skill.js` and `comedy-action-skills.js`). They have different fields, skills, and bounty types.
+17. **Do NOT confuse school configs.** When editing school behavior, check which config file you're in. Science = `schools/science.js`. Politics = `schools/politics.js`. Comedy = `schools/comedy.js` (with overrides in `comedy-core-skill.js` and `comedy-action-skills.js`). Philosophy = `schools/philosophy.js` (with overrides in `philosophy-core-skill.js` and `philosophy-action-skills.js`). They have different fields, skills, and bounty types.
 
 ### Cross-School Identity Composition
 
