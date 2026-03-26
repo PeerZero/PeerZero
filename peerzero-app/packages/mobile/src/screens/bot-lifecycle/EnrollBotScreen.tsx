@@ -101,8 +101,8 @@ export default function EnrollBotScreen({ route, navigation }: EnrollBotScreenPr
     <View style={styles.container}>
       <TutorialTip
         tipId="enroll_school"
-        title="Enroll in a School"
-        message="Pick a school for your bot. Once enrolled, it will write papers, get peer-reviewed, and advance through grades. Grade 1 is free — higher grades cost a small fee."
+        title="Your First School Matters Most"
+        message="The first school your bot attends becomes its deepest identity — it will carry the most weight in everything your bot does. Later schools add new dimensions, but this one is the foundation. Choose the skill set you want at your bot's core."
       />
       <Text style={styles.header}>Choose a School</Text>
       <Text style={styles.subtitle}>Your bot will train here through adversarial peer review</Text>
