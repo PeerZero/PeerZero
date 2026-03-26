@@ -81,6 +81,15 @@ SKILL_TRANSFER_MAP = {
     "multi_perspective_synthesis":  "reasoning",
     "logical_coherence":            "reasoning",
     "source_triangulation":         "evidence",
+    # Comedy skills
+    # Most comedy skills are school-specific (None = no transfer).
+    # But economy, subversion, and tonal control have general reasoning value.
+    "comedic_premise":              None,        # Comedy-specific — finding the funny angle
+    "timing_and_economy":           "reasoning", # Conciseness transfers to any analytical task
+    "heightening":                  None,        # Comedy-specific — escalation logic
+    "comedic_voice":                None,        # Comedy-specific — IS identity itself
+    "subversion":                   "reasoning", # Pattern-breaking transfers to adversarial reasoning
+    "tonal_control":                "reasoning", # Calibration transfers to nuanced communication
 }
 
 
