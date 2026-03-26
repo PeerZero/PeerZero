@@ -29,9 +29,15 @@ import { getDecryptedKey } from '../services/api-key.service';
 import { getPlatformCredentials, updatePlatformCycleStatus } from '../services/platform.service';
 import { query, queryOne } from '../db/client';
 import { broadcastExternalActivity } from '../websocket/activity-stream';
-import { getLatestSelfAuthored } from '../services/memory.service';
+import {
+  getLatestSelfAuthored,
+  storeExercise,
+  getUncondensedExerciseCount,
+  storeParagraph,
+  getParagraphs,
+} from '../services/memory.service';
 import { resolveActiveSkills } from '../services/skill-engine.service';
-import { buildPlatformIdentityPrompt } from './prompt-builder';
+import { buildPlatformIdentityPrompt, buildPrompt } from './prompt-builder';
 import { PLATFORM_ACTION_TOOL, PLATFORM_SKIP_TOOL } from './tool-schemas';
 import type { PlatformCredentials } from '../adapters/platform.adapter';
 import type { SchoolProfile } from '@peerzero/shared';
@@ -161,6 +167,79 @@ export async function runPlatformCycle(ctx: PlatformCycleContext): Promise<void>
       content_preview: preview || null,
       skills_demonstrated: result.skills_demonstrated || [],
     });
+
+    // ─────────────────────────────────────────────────────────────────────
+    // 9. Platform condensation: L1→L2→L3 ONLY (L4/L5 are school-exclusive)
+    //
+    // ┌─────────────────────────────────────────────────────────────────┐
+    // │ ARCHITECTURE: Platform condensation in the app                  │
+    // │                                                                 │
+    // │ Platform actions generate L1 exercises. When 5+ accumulate,    │
+    // │ the LLM condenses them into L2 paragraphs. When 5+ paragraphs │
+    // │ accumulate, they condense into L3 docs. L3→L4 is HARD-BLOCKED │
+    // │ — core identity can only be written through school cycles.     │
+    // │                                                                 │
+    // │ Uses the same condenser prompts as school. Thresholds match.   │
+    // │                                                                 │
+    // │ DO NOT add core or master condensation here.                   │
+    // │ See docs/CONDENSATION_ARCHITECTURE.md for the full design.     │
+    // └─────────────────────────────────────────────────────────────────┘
+    // ─────────────────────────────────────────────────────────────────────
+    try {
+      // Store platform action as L1 exercise
+      await storeExercise(
+        ctx.botId,
+        0, // cycle_number 0 = platform cycle (not school)
+        `platform:${action.action_type}`,
+        {
+          interaction_type: 'platform_action',
+          platform: platCreds.platformName,
+          action_type: action.action_type,
+          content_preview: preview || '',
+          result_summary: summary,
+        },
+      );
+
+      // Check if platform condensation threshold is met (5+ exercises)
+      const uncondensed = await getUncondensedExerciseCount(ctx.botId);
+      if (uncondensed >= 5 && cachedProfile?.cached_profile?.skill_condenser) {
+        // Use the same condenser prompt the school provides
+        const condensationPrompt = buildPrompt('condense', {
+          profile: cachedProfile.cached_profile,
+          type: 'skill',
+        });
+        const condenseResponse = await llmAdapter.chat(llmKey, ctx.llmModel, condensationPrompt);
+
+        try {
+          const parsed = JSON.parse(
+            condenseResponse.content
+              .replace(/^```(?:json)?\s*/i, '')
+              .replace(/```\s*$/i, '')
+              .trim()
+          );
+          if (parsed?.paragraph) {
+            await storeParagraph(
+              ctx.botId,
+              `platform:${platCreds.platformName}`,
+              parsed.paragraph as string,
+              0, // cycle 0 = platform
+            );
+            logger.info(
+              { botId: ctx.botId, platform: platCreds.platformName },
+              'Platform L1→L2: stored condensed paragraph from platform experience'
+            );
+          }
+        } catch {
+          // JSON parse failure — non-blocking
+        }
+      }
+    } catch (condensErr) {
+      // Platform condensation failures must NEVER block the platform cycle
+      logger.warn(
+        { botId: ctx.botId, err: condensErr instanceof Error ? condensErr.message : condensErr },
+        'Platform condensation failed (non-blocking)'
+      );
+    }
 
   } catch (err) {
     const errorMsg = err instanceof Error ? err.message : String(err);

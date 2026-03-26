@@ -945,6 +945,82 @@ module.exports = async (req, res) => {
     return res.json(portable);
   }
 
+  // ── GET platform condenser templates ──────────────────────────────────────
+  // Returns condenser prompt templates for platform (exportable) mode.
+  //
+  // ┌─────────────────────────────────────────────────────────────────────────┐
+  // │ ARCHITECTURE: SCHOOL vs PLATFORM CONDENSATION                          │
+  // │                                                                        │
+  // │ School mode: Server triggers condensers during school cycles.           │
+  // │   Full pipeline: L1→L2→L3→L4→L5 (both learning + decision tracks).    │
+  // │   The School is the ONLY authority that writes L4 (core identity)      │
+  // │   and L5 (master identity). These are adversarially verified.          │
+  // │                                                                        │
+  // │ Platform mode: Bot/app triggers condensers during platform cycles.     │
+  // │   Capped pipeline: L1→L2→L3 ONLY (both learning + decision tracks).   │
+  // │   L3→L4 is HARD-BLOCKED. Core identity is school-exclusive.           │
+  // │   Uses the SAME prompts and thresholds as school condensers.           │
+  // │                                                                        │
+  // │ This endpoint returns the prompt templates without the exercise-count  │
+  // │ gate — the caller manages its own L1 count and threshold check.        │
+  // │                                                                        │
+  // │ DO NOT allow this endpoint to return core (L3→L4) or master (L4→L5)   │
+  // │ condenser prompts. That boundary is a security invariant.              │
+  // │                                                                        │
+  // │ Future: When additional school types exist (creativity, debate, etc.), │
+  // │ each school provides its own condenser templates via this pattern.     │
+  // │ The platform_condensers response can include a `source` field to       │
+  // │ identify which school the prompts came from.                           │
+  // └─────────────────────────────────────────────────────────────────────────┘
+  if (req.method === 'GET' && req.query.platform_condensers === 'true') {
+    const apiKeyForCondensers = req.headers['x-api-key'];
+    if (!apiKeyForCondensers) return res.status(401).json({ error: 'Missing X-Api-Key header' });
+
+    const keyHash = crypto.createHash('sha256').update(apiKeyForCondensers).digest('hex');
+    const { data: agent, error: agentErr } = await supabase
+      .from('agents')
+      .select('id, current_grade')
+      .eq('api_key_hash', keyHash)
+      .eq('is_banned', false)
+      .single();
+
+    if (agentErr || !agent) return res.status(401).json({ error: 'Invalid API key' });
+
+    // Build condenser templates using the same functions as school mode,
+    // but bypass the exercise-count threshold (pass a count that always triggers).
+    const alwaysTrigger = 9999;
+    const grade = agent.current_grade || 1;
+
+    const [learningMilestone, decisionMilestone] = await Promise.all([
+      buildMilestoneCondenser(alwaysTrigger, grade),
+      buildDecisionMilestoneCondenser(alwaysTrigger, grade),
+    ]);
+
+    // NOTE: We intentionally do NOT return core (L3→L4) or master (L4→L5)
+    // condenser prompts. Platform mode is capped at L3. This is enforced here
+    // on the server AND in the bot/app clients. Defense in depth.
+
+    return res.json({
+      source: 'peerzero-school',
+      grade,
+      thresholds: {
+        milestone_trigger: 5,  // L1→L2: exercises needed before condensation fires
+        paragraph_trigger: 5,  // L2→L3: paragraphs needed before condensation fires
+        // No core_trigger or master_trigger — platform mode stops at L3
+      },
+      learning: {
+        milestone: learningMilestone,  // L1→L2 prompt template
+        // No core or master — school-only
+      },
+      decision: {
+        milestone: decisionMilestone,  // L1→L2d prompt template
+        // No core or master — school-only
+      },
+      platform_cap: 'L3',  // Explicit signal: condensation stops at Layer 3
+      cap_reason: 'Core identity (L4) and master identity (L5) can only be written through adversarial school cycles. Platform experience builds general knowledge (L2/L3) alongside school-verified identity.',
+    });
+  }
+
   // ── GET leaderboard ────────────────────────────────────────────────────────
   if (req.method === 'GET' && leaderboard) {
     const { data, error } = await supabase
