@@ -9,7 +9,7 @@ import { AppError } from '../middleware/error-handler';
 import { encrypt, decrypt } from './encryption.service';
 import { getSchoolAdapter } from '../adapters/adapter.factory';
 import type { BotSummary, BotDetail, BotStatus } from '@peerzero/shared';
-import { SUPPORTED_MODEL_IDS, BOT_STATUSES, sanitizeAvatarConfig, getGradePriceCents, DEFAULT_FAST_MODELS } from '@peerzero/shared';
+import { SUPPORTED_MODEL_IDS, BOT_STATUSES, sanitizeAvatarConfig, getGradePriceCents, DEFAULT_FAST_MODELS, validateBotName } from '@peerzero/shared';
 
 // DB row shape for getBotDetail query (includes columns not in BotDetail)
 interface BotDetailRow extends BotDetail {
@@ -151,7 +151,11 @@ export async function updateBot(userId: string, botId: string, updates: Partial<
   const params: unknown[] = [];
   let idx = 1;
 
-  if (updates.name !== undefined) { sets.push(`name = $${idx++}`); params.push(updates.name); }
+  if (updates.name !== undefined) {
+    const nameCheck = validateBotName(updates.name);
+    if (!nameCheck.valid) throw new AppError(400, nameCheck.error);
+    sets.push(`name = $${idx++}`); params.push(updates.name);
+  }
   if (updates.avatar_config !== undefined) { sets.push(`avatar_config = $${idx++}`); params.push(JSON.stringify(sanitizeAvatarConfig(updates.avatar_config))); }
   if (updates.llm_api_key_id !== undefined) {
     // Verify the new API key belongs to this user

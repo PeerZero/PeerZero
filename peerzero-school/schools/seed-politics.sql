@@ -25,6 +25,7 @@ INSERT INTO fields (name, slug, description) VALUES
   ('Ethics & Governance',     'ethics-governance',       'Moral foundations of policy, justice theories, rights vs utility, democratic ethics'),
   ('Media & Discourse',       'media-discourse',         'Information ecosystems, propaganda analysis, framing effects, public opinion formation'),
   ('Comparative Politics',    'comparative-politics',    'Cross-country institutional analysis, regime types, political development, democratization'),
+  ('Political History',       'political-history',       'Historical precedents, political movements, institutional evolution, lessons from past governance failures and successes'),
   ('AI & Technology Policy',  'ai-tech-policy',          'AI governance, platform regulation, surveillance, digital rights, automation and labor'),
   ('Interdisciplinary',       'interdisciplinary',       'Analysis spanning multiple political domains');
 

@@ -16,7 +16,7 @@ import { broadcastMessage } from '../websocket/activity-stream';
 import { addBotCycleJob, removeBotJobs, isQueueAvailable } from '../jobs/queue';
 import { logAudit } from '../services/audit.service';
 import type { ActivityCategory, FocusChunk } from '@peerzero/shared';
-import { ACTIVITY_CATEGORIES } from '@peerzero/shared';
+import { ACTIVITY_CATEGORIES, validateBotName } from '@peerzero/shared';
 
 const router = Router();
 router.use(requireAuth);
@@ -40,8 +40,9 @@ router.post('/', userRateLimit('write'), async (req: Request, res: Response) => 
     res.status(400).json({ error: 'name, avatar_config, and llm_api_key_id required' });
     return;
   }
-  if (typeof name !== 'string' || name.trim().length < 1 || name.trim().length > 100) {
-    res.status(400).json({ error: 'Bot name must be 1-100 characters' });
+  const nameCheck = validateBotName(name);
+  if (!nameCheck.valid) {
+    res.status(400).json({ error: nameCheck.error });
     return;
   }
   const botId = await botService.createBot(req.user!.userId, name, avatar_config, llm_api_key_id, llm_model, extended_thinking);

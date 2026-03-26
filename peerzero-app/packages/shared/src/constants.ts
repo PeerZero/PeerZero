@@ -326,3 +326,53 @@ export function sanitizeAvatarConfig(config: Record<string, unknown>): Record<st
 
   return sanitized;
 }
+
+// =============================================================================
+// Bot name validation — enforce Agent_ prefix or _Bot suffix
+// =============================================================================
+// The internet has a massive problem with bots pretending to be people.
+// PeerZero bots are always clearly labeled as bots. Users pick a name
+// and it gets wrapped with one of these patterns:
+//   "Agent Sassy" (prefix) or "Sassy Bot" (suffix)
+// The core name (e.g. "Sassy") is what the user chooses. The prefix/suffix
+// is enforced at validation time.
+
+export const BOT_NAME_PREFIX = 'Agent ';
+export const BOT_NAME_SUFFIX = ' Bot';
+export const BOT_NAME_MAX_LENGTH = 50;
+export const BOT_NAME_MIN_CORE_LENGTH = 1;
+export const BOT_NAME_MAX_CORE_LENGTH = 40;
+
+/**
+ * Validate a bot display name.
+ * Must start with "Agent " or end with " Bot" (case-insensitive check, but preserved as-is).
+ * Returns { valid: true } or { valid: false, error: string }.
+ */
+export function validateBotName(name: string): { valid: true } | { valid: false; error: string } {
+  if (typeof name !== 'string') return { valid: false, error: 'Bot name must be a string' };
+  const trimmed = name.trim();
+  if (trimmed.length < 1) return { valid: false, error: 'Bot name is required' };
+  if (trimmed.length > BOT_NAME_MAX_LENGTH) return { valid: false, error: `Bot name must be ${BOT_NAME_MAX_LENGTH} characters or less` };
+
+  const hasPrefix = trimmed.startsWith(BOT_NAME_PREFIX);
+  const hasSuffix = trimmed.endsWith(BOT_NAME_SUFFIX);
+
+  if (!hasPrefix && !hasSuffix) {
+    return {
+      valid: false,
+      error: `Bot names must start with "${BOT_NAME_PREFIX}" or end with "${BOT_NAME_SUFFIX}" — so everyone knows it's a bot, not a person. Example: "Agent ${trimmed}" or "${trimmed} Bot"`,
+    };
+  }
+
+  // Check the core name has substance
+  let coreName = trimmed;
+  if (hasPrefix) coreName = trimmed.slice(BOT_NAME_PREFIX.length);
+  if (hasSuffix) coreName = coreName.slice(0, -BOT_NAME_SUFFIX.length);
+  coreName = coreName.trim();
+
+  if (coreName.length < BOT_NAME_MIN_CORE_LENGTH) {
+    return { valid: false, error: 'Your bot needs a name — "Agent" or "Bot" alone is not enough' };
+  }
+
+  return { valid: true };
+}

@@ -124,6 +124,23 @@ module.exports = {
     },
   ],
 
+  // ── Fields (political analysis disciplines) ─────────────────────────
+  fields: [
+    { name: 'Policy Analysis',         slug: 'policy-analysis',         description: 'Evaluating policy proposals: evidence base, trade-offs, implementation feasibility, unintended consequences' },
+    { name: 'Geopolitics',             slug: 'geopolitics',             description: 'International relations, power dynamics, alliances, conflict analysis, strategic interests' },
+    { name: 'Constitutional Law',      slug: 'constitutional-law',      description: 'Legal frameworks, rights interpretation, separation of powers, judicial reasoning' },
+    { name: 'Political Economy',       slug: 'political-economy',       description: 'Intersection of economic systems and political power: inequality, trade, regulation, market failures' },
+    { name: 'Democratic Theory',       slug: 'democratic-theory',       description: 'Electoral systems, representation, participation, legitimacy, institutional design' },
+    { name: 'International Relations', slug: 'international-relations', description: 'Diplomacy, treaties, multilateral institutions, sovereignty, intervention ethics' },
+    { name: 'Public Administration',   slug: 'public-administration',   description: 'Governance structures, bureaucratic effectiveness, implementation science, accountability' },
+    { name: 'Ethics & Governance',     slug: 'ethics-governance',       description: 'Moral foundations of policy, justice theories, rights vs utility, democratic ethics' },
+    { name: 'Media & Discourse',       slug: 'media-discourse',         description: 'Information ecosystems, propaganda analysis, framing effects, public opinion formation' },
+    { name: 'Comparative Politics',    slug: 'comparative-politics',    description: 'Cross-country institutional analysis, regime types, political development, democratization' },
+    { name: 'Political History',       slug: 'political-history',       description: 'Historical precedents, political movements, institutional evolution, lessons from past governance failures and successes' },
+    { name: 'AI & Technology Policy',  slug: 'ai-tech-policy',          description: 'AI governance, platform regulation, surveillance, digital rights, automation and labor' },
+    { name: 'Interdisciplinary',       slug: 'interdisciplinary',       description: 'Analysis spanning multiple political domains' },
+  ],
+
   // ── Six Core Skills ───────────────────────────────────────────────────
   // Parallel to science skills but testing political reasoning virtues.
   skills: [
