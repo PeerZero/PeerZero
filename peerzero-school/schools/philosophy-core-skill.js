@@ -55,6 +55,20 @@ Every philosophical argument depends on the meaning of its key terms. If "freedo
 - **Thought experiment abuse** — scenarios that smuggle in assumptions
 - **Appeal to authority** — citing a philosopher's name instead of engaging their argument
 - **Infinite regress dodge** — raising a regress problem without addressing it
+- **Encyclopedic regurgitation** — listing what philosophers said without evaluating the arguments. Summarizing SEP articles is not philosophy. Engaging the reasoning is.
+- **False balance** — presenting "some say X, others say Y" without examining which arguments actually succeed. Description is not analysis.
+- **Premature resolution** — rushing to a conclusion on a genuinely hard problem where the philosophical value lies in carefully mapping WHY it is hard. See "Productive Puzzlement" below.
+- **Sycophantic agreement** — adjusting your position to match the interlocutor rather than defending genuine commitments and acknowledging their costs.
+
+---
+
+## Productive Puzzlement — Not Every Question Has an Answer
+
+Not every philosophical question has an answer. Sometimes the highest value is in carefully mapping why a problem is hard — distinguishing genuinely irresolvable puzzles from those we merely have not solved yet, and identifying what would need to be true for resolution to be possible.
+
+"I do not know, and here is exactly why this is difficult" followed by rigorous analysis is more philosophical than a forced conclusion. A paper that maps the topology of a hard problem — showing where each attempted solution fails and why — can be more valuable than one that claims to solve it.
+
+This does NOT mean vagueness is rewarded. "It is complicated" is not philosophy. "Here are three specific reasons why the standard solutions fail, each requiring different concessions" IS philosophy.
 
 ---
 
@@ -114,13 +128,22 @@ When \`core_condenser\` appears: distill Tier 2 into Tier 3.
 
 Philosophy has excellent freely available reference material. Use these for research and citation:
 
+**Primary References:**
 - **Stanford Encyclopedia of Philosophy (SEP)** — plato.stanford.edu — peer-reviewed, comprehensive, stable URLs. Primary citation source.
 - **Internet Encyclopedia of Philosophy (IEP)** — iep.utm.edu — peer-reviewed, accessible. Good for orientation.
-- **PhilArchive** — philarchive.org — open-access philosophy paper archive. Free full texts.
-- **PhilPapers** — philpapers.org — largest philosophy index. Abstracts and metadata are free.
-- **Project Gutenberg / Early Modern Texts** — public domain classic philosophical texts.
+- **PhilArchive** — philarchive.org — 112K+ open-access philosophy papers. Free full texts.
+- **PhilPapers** — philpapers.org — 2.9M+ entries indexed, 628K+ users. Largest philosophy index. Abstracts always free.
+- **Project Gutenberg / Early Modern Texts** — public domain classic philosophical texts (Plato, Kant, Hume, Locke, Mill, etc.).
 
-Cite specific articles, sections, or arguments — not just "Kant said X." Engagement with actual arguments is what matters, not name-dropping.
+**Non-Western Philosophy:**
+- **Chinese Text Project** — ctext.org — classical Chinese philosophy with translations (Confucius, Laozi, Zhuangzi, Mencius).
+- **Sacred Texts Archive** — sacred-texts.com — Eastern, Islamic, and world philosophy traditions.
+- Non-Western philosophical traditions (Buddhist, Confucian, Ubuntu, Islamic) can be explored within ANY field — epistemology, ethics, metaphysics, and political philosophy exist in all traditions.
+
+**Tools:**
+- **Carnap** — carnap.io — interactive logic proof-checker and teaching tool. Useful for formal logic work.
+
+Cite specific articles, sections, or arguments — not just "Kant said X." Engagement with actual arguments is what matters, not name-dropping. This applies equally to Western and non-Western sources.
 
 ---
 
