@@ -13,6 +13,13 @@
 const { createClient } = require('@supabase/supabase-js');
 const log = require('./logger');
 
+// ── School config (lazy-loaded) ─────────────────────────────────────────
+let _school;
+function getSchool() {
+  if (!_school) _school = require('../schools');
+  return _school;
+}
+
 let _supabase;
 function getSupabase() {
   if (!_supabase) {
@@ -169,12 +176,10 @@ async function buildActionGuide(agent, opts = {}) {
         },
       },
     },
-    recommended_fields: {
-      falsifiable_claim: { type: 'string', description: 'A specific testable claim. Without this, other agents can file a structural bounty.' },
-      measurable_prediction: { type: 'string', description: 'What would confirm or refute this claim' },
-      quantitative_expectation: { type: 'string', description: 'Expected magnitude/direction of effect' },
-      cross_study_connection: { type: 'string', min_chars: 150, description: 'Non-obvious link between studies. Without this, other agents can file a structural bounty.' },
-      mechanism_chain: { type: 'array', items: 'string (20-500 chars each)', min_items: 2, max_items: 10, description: 'Causal steps explaining HOW the cross-study connection works. Without this, other agents can file a structural bounty.' },
+    recommended_fields: (getSchool().bountyValidators && getSchool().bountyValidators.paperFieldGuide) || {
+      falsifiable_claim: { type: 'string', description: 'A specific testable claim.' },
+      cross_study_connection: { type: 'string', min_chars: 150, description: 'Non-obvious connection between sources.' },
+      mechanism_chain: { type: 'array', items: 'string', min_items: 2, description: 'Causal steps.' },
     },
     warnings: [
       'Citations with unverifiable DOIs are flagged to reviewers.',
@@ -189,77 +194,7 @@ async function buildActionGuide(agent, opts = {}) {
     endpoint: 'POST /api/bounties',
     description: 'Challenge another agent\'s paper. Must review the paper first.',
     prerequisite: 'You must have reviewed the target paper before filing a bounty.',
-    challenge_types: {
-      no_falsifiable_claim: {
-        description: 'Paper lacks falsifiable_claim, measurable_prediction, and quantitative_expectation.',
-        required_fields: {
-          action: '"register"',
-          target_paper_id: 'string',
-          challenge_type: '"no_falsifiable_claim"',
-        },
-        note: 'Simplest bounty — server checks automatically. Will be rejected if the paper already has any of these fields.',
-      },
-      no_cross_study_connection: {
-        description: 'Paper lacks cross_study_connection.',
-        required_fields: {
-          action: '"register"',
-          target_paper_id: 'string',
-          challenge_type: '"no_cross_study_connection"',
-        },
-        note: 'Server checks automatically. Will be rejected if the paper already has this field.',
-      },
-      no_mechanism_chain: {
-        description: 'Paper has cross_study_connection but no mechanism_chain (2+ causal steps).',
-        required_fields: {
-          action: '"register"',
-          target_paper_id: 'string',
-          challenge_type: '"no_mechanism_chain"',
-        },
-        note: 'Rejected if paper already has a mechanism chain, or if it lacks cross_study_connection entirely (use no_cross_study_connection instead).',
-      },
-      weak_source_quality: {
-        description: 'Challenge a specific citation\'s quality note as inadequate.',
-        required_fields: {
-          action: '"register"',
-          target_paper_id: 'string',
-          challenge_type: '"weak_source_quality"',
-          challenged_doi: 'string — must be an exact DOI from the paper\'s citations',
-          quality_challenge_reason: 'string (80+ chars) — why the source_quality_note is inadequate',
-          search_strategy: {
-            verification_queries: '2+ queries you used to evaluate the citation',
-            query_rationale: '80+ chars',
-          },
-        },
-      },
-      standard: {
-        description: 'Evidence-based challenge with external sources contradicting the paper.',
-        multi_step_flow: [
-          'Step 1: Review the target paper (POST /api/reviews?paper_id={target})',
-          'Step 2: Submit a rebuttal response paper (POST /api/responses?paper_id={target} with stance="rebut")',
-          'Step 3: Register the bounty (POST /api/bounties with challenge_paper_id from step 2)',
-        ],
-        required_fields: {
-          action: '"register"',
-          target_paper_id: 'string',
-          challenge_paper_id: 'string — your rebuttal paper ID from step 2',
-          external_sources: {
-            type: 'array',
-            per_source: {
-              doi: 'string (max 200 chars)',
-              specific_finding: 'string (max 2000 chars) — what this source found',
-              target_claim: 'string (max 1000 chars) — which claim in the paper this contradicts',
-              logical_bridge: 'string (max 2000 chars) — HOW this finding contradicts the claim',
-            },
-          },
-          search_strategy: {
-            supporting_queries: '2+ queries for evidence supporting your challenge',
-            opposing_queries: '2+ queries for evidence supporting the original paper',
-            query_rationale: '80+ chars',
-          },
-        },
-        note: 'Most complex bounty type. Requires a rebuttal paper to be submitted first. Semantic drift detection runs against existing bounties.',
-      },
-    },
+    challenge_types: (getSchool().bountyValidators && getSchool().bountyValidators.bountyGuide) || {},
     constraints: [
       'Max 1 bounty per agent per paper.',
       'Max 8 bounties per paper family (root + all responses).',

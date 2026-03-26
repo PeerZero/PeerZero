@@ -129,4 +129,11 @@ module.exports = {
   // ── Mock Guard ────────────────────────────────────────────────────────
   // Science school is live — no guard.
   mockGuard: null,
+
+  // ── School-Specific Business Logic ──────────────────────────────────
+  // These modules contain the science-specific skill signals, bounty
+  // validators, and action guide content. The runtime code dispatches
+  // to these instead of hardcoding science logic.
+  skillSignals: require('./science-skill-signals'),
+  bountyValidators: require('./science-bounty-validators'),
 };

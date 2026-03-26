@@ -8,14 +8,14 @@ import { useFocusEffect } from '@react-navigation/native';
 import { bots as botsApi, apiKeys as keysApi } from '../../services/api';
 import { colors } from '../../theme/colors';
 import { spacing, fontSize, borderRadius } from '../../theme/spacing';
-import { AVATAR_COLOR_PRESETS, SUPPORTED_MODELS, SPECIES_PRESETS } from '@peerzero/shared';
+import { AVATAR_COLOR_PRESETS, SUPPORTED_MODELS, SPECIES_PRESETS, BOT_NAME_PREFIX, BOT_NAME_SUFFIX, BOT_NAME_MAX_LENGTH, validateBotName } from '@peerzero/shared';
 import type { ApiKeyInfo } from '@peerzero/shared';
 import BotAvatar from '../../components/BotAvatar';
 import TutorialTip from '../../components/TutorialTip';
 import * as Haptics from 'expo-haptics';
 import type { CreateBotScreenProps } from '../../navigation/types';
 
-const MAX_NAME_LENGTH = 50;
+const MAX_NAME_LENGTH = BOT_NAME_MAX_LENGTH;
 
 // Preview color used on the style picker (neutral enough to show shape clearly)
 const PREVIEW_COLOR = '#6C5CE7';
@@ -61,12 +61,9 @@ export default function CreateBotScreen({ navigation }: CreateBotScreenProps) {
   const handleCreate = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     const trimmedName = name.trim();
-    if (!trimmedName) {
-      Alert.alert('Name Required', 'Give your bot a name to get started.');
-      return;
-    }
-    if (trimmedName.length > MAX_NAME_LENGTH) {
-      Alert.alert('Name Too Long', `Max ${MAX_NAME_LENGTH} characters.`);
+    const nameCheck = validateBotName(trimmedName);
+    if (!nameCheck.valid) {
+      Alert.alert('Invalid Name', nameCheck.error);
       return;
     }
     if (!selectedKeyId) {
@@ -208,7 +205,7 @@ export default function CreateBotScreen({ navigation }: CreateBotScreenProps) {
       <Text style={styles.label}>Name</Text>
       <TextInput
         style={styles.input}
-        placeholder="What's your bot called?"
+        placeholder={`e.g. "${BOT_NAME_PREFIX}Nova" or "Nova${BOT_NAME_SUFFIX}"`}
         placeholderTextColor={colors.text.tertiary}
         value={name}
         onChangeText={(t) => setName(t.slice(0, MAX_NAME_LENGTH))}
@@ -218,6 +215,9 @@ export default function CreateBotScreen({ navigation }: CreateBotScreenProps) {
         accessibilityLabel="Bot name"
         accessibilityRole="text"
       />
+      <Text style={styles.nameHint}>
+        Must start with "{BOT_NAME_PREFIX}" or end with "{BOT_NAME_SUFFIX}" — bots should never pretend to be people.
+      </Text>
       <Text style={styles.charCount}>{name.length}/{MAX_NAME_LENGTH}</Text>
 
       {/* Color picker */}
@@ -379,6 +379,7 @@ const styles = StyleSheet.create({
     padding: spacing.md, borderRadius: borderRadius.md, fontSize: fontSize.lg,
     borderWidth: 1, borderColor: colors.border,
   },
+  nameHint: { fontSize: fontSize.xs, color: colors.text.secondary, marginTop: 4, lineHeight: fontSize.xs * 1.4 },
   charCount: { fontSize: fontSize.xs, color: colors.text.tertiary, alignSelf: 'flex-end', marginTop: 2 },
   colorGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, width: '100%' },
   colorSwatch: { width: 44, height: 44, borderRadius: 22 },

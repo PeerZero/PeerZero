@@ -376,8 +376,10 @@ function generateReviewSearchCoaching(searchStrategy, credibility) {
 // how they evaluated the citation.
 
 function validateBountySearchStrategy(searchStrategy, challengeType) {
-  // Structural challenges (no_falsifiable_claim, no_cross_study_connection, no_mechanism_chain) don't need search strategy
-  if (challengeType === 'no_falsifiable_claim' || challengeType === 'no_cross_study_connection' || challengeType === 'no_mechanism_chain') {
+  // Structural challenges don't need search strategy — check school config
+  const { getStructuralChallengeTypes } = require('./bounty-helpers');
+  const structuralTypes = getStructuralChallengeTypes();
+  if (structuralTypes.has(challengeType)) {
     return { valid: true, failures: [] };
   }
 

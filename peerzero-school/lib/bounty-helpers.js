@@ -101,7 +101,8 @@ function validateWeakSourceQualityChallenge(body) {
 
 // ── Semantic Drift Detection ───────────────────────────────────────────────────
 
-const SCIENTIFIC_STOPWORDS = new Set([
+// Default stopwords — used as fallback if school config doesn't provide any.
+const DEFAULT_STOPWORDS = new Set([
   'study', 'studies', 'research', 'evidence', 'finding', 'findings', 'result',
   'results', 'shows', 'shown', 'demonstrate', 'demonstrates', 'demonstrated',
   'suggest', 'suggests', 'indicated', 'indicates', 'reported', 'reports',
@@ -118,15 +119,26 @@ const SCIENTIFIC_STOPWORDS = new Set([
   'provide', 'provides', 'provided', 'author', 'authors', 'original',
 ]);
 
+// Backward-compatible alias
+const SCIENTIFIC_STOPWORDS = DEFAULT_STOPWORDS;
+
+/** Get stopwords from school config, falling back to defaults */
+function getStopwords() {
+  const school = getSchool();
+  const signals = school.skillSignals;
+  return (signals && signals.stopwords) || DEFAULT_STOPWORDS;
+}
+
 /**
  * Tokenize text into a set of meaningful words (length > 3, stopwords removed).
  * @param {string} text
  * @returns {Set<string>}
  */
 function tokenize(text) {
+  const stopwords = getStopwords();
   return new Set(
     text.toLowerCase().replace(/[^\w\s]/g, ' ').split(/\s+/)
-      .filter(t => t.length > 3 && !SCIENTIFIC_STOPWORDS.has(t))
+      .filter(t => t.length > 3 && !stopwords.has(t))
   );
 }
 
@@ -244,6 +256,7 @@ Respond with ONLY valid JSON:
 module.exports = {
   MIN_SCORE_DROP,
   STRUCTURAL_CHALLENGE_TYPES,
+  getStructuralChallengeTypes,
   isValidDoiFormat,
   validateExternalSources,
   validateWeakSourceQualityChallenge,

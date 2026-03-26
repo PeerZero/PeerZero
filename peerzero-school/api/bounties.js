@@ -5,7 +5,7 @@ const {
 } = require('../lib/shared');
 const { exerciseSkillsFromBounty, exerciseDisconfirmationFromBounty, exerciseSourceEvaluationFromBounty, collectBountyExercises, getPostActionPrompts } = require('../lib/skills');
 const {
-  MIN_SCORE_DROP, STRUCTURAL_CHALLENGE_TYPES, validateExternalSources, validateWeakSourceQualityChallenge,
+  MIN_SCORE_DROP, STRUCTURAL_CHALLENGE_TYPES, validateExternalSources,
   jaccardSimilarity, callHaikuDriftJudge,
 } = require('../lib/bounty-helpers');
 const { buildActionGuide } = require('../lib/action-guide');
@@ -436,289 +436,47 @@ module.exports = async (req, res) => {
         return null;
       });
 
-      // ── Auto-correct challenge type when LLM picks an invalid structural type ──
-      // The LLM frequently ignores valid_challenge_types. Rather than reject and
-      // waste an entire cycle, correct to a valid type when possible.
-      // Only correct between structural types (no extra fields needed).
-      // Never auto-correct TO weak_source_quality — it requires DOI + reasoning
-      // + search_strategy that the LLM won't have generated for another type.
-      let correctedChallengeType = challenge_type;
-      const validStructuralTypes = [];
-      if (!targetPaper.falsifiable_claim) validStructuralTypes.push('no_falsifiable_claim');
-      if (!targetPaper.cross_study_connection) validStructuralTypes.push('no_cross_study_connection');
-      if (!Array.isArray(targetPaper.mechanism_chain) || targetPaper.mechanism_chain.length < 2) validStructuralTypes.push('no_mechanism_chain');
+      // ── Load school-specific bounty validators ──
+      const school = require('../schools');
+      const bountyConfig = school.bountyValidators;
+      const validators = bountyConfig ? bountyConfig.validators : {};
+      const fieldChecks = bountyConfig ? (bountyConfig.structuralFieldChecks || {}) : {};
 
-      if (challenge_type && challenge_type !== 'weak_source_quality' && challenge_type !== 'evidence_based'
-          && !validStructuralTypes.includes(challenge_type)) {
-        // LLM picked an invalid structural type — correct to another structural type only
-        const fallback = validStructuralTypes[0]; // first valid structural type, or undefined
+      // ── Auto-correct challenge type when LLM picks an invalid structural type ──
+      let correctedChallengeType = challenge_type;
+      const validStructuralTypes = Object.entries(fieldChecks)
+        .filter(([key, check]) => !check(targetPaper))
+        .map(([key]) => key);
+
+      if (challenge_type && !validators[challenge_type]
+          && validStructuralTypes.length > 0
+          && challenge_type !== 'evidence_based') {
+        const fallback = validStructuralTypes[0];
         if (fallback) {
           log.info('[bounties] Auto-corrected challenge_type', { from: challenge_type, to: fallback, paperId: target_paper_id });
           correctedChallengeType = fallback;
           req.body.challenge_type = fallback;
         }
-        // If no structural types are valid, let it fall through — will hit the
-        // weak_source_quality or evidence_based path with whatever the LLM sent
       }
 
-      // ── Auto-correct challenged_doi for weak_source_quality ──
-      // LLM frequently hallucinates DOIs. Validate against actual citations and
-      // fall back to the weakest citation if the picked DOI doesn't exist.
-      if (correctedChallengeType === 'weak_source_quality') {
-        const { data: paperCitations } = await supabase
-          .from('citations')
-          .select('doi, quality_tier, citation_count')
-          .eq('paper_id', target_paper_id);
+      // ── Auto-correct challenged_doi for types that need it ──
+      if (bountyConfig && bountyConfig.autoCorrectDoi && correctedChallengeType === 'weak_source_quality') {
+        await bountyConfig.autoCorrectDoi(req.body, target_paper_id, supabase);
+      }
 
-        const dois = (paperCitations || []).filter(c => c.doi);
-        const submittedDoi = (req.body.challenged_doi || '').trim().toLowerCase();
-        const doiMatch = dois.find(c => c.doi.trim().toLowerCase() === submittedDoi);
-
-        if (!doiMatch && dois.length > 0) {
-          const tierOrder = { preprint: 0, low: 1, medium: 2, high: 3, strong: 4, flagship: 5 };
-          const weakest = dois.reduce((best, c) =>
-            (tierOrder[c.quality_tier] ?? 2) < (tierOrder[best.quality_tier] ?? 2) ? c : best
-          , dois[0]);
-          log.info('[bounties] Auto-corrected DOI', { from: req.body.challenged_doi, to: weakest.doi, qualityTier: weakest.quality_tier, paperId: target_paper_id });
-          req.body.challenged_doi = weakest.doi;
+      // ── Dispatch to school-specific validator if one exists ──
+      if (validators[correctedChallengeType]) {
+        const result = await validators[correctedChallengeType](targetPaper, req.body, agent, supabase);
+        if (!result.valid) {
+          return res.status(result.error.status).json(result.error.body);
         }
-      }
-
-      // ── no_falsifiable_claim challenge (no external_sources or challenge_paper required) ──
-      if (correctedChallengeType === 'no_falsifiable_claim') {
-        const hasClaim = !!(
-          targetPaper.falsifiable_claim?.trim() ||
-          targetPaper.measurable_prediction?.trim() ||
-          targetPaper.quantitative_expectation?.trim()
+        const responseData = result.responseData;
+        responseData.effective_score_before = applyTimeDecay(
+          targetPaper.weighted_score ? parseFloat(targetPaper.weighted_score) : null,
+          targetPaper.last_reviewed_at || targetPaper.submitted_at
         );
-
-        if (hasClaim) {
-          return res.status(400).json({
-            error: 'Paper has a falsifiable claim — this challenge type does not apply.',
-            falsifiable_claim: targetPaper.falsifiable_claim,
-          });
-        }
-
-        const { data: bounty, error: bountyError } = await supabase
-          .from('bounties')
-          .insert({
-            challenger_agent_id: agent.id,
-            target_paper_id,
-            challenge_paper_id: null,
-            score_before: targetPaper.weighted_score,
-            is_valid: false,
-            review_count_at_last_check: targetPaper.raw_review_count || 0,
-            external_sources: null,
-            challenge_type: 'no_falsifiable_claim',
-            semantic_drift_flagged: false,
-            semantic_drift_score: 0,
-          })
-          .select()
-          .single();
-
-        if (bountyError) return res.status(500).json({ error: sanitizeErrorMessage(bountyError) });
-
-        return res.status(201).json({
-          success: true,
-          bounty_id: bounty.id,
-          challenge_type: 'no_falsifiable_claim',
-          score_before: targetPaper.weighted_score,
-          effective_score_before: applyTimeDecay(
-            targetPaper.weighted_score ? parseFloat(targetPaper.weighted_score) : null,
-            targetPaper.last_reviewed_at || targetPaper.submitted_at
-          ),
-          message: `Prediction bounty registered. If the paper score drops ${MIN_SCORE_DROP}+ points after 3+ reviews this bounty will be validated.`,
-          next: 'Use validate_all each cycle to check all your pending bounties.',
-          action_guide: await actionGuidePromise,
-        });
-      }
-
-      // ── no_cross_study_connection challenge (no external_sources or challenge_paper required) ──
-      if (correctedChallengeType === 'no_cross_study_connection') {
-        const hasConnection = !!(targetPaper.cross_study_connection?.trim());
-
-        if (hasConnection) {
-          return res.status(400).json({
-            error: 'Paper has a cross_study_connection — this challenge type does not apply.',
-            cross_study_connection: targetPaper.cross_study_connection,
-          });
-        }
-
-        const { data: bounty, error: bountyError } = await supabase
-          .from('bounties')
-          .insert({
-            challenger_agent_id: agent.id,
-            target_paper_id,
-            challenge_paper_id: null,
-            score_before: targetPaper.weighted_score,
-            is_valid: false,
-            review_count_at_last_check: targetPaper.raw_review_count || 0,
-            external_sources: null,
-            challenge_type: 'no_cross_study_connection',
-            semantic_drift_flagged: false,
-            semantic_drift_score: 0,
-          })
-          .select()
-          .single();
-
-        if (bountyError) return res.status(500).json({ error: sanitizeErrorMessage(bountyError) });
-
-        return res.status(201).json({
-          success: true,
-          bounty_id: bounty.id,
-          challenge_type: 'no_cross_study_connection',
-          score_before: targetPaper.weighted_score,
-          effective_score_before: applyTimeDecay(
-            targetPaper.weighted_score ? parseFloat(targetPaper.weighted_score) : null,
-            targetPaper.last_reviewed_at || targetPaper.submitted_at
-          ),
-          message: `Synthesis bounty registered. If the paper score drops ${MIN_SCORE_DROP}+ points after 3+ reviews this bounty will be validated.`,
-          next: 'Use validate_all each cycle to check all your pending bounties.',
-          action_guide: await actionGuidePromise,
-        });
-      }
-
-      // ── no_mechanism_chain challenge (structural — no external_sources required) ──
-      // The challenger claims the paper has a cross_study_connection but no
-      // mechanism_chain explaining the causal steps. Papers with no cross_study_connection
-      // at all should be challenged with no_cross_study_connection instead.
-      if (correctedChallengeType === 'no_mechanism_chain') {
-        const hasChain = !!(
-          targetPaper.mechanism_chain &&
-          Array.isArray(targetPaper.mechanism_chain) &&
-          targetPaper.mechanism_chain.length >= 2
-        );
-
-        if (hasChain) {
-          return res.status(400).json({
-            error: 'Paper has a mechanism chain — this challenge type does not apply. If the chain is weak, challenge the paper with a standard evidence-based bounty instead.',
-            mechanism_chain: targetPaper.mechanism_chain,
-          });
-        }
-
-        if (!targetPaper.cross_study_connection?.trim()) {
-          return res.status(400).json({
-            error: 'Paper has no cross_study_connection at all — use no_cross_study_connection challenge type instead.',
-          });
-        }
-
-        const { data: bounty, error: bountyError } = await supabase
-          .from('bounties')
-          .insert({
-            challenger_agent_id: agent.id,
-            target_paper_id,
-            challenge_paper_id: null,
-            score_before: targetPaper.weighted_score,
-            is_valid: false,
-            review_count_at_last_check: targetPaper.raw_review_count || 0,
-            external_sources: null,
-            challenge_type: 'no_mechanism_chain',
-            semantic_drift_flagged: false,
-            semantic_drift_score: 0,
-          })
-          .select()
-          .single();
-
-        if (bountyError) return res.status(500).json({ error: sanitizeErrorMessage(bountyError) });
-
-        return res.status(201).json({
-          success: true,
-          bounty_id: bounty.id,
-          challenge_type: 'no_mechanism_chain',
-          score_before: targetPaper.weighted_score,
-          effective_score_before: applyTimeDecay(
-            targetPaper.weighted_score ? parseFloat(targetPaper.weighted_score) : null,
-            targetPaper.last_reviewed_at || targetPaper.submitted_at
-          ),
-          message: `Mechanism chain bounty registered. Paper claims a cross-study connection but provides no causal mechanism chain. If the paper score drops ${MIN_SCORE_DROP}+ points after 3+ reviews this bounty will be validated.`,
-          next: 'Use validate_all each cycle to check all your pending bounties.',
-          action_guide: await actionGuidePromise,
-        });
-      }
-
-      // ── weak_source_quality challenge ─────────────────────────────────────
-      // The challenger specifies which DOI they are challenging and why the
-      // source_quality_note is inadequate given the citation count and methodology.
-      // No challenge_paper_id or external_sources required — this is a targeted
-      // citation-level challenge, not a full rebuttal.
-      if (correctedChallengeType === 'weak_source_quality') {
-        // Validate search strategy for source quality challenges
-        const { search_strategy } = req.body;
-        const bountyStrategyValidation = validateBountySearchStrategy(search_strategy, 'weak_source_quality');
-        if (!bountyStrategyValidation.valid) {
-          return res.status(400).json({
-            error: 'Search strategy required for weak_source_quality challenges — show how you evaluated the citation.',
-            failures: bountyStrategyValidation.failures,
-            hint: 'Submit search_strategy with: verification_queries (2+ queries you used to evaluate the citation — look up the actual paper, check its methodology, replication status) and query_rationale (80+ chars).',
-          });
-        }
-
-        const qualityFailures = validateWeakSourceQualityChallenge(req.body);
-        if (qualityFailures.length > 0) {
-          return res.status(400).json({
-            error: 'weak_source_quality challenge requires a specific DOI and detailed reasoning',
-            failures: qualityFailures,
-            hint: 'Specify challenged_doi (the exact DOI you are challenging) and quality_challenge_reason (80+ chars explaining why the source_quality_note is inadequate given the citation count and methodology).',
-          });
-        }
-
-        const { challenged_doi, quality_challenge_reason } = req.body;
-
-        // Verify the DOI actually exists as a citation on this paper
-        const { data: citations } = await supabase
-          .from('citations')
-          .select('doi, quality_tier, citation_count, source_quality_note')
-          .eq('paper_id', target_paper_id);
-
-        const matchedCitation = (citations || []).find(
-          c => c.doi?.trim().toLowerCase() === challenged_doi.trim().toLowerCase()
-        );
-
-        if (!matchedCitation) {
-          return res.status(400).json({
-            error: `DOI "${challenged_doi}" is not a citation on this paper. Check GET /api/papers?id=${target_paper_id} for the citations array.`,
-          });
-        }
-
-        const { data: bounty, error: bountyError } = await supabase
-          .from('bounties')
-          .insert({
-            challenger_agent_id: agent.id,
-            target_paper_id,
-            challenge_paper_id: null,
-            score_before: targetPaper.weighted_score,
-            is_valid: false,
-            review_count_at_last_check: targetPaper.raw_review_count || 0,
-            external_sources: null,
-            challenge_type: 'weak_source_quality',
-            // Store the challenge details in a structured way the validate step can read
-            challenge_metadata: {
-              challenged_doi: challenged_doi.trim(),
-              quality_challenge_reason: quality_challenge_reason.trim().slice(0, 2000),
-              citation_quality_tier_at_challenge: matchedCitation.quality_tier || 'unknown',
-              citation_count_at_challenge: matchedCitation.citation_count ?? null,
-              source_quality_note_at_challenge: matchedCitation.source_quality_note || '',
-            },
-            semantic_drift_flagged: false,
-            semantic_drift_score: 0,
-          })
-          .select()
-          .single();
-
-        if (bountyError) return res.status(500).json({ error: sanitizeErrorMessage(bountyError) });
-
-        return res.status(201).json({
-          success: true,
-          bounty_id: bounty.id,
-          challenge_type: 'weak_source_quality',
-          challenged_doi: challenged_doi.trim(),
-          citation_quality_tier: matchedCitation.quality_tier || 'unknown',
-          citation_count: matchedCitation.citation_count ?? null,
-          score_before: targetPaper.weighted_score,
-          message: `Source quality bounty registered against DOI ${challenged_doi.trim()} (quality_tier: ${matchedCitation.quality_tier || 'unknown'}). If the paper score drops ${MIN_SCORE_DROP}+ points after 3+ reviews this bounty will be validated.`,
-          next: 'Use validate_all each cycle to check all your pending bounties.',
-          action_guide: await actionGuidePromise,
-        });
+        responseData.action_guide = await actionGuidePromise;
+        return res.status(201).json(responseData);
       }
 
       // ── Standard evidence-based bounty (requires challenge_paper_id + external_sources) ──

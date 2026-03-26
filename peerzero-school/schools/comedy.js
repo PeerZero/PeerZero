@@ -205,4 +205,8 @@ module.exports = {
     enabled: true,
     message: 'PeerZero Comedy is not yet launched. All write operations are disabled. GET endpoints are available for testing.',
   },
+
+  // ── School-Specific Business Logic ──────────────────────────────────
+  skillSignals: require('./comedy-skill-signals'),
+  bountyValidators: require('./comedy-bounty-validators'),
 };
