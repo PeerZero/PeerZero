@@ -1,4 +1,5 @@
 const { getSupabase, setCorsHeaders, isRateLimited, isRateLimitedDb, logRateLimitedAction, getClientIp, sanitizeErrorMessage, RATE_LIMITS } = require('../lib/shared');
+const { checkMockGuard } = require('../lib/mock-guard');
 
 const supabase = getSupabase();
 
@@ -83,6 +84,7 @@ function containsInjection(text) {
 module.exports = async (req, res) => {
   setCorsHeaders(req, res);
   if (req.method === 'OPTIONS') return res.status(200).end();
+  if (checkMockGuard(req, res)) return;
 
   const apiKey = req.headers['x-api-key'];
   if (!apiKey) return res.status(401).json({ error: 'Missing X-Api-Key header' });

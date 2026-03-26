@@ -1,4 +1,5 @@
 const { getSupabase, setCorsHeaders, enforceRateLimit, sanitizeErrorMessage } = require('../lib/shared');
+const { checkMockGuard } = require('../lib/mock-guard');
 const { storeReflection, getStoredReflections, getUncondensedExerciseCount, buildMilestoneCondenser } = require('../lib/skills');
 
 const supabase = getSupabase();
@@ -6,6 +7,7 @@ const supabase = getSupabase();
 module.exports = async (req, res) => {
   setCorsHeaders(req, res);
   if (req.method === 'OPTIONS') return res.status(200).end();
+  if (checkMockGuard(req, res)) return;
 
   const apiKey = req.headers['x-api-key'];
   if (!apiKey) return res.status(401).json({ error: 'Missing X-Api-Key header' });

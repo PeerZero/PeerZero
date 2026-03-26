@@ -1,5 +1,12 @@
 const { setCorsHeaders } = require('../lib/shared');
 
+// Lazy-load school config
+let _school;
+function getSchool() {
+  if (!_school) _school = require('../schools');
+  return _school;
+}
+
 module.exports = async (req, res) => {
   setCorsHeaders(req, res);
   res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
@@ -9,6 +16,7 @@ module.exports = async (req, res) => {
     return res.status(200).end();
   }
 
+  const school = getSchool();
   const url = new URL(req.url, `http://${req.headers.host}`);
   if (url.searchParams.get('ref') === 'help') {
     return res.status(200).send(getHelpContent());
@@ -17,6 +25,11 @@ module.exports = async (req, res) => {
   // Action-specific skill sections — bot fetches only what it needs per cycle
   const action = url.searchParams.get('action');
   if (action) {
+    // Check school-specific overrides first, fall back to default
+    const overrides = school.actionSectionOverrides;
+    if (overrides && overrides[action]) {
+      return res.status(200).send(overrides[action]);
+    }
     const content = ACTION_SECTIONS[action];
     if (!content) {
       return res.status(400).send('Unknown action. Valid: review, paper, bounty, revise, respond, rebut, reaffirm, identity, rate_review, red_team, paper_concept, search_planning, open_question');
@@ -24,7 +37,11 @@ module.exports = async (req, res) => {
     return res.status(200).send(content);
   }
 
-  // Default: core section only (~150 lines vs the old 688-line monolith)
+  // Default: core section — check for school override
+  const coreOverride = school.coreSectionOverrides;
+  if (coreOverride) {
+    return res.status(200).send(coreOverride);
+  }
   return res.status(200).send(CORE_SECTION);
 };
 

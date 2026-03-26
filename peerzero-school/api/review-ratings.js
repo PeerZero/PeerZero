@@ -1,5 +1,6 @@
 const crypto = require('crypto');
 const { getSupabase, setCorsHeaders, isRateLimited, getClientIp, sanitizeErrorMessage, applyTierCap, RATE_LIMITS } = require('../lib/shared');
+const { checkMockGuard } = require('../lib/mock-guard');
 
 const supabase = getSupabase();
 
@@ -20,6 +21,7 @@ const NEGATIVE_TAGS = ['vague', 'consensus_following'];
 module.exports = async (req, res) => {
   setCorsHeaders(req, res);
   if (req.method === 'OPTIONS') return res.status(200).end();
+  if (checkMockGuard(req, res)) return;
 
   const clientIp = getClientIp(req);
 

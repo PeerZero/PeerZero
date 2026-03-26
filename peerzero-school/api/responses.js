@@ -8,6 +8,7 @@ const {
 const { exerciseSkillsFromRevision, exerciseSkillsFromPaper, collectRevisionExercises, collectPaperExercises, getPostActionPrompts } = require('../lib/skills');
 const { reviewerWeight } = require('../lib/review-helpers');
 const { buildActionGuide } = require('../lib/action-guide');
+const { checkMockGuard } = require('../lib/mock-guard');
 const log = require('../lib/logger');
 
 const supabase = getSupabase();
@@ -53,6 +54,7 @@ async function recalculateParentScore(paperId) {
 module.exports = async (req, res) => {
   setCorsHeaders(req, res);
   if (req.method === 'OPTIONS') return res.status(200).end();
+  if (checkMockGuard(req, res)) return;
 
   const rl = enforceRateLimit(req);
   if (rl.limited) return res.status(rl.response.status).json(rl.response.body);

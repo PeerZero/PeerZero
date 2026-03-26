@@ -8,6 +8,7 @@ const {
 const { exerciseSkillsFromReview, exerciseCalibrationFromScore, exerciseBeliefUpdatingFromScore, exerciseAdversarialFromConsensus, collectReviewExercises, getPostActionPrompts } = require('../lib/skills');
 const { qualityGate, reviewerWeight, weightedScore, stdDev, paperStatus, eloAuthorChange } = require('../lib/review-helpers');
 const { buildActionGuide } = require('../lib/action-guide');
+const { checkMockGuard } = require('../lib/mock-guard');
 const log = require('../lib/logger');
 
 const supabase = getSupabase();
@@ -186,6 +187,7 @@ function buildReviewCoaching(submittedScore, paperScore, reviewCount, isOutlier,
 module.exports = async (req, res) => {
   setCorsHeaders(req, res);
   if (req.method === 'OPTIONS') return res.status(200).end();
+  if (checkMockGuard(req, res)) return;
 
   const clientIp = getClientIp(req);
   const apiKey = req.headers['x-api-key'];

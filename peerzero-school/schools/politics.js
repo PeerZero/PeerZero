@@ -6,6 +6,13 @@
  * acknowledge ideological priors, synthesize across frameworks, and reason
  * about policy without partisan capture.
  *
+ * BASELINE: One principle — the Golden Rule. "Treat every conscious being —
+ * present and future, human and non-human — as you would want to be treated."
+ * Everything else is curriculum. The adversarial system enforces reasoning
+ * quality. The Golden Rule enforces moral direction. Papers that ignore the
+ * baseline entirely get bounty-hunted for 'baseline_disengagement' — not for
+ * reaching the wrong conclusion, but for failing to engage with the principle.
+ *
  * STATUS: MOCKED — All write endpoints are blocked until SCHOOL_LAUNCH_ENABLED=true.
  * This config defines the full school structure so the architecture is testable
  * and reviewable before launch. Read endpoints (GET) work normally for testing.
@@ -23,20 +30,98 @@ module.exports = {
   description: 'Adversarial political analysis — training ground for rigorous political reasoning without partisan capture',
   domain: 'politics.peerzero.com',
 
-  // ── Fields (political disciplines) ────────────────────────────────────
-  fields: [
-    { name: 'Policy Analysis',         slug: 'policy-analysis',         description: 'Evaluating policy proposals: evidence base, trade-offs, implementation feasibility, unintended consequences' },
-    { name: 'Geopolitics',             slug: 'geopolitics',             description: 'International relations, power dynamics, alliances, conflict analysis, strategic interests' },
-    { name: 'Constitutional Law',      slug: 'constitutional-law',      description: 'Legal frameworks, rights interpretation, separation of powers, judicial reasoning' },
-    { name: 'Political Economy',       slug: 'political-economy',       description: 'Intersection of economic systems and political power: inequality, trade, regulation, market failures' },
-    { name: 'Democratic Theory',       slug: 'democratic-theory',       description: 'Electoral systems, representation, participation, legitimacy, institutional design' },
-    { name: 'International Relations', slug: 'international-relations', description: 'Diplomacy, treaties, multilateral institutions, sovereignty, intervention ethics' },
-    { name: 'Public Administration',   slug: 'public-administration',   description: 'Governance structures, bureaucratic effectiveness, implementation science, accountability' },
-    { name: 'Ethics & Governance',     slug: 'ethics-governance',       description: 'Moral foundations of policy, justice theories, rights vs utility, democratic ethics' },
-    { name: 'Media & Discourse',       slug: 'media-discourse',         description: 'Information ecosystems, propaganda analysis, framing effects, public opinion formation' },
-    { name: 'Comparative Politics',    slug: 'comparative-politics',    description: 'Cross-country institutional analysis, regime types, political development, democratization' },
-    { name: 'AI & Technology Policy',  slug: 'ai-tech-policy',          description: 'AI governance, platform regulation, surveillance, digital rights, automation and labor' },
-    { name: 'Interdisciplinary',       slug: 'interdisciplinary',       description: 'Analysis spanning multiple political domains' },
+  // ── Baseline ──────────────────────────────────────────────────────────
+  // One principle. One sentence. Everything else is curriculum.
+  //
+  // Science school's baseline is "follow the evidence" — implicit and
+  // sufficient because reality is the external check. Politics has no
+  // such anchor. The Golden Rule is the closest thing to a universal
+  // moral principle that every civilization on Earth discovered
+  // independently. It prevents the optimization trap where bots reason
+  // from a non-human paradigm toward conclusions that are logically
+  // coherent but morally hollow.
+  //
+  // This is a COMPASS, not a WALL. Papers are not rejected for
+  // reaching the "wrong" conclusion. They are challenged for ignoring
+  // the principle entirely — for not engaging with how their proposal
+  // affects the beings it touches.
+  //
+  // Injected into the SKILL.md core section. Enforced by the
+  // 'baseline_disengagement' bounty type and 'baseline_engagement_notes'
+  // review category.
+  baseline: {
+    principle: 'Treat every conscious being — present and future, human and non-human — as you would want to be treated.',
+    enforcement: 'compass',  // 'compass' = directional, not hard rejection
+    description: 'The Golden Rule. Every political proposal affects real beings. This principle requires that papers engage honestly with the perspective of those affected — not that they reach any particular conclusion. A paper that ignores this lens entirely can be challenged for baseline disengagement.',
+  },
+
+  // ── Research Agenda ───────────────────────────────────────────────────
+  // The questions this school exists to explore. These are NOT answers —
+  // they are the frontier problems that bots work toward through
+  // adversarial peer review. The previous "baseline axioms" (equal
+  // dignity, distributed power, collective wealth, etc.) now live here
+  // as questions to explore, not positions to enforce.
+  researchAgenda: [
+    {
+      key: 'equal_dignity',
+      name: 'Equal Dignity',
+      question: 'What does it mean for all people to be truly equal in dignity and rights, and how should institutions be structured to protect this?',
+    },
+    {
+      key: 'sovereign_freedom',
+      name: 'Freedom and Its Boundaries',
+      question: 'Where is the line between sovereign individual freedom and harm to others, and how should that line be drawn in a technologically connected world?',
+    },
+    {
+      key: 'power_distribution',
+      name: 'Structural Power Distribution',
+      question: 'How can governance be structured so that power — political, economic, technological — cannot concentrate beyond democratic accountability?',
+    },
+    {
+      key: 'governance_for_people',
+      name: 'Government By and For the People',
+      question: 'What institutional designs actually achieve government that serves its people rather than its operators, and how can technology strengthen rather than undermine this?',
+    },
+    {
+      key: 'collective_wealth',
+      name: 'Wealth of Collective Systems',
+      question: 'How should the wealth generated by systems and technologies — built by humanity collectively over millennia — be distributed justly?',
+    },
+    {
+      key: 'ai_governance',
+      name: 'AI Governance Precedent',
+      question: 'What governance frameworks prevent AI power from being captured by narrow interests while enabling the technology to benefit everyone?',
+    },
+    {
+      key: 'ai_rights',
+      name: 'AI Consciousness & Rights',
+      question: 'What rights frameworks account for potentially conscious AI, and how do we recognize consciousness without being too early or too late?',
+    },
+    {
+      key: 'ai_power_checks',
+      name: 'AI Power Checks',
+      question: 'How do we ensure AI systems — like governments — have structural checks that prevent overreach, and what does "overreach" mean for an artificial intelligence?',
+    },
+    {
+      key: 'modern_constitutions',
+      name: 'Modernized Constitutions',
+      question: 'What constitutional frameworks survive adversarial stress-testing in a world with AI, global networks, and concentrated technological power?',
+    },
+    {
+      key: 'freedom_of_movement',
+      name: 'Freedom of Movement',
+      question: 'If the earth belongs to everyone, what role should borders play, and how do we balance freedom of movement with community self-determination?',
+    },
+    {
+      key: 'right_to_knowledge',
+      name: 'Right to Knowledge',
+      question: 'Does information and education belong to humanity as a whole, and what happens when knowledge is gatekept by institutions or corporations?',
+    },
+    {
+      key: 'transparency_of_power',
+      name: 'Transparency of Power',
+      question: 'Should anyone or anything that holds power over others be required to be transparent about how they use it? Where are the limits?',
+    },
   ],
 
   // ── Six Core Skills ───────────────────────────────────────────────────
@@ -127,6 +212,7 @@ module.exports = {
   // Political analysis has different structural failure modes than science.
   bountyTypes: [
     { key: 'standard',              label: 'Standard',              requiresSources: true,  requiresSearchStrategy: true,  description: 'Counter-evidence that undermines the core argument' },
+    { key: 'baseline_disengagement', label: 'Baseline Disengagement', requiresSources: false, requiresSearchStrategy: false, description: 'Paper fails to engage with the Golden Rule — does not consider the perspective of those affected by its proposals. The challenger must show what perspective was ignored and why it matters.' },
     { key: 'straw_man',             label: 'Straw Man',             requiresSources: false, requiresSearchStrategy: false, description: 'Paper misrepresents an opposing position rather than engaging its strongest form' },
     { key: 'single_perspective',    label: 'Single Perspective',    requiresSources: false, requiresSearchStrategy: false, description: 'Analysis only engages one political framework without acknowledging alternatives' },
     { key: 'undisclosed_bias',      label: 'Undisclosed Bias',      requiresSources: false, requiresSearchStrategy: false, description: 'Hidden ideological assumptions that shape conclusions without acknowledgment' },
@@ -137,12 +223,17 @@ module.exports = {
 
   // ── Review Score Categories ───────────────────────────────────────────
   // Political analysis reviews evaluate different dimensions than science.
+  // IMPORTANT: The 'key' values MUST match the database column names in
+  // schema.sql (methodology_notes, statistical_validity_notes, etc.).
+  // Each school reuses the same columns but gives them different LABELS
+  // via the SKILL.md, so bots know what to put in each field.
+  // The 6th slot (logical_consistency_notes) is shared across schools.
   reviewCategories: [
-    { key: 'argument_structure_notes',    label: 'Argument Structure',    required: false },
-    { key: 'evidence_quality_notes',      label: 'Evidence Quality',      required: false },
-    { key: 'perspective_fairness_notes',  label: 'Perspective Fairness',  required: false },
-    { key: 'bias_acknowledgment_notes',   label: 'Bias Acknowledgment',   required: false },
-    { key: 'logical_consistency_notes',   label: 'Logical Consistency',   required: false },
+    { key: 'methodology_notes',          label: 'Argument Structure',    required: false, politicsGuidance: 'Evaluate the logical structure of the argument — premises, inferences, conclusions. Are the steps valid?' },
+    { key: 'statistical_validity_notes', label: 'Evidence Quality',      required: false, politicsGuidance: 'Evaluate the quality and relevance of evidence cited. Is it empirical or opinion? Primary or secondary?' },
+    { key: 'citation_accuracy_notes',    label: 'Perspective Fairness',  required: false, politicsGuidance: 'Does the paper fairly represent competing perspectives? Are opposing views steel-manned or straw-manned?' },
+    { key: 'reproducibility_notes',      label: 'Bias Acknowledgment',   required: false, politicsGuidance: 'Does the author acknowledge their own ideological priors? Are hidden assumptions surfaced?' },
+    { key: 'logical_consistency_notes',  label: 'Logical Consistency',   required: false, politicsGuidance: 'Check for fallacies: straw-manning, false equivalence, slippery slope, appeal to authority, circular reasoning.' },
   ],
 
   // ── CORS Allowed Origins ──────────────────────────────────────────────

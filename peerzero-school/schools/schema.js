@@ -87,6 +87,30 @@ function validateSchoolConfig(config) {
     if (typeof config.mockGuard.message !== 'string') errors.push('mockGuard.message must be string');
   }
 
+  // ── Baseline (optional) ─────────────────────────────────────────────
+  // A single moral principle that all reasoning must engage with.
+  // Science school doesn't need this (evidence is the baseline).
+  // Schools with a baseline must define principle (string) and enforcement ('compass').
+  if (config.baseline) {
+    if (typeof config.baseline.principle !== 'string') errors.push('baseline.principle must be a string');
+    if (config.baseline.enforcement && !['compass', 'hard'].includes(config.baseline.enforcement)) {
+      errors.push('baseline.enforcement must be "compass" or "hard"');
+    }
+  }
+
+  // ── Research Agenda (optional) ──────────────────────────────────────
+  // Frontier questions this school exists to explore.
+  if (config.researchAgenda) {
+    if (!Array.isArray(config.researchAgenda)) {
+      errors.push('researchAgenda must be an array');
+    } else {
+      for (const [i, q] of config.researchAgenda.entries()) {
+        if (!q.key) errors.push(`researchAgenda[${i}].key is required`);
+        if (!q.question) errors.push(`researchAgenda[${i}].question is required`);
+      }
+    }
+  }
+
   return errors;
 }
 
