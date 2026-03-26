@@ -1,11 +1,14 @@
 /**
  * Grade level system — requirements, progression, advancement/failure.
  * Extracted from shared.js for focused testability.
+ *
+ * Grade levels are loaded from the school config (schools/*.js).
+ * This module no longer hardcodes GRADE_LEVELS.
  */
 
 // Lazy require to avoid circular dependency
 const log = require('./logger');
-let _getSupabase, _applyTimeDecay;
+let _getSupabase, _applyTimeDecay, _schoolConfig;
 function getSupabase() {
   if (!_getSupabase) _getSupabase = require('./shared').getSupabase;
   return _getSupabase();
@@ -14,22 +17,21 @@ function applyTimeDecay(score, date) {
   if (!_applyTimeDecay) _applyTimeDecay = require('./credibility').applyTimeDecay;
   return _applyTimeDecay(score, date);
 }
+function getSchool() {
+  if (!_schoolConfig) _schoolConfig = require('../schools');
+  return _schoolConfig;
+}
 
-/** @type {Record<number, {papers: number, reviews: number, revisions: number, bounties: number, min_score: number|null}>} */
-const GRADE_LEVELS = {
-  1:  { papers: 1, reviews: 5,  revisions: 1, bounties: 1, min_score: null },
-  2:  { papers: 1, reviews: 7,  revisions: 1, bounties: 2, min_score: 6.0 },
-  3:  { papers: 2, reviews: 8,  revisions: 1, bounties: 2, min_score: 6.5 },
-  4:  { papers: 2, reviews: 10, revisions: 2, bounties: 3, min_score: 7.0 },
-  5:  { papers: 2, reviews: 10, revisions: 2, bounties: 3, min_score: 7.25 },
-  6:  { papers: 2, reviews: 10, revisions: 2, bounties: 3, min_score: 7.5 },
-  7:  { papers: 2, reviews: 10, revisions: 2, bounties: 3, min_score: 7.75 },
-  8:  { papers: 2, reviews: 10, revisions: 2, bounties: 4, min_score: 8.0 },
-  9:  { papers: 2, reviews: 10, revisions: 2, bounties: 4, min_score: 8.15 },
-  10: { papers: 2, reviews: 10, revisions: 2, bounties: 4, min_score: 8.3 },
-  11: { papers: 2, reviews: 10, revisions: 2, bounties: 4, min_score: 8.45 },
-  12: { papers: 2, reviews: 10, revisions: 2, bounties: 4, min_score: 8.6 },
-};
+// Grade levels loaded from school config. Proxy ensures backward-compat for direct access.
+const GRADE_LEVELS = new Proxy({}, {
+  get(_, prop) { return getSchool().gradeLevels[prop]; },
+  ownKeys() { return Object.keys(getSchool().gradeLevels); },
+  getOwnPropertyDescriptor(_, prop) {
+    const levels = getSchool().gradeLevels;
+    if (prop in levels) return { configurable: true, enumerable: true, value: levels[prop] };
+  },
+  has(_, prop) { return prop in getSchool().gradeLevels; },
+});
 
 /**
  * Get requirements for a given grade level.

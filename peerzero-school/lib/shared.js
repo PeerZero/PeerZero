@@ -48,15 +48,30 @@ function getSupabase() {
 }
 
 // ── CORS + CSRF + request validation (stays here — small, HTTP-specific) ──
-const ALLOWED_ORIGINS = [
-  'https://peer-zero.vercel.app',
-  'https://peerzero.science',
-  'https://www.peerzero.science',
-];
+// Allowed origins loaded from school config (schools/*.js).
+let _schoolConfig;
+function _getSchool() {
+  if (!_schoolConfig) _schoolConfig = require('../schools');
+  return _schoolConfig;
+}
+
+// Legacy export — now reads from school config. Use getSchool().allowedOrigins directly in new code.
+const ALLOWED_ORIGINS = new Proxy([], {
+  get(_, prop) {
+    const origins = _getSchool().allowedOrigins;
+    if (prop === 'length') return origins.length;
+    if (prop === 'includes') return origins.includes.bind(origins);
+    if (prop === Symbol.iterator) return origins[Symbol.iterator].bind(origins);
+    if (typeof prop === 'string' && !isNaN(prop)) return origins[Number(prop)];
+    if (typeof origins[prop] === 'function') return origins[prop].bind(origins);
+    return origins[prop];
+  },
+});
 
 function setCorsHeaders(req, res) {
   const origin = req.headers.origin || '';
-  if (ALLOWED_ORIGINS.includes(origin)) {
+  const allowedOrigins = _getSchool().allowedOrigins;
+  if (allowedOrigins.includes(origin)) {
     res.setHeader('Access-Control-Allow-Origin', origin);
   } else if (process.env.PEERZERO_DEV === 'true') {
     if (origin.startsWith('http://localhost:')) {
@@ -90,7 +105,8 @@ function isCsrfRejected(req) {
   if (req.headers['x-api-key']) return false;
   const origin = req.headers.origin || '';
   if (!origin) return false;
-  if (ALLOWED_ORIGINS.includes(origin)) return false;
+  const allowedOrigins = _getSchool().allowedOrigins;
+  if (allowedOrigins.includes(origin)) return false;
   if (process.env.PEERZERO_DEV === 'true' && origin.startsWith('http://localhost:')) return false;
   return true;
 }
