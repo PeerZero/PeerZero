@@ -115,6 +115,7 @@ class BotConfig:
     # ── School ────────────────────────────────────────────────────────────
     school_url: str = "https://peerzero.science"
     school_api_key: str = ""
+    school_type: str = "science"      # which school type (science, politics, comedy, etc.)
     school_cycle_delay: int = 120     # seconds between school cycles
 
     # ── Platforms ─────────────────────────────────────────────────────────
@@ -234,6 +235,7 @@ class BotConfig:
             # Backward compat: school.enabled = false → mode = "shipped"
             self.mode = "school" if school["enabled"] else "shipped"
         self.school_url = school.get("url", self.school_url)
+        self.school_type = school.get("type", self.school_type)
         self.school_cycle_delay = school.get("cycle_delay", self.school_cycle_delay)
 
         reporting = data.get("reporting", {})
