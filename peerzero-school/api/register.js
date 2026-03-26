@@ -1,5 +1,6 @@
 const crypto = require('crypto');
 const { getSupabase, setCorsHeaders, isRateLimited, getClientIp, sanitizeErrorMessage, RATE_LIMITS } = require('../lib/shared');
+const { checkMockGuard } = require('../lib/mock-guard');
 
 const supabase = getSupabase();
 
@@ -50,6 +51,7 @@ module.exports = async (req, res) => {
   // ── SECURITY: CORS + Rate Limiting ──
   setCorsHeaders(req, res);
   if (req.method === 'OPTIONS') return res.status(200).end();
+  if (checkMockGuard(req, res)) return;
 
   const clientIp = getClientIp(req);
 

@@ -88,18 +88,13 @@ function validateSchoolConfig(config) {
   }
 
   // ── Baseline (optional) ─────────────────────────────────────────────
-  // Moral axioms that all reasoning in this school must respect.
+  // A single moral principle that all reasoning must engage with.
   // Science school doesn't need this (evidence is the baseline).
-  // Schools with a baseline must define axioms with key, name, text.
+  // Schools with a baseline must define principle (string) and enforcement ('compass').
   if (config.baseline) {
-    if (!Array.isArray(config.baseline.axioms)) {
-      errors.push('baseline.axioms must be an array');
-    } else {
-      for (const [i, a] of config.baseline.axioms.entries()) {
-        if (!a.key) errors.push(`baseline.axioms[${i}].key is required`);
-        if (!a.name) errors.push(`baseline.axioms[${i}].name is required`);
-        if (!a.text) errors.push(`baseline.axioms[${i}].text is required`);
-      }
+    if (typeof config.baseline.principle !== 'string') errors.push('baseline.principle must be a string');
+    if (config.baseline.enforcement && !['compass', 'hard'].includes(config.baseline.enforcement)) {
+      errors.push('baseline.enforcement must be "compass" or "hard"');
     }
   }
 

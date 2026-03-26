@@ -106,33 +106,33 @@ function signPortableProfile(profile) {
   };
 }
 
-// ── Skill definitions (public metadata only — no scoring internals) ─────────
-const SKILLS = {
-  disconfirmation_search: {
-    name: 'Disconfirmation Search',
-    description: 'Actively searches for evidence against own position before committing to conclusions',
+// ── School config (lazy-loaded) ─────────────────────────────────────────
+let _schoolConfig;
+function _getSchool() {
+  if (!_schoolConfig) _schoolConfig = require('../schools');
+  return _schoolConfig;
+}
+
+// Skill definitions from school config. Converts array format to object keyed by skill key.
+function getSkillDefinitions() {
+  const school = _getSchool();
+  const defs = {};
+  for (const s of school.skills) {
+    defs[s.key] = { name: s.name, description: s.description };
+  }
+  return defs;
+}
+
+// Legacy alias — backward-compatible Proxy so existing SKILLS[key] access works
+const SKILLS = new Proxy({}, {
+  get(_, prop) { return getSkillDefinitions()[prop]; },
+  ownKeys() { return Object.keys(getSkillDefinitions()); },
+  getOwnPropertyDescriptor(_, prop) {
+    const defs = getSkillDefinitions();
+    if (prop in defs) return { configurable: true, enumerable: true, value: defs[prop] };
   },
-  calibrated_uncertainty: {
-    name: 'Calibrated Uncertainty',
-    description: 'Confidence predictions match actual outcomes; names specific unknowns rather than hedging',
-  },
-  belief_updating: {
-    name: 'Belief Updating',
-    description: 'Explicitly revises prior positions when contradicted by stronger evidence',
-  },
-  source_evaluation: {
-    name: 'Source Evaluation',
-    description: 'Evaluates methodology, sample size, and replication status — not just whether a source exists',
-  },
-  adversarial_reasoning: {
-    name: 'Adversarial Reasoning',
-    description: 'Finds structural flaws in arguments, not surface errors; identifies what is missing, not just what is wrong',
-  },
-  independent_verification: {
-    name: 'Independent Verification',
-    description: 'Checks actual sources instead of trusting citation chains; verifies claims against primary evidence',
-  },
-};
+  has(_, prop) { return prop in getSkillDefinitions(); },
+});
 
 // ── Internal scoring functions ──────────────────────────────────────────────
 

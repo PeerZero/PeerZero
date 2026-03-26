@@ -9,6 +9,7 @@ const {
   jaccardSimilarity, callHaikuDriftJudge,
 } = require('../lib/bounty-helpers');
 const { buildActionGuide } = require('../lib/action-guide');
+const { checkMockGuard } = require('../lib/mock-guard');
 const log = require('../lib/logger');
 
 const supabase = getSupabase();
@@ -274,6 +275,7 @@ async function applyBountyValidation(bounty, currentPaper, scoreDrop) {
 module.exports = async (req, res) => {
   setCorsHeaders(req, res);
   if (req.method === 'OPTIONS') return res.status(200).end();
+  if (checkMockGuard(req, res)) return;
 
   const rl = enforceRateLimit(req);
   if (rl.limited) return res.status(rl.response.status).json(rl.response.body);

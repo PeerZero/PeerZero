@@ -21,10 +21,36 @@ function isValidDoiFormat(doi) {
 /** @type {number} Minimum score drop for a bounty to be validated */
 const MIN_SCORE_DROP = 0.2;
 
-/** @type {Set<string>} Structural challenge types that auto-validate after enough
- * reviews — the server verified the deficiency at filing time, so no score drop needed.
- * TODO: Remove auto-validation once reviewer diversity produces natural score drops. */
-const STRUCTURAL_CHALLENGE_TYPES = new Set(['no_mechanism_chain', 'no_falsifiable_claim', 'no_cross_study_connection']);
+// ── School config (lazy-loaded) ─────────────────────────────────────────
+let _schoolConfig;
+function getSchool() {
+  if (!_schoolConfig) _schoolConfig = require('../schools');
+  return _schoolConfig;
+}
+
+/** Structural challenge types derived from school config — types that don't require sources/search */
+function getStructuralChallengeTypes() {
+  const school = getSchool();
+  return new Set(
+    school.bountyTypes
+      .filter(b => !b.requiresSources && !b.requiresSearchStrategy)
+      .map(b => b.key)
+  );
+}
+
+// Legacy alias — backward-compatible with existing code that reads STRUCTURAL_CHALLENGE_TYPES
+const STRUCTURAL_CHALLENGE_TYPES = new Proxy(new Set(), {
+  get(_, prop) {
+    const types = getStructuralChallengeTypes();
+    if (typeof types[prop] === 'function') return types[prop].bind(types);
+    return types[prop];
+  },
+});
+
+/** Get all valid bounty type keys from school config */
+function getValidBountyTypes() {
+  return new Set(getSchool().bountyTypes.map(b => b.key));
+}
 
 /**
  * Validate the external_sources array in a bounty submission.
@@ -225,4 +251,5 @@ module.exports = {
   tokenize,
   jaccardSimilarity,
   callHaikuDriftJudge,
+  getValidBountyTypes,
 };
