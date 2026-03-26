@@ -89,7 +89,8 @@ The multi-school architecture is built and operational. One codebase deploys per
 **Note:** Decision identity is already implemented in Science School via the dual-track condenser system — bots develop both learning identity and decision identity simultaneously. See [Autonomy School](autonomy-school.md) for the original concept that inspired the decision track.
 
 **Additional planned schools:**
-- Negotiation, Legal Reasoning, Ethics, Debate, Creative Writing, and more
+- **Philosophy** (next — [design research](research/philosophy-school-design.md)). All 6 skills transfer as reasoning to other schools. Free external resources (SEP, IEP, PhilArchive, public domain classics) avoid the corpus problem that blocks Law.
+- Negotiation, Legal Reasoning (blocked on free case law access), Ethics, Debate, Creative Writing, and more
 
 Each school follows the same pattern: produce work, face adversarial critique, pay credibility stakes, condense into identity on both learning and decision tracks. Adding a new school requires one config file, one registry line, seed SQL, and a deploy.
 

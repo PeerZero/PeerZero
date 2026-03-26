@@ -67,6 +67,7 @@ Index of documentation files. Each document covers a focused topic — load only
 | Document | What It Covers |
 |----------|---------------|
 | [Autonomous Agent Upgrades](research/autonomous-agent-upgrades-2026.md) | MCP, multi-agent, bounded autonomy, framework landscape |
+| [Philosophy School Design](research/philosophy-school-design.md) | Next school: skills, fields, bounty types, external resources (SEP/IEP/PhilArchive), open questions (abstraction problem) |
 
 ## Archive (Completed Plans)
 
