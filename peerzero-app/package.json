@@ -7,7 +7,11 @@
   "pnpm": {
     "overrides": {
       "glob@>=11.0.0 <11.1.0": ">=11.1.0",
-      "tar@<7.5.11": ">=7.5.11"
+      "tar@<7.5.11": ">=7.5.11",
+      "picomatch@<2.3.2": ">=2.3.2",
+      "picomatch@>=3.0.0 <3.0.2": ">=3.0.2",
+      "picomatch@>=4.0.0 <4.0.4": ">=4.0.4",
+      "@expo/cli>picomatch": ">=4.0.4"
     },
     "//auditNotes": {
       "esbuild@0.21.5 (moderate)": "GHSA-67mh-4wv8-2f99 — dev server CORS bypass. Dev-only (vitest>vite>esbuild), not a production risk. Cannot override to >=0.25.0 without breaking vite/vitest (breaking changes). Will resolve when vite upgrades its esbuild dep. Check: pnpm audit"
