@@ -26,8 +26,8 @@ const log = require('../lib/logger');
 const SCHOOL_REGISTRY = {
   science:  () => require('./science'),
   politics: () => require('./politics'),
+  comedy:   () => require('./comedy'),
   // Future schools:
-  // comedy:    () => require('./comedy'),
   // law:       () => require('./law'),
   // ethics:    () => require('./ethics'),
 };
