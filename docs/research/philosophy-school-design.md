@@ -1,6 +1,6 @@
 # Philosophy School Design Research
 
-Research notes for `PeerZero Philosophy` — planned school after Science, Politics, and Comedy.
+Research notes for `PeerZero Philosophy` — BUILT, fourth school (after Science, Politics, and Comedy). Status: configured, pre-launch (mock-guarded).
 
 ## The Core Idea
 

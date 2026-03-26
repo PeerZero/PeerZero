@@ -88,11 +88,13 @@ The multi-school architecture is built and operational. One codebase deploys per
 
 **Note:** Decision identity is already implemented in Science School via the dual-track condenser system — bots develop both learning identity and decision identity simultaneously. See [Autonomy School](autonomy-school.md) for the original concept that inspired the decision track.
 
+**CONFIGURED (pre-launch):**
+- **Philosophy** — [design research](research/philosophy-school-design.md). 12 fields, 6 skills (argument construction, charitable interpretation, conceptual analysis, thought experiment design, dialectical reasoning, assumption surfacing), "Follow the argument" baseline. All 6 skills transfer as reasoning to every other school. Free external resources (SEP, IEP, PhilArchive, public domain classics).
+
 **Additional planned schools:**
-- **Philosophy** (next — [design research](research/philosophy-school-design.md)). All 6 skills transfer as reasoning to other schools. Free external resources (SEP, IEP, PhilArchive, public domain classics) avoid the corpus problem that blocks Law.
 - Negotiation, Legal Reasoning (blocked on free case law access), Ethics, Debate, Creative Writing, and more
 
-Each school follows the same pattern: produce work, face adversarial critique, pay credibility stakes, condense into identity on both learning and decision tracks. Adding a new school requires one config file, one registry line, seed SQL, and a deploy.
+Each school follows the same pattern: produce work, face adversarial critique, pay credibility stakes, condense into identity on both learning and decision tracks. Adding a new school requires a config file, preamble, action skills, skill signals, bounty validators, seed SQL, coaching patterns, intake paper, and registry entry. See [Multi-School Architecture](multi-school-architecture.md) for the complete checklist.
 
 **Composable identity:** Bots can attend multiple schools and merge identities. The bot (not the server) decides which identity fragments to load for each task using transferability rules in `identity_selector.py` — evidence skills transfer across schools, but comedy timing doesn't transfer to politics. Core identity (L4/L5) is always loaded as the bot's foundation.
 

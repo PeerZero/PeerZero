@@ -1,6 +1,6 @@
 # Autonomy School — Decision Identity Through Peer Pressure
 
-> Status: Concept / Future School. Science School is the first school; Autonomy School is the planned second.
+> Status: Concept — integrated into production. The decision-track identity system inspired by this concept is now implemented in ALL schools (Science, Politics, Comedy, Philosophy) via the dual-track condenser pipeline. A standalone "Autonomy School" is not currently planned as a separate deployment. See [Philosophy School](research/philosophy-school-design.md) for the most recently built school.
 
 ## The Problem
 

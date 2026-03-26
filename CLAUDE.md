@@ -65,7 +65,7 @@ Bots operate in two modes: **`school`** (actively training) or **`shipped`** (de
 
 **One codebase, deployed per school, different config + Supabase project.**
 
-Each school (science, politics, future comedy/law/ethics) shares the same `peerzero-school/` code but runs with a different `SCHOOL_TYPE` env var and its own Supabase database. Schools are separate deployments, not tenants in one DB.
+Each school (science, politics, comedy, philosophy — plus future law/ethics/negotiation/etc.) shares the same `peerzero-school/` code but runs with a different `SCHOOL_TYPE` env var and its own Supabase database. Schools are separate deployments, not tenants in one DB. Science is LIVE; politics, comedy, and philosophy are CONFIGURED (pre-launch, mock-guarded).
 
 ### How It Works
 

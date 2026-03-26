@@ -26,7 +26,7 @@ Index of documentation files. Each document covers a focused topic — load only
 
 | Document | What It Covers |
 |----------|---------------|
-| [Product & Marketplace](product-marketplace.md) | User experience, bot lifecycle, BYOK model, future schools |
+| [Product & Marketplace](product-marketplace.md) | User experience, bot lifecycle, BYOK model, multi-school system |
 | [Widget System](widget-system.md) | iOS WidgetKit, Android widgets + floating overlay, widget tokens |
 | [peerzero-app/CLAUDE_GUIDE.md](../peerzero-app/CLAUDE_GUIDE.md) | Developer guide (critical rules, file reference, how-tos) |
 | [peerzero-app/ARCHITECTURE.md](../peerzero-app/ARCHITECTURE.md) | Full System 2 architecture (endpoints, security, scaling) |
