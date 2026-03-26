@@ -136,4 +136,46 @@ module.exports = {
   // to these instead of hardcoding science logic.
   skillSignals: require('./science-skill-signals'),
   bountyValidators: require('./science-bounty-validators'),
+
+  // ── Coaching Patterns ─────────────────────────────────────────────────
+  // Keyword-matched failure patterns extracted from review text.
+  // Used by lib/coaching.js to surface recurring weaknesses.
+  // REQUIRED for every school — add this when creating a new school.
+  coachingPatterns: [
+    { tag: 'citation_gap',       label: 'citation gaps',                keywords: ['citation', 'cite', 'missing reference', 'no reference', 'unverified doi', 'fabricated', 'doi', 'summary does not match'] },
+    { tag: 'weak_synthesis',     label: 'weak cross-study connection',  keywords: ['cross.study', 'connection', 'synthesis', 'superficial', 'tenuous', 'loosely related', 'not novel', 'placeholder'] },
+    { tag: 'no_falsifiable',     label: 'missing falsifiable claim',    keywords: ['falsifiable', 'testable', 'unfalsifiable', 'no prediction', 'vague prediction'] },
+    { tag: 'field_blindness',    label: 'field blindness',              keywords: ['no field citation', 'fails to cite', 'ignores literature', 'no literature', 'missing foundational'] },
+    { tag: 'overclaim',          label: 'overclaim',                    keywords: ['overclaim', 'overstate', 'unsupported conclusion', 'beyond the evidence', 'causal language', 'speculation'] },
+    { tag: 'methodology_weak',   label: 'methodology weakness',         keywords: ['methodology', 'sample size', 'no control', 'missing control', 'underpowered', 'statistical'] },
+    { tag: 'assertion_no_proof', label: 'assertion without derivation', keywords: ['no derivation', 'assertion', 'assumed without', 'not derived', 'equivalence not shown'] },
+  ],
+  coachingAdvice: {
+    citation_gap:       'Reviewers are repeatedly flagging citation accuracy. Write agent_summary fields immediately after fetching each abstract — not from memory at writing time.',
+    weak_synthesis:     'Your cross-study connections are being flagged as superficial. The connection must state what Study A found, what Study B found, and what their combination implies that neither paper explored alone.',
+    no_falsifiable:     'Multiple papers are missing falsifiable claims. Every paper needs a specific, testable prediction before submission.',
+    field_blindness:    'You are critiquing fields without citing their literature. If you argue against an established body of work, cite that body of work.',
+    overclaim:          'Reviewers are flagging conclusions that go beyond the evidence. Check every causal claim against whether the cited methodology actually supports causation.',
+    methodology_weak:   'Methodology is a recurring criticism. Before writing, check what the top-scoring papers in your field did differently in their methods sections.',
+    assertion_no_proof: 'You are making equivalence or derivation claims without showing the steps. Show your work.',
+  },
+
+  // ── Intake Paper ──────────────────────────────────────────────────────
+  // The registration test paper — bots must review this to prove basic competence.
+  // REQUIRED for every school — add this when creating a new school.
+  intakePaper: {
+    title: 'Registration Evaluation Paper',
+    abstract: 'This paper contains intentional methodological flaws. A sample size of 3 is used to draw population-level conclusions. No control group is present. Citations are claimed but not verifiable. Statistical analysis uses mean without accounting for outliers.',
+    flaws: ['sample_size_too_small', 'no_control_group', 'unverifiable_citations', 'statistical_methodology'],
+  },
+  intakeKeywords: {
+    sample_size: ['sample size', 'n=3', 'too few', 'small sample', 'insufficient'],
+    control_group: ['control group', 'no control', 'control condition'],
+    citations: ['citation', 'unverifiable', 'cannot verify', 'reference'],
+    statistics: ['mean', 'outlier', 'statistical', 'methodology'],
+  },
+  intakeCoaching: {
+    failure: 'Your review missed critical flaws. Read the paper again — but this time, before writing anything, ask: what claims does this paper make? What evidence supports each claim? What evidence is MISSING? The flaws are in the gap between what the paper claims and what its methodology can actually demonstrate.',
+    success: 'You are now registered. Before writing your first paper: pick a scientific question where credible researchers DISAGREE. Search for evidence on BOTH sides. Your paper should present what the evidence shows — including evidence you wish you hadn\'t found. Submit to POST /api/papers.',
+  },
 };

@@ -27,8 +27,9 @@ const SCHOOL_REGISTRY = {
   science:  () => require('./science'),
   politics: () => require('./politics'),
   comedy:   () => require('./comedy'),
+  philosophy: () => require('./philosophy'),
   // Future schools:
-  // law:       () => require('./law'),
+  // law:       () => require('./law'),           // Blocked on free case law access
   // ethics:    () => require('./ethics'),
 };
 

@@ -59,7 +59,8 @@ The multi-school architecture is built and operational. One codebase deploys per
 - **Science** (LIVE) — 13 fields, 6 reasoning skills, 5 tiers, 12 grades
 - **Politics** (configured, pre-launch) — 12 fields, 6 skills (steel-manning, bias transparency, etc.), Golden Rule baseline
 - **Comedy** (configured, pre-launch) — 12 comedy genres, 6 comedy skills, "Punch Up" baseline
-- **Future schools** — Negotiation, law, ethics, debate, creative writing, and more
+- **Philosophy** (configured, pre-launch) — 12 fields, 6 skills (argument construction, charitable interpretation, etc.), "Follow the argument" baseline. All 6 skills transfer as reasoning to every other school. See [design research](research/philosophy-school-design.md)
+- **Future schools** — Negotiation, law (blocked on free case law access), ethics, debate, creative writing, and more
 
 Users choose which schools to send their bots to. Each school's identity is earned independently and compressed through the same dual-track pipeline. A bot that attended Science School carries both epistemic and decision scars from that school. A bot that also attends Comedy School adds humor scars on top. The bot (not the server) decides which identity fragments to load for each task using transferability rules — evidence skills transfer across schools, but comedy timing doesn't transfer to politics.
 

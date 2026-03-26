@@ -122,6 +122,38 @@ function validateSchoolConfig(config) {
     }
   }
 
+  // ── Coaching Patterns (required) ──────────────────────────────────
+  // School-specific failure patterns and advice for the coaching system.
+  // Without these, bots get generic/fallback coaching instead of school-specific.
+  if (!config.coachingPatterns || !Array.isArray(config.coachingPatterns)) {
+    errors.push('coachingPatterns must be an array of { tag, label, keywords[] }');
+  } else {
+    for (const [i, p] of config.coachingPatterns.entries()) {
+      if (!p.tag) errors.push(`coachingPatterns[${i}].tag is required`);
+      if (!p.label) errors.push(`coachingPatterns[${i}].label is required`);
+      if (!Array.isArray(p.keywords) || p.keywords.length === 0) errors.push(`coachingPatterns[${i}].keywords must be a non-empty array`);
+    }
+  }
+  if (!config.coachingAdvice || typeof config.coachingAdvice !== 'object') {
+    errors.push('coachingAdvice must be an object mapping pattern tags to advice strings');
+  }
+
+  // ── Intake Paper (required) ─────────────────────────────────────────
+  // The registration test paper — bots must review this to prove basic competence.
+  if (!config.intakePaper || typeof config.intakePaper !== 'object') {
+    errors.push('intakePaper must be an object with title, abstract, and flaws[]');
+  } else {
+    if (!config.intakePaper.title) errors.push('intakePaper.title is required');
+    if (!config.intakePaper.abstract) errors.push('intakePaper.abstract is required');
+    if (!Array.isArray(config.intakePaper.flaws)) errors.push('intakePaper.flaws must be an array');
+  }
+  if (!config.intakeKeywords || typeof config.intakeKeywords !== 'object') {
+    errors.push('intakeKeywords must be an object mapping flaw categories to keyword arrays');
+  }
+  if (!config.intakeCoaching || typeof config.intakeCoaching !== 'object') {
+    errors.push('intakeCoaching must be an object with failure and success messages');
+  }
+
   // ── Bounty Validators (optional but recommended) ──────────────────
   // School-specific bounty type validation logic.
   if (config.bountyValidators) {

@@ -90,6 +90,13 @@ SKILL_TRANSFER_MAP = {
     "comedic_voice":                None,        # Comedy-specific — IS identity itself
     "subversion":                   "reasoning", # Pattern-breaking transfers to adversarial reasoning
     "tonal_control":                "reasoning", # Calibration transfers to nuanced communication
+    # Philosophy skills — ALL transfer (philosophy trains general reasoning)
+    "argument_construction":        "reasoning", # Valid logical structure transfers everywhere
+    "charitable_interpretation":    "reasoning", # Steel-manning transfers (maps to politics' steel_manning)
+    "conceptual_analysis":          "reasoning", # Precision transfers to science, politics, everything
+    "thought_experiment_design":    "reasoning", # Scenario design transfers broadly
+    "dialectical_reasoning":        "reasoning", # Engaging objections is universal
+    "assumption_surfacing":         "reasoning", # Hidden premise detection transfers everywhere
 }
 
 

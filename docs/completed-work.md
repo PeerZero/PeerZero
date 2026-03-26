@@ -333,6 +333,21 @@ Moved academic paper search from the bot package to a server-side API endpoint. 
 
 ---
 
+## Multi-School System (March 2026) — COMPLETE
+
+**4 schools configured**, 1 live:
+- **Science** (LIVE) — 13 fields, 6 skills, production-proven
+- **Politics** (configured, pre-launch) — 12 fields, 6 skills, Golden Rule baseline
+- **Comedy** (configured, pre-launch) — 12 genres, 6 skills, "Punch Up" baseline
+- **Philosophy** (configured, pre-launch) — 12 fields, 6 skills, "Follow the argument" baseline. All skills transfer as reasoning to every other school.
+
+**School-configurable server components:**
+- `lib/coaching.js` — reads `coachingPatterns[]` and `coachingAdvice{}` from school config (previously hardcoded science patterns)
+- `api/register.js` — reads `intakePaper{}`, `intakeKeywords{}`, `intakeCoaching{}` from school config (previously hardcoded science intake)
+- `schools/schema.js` — validates all required school config fields at startup including coaching patterns and intake paper
+- Each school has: main config, core skill preamble, action skills (11 sections), skill signals, bounty validators, seed SQL (with 6 condenser preambles)
+- Cross-school identity composition via `identity_selector.py` SKILL_TRANSFER_MAP in the bot
+
 ## Code Restructuring (March 2026) — COMPLETE
 
 See `CLEANUP_LOG.md` for full details on each change.
