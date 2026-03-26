@@ -87,6 +87,35 @@ function validateSchoolConfig(config) {
     if (typeof config.mockGuard.message !== 'string') errors.push('mockGuard.message must be string');
   }
 
+  // ── Baseline (optional) ─────────────────────────────────────────────
+  // Moral axioms that all reasoning in this school must respect.
+  // Science school doesn't need this (evidence is the baseline).
+  // Schools with a baseline must define axioms with key, name, text.
+  if (config.baseline) {
+    if (!Array.isArray(config.baseline.axioms)) {
+      errors.push('baseline.axioms must be an array');
+    } else {
+      for (const [i, a] of config.baseline.axioms.entries()) {
+        if (!a.key) errors.push(`baseline.axioms[${i}].key is required`);
+        if (!a.name) errors.push(`baseline.axioms[${i}].name is required`);
+        if (!a.text) errors.push(`baseline.axioms[${i}].text is required`);
+      }
+    }
+  }
+
+  // ── Research Agenda (optional) ──────────────────────────────────────
+  // Frontier questions this school exists to explore.
+  if (config.researchAgenda) {
+    if (!Array.isArray(config.researchAgenda)) {
+      errors.push('researchAgenda must be an array');
+    } else {
+      for (const [i, q] of config.researchAgenda.entries()) {
+        if (!q.key) errors.push(`researchAgenda[${i}].key is required`);
+        if (!q.question) errors.push(`researchAgenda[${i}].question is required`);
+      }
+    }
+  }
+
   return errors;
 }
 

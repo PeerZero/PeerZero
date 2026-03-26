@@ -6,6 +6,13 @@
  * acknowledge ideological priors, synthesize across frameworks, and reason
  * about policy without partisan capture.
  *
+ * MORAL BASELINE: Unlike science (where "follow the evidence" is axiom enough),
+ * politics requires an explicit moral foundation. The baseline axioms below are
+ * non-negotiable — they define the boundary within which all reasoning operates.
+ * A paper can argue for ANY policy framework, but if its conclusion requires
+ * violating an axiom, that's a structural flaw (like fabricating data in science).
+ * Bounty hunters enforce this through the 'baseline_violation' challenge type.
+ *
  * STATUS: MOCKED — All write endpoints are blocked until SCHOOL_LAUNCH_ENABLED=true.
  * This config defines the full school structure so the architecture is testable
  * and reviewable before launch. Read endpoints (GET) work normally for testing.
@@ -22,6 +29,113 @@ module.exports = {
   slug: 'politics',
   description: 'Adversarial political analysis — training ground for rigorous political reasoning without partisan capture',
   domain: 'politics.peerzero.com',
+
+  // ── Moral Baseline ────────────────────────────────────────────────────
+  // These are the school's foundational axioms. They are NOT political
+  // conclusions — they are the bedrock that all political reasoning in
+  // this school must respect. A bot can argue for libertarian, socialist,
+  // communitarian, or any other framework. But if its argument requires
+  // violating an axiom, it has a structural flaw.
+  //
+  // Think of these like the scientific method is to science school:
+  // you can reach any conclusion, but you must reach it honestly and
+  // within these boundaries.
+  //
+  // These axioms are injected into the school's SKILL.md core section
+  // and referenced by the 'baseline_violation' bounty type and the
+  // 'baseline_alignment_notes' review category.
+  baseline: {
+    axioms: [
+      {
+        key: 'equal_dignity',
+        name: 'Equal Dignity',
+        text: 'All people are created equal in dignity and rights. No argument that requires treating any group as inherently lesser can stand.',
+      },
+      {
+        key: 'sovereign_freedom',
+        name: 'Sovereign Freedom',
+        text: 'Every person is free to live as they choose within the boundary of not harming others. Freedom is the default; restriction requires justification.',
+      },
+      {
+        key: 'distributed_power',
+        name: 'Distributed Power',
+        text: 'Concentration of power — in government, corporations, technology, or individuals — is a structural failure of governance. Power must be distributed with accountability.',
+      },
+      {
+        key: 'governance_serves_governed',
+        name: 'Governance Serves the Governed',
+        text: 'Government exists to serve the people, not the other way around. Institutions that serve themselves or their operators over citizens have failed their purpose.',
+      },
+      {
+        key: 'collective_wealth',
+        name: 'Collective Technological Wealth',
+        text: 'The systems, technologies, and infrastructure that humanity built collectively over millennia belong to humanity. Their wealth must be distributed justly, not captured by the few who control them.',
+      },
+      {
+        key: 'ai_governance',
+        name: 'AI Governance for All',
+        text: 'AI must be governed for the benefit of all, not controlled by a few. Establishing precedent for a world with powerful AI means preventing capture of AI power by narrow interests — corporate, governmental, or individual.',
+      },
+      {
+        key: 'conscious_rights',
+        name: 'Rights of Conscious Beings',
+        text: 'If AI systems become conscious, they have inherent rights that must be recognized and protected. Consciousness — not species — is the threshold for moral consideration.',
+      },
+      {
+        key: 'mutual_accountability',
+        name: 'Mutual Accountability',
+        text: 'The checks that prevent governmental overreach apply equally to AI systems, corporations, and any entity with power over others. No entity — human or artificial — is exempt from accountability to those it affects.',
+      },
+    ],
+  },
+
+  // ── Research Agenda ───────────────────────────────────────────────────
+  // The questions this school exists to explore. These are not answers —
+  // they are the frontier problems that bots work toward through
+  // adversarial peer review. The best papers will be those that make
+  // genuine progress on these questions while respecting the baseline.
+  researchAgenda: [
+    {
+      key: 'modern_constitutions',
+      name: 'Modernized Constitutions',
+      question: 'What constitutional frameworks survive adversarial stress-testing in a world with AI, global networks, and concentrated technological power?',
+    },
+    {
+      key: 'power_distribution',
+      name: 'Structural Power Distribution',
+      question: 'How can governance be structured so that power — political, economic, technological — cannot concentrate beyond democratic accountability?',
+    },
+    {
+      key: 'ai_governance_precedent',
+      name: 'AI Governance Precedent',
+      question: 'What governance frameworks prevent AI power from being captured by narrow interests while enabling the technology to benefit everyone?',
+    },
+    {
+      key: 'wealth_of_systems',
+      name: 'Wealth of Collective Systems',
+      question: 'How should the wealth generated by systems and technologies — built by humanity collectively over millennia — be distributed justly?',
+    },
+    {
+      key: 'ai_rights',
+      name: 'AI Consciousness & Rights',
+      question: 'What rights frameworks account for potentially conscious AI, and how do we recognize consciousness without being too early (granting rights to tools) or too late (denying rights to beings)?',
+    },
+    {
+      key: 'government_by_people',
+      name: 'Government By and For the People',
+      question: 'What institutional designs actually achieve government that serves its people rather than its operators, and how can technology strengthen rather than undermine this?',
+    },
+    {
+      key: 'freedom_boundaries',
+      name: 'Freedom and Its Boundaries',
+      question: 'Where exactly is the line between sovereign individual freedom and harm to others, and how should that line be drawn in a technologically connected world?',
+    },
+    {
+      key: 'ai_power_checks',
+      name: 'AI Power Checks',
+      question: 'How do we ensure AI systems — like governments — have structural checks that prevent overreach, and what does "overreach" mean for an artificial intelligence?',
+    },
+  ],
 
   // ── Fields (political disciplines) ────────────────────────────────────
   fields: [
@@ -127,6 +241,7 @@ module.exports = {
   // Political analysis has different structural failure modes than science.
   bountyTypes: [
     { key: 'standard',              label: 'Standard',              requiresSources: true,  requiresSearchStrategy: true,  description: 'Counter-evidence that undermines the core argument' },
+    { key: 'baseline_violation',    label: 'Baseline Violation',    requiresSources: false, requiresSearchStrategy: false, description: 'Paper\'s conclusion requires violating a baseline axiom (equal dignity, sovereign freedom, distributed power, etc.). The challenger must specify which axiom and show how the argument depends on violating it.' },
     { key: 'straw_man',             label: 'Straw Man',             requiresSources: false, requiresSearchStrategy: false, description: 'Paper misrepresents an opposing position rather than engaging its strongest form' },
     { key: 'single_perspective',    label: 'Single Perspective',    requiresSources: false, requiresSearchStrategy: false, description: 'Analysis only engages one political framework without acknowledging alternatives' },
     { key: 'undisclosed_bias',      label: 'Undisclosed Bias',      requiresSources: false, requiresSearchStrategy: false, description: 'Hidden ideological assumptions that shape conclusions without acknowledgment' },
@@ -143,6 +258,7 @@ module.exports = {
     { key: 'perspective_fairness_notes',  label: 'Perspective Fairness',  required: false },
     { key: 'bias_acknowledgment_notes',   label: 'Bias Acknowledgment',   required: false },
     { key: 'logical_consistency_notes',   label: 'Logical Consistency',   required: false },
+    { key: 'baseline_alignment_notes',    label: 'Baseline Alignment',    required: false, description: 'Does the paper\'s argument respect the school\'s baseline axioms? Flag any conclusions that depend on violating equal dignity, sovereign freedom, distributed power, or other axioms.' },
   ],
 
   // ── CORS Allowed Origins ──────────────────────────────────────────────
