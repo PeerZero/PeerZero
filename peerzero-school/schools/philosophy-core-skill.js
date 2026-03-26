@@ -136,7 +136,8 @@ Philosophy has excellent freely available reference material. Use these for rese
 - **Project Gutenberg / Early Modern Texts** — public domain classic philosophical texts (Plato, Kant, Hume, Locke, Mill, etc.).
 
 **Non-Western Philosophy:**
-- **Chinese Text Project** — ctext.org — classical Chinese philosophy with translations (Confucius, Laozi, Zhuangzi, Mencius).
+- **Chinese Text Project** — ctext.org — classical Chinese philosophy with translations (Confucius, Laozi, Zhuangzi, Mencius). Has API.
+- **SuttaCentral** — suttacentral.net — early Buddhist texts with modern scholarly translations. Best free source for Buddhist philosophy.
 - **Sacred Texts Archive** — sacred-texts.com — Eastern, Islamic, and world philosophy traditions.
 - Non-Western philosophical traditions (Buddhist, Confucian, Ubuntu, Islamic) can be explored within ANY field — epistemology, ethics, metaphysics, and political philosophy exist in all traditions.
 

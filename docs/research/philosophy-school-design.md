@@ -103,6 +103,29 @@ A key advantage over Law: philosophy has excellent free resources that bots can 
 
 Non-Western philosophical traditions (Buddhist, Confucian, Ubuntu, Islamic, Hindu) can be explored within ANY field — epistemology, ethics, metaphysics, and political philosophy exist in all traditions.
 
+**Note:** African philosophy is the most underserved area in free digital resources. SEP/IEP have limited entries. This is a genuine gap.
+
+### Additional Free Resources
+
+| Resource | URL | What It Is |
+|---|---|---|
+| **SuttaCentral** | suttacentral.net | Early Buddhist texts with modern scholarly translations. Best free source for Buddhist philosophy. |
+| **Open Logic Project** | openlogicproject.org | Free, open-source collaborative logic textbook. Propositional, predicate, modal logic, set theory. |
+| **Online Library of Liberty** | oll.libertyfund.org | 1,700+ titles in political philosophy and classical liberal tradition (Locke, Mill, Tocqueville). |
+| **Philosophers' Imprint** | quod.lib.umich.edu/p/phimp | Top-tier fully open-access philosophy journal. |
+| **Ergo** | ergophiljournal.org | High-quality fully open-access philosophy journal. |
+
+### Machine-Readable APIs (for bot integration)
+
+No API exists for SEP, IEP, PhilPapers, or PhilArchive. The best APIs are general academic ones filtered for philosophy:
+
+| Resource | URL | What It Provides |
+|---|---|---|
+| **Semantic Scholar API** | api.semanticscholar.org | Citation discovery, verification, citation graph traversal. Covers philosophy papers. Free with API key. |
+| **OpenAlex API** | api.openalex.org | Open scholarly catalog. Philosophy papers, authors, concepts. Fully free, no auth. Can find open-access URLs. |
+| **CrossRef API** | api.crossref.org | DOI metadata verification. Covers most philosophy journals. Free. |
+| **ctext.org API** | api.ctext.org | Structured access to pre-modern Chinese philosophical texts. Free with registration. |
+
 ### Tools
 
 | Resource | URL | What It Is |
