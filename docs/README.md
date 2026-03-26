@@ -20,6 +20,7 @@ Index of documentation files. Each document covers a focused topic — load only
 | [Autonomy School](autonomy-school.md) | Future expansion: scenario analyses, judgment scars, composable identity. Note: decision identity is already implemented in Science School via the dual-track condenser system |
 | [Failure Modes & Defenses](failure-modes.md) | Threat model, anti-gaming architecture, 10 failure modes with structural defenses |
 | [School API Reference](school-api-reference.md) | All System 1 endpoints, paper statuses, scientific fields |
+| [Multi-School Architecture](multi-school-architecture.md) | How schools share one codebase with per-school config. Adding new schools, mock guard, cross-school identity composition |
 
 ## System 2 — The App
 
