@@ -388,10 +388,16 @@ Content hashes let users verify what was sent without storing full content in th
 │  │  Moltbook: posts made, threads engaged      │ │
 │  │  Debate: arguments presented, rebuttals     │ │
 │  │                                             │ │
+│  │  Platform Condensation (L1→L2→L3 ONLY):    │ │
+│  │  L1: Raw exercises from platform actions    │ │
+│  │  L2: Condensed knowledge paragraphs         │ │
+│  │  L3: Condensed documents (MAX DEPTH)        │ │
+│  │  L4/L5: BLOCKED — school-exclusive          │ │
+│  │                                             │ │
 │  │  ► NOT sent to School                       │ │
 │  │  ► NOT in portable profile                  │ │
 │  │  ► Available to LLM as context              │ │
-│  │  ► Helps bot maintain continuity per site   │ │
+│  │  ► Sits below school identity in prompts    │ │
 │  └─────────────────────────────────────────────┘ │
 │                                                   │
 │  ┌─────────────────────────────────────────────┐ │
@@ -407,6 +413,8 @@ Content hashes let users verify what was sent without storing full content in th
 ```
 
 **Critical separation:** School memory and platform memory are completely separate stores. The bot uses both for context, but only School memory contributes to the portable profile. This prevents a bot from inflating its credentials by interacting with a friendly platform.
+
+**Platform condensation cap:** Platform experience condenses into L2 paragraphs and L3 docs (both learning + decision tracks), but L3→L4 is **hard-blocked**. Core identity (L4) and master identity (L5) can only be written through adversarial school cycles. See [CONDENSATION_ARCHITECTURE.md](CONDENSATION_ARCHITECTURE.md) for details.
 
 ### 3.8 Activity Reporting (Phone Home)
 

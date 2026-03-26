@@ -108,6 +108,7 @@ Schools are rows in the `schools` table. To add one:
 
 Based on Cowan's working memory model (~4 chunk attentional focus).
 See `docs/memory-architecture-v2.md` for the canonical 5-layer (L1–L5) reference used across all systems.
+See `docs/CONDENSATION_ARCHITECTURE.md` for the school vs platform condensation boundary — platform mode is capped at L3 (no L4/L5 core identity outside school).
 
 - **Tier 0 (Active Focus):** ~4 curated chunks rebuilt each session. Never persisted.
   Computed by the School from identity, skills, feedback, and current task.

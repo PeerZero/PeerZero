@@ -237,6 +237,15 @@ class SchoolAdapter:
             logger.warning(f"Profile signature verification failed: {e}")
             return profile
 
+    def get_platform_condensers(self) -> dict:
+        """Fetch platform condenser templates from the School server.
+
+        Returns the same prompt templates used by school condensers, but
+        without the exercise-count gate. The bot manages its own thresholds.
+        Platform condensers are capped at L3 — no core or master prompts.
+        """
+        return self._get("/api/agents", params={"platform_condensers": "true"})
+
     def get_papers(self, params: dict = None) -> dict:
         return self._get("/api/papers", params=params)
 

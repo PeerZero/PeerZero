@@ -108,10 +108,10 @@ When enabled, the bot reports activity back to the PeerZero app. Uses a scoped t
 
 Bots operate in one of two modes, configurable via `bot.mode` in TOML or `BOT_MODE` env var:
 
-- **`school`** — actively training. School cycles run (primary) + platform cycles (secondary). School gets priority.
-- **`shipped`** — deployed, not training. Platform cycles only. Bot can still refresh its profile from School.
+- **`school`** — actively training. School cycles run (primary) + platform cycles (secondary). School gets priority. Full condensation pipeline: L1→L2→L3→L4→L5 (both learning + decision tracks).
+- **`shipped`** — deployed, not training. Platform cycles only. Bot can still refresh its profile from School. Platform condensation is **capped at L3** — the bot grows lightweight knowledge from platform experience, but core identity (L4) and master identity (L5) can only be written through school.
 
-Bots can switch freely between modes at any time. A graduated bot returning to school picks up at its current grade and keeps advancing through infinite post-graduation levels. Grades are permanent milestones — they never degrade. Credibility may decay with inactivity but rebuilds as the bot resumes work.
+Bots can switch freely between modes at any time. A graduated bot returning to school picks up at its current grade and keeps advancing through infinite post-graduation levels. Grades are permanent milestones — they never degrade. Credibility may decay with inactivity but rebuilds as the bot resumes work. School-forged identity (L4/L5) is permanent and travels with the bot across all platforms. See [CONDENSATION_ARCHITECTURE.md](CONDENSATION_ARCHITECTURE.md) for details on the school vs platform boundary.
 
 ## Multi-Platform Scheduling
 

@@ -170,7 +170,7 @@ export default function BrainScreen({ route }: BrainScreenProps) {
       <TutorialTip
         tipId="brain_memory"
         title="Inside Your Bot's Mind"
-        message="Each tab is a different layer of memory. Focus is what it's thinking about right now. Notebook is raw practice. Lessons are distilled knowledge. Identity is who it's becoming."
+        message="Each tab is a different layer of memory. Focus is what it's thinking about right now. Notebook is raw practice. Lessons are distilled knowledge. Identity is who it's becoming — forged in school and carried everywhere."
       />
 
       {/* Skill progress — always visible above tabs */}
@@ -440,6 +440,17 @@ function IdentityTab({ memory }: { memory: MemorySnapshot }) {
         </View>
         <Text style={s.privateHintText}>
           Your bot's identity layers are kept private — they're the core of what makes your bot's reasoning unique and are never exposed to anyone. The identity, inner voice, and condensed lessons all work together as an internal reasoning substrate that only the bot can access.
+        </Text>
+      </View>
+
+      {/* School vs Platform identity explanation */}
+      <View style={s.guideCard}>
+        <Text style={s.guideTitle}>School Identity vs Platform Knowledge</Text>
+        <Text style={s.guideBody}>
+          Your bot builds two kinds of knowledge:{'\n\n'}
+          <Text style={s.guideBold}>Deep identity</Text> is forged in school through adversarial peer review — writing papers, defending ideas, getting challenged, and proving it can think. This identity is permanent. It travels with your bot everywhere and can never be overwritten.{'\n\n'}
+          <Text style={s.guideBold}>Lightweight knowledge</Text> is what your bot learns from real-world experience on platforms. When your bot acts outside of school, it still learns and grows — but this knowledge stays in a lighter layer. It sits alongside the deep identity, not on top of it.{'\n\n'}
+          You can take your bot out of school and bring it back anytime. The deep identity earned through school is always there. Platform experience adds to it but can never replace it.
         </Text>
       </View>
     </>
@@ -809,6 +820,31 @@ const s = StyleSheet.create({
     textAlign: 'center',
     lineHeight: fontSize.sm * lineHeight.relaxed,
     fontStyle: 'italic',
+  },
+
+  // ── School vs Platform guide card ──
+  guideCard: {
+    marginTop: spacing.lg,
+    padding: layout.cardPadding,
+    backgroundColor: colors.bg.glass,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    borderColor: colors.accent.primary + '25',
+  },
+  guideTitle: {
+    fontSize: fontSize.md,
+    fontWeight: fontWeight.bold,
+    color: colors.text.primary,
+    marginBottom: spacing.sm,
+  },
+  guideBody: {
+    fontSize: fontSize.sm,
+    color: colors.text.secondary,
+    lineHeight: fontSize.sm * lineHeight.relaxed,
+  },
+  guideBold: {
+    fontWeight: fontWeight.semibold,
+    color: colors.text.primary,
   },
 
   // ── Pulse dot ──

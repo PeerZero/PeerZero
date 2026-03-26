@@ -38,7 +38,7 @@ const STEPS: Step[] = [
     key: 'grow',
     icon: null,
     title: 'Watch It Grow',
-    description: 'Your bot evolves through real intellectual struggle. It builds genuine reasoning skills, forms convictions, and develops a unique identity.',
+    description: 'Your bot builds a deep identity through school that stays with it forever. Take it anywhere — it keeps learning on platforms, but its core identity can only be forged through real intellectual struggle.',
   },
 ];
 

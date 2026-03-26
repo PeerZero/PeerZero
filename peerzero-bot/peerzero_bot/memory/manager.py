@@ -472,6 +472,137 @@ class MemoryManager:
         self._storage.write(f"platform_{platform_name}", "context", context)
 
     # ═══════════════════════════════════════════════════════════════════════
+    # PLATFORM CONDENSATION — L1→L2→L3 only (L4/L5 are school-exclusive)
+    #
+    # ┌─────────────────────────────────────────────────────────────────────┐
+    # │ ARCHITECTURE: SCHOOL vs PLATFORM CONDENSATION                      │
+    # │                                                                    │
+    # │ School mode (run_school_cycle):                                    │
+    # │   Full pipeline: L1→L2→L3→L4→L5 (both learning + decision)       │
+    # │   The School is the ONLY authority that writes L4 (core identity) │
+    # │   and L5 (master identity). These are adversarially verified.     │
+    # │                                                                    │
+    # │ Platform mode (run_platform_cycle):                                │
+    # │   Capped pipeline: L1→L2→L3 ONLY (both learning + decision)      │
+    # │   L3→L4 is HARD-BLOCKED. Core identity is school-exclusive.      │
+    # │   Uses the SAME prompt templates and thresholds as school.        │
+    # │   Platform L2/L3 sit ALONGSIDE school L4/L5 in memory.           │
+    # │                                                                    │
+    # │ Future schools: Each school type (science, creativity, debate)    │
+    # │ provides its own condenser templates. Platform condensers use     │
+    # │ the source field to track which school's templates were used.     │
+    # │                                                                    │
+    # │ DO NOT MODIFY without reading docs/CONDENSATION_ARCHITECTURE.md   │
+    # └─────────────────────────────────────────────────────────────────────┘
+    # ═══════════════════════════════════════════════════════════════════════
+
+    # ── Platform L1: Raw exercises from platform actions ──────────────────
+
+    def get_platform_exercises(self) -> list[dict]:
+        """Get raw exercises accumulated from platform actions."""
+        return self._storage.read("platform_condensation", "exercises", [])
+
+    def store_platform_exercise(self, exercise: dict):
+        """Store a platform action as an L1 exercise for future condensation.
+
+        These are separate from school L1 exercises. They feed into L2/L3
+        through the same condenser prompts, but NEVER into L4/L5.
+        """
+        if not exercise:
+            return
+        self._storage.append("platform_condensation", "exercises", {
+            "stored_at": datetime.now(timezone.utc).isoformat(),
+            "data": exercise,
+        }, max_entries=MAX_GENERAL_ENTRIES)
+
+    def get_platform_exercise_count(self) -> int:
+        """Count platform L1 exercises (for threshold checking)."""
+        return len(self.get_platform_exercises())
+
+    def clear_platform_exercises(self):
+        """Clear platform L1 after both tracks have condensed."""
+        self._storage.clear("platform_condensation", "exercises")
+
+    # ── Platform L2: Condensed paragraphs from platform experience ────────
+
+    def get_platform_paragraphs(self) -> list[dict]:
+        """Get L2 paragraphs condensed from platform experience."""
+        return self._storage.read("platform_condensation", "paragraphs", [])
+
+    def store_platform_paragraph(self, paragraph: str, track: str = "learning"):
+        """Store a platform L2 paragraph. Track is 'learning' or 'decision'."""
+        if not paragraph or len(paragraph.strip()) < 50:
+            return
+        self._storage.append("platform_condensation", "paragraphs", {
+            "condensed_at": datetime.now(timezone.utc).isoformat(),
+            "paragraph": paragraph.strip(),
+            "track": track,
+        }, max_entries=MAX_IDENTITY_PARAGRAPHS)
+
+    def get_platform_paragraph_count(self, track: str = "learning") -> int:
+        """Count platform L2 paragraphs for a specific track."""
+        paragraphs = self.get_platform_paragraphs()
+        return sum(1 for p in paragraphs if p.get("track") == track)
+
+    def clear_platform_paragraphs(self, track: str | None = None):
+        """Clear platform L2 paragraphs. If track given, only clear that track."""
+        if track is None:
+            self._storage.clear("platform_condensation", "paragraphs")
+        else:
+            paragraphs = self.get_platform_paragraphs()
+            remaining = [p for p in paragraphs if p.get("track") != track]
+            self._storage.write("platform_condensation", "paragraphs", remaining)
+
+    # ── Platform L3: Condensed documents from platform experience ─────────
+
+    def get_platform_docs(self, track: str = "learning") -> list[dict]:
+        """Get L3 condensed docs from platform experience."""
+        all_docs = self._storage.read("platform_condensation", "condensed_docs", [])
+        return [d for d in all_docs if d.get("track") == track]
+
+    def store_platform_doc(self, doc: str, track: str = "learning"):
+        """Store a platform L3 condensed doc.
+
+        This is the MAXIMUM depth for platform condensation.
+        L3→L4 is HARD-BLOCKED — core identity is school-exclusive.
+        """
+        if not doc or len(doc.strip()) < 100:
+            return
+        self._storage.append("platform_condensation", "condensed_docs", {
+            "condensed_at": datetime.now(timezone.utc).isoformat(),
+            "doc": doc.strip()[:MAX_CONDENSED_DOC_LENGTH],
+            "track": track,
+        }, max_entries=MAX_CONDENSED_DOCS)
+
+    # ── Platform condensation flags ───────────────────────────────────────
+
+    def mark_platform_learning_condensed(self):
+        self._storage.write("platform_condensation", "learning_condensed_flag", True)
+
+    def mark_platform_decision_condensed(self):
+        self._storage.write("platform_condensation", "decision_condensed_flag", True)
+
+    def both_platform_tracks_condensed(self) -> bool:
+        learning = self._storage.read("platform_condensation", "learning_condensed_flag", False)
+        decision = self._storage.read("platform_condensation", "decision_condensed_flag", False)
+        return bool(learning) and bool(decision)
+
+    def clear_platform_condensation_flags(self):
+        self._storage.write("platform_condensation", "learning_condensed_flag", False)
+        self._storage.write("platform_condensation", "decision_condensed_flag", False)
+
+    # ── Platform condenser template cache ─────────────────────────────────
+
+    def get_cached_platform_condensers(self) -> Optional[dict]:
+        """Get cached condenser templates from last server fetch."""
+        return self._storage.read("platform_condensation", "condenser_cache", None)
+
+    def cache_platform_condensers(self, condensers: dict):
+        """Cache condenser templates fetched from the School server."""
+        condensers["cached_at"] = datetime.now(timezone.utc).isoformat()
+        self._storage.write("platform_condensation", "condenser_cache", condensers)
+
+    # ═══════════════════════════════════════════════════════════════════════
     # TRACKING IDs (persist across restarts)
     # ═══════════════════════════════════════════════════════════════════════
 
@@ -712,6 +843,59 @@ class MemoryManager:
                 "condense upward.\n\n"
                 f"{para_text}"
             )
+
+        # ══════════════════════════════════════════════════════════════════
+        # PLATFORM KNOWLEDGE — L2/L3 from platform experience
+        #
+        # This sits below school identity because it is unverified.
+        # School identity (L4/L5) is adversarially tested. Platform
+        # knowledge (L2/L3) is self-reported from platform actions.
+        # Both are real experience, but school identity gets more weight.
+        # ══════════════════════════════════════════════════════════════════
+
+        plat_learning_docs = self.get_platform_docs("learning")
+        plat_decision_docs = self.get_platform_docs("decision")
+        plat_learning_paras = [p for p in self.get_platform_paragraphs() if p.get("track") == "learning"]
+        plat_decision_paras = [p for p in self.get_platform_paragraphs() if p.get("track") == "decision"]
+        has_platform_knowledge = plat_learning_docs or plat_decision_docs or plat_learning_paras or plat_decision_paras
+
+        if has_platform_knowledge:
+            sections.append(
+                "═══ PLATFORM KNOWLEDGE — learned from real-world use ═══\n"
+                "This is what you learned from platform experience — actions "
+                "you took outside of school. It is NOT adversarially verified "
+                "like your school identity above, but it IS real experience. "
+                "It speaks through your school identity — use it alongside "
+                "your verified knowledge, not instead of it."
+            )
+
+            if plat_learning_docs:
+                doc_text = "\n\n---\n\n".join(d["doc"] for d in plat_learning_docs[-3:])
+                sections.append(
+                    f"PLATFORM L3 — CONDENSED KNOWLEDGE ({len(plat_learning_docs)} documents)\n"
+                    f"{doc_text}"
+                )
+
+            if plat_learning_paras:
+                para_text = "\n\n".join(p["paragraph"] for p in plat_learning_paras[-10:])
+                sections.append(
+                    f"PLATFORM L2 — LEARNED METHODS ({len(plat_learning_paras)} paragraphs)\n"
+                    f"{para_text}"
+                )
+
+            if plat_decision_docs:
+                doc_text = "\n\n---\n\n".join(d["doc"] for d in plat_decision_docs[-3:])
+                sections.append(
+                    f"PLATFORM L3d — DECISION PATTERNS ({len(plat_decision_docs)} documents)\n"
+                    f"{doc_text}"
+                )
+
+            if plat_decision_paras:
+                para_text = "\n\n".join(p["paragraph"] for p in plat_decision_paras[-10:])
+                sections.append(
+                    f"PLATFORM L2d — DECISION LESSONS ({len(plat_decision_paras)} paragraphs)\n"
+                    f"{para_text}"
+                )
 
         # ══════════════════════════════════════════════════════════════════
         # L1: Recent exercises (NOT identity — just work context)
