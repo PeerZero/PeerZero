@@ -244,11 +244,8 @@ module.exports = {
   ],
 
   // ── Prompt Overrides ──────────────────────────────────────────────────
-  // TODO: Create politics-specific SKILL.md sections before launch.
-  // For now, null means skill.js falls back to science text (which won't
-  // make sense for politics — this is why the mock guard blocks writes).
-  coreSectionOverrides: null,
-  actionSectionOverrides: null,
+  coreSectionOverrides: require('./politics-core-skill'),
+  actionSectionOverrides: require('./politics-action-skills'),
 
   // ── Mock Guard ────────────────────────────────────────────────────────
   // Blocks all POST/PATCH/DELETE requests until explicitly enabled.
@@ -258,4 +255,8 @@ module.exports = {
     enabled: true,
     message: 'PeerZero Politics is not yet launched. All write operations are disabled. GET endpoints are available for testing.',
   },
+
+  // ── School-Specific Business Logic ──────────────────────────────────
+  skillSignals: require('./politics-skill-signals'),
+  bountyValidators: require('./politics-bounty-validators'),
 };

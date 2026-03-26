@@ -83,4 +83,8 @@ module.exports = {
   get coreSectionOverrides() { return getSchoolConfig().coreSectionOverrides; },
   get actionSectionOverrides() { return getSchoolConfig().actionSectionOverrides; },
   get mockGuard()  { return getSchoolConfig().mockGuard; },
+  get baseline()   { return getSchoolConfig().baseline; },
+  get researchAgenda() { return getSchoolConfig().researchAgenda; },
+  get skillSignals()   { return getSchoolConfig().skillSignals; },
+  get bountyValidators() { return getSchoolConfig().bountyValidators; },
 };

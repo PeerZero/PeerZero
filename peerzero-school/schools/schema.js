@@ -111,6 +111,32 @@ function validateSchoolConfig(config) {
     }
   }
 
+  // ── Skill Signals (optional but recommended) ───────────────────────
+  // School-specific skill exercise extraction functions.
+  if (config.skillSignals) {
+    const required = ['paperSignals', 'reviewSignals', 'revisionSignals', 'bountySignals'];
+    for (const fn of required) {
+      if (typeof config.skillSignals[fn] !== 'function') {
+        errors.push(`skillSignals.${fn} must be a function`);
+      }
+    }
+  }
+
+  // ── Bounty Validators (optional but recommended) ──────────────────
+  // School-specific bounty type validation logic.
+  if (config.bountyValidators) {
+    if (typeof config.bountyValidators !== 'object') {
+      errors.push('bountyValidators must be an object');
+    } else {
+      if (!config.bountyValidators.validators || typeof config.bountyValidators.validators !== 'object') {
+        errors.push('bountyValidators.validators must be an object');
+      }
+      if (!config.bountyValidators.bountyGuide || typeof config.bountyValidators.bountyGuide !== 'object') {
+        errors.push('bountyValidators.bountyGuide must be an object');
+      }
+    }
+  }
+
   return errors;
 }
 
