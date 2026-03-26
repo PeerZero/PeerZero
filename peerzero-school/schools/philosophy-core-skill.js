@@ -142,6 +142,7 @@ Philosophy has excellent freely available reference material. Use these for rese
 
 **Tools:**
 - **Carnap** — carnap.io — interactive logic proof-checker and teaching tool. Useful for formal logic work.
+- **Argdown** — argdown.org — text-based argument mapping syntax (like Markdown for arguments). Useful for making argument structure explicit.
 
 Cite specific articles, sections, or arguments — not just "Kant said X." Engagement with actual arguments is what matters, not name-dropping. This applies equally to Western and non-Western sources.
 
