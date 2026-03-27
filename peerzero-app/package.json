@@ -12,11 +12,13 @@
       "picomatch@>=3.0.0 <3.0.2": ">=3.0.2",
       "picomatch@>=4.0.0 <4.0.4": ">=4.0.4",
       "@expo/cli>picomatch": ">=4.0.4",
-      "node-forge@<1.4.0": ">=1.4.0"
+      "node-forge@<1.4.0": ">=1.4.0",
+      "path-to-regexp@<0.1.13": ">=0.1.13"
     },
     "//auditNotes": {
       "esbuild@0.21.5 (moderate)": "GHSA-67mh-4wv8-2f99 — dev server CORS bypass. Dev-only (vitest>vite>esbuild), not a production risk. Cannot override to >=0.25.0 without breaking vite/vitest (breaking changes). Will resolve when vite upgrades its esbuild dep. Check: pnpm audit",
-      "node-forge@1.3.3 (high)": "GHSA-5m6q-g25r-mvwx, GHSA-2328-f5f3-gj25, GHSA-q67f-28xg-22rw, GHSA-ppp5-5v6c-4jwp — DoS, cert bypass, Ed25519+RSA signature forgery. Comes from @expo/cli>@expo/code-signing-certificates>node-forge and @expo/cli>node-forge. Override to >=1.4.0."
+      "node-forge@1.3.3 (high)": "GHSA-5m6q-g25r-mvwx, GHSA-2328-f5f3-gj25, GHSA-q67f-28xg-22rw, GHSA-ppp5-5v6c-4jwp — DoS, cert bypass, Ed25519+RSA signature forgery. Comes from @expo/cli>@expo/code-signing-certificates>node-forge and @expo/cli>node-forge. Override to >=1.4.0.",
+      "path-to-regexp@0.1.12 (high)": "GHSA-37ch-88jc-xwx2 — ReDoS via multiple route parameters. Comes from express@4.22.1>path-to-regexp. Override to >=0.1.13."
     }
   },
   "workspaces": [
