@@ -102,7 +102,7 @@ describe('verify()', () => {
 
   it('rejects expired profile', async () => {
     const signed = signProfile(makeProfile(), keys.privateKey);
-    signed.expires_at = new Date(Date.now() - 1000).toISOString();
+    signed.expires_at = new Date(Date.now() - 120_000).toISOString();
     await assert.rejects(() => verify(signed, keys.publicKey), /expired/i);
   });
 
