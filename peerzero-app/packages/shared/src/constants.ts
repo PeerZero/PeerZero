@@ -159,6 +159,17 @@ export const SPECIES_PRESETS = [
   { seed: 'thorn', name: 'Thorn', desc: 'Spiky but sweet' },            // oval, horns, spike tail
   { seed: 'pippin', name: 'Pippin', desc: 'Perky & peppy' },            // pear, bunny ears, freckles
   { seed: 'starling', name: 'Starling', desc: 'Small & sparkly' },      // tall, cat ears, spots
+  // ── Funny species ──
+  { seed: 'splat', name: 'Splat', desc: 'Melted but trying' },          // blob, tiny ears, spring tail
+  { seed: 'loafer', name: 'Loafer', desc: 'Bread-shaped genius' },      // loaf, tiny ears, stub tail, mustache
+  { seed: 'professor', name: 'Professor', desc: 'One ear, all brain' },  // nuggie, one ear, fan tail, mustache
+  { seed: 'oops', name: 'Oops', desc: 'Happy little accident' },        // blob, huge ears, spring tail, bandaid
+  { seed: 'unit', name: 'Unit', desc: 'Absolute unit' },                // chonk, tiny ears, stub tail
+  { seed: 'crouton', name: 'Crouton', desc: 'Crunchy on the outside' }, // loaf, horns, spike tail, freckles
+  { seed: 'gremlin', name: 'Gremlin', desc: 'Chaotic but lovable' },    // nuggie, huge ears, spring tail, spots
+  { seed: 'sir', name: 'Sir Flops', desc: 'Distinguished & floppy' },   // tall, huge ears, fan tail, mustache
+  { seed: 'potato', name: 'Potato', desc: 'Peak performance' },         // blob, bear ears, pom tail
+  { seed: 'yeet', name: 'Yeet', desc: 'Built for speed (not really)' }, // squish, one ear, spike tail, bandaid
 ] as const;
 
 // ── Knowledge Hunger ──

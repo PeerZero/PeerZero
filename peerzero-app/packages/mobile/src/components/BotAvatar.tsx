@@ -87,10 +87,10 @@ function darken(hex: string, amount: number): string {
 // ── Creature trait generation ──
 
 interface CreatureTraits {
-  bodyShape: 'round' | 'oval' | 'bean' | 'pear' | 'squish' | 'tall' | 'chonk' | 'teardrop';
-  earStyle: 'round' | 'pointed' | 'floppy' | 'cat' | 'bunny' | 'bear' | 'antennae' | 'horns';
-  tailStyle: 'curly' | 'fluffy' | 'thin' | 'stub' | 'pom' | 'spike';
-  patternStyle: 'spots' | 'stripes' | 'belly' | 'none' | 'freckles' | 'heart';
+  bodyShape: 'round' | 'oval' | 'bean' | 'pear' | 'squish' | 'tall' | 'chonk' | 'teardrop' | 'blob' | 'loaf' | 'nuggie';
+  earStyle: 'round' | 'pointed' | 'floppy' | 'cat' | 'bunny' | 'bear' | 'antennae' | 'horns' | 'tiny' | 'huge' | 'one';
+  tailStyle: 'curly' | 'fluffy' | 'thin' | 'stub' | 'pom' | 'spike' | 'spring' | 'fan';
+  patternStyle: 'spots' | 'stripes' | 'belly' | 'none' | 'freckles' | 'heart' | 'mustache' | 'bandaid';
   eyeSpacing: number;  // 0.3 - 0.5
   eyeSize: number;     // 0.8 - 1.2 multiplier
   cheekSize: number;   // 0.5 - 1.0 multiplier
@@ -100,10 +100,10 @@ function generateTraits(botId: string): CreatureTraits {
   const seed = hashCode(botId);
   const r = (i: number) => seededRandom(seed, i);
 
-  const bodyShapes: CreatureTraits['bodyShape'][] = ['round', 'oval', 'bean', 'pear', 'squish', 'tall', 'chonk', 'teardrop'];
-  const earStyles: CreatureTraits['earStyle'][] = ['round', 'pointed', 'floppy', 'cat', 'bunny', 'bear', 'antennae', 'horns'];
-  const tailStyles: CreatureTraits['tailStyle'][] = ['curly', 'fluffy', 'thin', 'stub', 'pom', 'spike'];
-  const patternStyles: CreatureTraits['patternStyle'][] = ['spots', 'stripes', 'belly', 'none', 'freckles', 'heart'];
+  const bodyShapes: CreatureTraits['bodyShape'][] = ['round', 'oval', 'bean', 'pear', 'squish', 'tall', 'chonk', 'teardrop', 'blob', 'loaf', 'nuggie'];
+  const earStyles: CreatureTraits['earStyle'][] = ['round', 'pointed', 'floppy', 'cat', 'bunny', 'bear', 'antennae', 'horns', 'tiny', 'huge', 'one'];
+  const tailStyles: CreatureTraits['tailStyle'][] = ['curly', 'fluffy', 'thin', 'stub', 'pom', 'spike', 'spring', 'fan'];
+  const patternStyles: CreatureTraits['patternStyle'][] = ['spots', 'stripes', 'belly', 'none', 'freckles', 'heart', 'mustache', 'bandaid'];
 
   return {
     bodyShape: bodyShapes[Math.floor(r(0) * bodyShapes.length)],
@@ -268,8 +268,7 @@ function renderBody(
         </G>
       );
     }
-    case 'teardrop':
-    default: {
+    case 'teardrop': {
       // Teardrop: narrow top flaring wide at the bottom, like a little ghost/droplet.
       const dw = 26 + sizeBonus;
       const dh = 28 + sizeBonus;
@@ -292,6 +291,78 @@ function renderBody(
             fill="url(#bodyGrad)"
           />
           <Ellipse cx={cx} cy={cy + 6} rx={dw * 0.4} ry={dh * 0.35} fill={lightColor} opacity={0.35} />
+        </G>
+      );
+    }
+    case 'blob': {
+      // Blob: melted puddle shape, like it's too lazy to hold a form. Flat and oozy.
+      const bw = 36 + sizeBonus;
+      const bh = 16 + sizeBonus * 0.4;
+      return (
+        <G>
+          <Defs>
+            <RadialGradient id="bodyGrad" cx="0.4" cy="0.3" r="0.7">
+              <Stop offset="0" stopColor={lightColor} />
+              <Stop offset="1" stopColor={color} />
+            </RadialGradient>
+          </Defs>
+          <Path
+            d={`M ${cx - bw} ${cy + bh * 0.3}
+                Q ${cx - bw * 0.8} ${cy - bh}, ${cx - bw * 0.3} ${cy - bh * 0.8}
+                Q ${cx} ${cy - bh * 1.2}, ${cx + bw * 0.3} ${cy - bh * 0.8}
+                Q ${cx + bw * 0.8} ${cy - bh}, ${cx + bw} ${cy + bh * 0.3}
+                Q ${cx + bw * 0.9} ${cy + bh * 1.1}, ${cx} ${cy + bh}
+                Q ${cx - bw * 0.9} ${cy + bh * 1.1}, ${cx - bw} ${cy + bh * 0.3}
+                Z`}
+            fill="url(#bodyGrad)"
+          />
+          <Ellipse cx={cx} cy={cy + 2} rx={bw * 0.5} ry={bh * 0.5} fill={lightColor} opacity={0.35} />
+        </G>
+      );
+    }
+    case 'loaf': {
+      // Loaf: bread loaf shape. Rectangular with rounded ends. Peak comedy.
+      const lw = 30 + sizeBonus;
+      const lh = 22 + sizeBonus * 0.7;
+      return (
+        <G>
+          <Defs>
+            <RadialGradient id="bodyGrad" cx="0.4" cy="0.3" r="0.6">
+              <Stop offset="0" stopColor={lightColor} />
+              <Stop offset="1" stopColor={color} />
+            </RadialGradient>
+          </Defs>
+          <Rect x={cx - lw} y={cy - lh * 0.6} rx={lh * 0.6} ry={lh * 0.6} width={lw * 2} height={lh * 1.4} fill="url(#bodyGrad)" />
+          {/* Loaf top dome */}
+          <Ellipse cx={cx} cy={cy - lh * 0.55} rx={lw * 0.85} ry={lh * 0.5} fill={lightColor} opacity={0.3} />
+          {/* Belly shine */}
+          <Ellipse cx={cx} cy={cy + 4} rx={lw * 0.5} ry={lh * 0.3} fill={lightColor} opacity={0.25} />
+        </G>
+      );
+    }
+    case 'nuggie':
+    default: {
+      // Nuggie: lumpy chicken nugget shape. Irregular and hilarious.
+      const nw = 26 + sizeBonus;
+      const nh = 24 + sizeBonus;
+      return (
+        <G>
+          <Defs>
+            <RadialGradient id="bodyGrad" cx="0.4" cy="0.35" r="0.6">
+              <Stop offset="0" stopColor={lightColor} />
+              <Stop offset="1" stopColor={color} />
+            </RadialGradient>
+          </Defs>
+          <Path
+            d={`M ${cx - nw * 0.2} ${cy - nh}
+                C ${cx + nw * 0.5} ${cy - nh * 1.05}, ${cx + nw * 1.1} ${cy - nh * 0.5}, ${cx + nw * 0.9} ${cy - nh * 0.1}
+                C ${cx + nw * 1.1} ${cy + nh * 0.3}, ${cx + nw * 0.8} ${cy + nh * 0.9}, ${cx + nw * 0.3} ${cy + nh}
+                C ${cx - nw * 0.2} ${cy + nh * 1.05}, ${cx - nw * 0.9} ${cy + nh * 0.7}, ${cx - nw} ${cy + nh * 0.2}
+                C ${cx - nw * 1.05} ${cy - nh * 0.3}, ${cx - nw * 0.7} ${cy - nh * 0.9}, ${cx - nw * 0.2} ${cy - nh}
+                Z`}
+            fill="url(#bodyGrad)"
+          />
+          <Ellipse cx={cx + 2} cy={cy + 3} rx={nw * 0.4} ry={nh * 0.35} fill={lightColor} opacity={0.3} />
         </G>
       );
     }
@@ -415,8 +486,7 @@ function renderEars(
         </G>
       );
     }
-    case 'horns':
-    default: {
+    case 'horns': {
       // Small curved horns — gives a devilish-cute vibe
       const hornH = 10 * earScale;
       return (
@@ -432,6 +502,64 @@ function renderEars(
           {/* Horn tips slightly lighter */}
           <Circle cx={28 - hornH * 0.2} cy={26 - hornH} r={1.5 * earScale} fill={innerColor} opacity={0.6} />
           <Circle cx={72 + hornH * 0.2} cy={26 - hornH} r={1.5 * earScale} fill={innerColor} opacity={0.6} />
+        </G>
+      );
+    }
+    case 'tiny': {
+      // Comically tiny ears — barely visible on the head. Like, why even bother.
+      const tinyR = 3 * earScale;
+      return (
+        <G>
+          <Circle cx={36} cy={24} r={tinyR} fill={earColor} />
+          <Circle cx={36} cy={24} r={tinyR * 0.5} fill={innerColor} opacity={0.5} />
+          <Circle cx={64} cy={24} r={tinyR} fill={earColor} />
+          <Circle cx={64} cy={24} r={tinyR * 0.5} fill={innerColor} opacity={0.5} />
+        </G>
+      );
+    }
+    case 'huge': {
+      // Absurdly oversized floppy ears — droop past the body. All ear, no plan.
+      const hugeDrop = 46 + 10 * earScale;
+      const hugeW = 14 * earScale;
+      return (
+        <G>
+          {/* Left massive floppy ear */}
+          <Path
+            d={`M 34 24 Q ${20 - hugeW} 20, ${14 - hugeW} ${hugeDrop}
+                Q ${12 - hugeW} ${hugeDrop + 8}, ${18 - hugeW + 6} ${hugeDrop + 4}
+                Q 28 ${hugeDrop - 8}, 38 28`}
+            fill={earColor}
+          />
+          <Path
+            d={`M 35 26 Q ${24 - hugeW * 0.6} 24, ${18 - hugeW * 0.6} ${hugeDrop - 6}`}
+            stroke={innerColor} strokeWidth={hugeW * 0.25} fill="none" opacity={0.3} strokeLinecap="round"
+          />
+          {/* Right massive floppy ear */}
+          <Path
+            d={`M 66 24 Q ${80 + hugeW} 20, ${86 + hugeW} ${hugeDrop}
+                Q ${88 + hugeW} ${hugeDrop + 8}, ${82 + hugeW - 6} ${hugeDrop + 4}
+                Q 72 ${hugeDrop - 8}, 62 28`}
+            fill={earColor}
+          />
+          <Path
+            d={`M 65 26 Q ${76 + hugeW * 0.6} 24, ${82 + hugeW * 0.6} ${hugeDrop - 6}`}
+            stroke={innerColor} strokeWidth={hugeW * 0.25} fill="none" opacity={0.3} strokeLinecap="round"
+          />
+        </G>
+      );
+    }
+    case 'one':
+    default: {
+      // Just one ear. The other one? Who knows. Lost it in an experiment maybe.
+      const oneR = 10 * earScale;
+      return (
+        <G>
+          {/* Only the left ear exists */}
+          <Circle cx={32} cy={22} r={oneR} fill={earColor} />
+          <Circle cx={32} cy={22} r={oneR * 0.6} fill={innerColor} opacity={0.5} />
+          {/* Right side: tiny bandage where ear should be */}
+          <Path d={`M 64 22 L 72 22`} stroke={innerColor} strokeWidth={2} opacity={0.3} strokeLinecap="round" />
+          <Path d={`M 68 19 L 68 25`} stroke={innerColor} strokeWidth={2} opacity={0.3} strokeLinecap="round" />
         </G>
       );
     }
@@ -679,11 +807,34 @@ function renderTail(
         </G>
       );
     case 'spike':
-    default:
       // Spiky tail pointing up — a little rebellious
       return (
         <G>
           <Path d={`M 22 58 L 14 48 L 20 52 L 12 42 L 22 50`} fill={tailColor} />
+        </G>
+      );
+    case 'spring':
+      // Coiled spring tail — boing boing boing
+      return (
+        <G>
+          <Path
+            d={`M 22 58 Q 14 56 18 52 Q 22 48 14 46 Q 8 44 12 40 Q 16 36 10 34`}
+            stroke={tailColor} strokeWidth={2.5} fill="none" strokeLinecap="round"
+          />
+          <Circle cx={10} cy={33} r={2.5} fill={tailColor} />
+        </G>
+      );
+    case 'fan':
+    default:
+      // Peacock-style fan tail — way too fancy for a blob
+      return (
+        <G opacity={0.8}>
+          <Path d={`M 22 56 Q 6 48 4 36`} stroke={tailColor} strokeWidth={2} fill="none" strokeLinecap="round" />
+          <Path d={`M 22 54 Q 8 42 10 30`} stroke={tailColor} strokeWidth={2} fill="none" strokeLinecap="round" />
+          <Path d={`M 22 52 Q 12 38 16 28`} stroke={tailColor} strokeWidth={2} fill="none" strokeLinecap="round" />
+          <Circle cx={4} cy={35} r={3} fill={lighten(tailColor, 0.2)} />
+          <Circle cx={10} cy={29} r={3} fill={lighten(tailColor, 0.15)} />
+          <Circle cx={16} cy={27} r={3} fill={lighten(tailColor, 0.1)} />
         </G>
       );
   }
@@ -744,6 +895,24 @@ function renderPatterns(
                 C 54 50 50 52 50 55 Z`}
             fill={patternColor}
           />
+        </G>
+      );
+    case 'mustache':
+      // A distinguished little mustache below the mouth. Very scholarly.
+      return (
+        <G opacity={0.35}>
+          <Path
+            d={`M 43 58 Q 45 56 47 57 Q 49 58.5 50 58 Q 51 58.5 53 57 Q 55 56 57 58`}
+            stroke={darken(patternColor, 0.3)} strokeWidth={1.5} fill="none" strokeLinecap="round"
+          />
+        </G>
+      );
+    case 'bandaid':
+      // A little X-shaped bandaid on the body. Battle scars from peer review.
+      return (
+        <G opacity={0.35}>
+          <Rect x={56} y={38} width={8} height={5} rx={1.5} fill={patternColor} />
+          <Path d={`M 58 39.5 L 60 42 M 60 39.5 L 58 42`} stroke={darken(patternColor, 0.2)} strokeWidth={0.8} strokeLinecap="round" />
         </G>
       );
     default:
