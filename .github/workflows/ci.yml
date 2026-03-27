@@ -129,7 +129,7 @@ jobs:
         run: cd peerzero-sdk/node && npm ci --ignore-scripts && npm audit --audit-level=high
 
       - name: Audit bot dependencies
-        run: pip install pip-audit && cd peerzero-bot && pip install -e . && pip-audit --severity high
+        run: pip install pip-audit && cd peerzero-bot && pip install -e . && pip-audit
 
       # ── Semgrep static analysis ────────────────────────────────────
       - name: Semgrep security scan
