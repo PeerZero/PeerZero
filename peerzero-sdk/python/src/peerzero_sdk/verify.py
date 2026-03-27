@@ -272,7 +272,7 @@ def verify(
         if not verification_url:
             raise VerificationError("No public key provided and profile has no verification_url")
         school_url = verification_url.rsplit("/.well-known/", 1)[0]
-        key = get_public_key(school_url)
+        key = get_public_key(school_url, allowed_domains=allowed_domains)
     elif isinstance(public_key, (str, bytes)):
         pem = public_key.encode() if isinstance(public_key, str) else public_key
         loaded = load_pem_public_key(pem)
@@ -377,7 +377,8 @@ def is_expired(profile: Optional[dict[str, Any]]) -> bool:
         return False
     try:
         expiry = datetime.fromisoformat(expires_at.replace("Z", "+00:00"))
-        return datetime.now(timezone.utc) > expiry
+        # 60-second clock skew tolerance
+        return expiry < datetime.now(timezone.utc) - timedelta(seconds=60)
     except (ValueError, AttributeError):
         return True  # Unparseable = treat as expired
 
