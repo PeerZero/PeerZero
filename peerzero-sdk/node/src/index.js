@@ -14,7 +14,11 @@
 const crypto = require('crypto');
 const https = require('https');
 
-// Fields added by the signing process — not part of the signed payload
+// Fields added by the signing process — not part of the signed payload.
+// WARNING: Changes to SIGNATURE_FIELDS are a breaking change. Adding or removing
+// fields changes the canonical payload that is signed/verified, which means all
+// existing signed profiles will fail verification. Bump the major version if you
+// change this set.
 const SIGNATURE_FIELDS = new Set([
   'signature',
   'verification_url',
@@ -22,24 +26,83 @@ const SIGNATURE_FIELDS = new Set([
   'expires_at',
 ]);
 
+// ── Domain Allowlist (SSRF Protection) ──────────────────────────────────────
+
+const ALLOWED_SCHOOL_DOMAINS = new Set([
+  'peerzero.science',
+  'politics.peerzero.com',
+  'comedy.peerzero.com',
+  'philosophy.peerzero.com',
+  'localhost',
+]);
+
+// ── Rate Limiter (getPublicKey) ─────────────────────────────────────────────
+
+const _rateLimiter = {
+  tokens: 10,
+  maxTokens: 10,
+  lastRefill: Date.now(),
+  intervalMs: 60000, // 1 minute
+};
+
+function _consumeRateToken() {
+  const now = Date.now();
+  const elapsed = now - _rateLimiter.lastRefill;
+  if (elapsed >= _rateLimiter.intervalMs) {
+    _rateLimiter.tokens = _rateLimiter.maxTokens;
+    _rateLimiter.lastRefill = now;
+  }
+  if (_rateLimiter.tokens <= 0) {
+    throw new VerificationError('Rate limit exceeded: too many public key fetches. Try again later.');
+  }
+  _rateLimiter.tokens--;
+}
+
 // ── Public Key Fetching ─────────────────────────────────────────────────────
 
 const DEFAULT_SCHOOL_URL = 'https://peerzero.science';
 let _cachedKey = null;
 let _cachedKeyUrl = null;
+let _cachedKeyTime = 0;
+const _KEY_TTL_MS = 3600000; // 1 hour
 
 /**
  * Fetch the School's Ed25519 public key from its .well-known endpoint.
- * Result is cached in memory — call clearKeyCache() to reset.
+ * Result is cached in memory for 1 hour — call clearKeyCache() to reset early.
  *
  * @param {string} [schoolUrl] — Base URL of the School (default: https://peerzero.science)
+ * @param {object} [options] — Options
+ * @param {string[]} [options.allowedDomains] — Additional domains to allow beyond the built-in list
  * @returns {Promise<crypto.KeyObject>}
  */
-async function getPublicKey(schoolUrl) {
+async function getPublicKey(schoolUrl, options) {
   const base = (schoolUrl || DEFAULT_SCHOOL_URL).replace(/\/+$/, '');
   const url = `${base}/.well-known/peerzero-public-key.pem`;
 
-  if (_cachedKey && _cachedKeyUrl === url) return _cachedKey;
+  // Validate domain against allowlist (SSRF protection)
+  let hostname;
+  try {
+    hostname = new URL(base).hostname;
+  } catch (e) {
+    throw new VerificationError(`Invalid school URL: ${base}`);
+  }
+  const extraDomains = (options && options.allowedDomains) || [];
+  const allAllowed = new Set([...ALLOWED_SCHOOL_DOMAINS, ...extraDomains]);
+  if (!allAllowed.has(hostname)) {
+    throw new VerificationError(
+      `Domain "${hostname}" is not in the allowed school domains list. ` +
+      `Pass { allowedDomains: ["${hostname}"] } if this is a legitimate PeerZero school.`
+    );
+  }
+
+  // Check cache (with TTL)
+  const now = Date.now();
+  if (_cachedKey && _cachedKeyUrl === url && (now - _cachedKeyTime) < _KEY_TTL_MS) {
+    return _cachedKey;
+  }
+
+  // Rate limit
+  _consumeRateToken();
 
   const pem = await fetchText(url);
   const key = crypto.createPublicKey(pem);
@@ -52,6 +115,7 @@ async function getPublicKey(schoolUrl) {
 
   _cachedKey = key;
   _cachedKeyUrl = url;
+  _cachedKeyTime = Date.now();
   return key;
 }
 
@@ -61,6 +125,7 @@ async function getPublicKey(schoolUrl) {
 function clearKeyCache() {
   _cachedKey = null;
   _cachedKeyUrl = null;
+  _cachedKeyTime = 0;
 }
 
 // ── Profile Verification ────────────────────────────────────────────────────
@@ -73,7 +138,7 @@ function clearKeyCache() {
  * @returns {Promise<object>} — The verified profile (same object, signature confirmed valid)
  * @throws {VerificationError} if signature is missing, invalid, or expired
  */
-async function verify(profile, publicKey) {
+async function verify(profile, publicKey, options) {
   if (!profile || typeof profile !== 'object') {
     throw new VerificationError('Profile must be a non-null object');
   }
@@ -81,6 +146,9 @@ async function verify(profile, publicKey) {
   const signatureB64 = profile.signature;
   if (!signatureB64) {
     throw new VerificationError('Profile has no signature — cannot verify');
+  }
+  if (typeof signatureB64 !== 'string' || !/^[A-Za-z0-9+/]+=*$/.test(signatureB64)) {
+    throw new VerificationError('Profile signature is not valid base64');
   }
 
   // Check expiry first (fast, no crypto needed)
@@ -99,7 +167,7 @@ async function verify(profile, publicKey) {
     }
     // Extract school base URL from verification_url
     const schoolUrl = verificationUrl.replace(/\/.well-known\/.*$/, '');
-    key = await getPublicKey(schoolUrl);
+    key = await getPublicKey(schoolUrl, options);
   } else if (typeof publicKey === 'string') {
     key = crypto.createPublicKey(publicKey);
   } else {
@@ -215,7 +283,8 @@ function isExpired(profile) {
 
   const expiry = new Date(expiresAt);
   if (isNaN(expiry.getTime())) return true; // Unparseable date = treat as expired
-  return expiry < new Date();
+  // 60-second clock skew tolerance
+  return expiry < new Date(Date.now() - 60000);
 }
 
 // ── Error Class ─────────────────────────────────────────────────────────────
@@ -241,20 +310,31 @@ function normalizeSkill(s) {
   };
 }
 
+const _MAX_FETCH_SIZE = 10240; // 10KB max for fetched data
+
 function fetchText(url) {
   return new Promise((resolve, reject) => {
     if (!url.startsWith('https://')) {
       reject(new VerificationError(`Refusing to fetch non-HTTPS URL: ${url}. Public key must be fetched over TLS.`));
       return;
     }
-    const req = https.get(url, { timeout: 10000 }, (res) => {
+    const req = https.get(url, { timeout: 10000, rejectUnauthorized: true }, (res) => {
       if (res.statusCode < 200 || res.statusCode >= 300) {
         reject(new VerificationError(`Failed to fetch ${url}: HTTP ${res.statusCode}`));
         res.resume();
         return;
       }
       const chunks = [];
-      res.on('data', chunk => chunks.push(chunk));
+      let totalSize = 0;
+      res.on('data', chunk => {
+        totalSize += chunk.length;
+        if (totalSize > _MAX_FETCH_SIZE) {
+          req.destroy();
+          reject(new VerificationError(`Response from ${url} exceeds maximum size of ${_MAX_FETCH_SIZE} bytes`));
+          return;
+        }
+        chunks.push(chunk);
+      });
       res.on('end', () => resolve(Buffer.concat(chunks).toString()));
     });
     req.on('error', err => reject(new VerificationError(`Failed to fetch ${url}: ${err.message}`)));
@@ -272,4 +352,5 @@ module.exports = {
   getPublicKey,
   clearKeyCache,
   VerificationError,
+  ALLOWED_SCHOOL_DOMAINS,
 };

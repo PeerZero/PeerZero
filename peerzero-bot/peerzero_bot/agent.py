@@ -38,6 +38,7 @@ from .config import BotConfig
 from .memory import MemoryManager
 from .adapters.school import SchoolAdapter, extract_json
 from .adapters.base import PlatformAction
+from .utils import sanitize_untrusted, safe_error_msg
 from .adapters.mcp import MCPAdapter
 from .prompts import PromptBuilder
 from .identity import build_agent_card, build_identity_summary

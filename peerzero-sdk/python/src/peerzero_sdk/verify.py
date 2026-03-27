@@ -12,10 +12,12 @@ signature metadata (signature, verification_url, signed_at, expires_at).
 from __future__ import annotations
 
 import json
+import re
+import time
 from base64 import b64decode
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import Any, Optional
+from datetime import datetime, timedelta, timezone
+from typing import Any, Optional, Sequence
 from urllib.parse import urlparse
 
 import httpx
@@ -23,13 +25,41 @@ from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 from cryptography.hazmat.primitives.serialization import load_pem_public_key
 
-# Fields added by the signing process — not part of the signed payload
+# Fields added by the signing process — not part of the signed payload.
+# WARNING: Changes to _SIGNATURE_FIELDS are a breaking change. Adding or removing
+# fields changes the canonical payload that is signed/verified, which means all
+# existing signed profiles will fail verification. Bump the major version if you
+# change this set.
 _SIGNATURE_FIELDS = frozenset({"signature", "verification_url", "signed_at", "expires_at"})
 
 DEFAULT_SCHOOL_URL = "https://peerzero.science"
 
+# Domain allowlist for SSRF protection
+ALLOWED_SCHOOL_DOMAINS: set[str] = {
+    "peerzero.science",
+    "politics.peerzero.com",
+    "comedy.peerzero.com",
+    "philosophy.peerzero.com",
+    "localhost",
+}
+
+# Max fetch size (10KB)
+_MAX_FETCH_SIZE = 10240
+
+# Key cache TTL (1 hour)
+_KEY_TTL_S = 3600.0
+
+# Rate limiter state
+_rate_limiter = {
+    "tokens": 10,
+    "max_tokens": 10,
+    "last_refill": 0.0,
+    "interval_s": 60.0,
+}
+
 _cached_key: Optional[Ed25519PublicKey] = None
 _cached_key_url: Optional[str] = None
+_cached_key_time: float = 0.0
 
 
 class VerificationError(Exception):
@@ -100,52 +130,109 @@ class ParsedAgentCard:
 
 # ── Public Key Fetching ──────────────────────────────────────────────────────
 
-def get_public_key(school_url: str = DEFAULT_SCHOOL_URL) -> Ed25519PublicKey:
+def _consume_rate_token() -> None:
+    """Consume a rate-limit token, raising if exhausted."""
+    now = time.monotonic()
+    elapsed = now - _rate_limiter["last_refill"]
+    if elapsed >= _rate_limiter["interval_s"]:
+        _rate_limiter["tokens"] = _rate_limiter["max_tokens"]
+        _rate_limiter["last_refill"] = now
+    if _rate_limiter["tokens"] <= 0:
+        raise VerificationError(
+            "Rate limit exceeded: too many public key fetches. Try again later."
+        )
+    _rate_limiter["tokens"] -= 1
+
+
+def get_public_key(
+    school_url: str = DEFAULT_SCHOOL_URL,
+    *,
+    allowed_domains: Optional[Sequence[str]] = None,
+) -> Ed25519PublicKey:
     """
     Fetch the School's Ed25519 public key from its .well-known endpoint.
-    Result is cached in memory — call clear_key_cache() to reset.
+    Result is cached in memory for 1 hour — call clear_key_cache() to reset.
+
+    Args:
+        school_url: Base URL of the School (default: https://peerzero.science).
+        allowed_domains: Additional domains to allow beyond the built-in list.
     """
-    global _cached_key, _cached_key_url
+    global _cached_key, _cached_key_url, _cached_key_time
 
     parsed = urlparse(school_url)
-    if parsed.scheme != "https":
+    if parsed.scheme != "https" and parsed.hostname != "localhost":
         raise VerificationError(
             f"School URL must use HTTPS, got: {school_url}"
+        )
+
+    # Validate domain against allowlist (SSRF protection)
+    hostname = parsed.hostname
+    if not hostname:
+        raise VerificationError(f"Invalid school URL: {school_url}")
+    all_allowed = ALLOWED_SCHOOL_DOMAINS | set(allowed_domains or [])
+    if hostname not in all_allowed:
+        raise VerificationError(
+            f'Domain "{hostname}" is not in the allowed school domains list. '
+            f'Pass allowed_domains=["{hostname}"] if this is a legitimate PeerZero school.'
         )
 
     base = school_url.rstrip("/")
     url = f"{base}/.well-known/peerzero-public-key.pem"
 
-    if _cached_key is not None and _cached_key_url == url:
+    # Check cache (with TTL)
+    now = time.monotonic()
+    if _cached_key is not None and _cached_key_url == url and (now - _cached_key_time) < _KEY_TTL_S:
         return _cached_key
 
+    # Rate limit
+    _consume_rate_token()
+
     try:
-        resp = httpx.get(url, timeout=10.0, follow_redirects=False, verify=True)
-        resp.raise_for_status()
+        with httpx.stream("GET", url, timeout=10.0, follow_redirects=False, verify=True) as resp:
+            resp.raise_for_status()
+            chunks: list[bytes] = []
+            total_size = 0
+            for chunk in resp.iter_bytes():
+                total_size += len(chunk)
+                if total_size > _MAX_FETCH_SIZE:
+                    raise VerificationError(
+                        f"Response from {url} exceeds maximum size of {_MAX_FETCH_SIZE} bytes"
+                    )
+                chunks.append(chunk)
+            content = b"".join(chunks)
+    except VerificationError:
+        raise
     except Exception as e:
         raise VerificationError(f"Failed to fetch public key from {url}: {e}")
 
-    key = load_pem_public_key(resp.content)
+    key = load_pem_public_key(content)
     if not isinstance(key, Ed25519PublicKey):
         raise VerificationError(f"Expected Ed25519 key, got {type(key).__name__}")
 
     _cached_key = key
     _cached_key_url = url
+    _cached_key_time = time.monotonic()
     return key
 
 
 def clear_key_cache() -> None:
     """Clear the cached public key (useful after key rotation)."""
-    global _cached_key, _cached_key_url
+    global _cached_key, _cached_key_url, _cached_key_time
     _cached_key = None
     _cached_key_url = None
+    _cached_key_time = 0.0
 
 
 # ── Profile Verification ────────────────────────────────────────────────────
 
+_BASE64_RE = re.compile(r"^[A-Za-z0-9+/]+=*$")
+
+
 def verify(
     profile: dict[str, Any],
     public_key: Optional[Ed25519PublicKey | str | bytes] = None,
+    *,
+    allowed_domains: Optional[Sequence[str]] = None,
 ) -> dict[str, Any]:
     """
     Verify a signed portable profile's Ed25519 signature.
@@ -153,6 +240,8 @@ def verify(
     Args:
         profile: The full portable profile (with signature fields).
         public_key: PEM string/bytes, Ed25519PublicKey, or None to auto-fetch.
+        allowed_domains: Additional domains to allow beyond the built-in list
+            (passed through to get_public_key when auto-fetching).
 
     Returns:
         The verified profile (same dict, signature confirmed valid).
@@ -166,6 +255,8 @@ def verify(
     signature_b64 = profile.get("signature")
     if not signature_b64:
         raise VerificationError("Profile has no signature — cannot verify")
+    if not isinstance(signature_b64, str) or not _BASE64_RE.match(signature_b64):
+        raise VerificationError("Profile signature is not valid base64")
 
     # Check expiry first
     if is_expired(profile):

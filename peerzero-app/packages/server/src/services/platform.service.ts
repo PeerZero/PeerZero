@@ -79,6 +79,27 @@ export async function connectPlatform(
   );
   if (existing) throw new AppError(409, 'Bot already connected to this platform');
 
+  // Whitelist allowed config override keys and validate types
+  const ALLOWED_CONFIG_OVERRIDES: Record<string, 'string' | 'number' | 'boolean'> = {
+    base_url: 'string',
+    heartbeat_interval: 'number',
+    webhook_url: 'string',
+    timeout_ms: 'number',
+    retry_enabled: 'boolean',
+  };
+
+  if (configOverrides) {
+    for (const [key, value] of Object.entries(configOverrides)) {
+      if (!(key in ALLOWED_CONFIG_OVERRIDES)) {
+        throw new AppError(400, `Config override key '${key}' is not allowed. Allowed keys: ${Object.keys(ALLOWED_CONFIG_OVERRIDES).join(', ')}`);
+      }
+      const expectedType = ALLOWED_CONFIG_OVERRIDES[key];
+      if (typeof value !== expectedType) {
+        throw new AppError(400, `Config override '${key}' must be of type ${expectedType}`);
+      }
+    }
+  }
+
   // Encrypt credentials (same pattern as LLM keys)
   const { encrypted, iv, fingerprint } = encrypt(apiKey);
 

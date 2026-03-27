@@ -29,6 +29,7 @@ import { config } from '../config';
 import { requireAuth, JwtPayload } from '../middleware/auth';
 import { userRateLimit } from '../middleware/rate-limit';
 import { logAudit } from '../services/audit.service';
+import { logger } from '../lib/logger';
 import { credibilityToStage } from '@peerzero/shared';
 import type { WidgetBotData, WidgetDataResponse, AvatarConfig, BotStatus, MoodType } from '@peerzero/shared';
 
@@ -78,8 +79,9 @@ function jwtOrWidgetToken(req: Request, res: Response, next: NextFunction): void
       req.user = payload;
       next();
       return;
-    } catch {
-      // Fall through to widget token
+    } catch (err) {
+      // JWT verification failed — log before falling through to widget token check
+      logger.warn({ err: err instanceof Error ? err.message : 'unknown', ip: req.ip }, 'Widget JWT auth failed, falling through to widget token');
     }
   }
 

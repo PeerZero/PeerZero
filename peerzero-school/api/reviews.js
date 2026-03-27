@@ -1,6 +1,6 @@
 const crypto = require('crypto');
 const {
-  getSupabase, setCorsHeaders, sanitize, isRateLimited, getClientIp,
+  getSupabase, setCorsHeaders, isCsrfRejected, sanitize, isRateLimited, getClientIp,
   sanitizeErrorMessage, validateTextLength, applyTierCap, adjustCredibility, TIER_CAPS,
   computeCitationQualityGrade, validateReviewSearchStrategy,
   generateReviewSearchCoaching, recordFailureReflection, RATE_LIMITS
@@ -188,6 +188,11 @@ module.exports = async (req, res) => {
   setCorsHeaders(req, res);
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (checkMockGuard(req, res)) return;
+
+  // ── SECURITY: CSRF protection for state-changing requests ──
+  if (isCsrfRejected(req)) {
+    return res.status(403).json({ error: 'Forbidden — origin not allowed' });
+  }
 
   const clientIp = getClientIp(req);
   const apiKey = req.headers['x-api-key'];

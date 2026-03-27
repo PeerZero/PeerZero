@@ -16,6 +16,7 @@ import type {
   AgentCard,
 } from './platform.adapter';
 import { logger } from '../lib/logger';
+import { validateExternalUrl } from '../lib/url-validation';
 
 const REQUEST_TIMEOUT_MS = 30_000;
 
@@ -27,6 +28,7 @@ async function a2aFetch<T>(
   options: RequestInit = {},
 ): Promise<T> {
   const url = `${baseUrl}${path}`;
+  validateExternalUrl(url);
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 

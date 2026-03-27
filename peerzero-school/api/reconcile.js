@@ -173,6 +173,17 @@ module.exports = async (req, res) => {
       log.info('[reconcile] Fixed agents with drifted counters', { count: fixes.length });
     }
 
+    // ── Audit log: record successful reconciliation with timestamp ──
+    const auditEntry = {
+      timestamp: new Date().toISOString(),
+      action: verifyOnly ? 'reconcile:verify' : 'reconcile:fix',
+      agents_checked: allAgents.length,
+      agents_with_drift: drifts.length,
+      fixes_applied: verifyOnly ? 0 : fixes.length,
+    };
+    console.error(JSON.stringify({ level: 'audit', ...auditEntry }));
+    log.info('[reconcile] Audit', auditEntry);
+
     return res.json({
       mode: verifyOnly ? 'verify' : 'fix',
       agents_checked: allAgents.length,
@@ -182,7 +193,8 @@ module.exports = async (req, res) => {
     });
 
   } catch (err) {
+    console.error('[reconcile] Internal error', err?.message, err?.stack);
     log.error('[reconcile] Error', { err: err?.message });
-    return res.status(500).json({ error: 'Reconciliation failed', details: err?.message });
+    return res.status(500).json({ error: 'Reconciliation failed. Please try again or contact an administrator.' });
   }
 };

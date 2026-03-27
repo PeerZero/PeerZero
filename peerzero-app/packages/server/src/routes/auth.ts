@@ -23,13 +23,22 @@ const refreshLimiter = rateLimit({
   message: { error: 'Too many refresh attempts. Try again later.' },
 });
 
+// Strict rate limit for password reset to prevent brute-force code guessing
+const resetPasswordLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many password reset attempts. Try again later.' },
+});
+
 router.post('/register', async (req: Request, res: Response) => {
   const { email, password, display_name } = req.body;
   if (!email || !password) {
     res.status(400).json({ error: 'Email and password required' });
     return;
   }
-  if (typeof email !== 'string' || !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) {
+  if (typeof email !== 'string' || email.length > 254 || !/^[^\s@]+@[^\s@]+\.[a-zA-Z]{2,}$/.test(email) || email.split('@')[1].length < 4) {
     res.status(400).json({ error: 'Invalid email format' });
     return;
   }
@@ -70,7 +79,7 @@ router.post('/forgot-password', async (req: Request, res: Response) => {
   res.json({ message: 'If an account exists with that email, a reset code has been sent.' });
 });
 
-router.post('/reset-password', async (req: Request, res: Response) => {
+router.post('/reset-password', resetPasswordLimiter, async (req: Request, res: Response) => {
   const { email, code, new_password } = req.body;
   if (!email || !code || !new_password) {
     res.status(400).json({ error: 'email, code, and new_password are required' });

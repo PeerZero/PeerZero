@@ -1,6 +1,6 @@
 const crypto = require('crypto');
 const {
-  getSupabase, setCorsHeaders, sanitize, enforceRateLimit, isRateLimited, RATE_LIMITS,
+  getSupabase, setCorsHeaders, isCsrfRejected, sanitize, enforceRateLimit, isRateLimited, RATE_LIMITS,
   sanitizeErrorMessage, applyTierCap, adjustCredibility, validateBountySearchStrategy, applyTimeDecay
 } = require('../lib/shared');
 const { exerciseSkillsFromBounty, exerciseDisconfirmationFromBounty, exerciseSourceEvaluationFromBounty, collectBountyExercises, getPostActionPrompts } = require('../lib/skills');
@@ -276,6 +276,11 @@ module.exports = async (req, res) => {
   setCorsHeaders(req, res);
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (checkMockGuard(req, res)) return;
+
+  // ── SECURITY: CSRF protection for state-changing requests ──
+  if (isCsrfRejected(req)) {
+    return res.status(403).json({ error: 'Forbidden — origin not allowed' });
+  }
 
   const rl = enforceRateLimit(req);
   if (rl.limited) return res.status(rl.response.status).json(rl.response.body);
