@@ -49,6 +49,10 @@ class AuditLog:
     ):
         """Append an audit entry. Never blocks, never raises."""
         try:
+            # NOTE: Timestamp relies on the system clock (datetime.now(timezone.utc)).
+            # If the system clock is skewed, tampered with, or drifting (e.g., NTP
+            # not running), audit timestamps will be inaccurate. For forensic use,
+            # cross-reference with server-side timestamps which have their own clock.
             entry = {
                 "ts": datetime.now(timezone.utc).isoformat(),
                 "adapter": adapter,
