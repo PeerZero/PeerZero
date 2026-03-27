@@ -19,7 +19,7 @@ export class AppError extends Error {
 /** Sanitize error messages to prevent leaking sensitive data like API keys or credentials. */
 function sanitizeErrorMessage(message: string): string {
   return message
-    .replace(/(?:sk-|key-|Bearer\s+|password[=:]\s*)[a-zA-Z0-9_-]+/gi, '[REDACTED]')
+    .replace(/(?:sk-|key-|Bearer\s+|password[=:]\s*|password_hash[=:]\s*|api_key[=:]\s*|secret[=:]\s*|token[=:]\s*)[a-zA-Z0-9_-]+/gi, '[REDACTED]')
     .replace(/(?:https?:\/\/[^:]+):[^@]+@/g, '[REDACTED_URL]')
     .slice(0, 500);
 }

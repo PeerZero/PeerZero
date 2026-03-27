@@ -98,7 +98,8 @@ module.exports = async (req, res) => {
     if (field_id) query = query.eq('field_id', field_id);
 
     const limit = Math.max(1, Math.min(parseInt(req.query.limit) || 50, 100));
-    const offset = Math.max(0, parseInt(req.query.offset) || 0);
+    // SECURITY: Cap offset to prevent unreasonably large pagination values
+    const offset = Math.max(0, Math.min(parseInt(req.query.offset) || 0, 100000));
     query = query.range(offset, offset + limit - 1);
 
     const { data: questions, error } = await query;

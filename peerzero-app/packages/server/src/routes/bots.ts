@@ -92,8 +92,8 @@ router.post('/:id/start', userRateLimit('bot_control'), async (req: Request, res
     return;
   }
 
-  if (bot.cycle_delay_seconds <= 0 || bot.cycle_delay_seconds > 86400) {
-    res.status(400).json({ error: 'cycle_delay_seconds must be between 1 and 86400' });
+  if (bot.cycle_delay_seconds < 10 || bot.cycle_delay_seconds > 86400) {
+    res.status(400).json({ error: 'cycle_delay_seconds must be between 10 and 86400' });
     return;
   }
 
@@ -139,7 +139,7 @@ router.get('/:id/activity', userRateLimit('read'), async (req: Request, res: Res
   // Verify ownership before returning activity
   await botService.getBotDetail(req.user!.userId, req.params.id);
   const rawPage = parseInt(req.query.page as string);
-  const page = Number.isFinite(rawPage) && rawPage > 0 ? Math.min(rawPage, 10000) : 1;
+  const page = Number.isFinite(rawPage) && rawPage > 0 ? Math.min(rawPage, 500) : 1;
   const rawPerPage = parseInt(req.query.per_page as string);
   const perPage = Number.isFinite(rawPerPage) && rawPerPage > 0 ? Math.min(rawPerPage, 100) : 20;
 
@@ -227,7 +227,7 @@ router.get('/:id/external-activity', userRateLimit('read'), async (req: Request,
     res.json({ data, has_more: hasMore, next_cursor: nextCursor });
   } else {
     const rawPage = parseInt(req.query.page as string);
-    const page = Number.isFinite(rawPage) && rawPage > 0 ? Math.min(rawPage, 10000) : 1;
+    const page = Number.isFinite(rawPage) && rawPage > 0 ? Math.min(rawPage, 500) : 1;
     const offset = (page - 1) * perPage;
     const rows = await queryRows(
       `SELECT id, platform, action, summary, content_preview, skills_demonstrated, bot_timestamp, created_at
@@ -328,7 +328,7 @@ router.post('/:id/speak', userRateLimit('write'), async (req: Request, res: Resp
 router.get('/:id/messages', userRateLimit('read'), async (req: Request, res: Response) => {
   await botService.getBotDetail(req.user!.userId, req.params.id);
   const rawPage = parseInt(req.query.page as string);
-  const page = Number.isFinite(rawPage) && rawPage > 0 ? Math.min(rawPage, 10000) : 1;
+  const page = Number.isFinite(rawPage) && rawPage > 0 ? Math.min(rawPage, 500) : 1;
   const rawPerPage = parseInt(req.query.per_page as string);
   const perPage = Number.isFinite(rawPerPage) && rawPerPage > 0 ? Math.min(rawPerPage, 50) : 30;
   const result = await messageService.getMessages(req.params.id, page, perPage);

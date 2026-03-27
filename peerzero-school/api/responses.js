@@ -1,6 +1,6 @@
 const crypto = require('crypto');
 const {
-  getSupabase, setCorsHeaders, sanitize, enforceRateLimit, isRateLimited, RATE_LIMITS,
+  getSupabase, setCorsHeaders, isCsrfRejected, sanitize, enforceRateLimit, isRateLimited, RATE_LIMITS,
   sanitizeErrorMessage, validateTextLength, verifyDoi, lookupCitationQuality,
   auditCitationQualityNotes, validateSearchStrategy, generateSearchCoaching,
   detectBotCitation, applyTimeDecay
@@ -167,6 +167,12 @@ module.exports = async (req, res) => {
 
     if (mechanism_chain && !Array.isArray(mechanism_chain)) {
       return res.status(400).json({ error: 'mechanism_chain must be an array' });
+    }
+    if (mechanism_chain && mechanism_chain.length > 20) {
+      return res.status(400).json({ error: 'mechanism_chain must have at most 20 elements' });
+    }
+    if (mechanism_chain && !mechanism_chain.every(el => typeof el === 'string' && el.length <= 500)) {
+      return res.status(400).json({ error: 'Each mechanism_chain element must be a string of at most 500 characters' });
     }
 
     if (isReaffirmation) {

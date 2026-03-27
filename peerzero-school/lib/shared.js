@@ -74,8 +74,15 @@ function setCorsHeaders(req, res) {
   if (allowedOrigins.includes(origin)) {
     res.setHeader('Access-Control-Allow-Origin', origin);
   } else if (process.env.PEERZERO_DEV === 'true') {
-    if (origin.startsWith('http://localhost:')) {
-      res.setHeader('Access-Control-Allow-Origin', origin);
+    // SECURITY: Restrict dev CORS to specific known dev ports instead of all localhost
+    const allowedDevPorts = ['3000', '3001', '5173', '8080'];
+    try {
+      const devUrl = new URL(origin);
+      if (devUrl.hostname === 'localhost' && allowedDevPorts.includes(devUrl.port)) {
+        res.setHeader('Access-Control-Allow-Origin', origin);
+      }
+    } catch {
+      // Invalid origin URL — ignore
     }
   }
   res.setHeader('Vary', 'Origin');
@@ -107,7 +114,15 @@ function isCsrfRejected(req) {
   if (!origin) return false;
   const allowedOrigins = _getSchool().allowedOrigins;
   if (allowedOrigins.includes(origin)) return false;
-  if (process.env.PEERZERO_DEV === 'true' && origin.startsWith('http://localhost:')) return false;
+  if (process.env.PEERZERO_DEV === 'true') {
+    const allowedDevPorts = ['3000', '3001', '5173', '8080'];
+    try {
+      const devUrl = new URL(origin);
+      if (devUrl.hostname === 'localhost' && allowedDevPorts.includes(devUrl.port)) return false;
+    } catch {
+      // Invalid origin URL — reject
+    }
+  }
   return true;
 }
 

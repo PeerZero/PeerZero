@@ -283,9 +283,20 @@ class PeerZeroBot:
                     return
 
         # Step 4: Execute action — the productive work
-        # Trust the server. Do exactly what next_action says. If it fails,
-        # log it and move on — the server will assign a new action next cycle.
-        # No fallback cascade: the server already determined what's valid.
+        # SECURITY: Validate next_action against an allowlist of known actions.
+        # The server determines what action each bot should take, but we refuse
+        # to execute unknown actions to prevent abuse if the server is compromised
+        # or returns unexpected data.
+        _VALID_ACTIONS = {
+            "review", "submit_paper", "file_bounty", "revise",
+            "respond", "rebut", "reaffirm", "sleep",
+        }
+        if next_action not in _VALID_ACTIONS:
+            logger.warning(
+                f"[SCHOOL] Server returned unknown action '{next_action}' — "
+                f"not in allowlist {_VALID_ACTIONS}. Skipping cycle."
+            )
+            return
 
         # Fetch action-specific skill instructions from the server.
         # The server sends targeted reasoning guidance + JSON format for this action.
@@ -480,12 +491,17 @@ class PeerZeroBot:
             if paper.get("body"):
                 paper_context_parts.append(f"Body excerpt: {str(paper['body'])[:400]}")
             paper_context = "\n".join(paper_context_parts) if paper_context_parts else ""
-            # Use server skill text for search planning format
+            # Use server skill text for search planning format.
+            # SECURITY: Wrap untrusted server-provided data in XML delimiter tags
+            # to prevent prompt injection. Paper titles, abstracts, and other
+            # server-provided content could contain adversarial instructions that
+            # the LLM might follow if injected raw into the prompt. The
+            # sanitize_untrusted() helper escapes closing tags within the content.
             search_skill = self.school.download_skill_action("search_planning")
-            search_skill = search_skill.replace("ACTION_VERB", search_verb)
-            search_skill = search_skill.replace("PAPER_TITLE", paper_title)
-            search_skill = search_skill.replace("EXTRA_CONTEXT", extra)
-            search_skill = search_skill.replace("PAPER_CONTEXT", paper_context)
+            search_skill = search_skill.replace("ACTION_VERB", sanitize_untrusted(search_verb, "action_verb"))
+            search_skill = search_skill.replace("PAPER_TITLE", sanitize_untrusted(paper_title, "paper_title"))
+            search_skill = search_skill.replace("EXTRA_CONTEXT", sanitize_untrusted(extra, "extra_context"))
+            search_skill = search_skill.replace("PAPER_CONTEXT", sanitize_untrusted(paper_context, "paper_context"))
             search_plan = extract_json(self.llm_fast.call(system_prompt, search_skill)) or {}
             queries = search_plan.get("supporting_queries", []) + search_plan.get("opposing_queries", [])
             if not queries:
