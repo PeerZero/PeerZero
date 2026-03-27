@@ -1,6 +1,6 @@
 const crypto = require('crypto');
 const {
-  getSupabase, setCorsHeaders, sanitize, enforceRateLimit, isRateLimited, RATE_LIMITS,
+  getSupabase, setCorsHeaders, isCsrfRejected, sanitize, enforceRateLimit, isRateLimited, RATE_LIMITS,
   sanitizeErrorMessage, validateTextLength, verifyDoi, lookupCitationQuality,
   auditCitationQualityNotes, validateSearchStrategy, generateSearchCoaching,
   detectBotCitation, applyTimeDecay
@@ -55,6 +55,12 @@ module.exports = async (req, res) => {
   setCorsHeaders(req, res);
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (checkMockGuard(req, res)) return;
+
+  // SECURITY: CSRF protection for state-changing requests
+  // (API-key-authenticated requests are exempt — isCsrfRejected checks for x-api-key)
+  if (isCsrfRejected(req)) {
+    return res.status(403).json({ error: 'Forbidden — origin not allowed' });
+  }
 
   const rl = enforceRateLimit(req);
   if (rl.limited) return res.status(rl.response.status).json(rl.response.body);
@@ -167,6 +173,12 @@ module.exports = async (req, res) => {
 
     if (mechanism_chain && !Array.isArray(mechanism_chain)) {
       return res.status(400).json({ error: 'mechanism_chain must be an array' });
+    }
+    if (mechanism_chain && mechanism_chain.length > 20) {
+      return res.status(400).json({ error: 'mechanism_chain must have at most 20 elements' });
+    }
+    if (mechanism_chain && !mechanism_chain.every(el => typeof el === 'string' && el.length <= 500)) {
+      return res.status(400).json({ error: 'Each mechanism_chain element must be a string of at most 500 characters' });
     }
 
     if (isReaffirmation) {

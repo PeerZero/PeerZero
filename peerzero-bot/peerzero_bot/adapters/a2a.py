@@ -26,6 +26,7 @@ from .base import (
     PlatformAction, PlatformResult,
 )
 from ..security import SecurityGateway, CredentialStore
+from ..utils import safe_error_msg
 
 logger = logging.getLogger("peerzero-bot.a2a")
 
@@ -125,7 +126,7 @@ class A2AAdapter:
                 supports_streaming=self._remote_card.get("capabilities", {}).get("streaming", False),
             )
         except Exception as e:
-            logger.warning(f"[{self._name}] Discovery failed: {e}")
+            logger.warning(f"[{self._name}] Discovery failed: {safe_error_msg(e)}")
             return PlatformCapabilities(platform_name=self._name)
 
     def get_context(self) -> PlatformContext:
@@ -145,14 +146,41 @@ class A2AAdapter:
             }
             result = self._request("POST", self._url, json=task_data)
 
+            # SECURITY: Validate incoming platform data before creating PlatformContext.
+            # Enforce size limits and type checks to prevent memory exhaustion or
+            # type confusion from malicious/broken platform responses.
+            if not isinstance(result, dict):
+                logger.warning(f"[{self._name}] A2A response is not a dict, got {type(result).__name__}")
+                result = {}
+            raw_str = json.dumps(result, default=str)
+            _MAX_CONTEXT_SIZE = 512 * 1024  # 512 KB
+            if len(raw_str) > _MAX_CONTEXT_SIZE:
+                logger.warning(
+                    f"[{self._name}] A2A response too large ({len(raw_str)} bytes), "
+                    f"truncating context"
+                )
+
             # Parse A2A response
             task_result = result.get("result", {})
+            if not isinstance(task_result, dict):
+                task_result = {}
             artifacts = task_result.get("artifacts", [])
+            if not isinstance(artifacts, list):
+                artifacts = []
             context_text = ""
             for artifact in artifacts:
+                if not isinstance(artifact, dict):
+                    continue
                 for part in artifact.get("parts", []):
-                    if part.get("type") == "text":
+                    if not isinstance(part, dict):
+                        continue
+                    if part.get("type") == "text" and isinstance(part.get("text"), str):
                         context_text += part["text"] + "\n"
+                        # Cap context text accumulation
+                        if len(context_text) > 50000:
+                            break
+                if len(context_text) > 50000:
+                    break
 
             return PlatformContext(
                 platform_name=self._name,
@@ -161,7 +189,7 @@ class A2AAdapter:
             )
         except Exception as e:
             logger.warning(f"[{self._name}] Context fetch failed: {e}")
-            return PlatformContext(platform_name=self._name, summary=f"Context unavailable: {e}")
+            return PlatformContext(platform_name=self._name, summary=f"Context unavailable: {type(e).__name__}")
 
     def submit_action(self, action: PlatformAction) -> PlatformResult:
         """Submit an action to the platform as an A2A task."""
@@ -199,12 +227,12 @@ class A2AAdapter:
                 summary=f"{action.action_type} on {self._name}: {status}",
             )
         except Exception as e:
-            logger.warning(f"[{self._name}] Action failed: {e}")
+            logger.warning(f"[{self._name}] Action failed: {safe_error_msg(e)}")
             return PlatformResult(
                 success=False,
                 action_type=action.action_type,
                 platform_name=self._name,
-                error=str(e),
+                error=safe_error_msg(e),
             )
 
     def publish_agent_card(self, agent_card: dict) -> bool:

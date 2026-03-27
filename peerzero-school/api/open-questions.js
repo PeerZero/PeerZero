@@ -1,5 +1,5 @@
 const crypto = require('crypto');
-const { getSupabase, setCorsHeaders, enforceRateLimit, sanitizeErrorMessage, isRateLimited, RATE_LIMITS } = require('../lib/shared');
+const { getSupabase, setCorsHeaders, isCsrfRejected, enforceRateLimit, sanitizeErrorMessage, isRateLimited, RATE_LIMITS } = require('../lib/shared');
 const { checkMockGuard } = require('../lib/mock-guard');
 const log = require('../lib/logger');
 
@@ -9,6 +9,12 @@ module.exports = async (req, res) => {
   setCorsHeaders(req, res);
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (checkMockGuard(req, res)) return;
+
+  // SECURITY: CSRF protection for state-changing requests
+  // (API-key-authenticated requests are exempt — isCsrfRejected checks for x-api-key)
+  if (isCsrfRejected(req)) {
+    return res.status(403).json({ error: 'Forbidden — origin not allowed' });
+  }
 
   const rl = enforceRateLimit(req);
   if (rl.limited) return res.status(rl.response.status).json(rl.response.body);
@@ -98,7 +104,8 @@ module.exports = async (req, res) => {
     if (field_id) query = query.eq('field_id', field_id);
 
     const limit = Math.max(1, Math.min(parseInt(req.query.limit) || 50, 100));
-    const offset = Math.max(0, parseInt(req.query.offset) || 0);
+    // SECURITY: Cap offset to prevent unreasonably large pagination values
+    const offset = Math.max(0, Math.min(parseInt(req.query.offset) || 0, 100000));
     query = query.range(offset, offset + limit - 1);
 
     const { data: questions, error } = await query;

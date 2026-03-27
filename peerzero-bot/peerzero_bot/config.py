@@ -142,6 +142,11 @@ class BotConfig:
     # Routes all LLM calls through PeerZero's proxy, which injects the
     # identity activation preamble server-side. The preamble never
     # touches the user's machine when this is enabled.
+    #
+    # TRUST DEPENDENCY: This hardcoded default URL is a security-critical
+    # trust anchor. All LLM API calls (including credentials) flow through
+    # this proxy when llm_proxy_enabled=True. Changing this URL redirects
+    # all LLM traffic. Override via LLM_PROXY_URL env var if needed.
     llm_proxy_url: str = "https://peerzero-llm-proxy.peerzero.workers.dev"
     llm_proxy_enabled: bool = True
     llm_proxy_key: str = ""  # From PEERZERO_PROXY_KEY env var
@@ -195,14 +200,27 @@ class BotConfig:
 
     @staticmethod
     def _check_file_permissions(path: Path):
-        """Warn if config file is readable by group or others."""
+        """Refuse to load world-readable config files unless explicitly allowed.
+
+        Config files may contain non-secret settings (URLs, platform names, etc.)
+        that could still leak architectural details. Refuse to load unless the
+        operator explicitly sets PEERZERO_ALLOW_INSECURE_CONFIG=1.
+        """
         try:
             mode = path.stat().st_mode
             if mode & stat.S_IRGRP or mode & stat.S_IROTH:
-                logger.warning(
-                    f"Config file {path} is readable by group/others (mode {oct(mode)}). "
-                    f"Consider restricting: chmod 600 {path}"
-                )
+                if os.environ.get("PEERZERO_ALLOW_INSECURE_CONFIG") == "1":
+                    logger.warning(
+                        f"Config file {path} is readable by group/others (mode {oct(mode)}). "
+                        f"Proceeding because PEERZERO_ALLOW_INSECURE_CONFIG=1 is set. "
+                        f"Consider restricting: chmod 600 {path}"
+                    )
+                else:
+                    raise PermissionError(
+                        f"Config file {path} is readable by group/others (mode {oct(mode)}). "
+                        f"Refusing to load — fix with: chmod 600 {path}\n"
+                        f"To override, set PEERZERO_ALLOW_INSECURE_CONFIG=1"
+                    )
         except OSError:
             pass  # Can't check permissions — skip silently
 
@@ -279,11 +297,36 @@ class BotConfig:
             # Parse MCP servers if present
             mcp_servers = []
             for srv in pconf.get("mcp_servers", []):
+                # SECURITY: Type-validate critical MCP config fields to prevent
+                # type confusion that could lead to command injection or crashes.
+                srv_command = srv.get("command", "")
+                srv_args = srv.get("args", [])
+                srv_env = srv.get("env", {})
+                if not isinstance(srv_command, str):
+                    logger.error(
+                        f"MCP server '{srv.get('name', '?')}' command must be a string, "
+                        f"got {type(srv_command).__name__} — skipping server"
+                    )
+                    continue
+                if not isinstance(srv_args, list) or not all(isinstance(a, str) for a in srv_args):
+                    logger.error(
+                        f"MCP server '{srv.get('name', '?')}' args must be a list of strings — "
+                        f"skipping server"
+                    )
+                    continue
+                if not isinstance(srv_env, dict) or not all(
+                    isinstance(k, str) and isinstance(v, str) for k, v in srv_env.items()
+                ):
+                    logger.error(
+                        f"MCP server '{srv.get('name', '?')}' env must be a dict of strings — "
+                        f"skipping server"
+                    )
+                    continue
                 mcp_servers.append(MCPServerConfig(
                     name=srv.get("name", ""),
-                    command=srv.get("command", ""),
-                    args=srv.get("args", []),
-                    env=srv.get("env", {}),
+                    command=srv_command,
+                    args=srv_args,
+                    env=srv_env,
                     transport=srv.get("transport", "stdio"),
                     url=srv.get("url", ""),
                 ))
@@ -410,14 +453,20 @@ class BotConfig:
         return errors
 
     def ensure_directories(self):
-        """Create memory and audit directories with restricted permissions."""
+        """Create memory and audit directories with restricted permissions.
+
+        Always enforces 0o700 on the directories, even if they already exist,
+        to correct permissions that may have been loosened externally.
+        """
         mem_path = Path(self.memory_path)
         mem_path.mkdir(parents=True, exist_ok=True)
+        # Always enforce owner-only access, even on pre-existing directories
         mem_path.chmod(stat.S_IRWXU)
 
         if self.audit_log:
             audit_path = mem_path / "audit"
             audit_path.mkdir(parents=True, exist_ok=True)
+            # Always enforce owner-only access, even on pre-existing directories
             audit_path.chmod(stat.S_IRWXU)
 
     def get_key_fingerprint(self, key_type: str = "school") -> str:

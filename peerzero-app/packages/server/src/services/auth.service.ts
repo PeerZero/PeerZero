@@ -173,7 +173,7 @@ export async function forgotPassword(email: string): Promise<void> {
   // Check if user exists (but don't reveal this to the caller)
   const user = await queryOne('SELECT id FROM users WHERE email = $1', [email]);
   if (user) {
-    const code = crypto.randomBytes(4).toString('hex'); // 8-char hex code (32 bits entropy)
+    const code = crypto.randomBytes(8).toString('hex'); // 16-char hex code (64 bits entropy)
     // Hash the code before storing — even Redis compromise won't leak usable codes
     const codeHash = crypto.createHash('sha256').update(code).digest('hex');
     const r = getRedis();

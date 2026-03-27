@@ -9,10 +9,6 @@ compatibility_date = "2024-09-01"
 
 [vars]
 ENVIRONMENT = "production"
-
-# KV namespace for caching validated API key hashes (5-min TTL)
-# Create via: wrangler kv:namespace create "AUTH_CACHE"
-# Then paste the binding id below.
-# [[kv_namespaces]]
-# binding = "AUTH_CACHE"
-# id = "<your-kv-namespace-id>"
+# Comma-separated list of allowed CORS origins. Set to actual origins before deploying.
+# Example: ALLOWED_ORIGINS = "https://app.peerzero.com,https://bot.peerzero.com"
+# ALLOWED_ORIGINS = ""

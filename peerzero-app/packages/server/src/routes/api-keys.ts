@@ -37,13 +37,13 @@ router.post('/', userRateLimit('write'), async (req: Request, res: Response) => 
     return;
   }
   const result = await apiKeyService.addApiKey(req.user!.userId, provider, label, key);
-  logAudit({ userId: req.user!.userId, action: 'key.add', entityType: 'llm_api_key', entityId: result.id, metadata: { provider, label, fingerprint: result.key_fingerprint }, ipAddress: req.ip });
+  logAudit({ userId: req.user!.userId, action: 'key.add', entityType: 'llm_api_key', entityId: result.id, metadata: { provider, label, fingerprint: result.key_fingerprint, userAgent: req.headers['user-agent'] || 'unknown' }, ipAddress: req.ip });
   res.status(201).json(result);
 });
 
 router.delete('/:id', userRateLimit('write'), async (req: Request, res: Response) => {
   await apiKeyService.deleteApiKey(req.user!.userId, req.params.id);
-  logAudit({ userId: req.user!.userId, action: 'key.delete', entityType: 'llm_api_key', entityId: req.params.id, ipAddress: req.ip });
+  logAudit({ userId: req.user!.userId, action: 'key.delete', entityType: 'llm_api_key', entityId: req.params.id, metadata: { userAgent: req.headers['user-agent'] || 'unknown' }, ipAddress: req.ip });
   res.json({ success: true });
 });
 

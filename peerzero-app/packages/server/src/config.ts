@@ -33,7 +33,15 @@ export const config = {
   redisUrl: process.env.REDIS_URL || '',
 
   // JWT
-  get jwtSecret() { return required('JWT_SECRET'); },
+  // WARNING: JWT_SECRET must never be committed to .env in source control.
+  // Use a secrets manager (AWS Secrets Manager, Vault, etc.) in production.
+  get jwtSecret() {
+    const secret = required('JWT_SECRET');
+    if (secret.length < 32) {
+      throw new Error('JWT_SECRET must be at least 32 characters for adequate security');
+    }
+    return secret;
+  },
   get jwtRefreshSecret() { return required('JWT_REFRESH_SECRET'); },
   jwtExpiresIn: '5m',
   jwtRefreshExpiresIn: '30d',

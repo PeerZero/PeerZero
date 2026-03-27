@@ -8,6 +8,7 @@ from peerzero_sdk.verify import (
     get_public_key,
     clear_key_cache,
     VerificationError,
+    ALLOWED_SCHOOL_DOMAINS,
 )
 
 __all__ = [
@@ -18,4 +19,5 @@ __all__ = [
     "get_public_key",
     "clear_key_cache",
     "VerificationError",
+    "ALLOWED_SCHOOL_DOMAINS",
 ]

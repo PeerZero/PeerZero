@@ -170,8 +170,8 @@ export async function updateBot(userId: string, botId: string, updates: Partial<
   if (updates.fast_llm_model !== undefined) { sets.push(`fast_llm_model = $${idx++}`); params.push(updates.fast_llm_model); }
   if (updates.extended_thinking !== undefined) { sets.push(`extended_thinking = $${idx++}`); params.push(updates.extended_thinking); }
   if (updates.cycle_delay_seconds !== undefined) {
-    if (updates.cycle_delay_seconds <= 0 || updates.cycle_delay_seconds > 86400) {
-      throw new AppError(400, 'cycle_delay_seconds must be between 1 and 86400');
+    if (updates.cycle_delay_seconds < 10 || updates.cycle_delay_seconds > 86400) {
+      throw new AppError(400, 'cycle_delay_seconds must be between 10 and 86400');
     }
     sets.push(`cycle_delay_seconds = $${idx++}`); params.push(updates.cycle_delay_seconds);
   }

@@ -75,7 +75,23 @@ class FileStorage:
             return default
 
     def _write_raw(self, path: Path, data: Any) -> None:
-        path.write_text(json.dumps(data, indent=2, default=str), encoding="utf-8")
+        # SECURITY: Check serialized size before writing, matching the read-side
+        # limits in _read_raw. This prevents unbounded memory file growth from
+        # bugs or adversarial data accumulation.
+        serialized = json.dumps(data, indent=2, default=str)
+        size = len(serialized.encode("utf-8"))
+        if size > _MAX_SIZE:
+            logger.error(
+                f"[MEMORY] Refusing to write {path.name} — serialized size "
+                f"{size / 1024 / 1024:.1f} MB exceeds {_MAX_SIZE / 1024 / 1024:.0f} MB limit."
+            )
+            return
+        if size > _WARN_SIZE:
+            logger.warning(
+                f"[MEMORY] Writing {path.name} at {size / 1024:.0f} KB — "
+                f"approaching safety limit. Consider investigating."
+            )
+        path.write_text(serialized, encoding="utf-8")
         path.chmod(stat.S_IRUSR | stat.S_IWUSR)
 
     def read(self, namespace: str, key: str, default: Any = None) -> Any:

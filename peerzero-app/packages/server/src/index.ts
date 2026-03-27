@@ -37,7 +37,30 @@ import publicBotRoutes from './routes/bots-public';
 const app = express();
 
 // ── Middleware ──
-app.use(helmet());
+// CSRF note: This is an API-only server (no HTML forms). CSRF is mitigated by
+// requiring Authorization headers (Bearer tokens) on all authenticated endpoints.
+// Browsers do not attach Authorization headers automatically from cross-origin
+// form submissions, so CSRF attacks cannot forge authenticated requests.
+app.use(helmet({
+  hsts: {
+    maxAge: 31536000,        // 1 year in seconds
+    includeSubDomains: true,
+    preload: true,
+  },
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'none'"],
+      scriptSrc: ["'none'"],
+      styleSrc: ["'none'"],
+      imgSrc: ["'none'"],
+      connectSrc: ["'self'"],
+      frameSrc: ["'none'"],
+      objectSrc: ["'none'"],
+      baseUri: ["'none'"],
+      formAction: ["'none'"],
+    },
+  },
+}));
 app.use(cors({
   origin: config.isDev
     ? [/^https?:\/\/localhost(:\d+)?$/, /^https?:\/\/127\.0\.0\.1(:\d+)?$/]

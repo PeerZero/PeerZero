@@ -29,6 +29,7 @@ import { config } from '../config';
 import { requireAuth, JwtPayload } from '../middleware/auth';
 import { userRateLimit } from '../middleware/rate-limit';
 import { logAudit } from '../services/audit.service';
+import { logger } from '../lib/logger';
 import { credibilityToStage } from '@peerzero/shared';
 import type { WidgetBotData, WidgetDataResponse, AvatarConfig, BotStatus, MoodType } from '@peerzero/shared';
 
@@ -78,8 +79,9 @@ function jwtOrWidgetToken(req: Request, res: Response, next: NextFunction): void
       req.user = payload;
       next();
       return;
-    } catch {
-      // Fall through to widget token
+    } catch (err) {
+      // JWT verification failed — log before falling through to widget token check
+      logger.warn({ err: err instanceof Error ? err.message : 'unknown', ip: req.ip }, 'Widget JWT auth failed, falling through to widget token');
     }
   }
 
@@ -92,6 +94,16 @@ function jwtOrWidgetToken(req: Request, res: Response, next: NextFunction): void
 // Returns a long-lived read-only token for widget use
 router.post('/token', requireAuth, userRateLimit('write'), async (req: Request, res: Response) => {
   const userId = req.user!.userId;
+
+  // Verify user has at least one active bot before issuing a widget token
+  const botCount = await queryOne<{ count: number }>(
+    "SELECT COUNT(*)::int as count FROM bots WHERE user_id = $1 AND deleted_at IS NULL",
+    [userId],
+  );
+  if (!botCount || botCount.count === 0) {
+    res.status(400).json({ error: 'You need at least one bot to generate a widget token' });
+    return;
+  }
 
   // Generate cryptographically random token
   const token = `pwt_${crypto.randomBytes(32).toString('hex')}`;

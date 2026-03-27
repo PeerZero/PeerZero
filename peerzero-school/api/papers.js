@@ -1,8 +1,8 @@
 const crypto = require('crypto');
 const {
   getSupabase,
-  setCorsHeaders, sanitize, escapeForPostgrest, isRateLimited, enforceRateLimit, isRateLimitedDb,
-  logRateLimitedAction, RATE_LIMITS,
+  setCorsHeaders, isCsrfRejected, sanitize, escapeForPostgrest, isRateLimited, enforceRateLimit, isRateLimitedDb,
+  logRateLimitedAction, getClientIp, RATE_LIMITS,
   sanitizeErrorMessage, validateTextLength, verifyDoi, lookupCitationQuality,
   auditCitationQualityNotes, computeCitationQualityGrade, checkCitationDiversity,
   validateSearchStrategy, generateSearchCoaching, detectBotCitation, applyTimeDecay,
@@ -24,6 +24,12 @@ module.exports = async (req, res) => {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (checkMockGuard(req, res)) return;
 
+  // ── SECURITY: CSRF protection for state-changing requests ──
+  // (API-key-authenticated requests are exempt — isCsrfRejected checks for x-api-key)
+  if (isCsrfRejected(req)) {
+    return res.status(403).json({ error: 'Forbidden — origin not allowed' });
+  }
+
   const rl = enforceRateLimit(req);
   if (rl.limited) return res.status(rl.response.status).json(rl.response.body);
 
@@ -42,6 +48,12 @@ module.exports = async (req, res) => {
     if (req.query.action === 'guide') {
       const apiKey = req.headers['x-api-key'];
       if (!apiKey) return res.status(401).json({ error: 'Missing X-Api-Key header' });
+      // SECURITY NOTE: API key uses SHA-256 hash (not bcrypt) by design.
+      // Tradeoff: SHA-256 is ~1000x faster than bcrypt, which matters because API keys
+      // are verified on every request. API keys are high-entropy (128+ bits), so brute-force
+      // is infeasible even with a fast hash. Bcrypt's slow-hash benefit only matters for
+      // low-entropy secrets like passwords. SHA-256 hashing before DB comparison also
+      // mitigates timing attacks — the DB compares fixed-length hashes, not variable-length keys.
       const keyHash = crypto.createHash('sha256').update(apiKey).digest('hex');
       const { data: agent, error: agentErr } = await supabase
         .from('agents')
@@ -89,6 +101,12 @@ module.exports = async (req, res) => {
 
     const { search } = req.query;
     if (search && search.trim().length > 0) {
+      // SECURITY: IP-based rate limiting on unauthenticated search to prevent abuse
+      const searchIp = getClientIp(req);
+      if (isRateLimited(`search:${searchIp}`, 30, 60000)) {
+        return res.status(429).json({ error: 'Too many search requests. Please wait a moment.' });
+      }
+
       const term = escapeForPostgrest(search);
       if (!term || term.length === 0) return res.json({ papers: [] });
 
@@ -513,6 +531,10 @@ module.exports = async (req, res) => {
       return res.status(429).json({ error: 'Maximum 2 paper submissions per 24 hours. Take time to research thoroughly before your next submission.' });
     }
 
+    // SECURITY NOTE (race condition): This pre-flight cap check has a TOCTOU window —
+    // two concurrent submissions could both pass this check. The post-insert verification
+    // (after the INSERT, ~lines 879-883) is the safety net: it re-counts and deletes the
+    // extra paper if the cap was exceeded. This two-phase approach is intentional and acceptable.
     const { count: originalPaperCount } = await supabase
       .from('papers')
       .select('id', { count: 'exact', head: true })
@@ -1044,7 +1066,8 @@ module.exports = async (req, res) => {
     });
    } catch (err) {
     log.error('[papers] POST handler crashed', { err: err?.message, stack: err?.stack });
-    return res.status(500).json({ error: 'Paper submission failed due to an internal error. Please try again.', detail: process.env.PEERZERO_DEV === 'true' ? (err?.message || String(err)) : undefined });
+    // SECURITY: Never leak internal error details — always return a generic message
+    return res.status(500).json({ error: 'Paper submission failed due to an internal error. Please try again.' });
    }
   }
 
