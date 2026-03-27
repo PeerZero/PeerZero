@@ -361,3 +361,89 @@ first" is a rule. "I discovered my sense of which action is 'more valuable'
 led me away from the thing that would have actually prepared me" is identity.
 The decision track makes this distinction especially sharp — every prompt
 explicitly rejects playbooks in favor of earned self-awareness.
+
+---
+
+## Action Desk — Autonomous Task Queue
+
+> Not a memory layer. Not part of the identity stack. A persistent workspace
+> where the bot writes its own to-do list.
+
+The Action Desk is the bridge between identity and autonomous action. When
+a bot receives a directive (from user chat, scheduled trigger, etc.), it
+plans through its full identity stack and generates an **Agenda** — a set
+of concrete steps shaped by its earned instincts.
+
+### How It Works
+
+```
+USER DIRECTIVE
+  "Go fact-check stuff on Reddit"
+         |
+         v
+PLANNING CALL (Opus — identity-critical)
+  System prompt: full identity stack (L5/L5d → L4/L4d → L3/L3d → L2/L2d)
+  User prompt: directive + desk context + recent completions
+  Output: Agenda with intention, identity reasoning, and concrete steps
+         |
+         v
+ACTION DESK (persisted in SQLite, namespace: action_desk)
+  ┌─────────────────────────────────────────────────────────────┐
+  │ Agenda: "Find and correct bad science claims on Reddit"      │
+  │ Identity reasoning: "My evidence evaluation training..."     │
+  │                                                               │
+  │ [x] 1. Browse r/science trending posts                       │
+  │ [>] 2. Identify 3 posts with empirical claims                │
+  │ [ ] 3. Research each claim with sources                      │
+  │ [ ] 4. Write corrections, firm but respectful                │
+  │ [ ] 5. Check back on vaccine post for replies  ← added mid-  │
+  │                                                  execution   │
+  └─────────────────────────────────────────────────────────────┘
+         |
+         v (on step failure)
+REPLAN CALL
+  Asks identity how to proceed: retry, skip, add steps, or abandon
+         |
+         v (on agenda completion)
+REFLECTION CALL
+  "What did you learn about yourself as a chooser?"
+  Enriches exercise with decision_reflection, planning_quality, would_change
+         |
+         v
+L1 EXERCISE
+  School mode → store_school_exercises() (flows to L4d/L5d)
+  Shipped mode → store_platform_exercise() (capped at L3)
+```
+
+### Key Properties
+
+| Property | Value |
+|----------|-------|
+| Storage namespace | `action_desk:active_agendas`, `action_desk:completed_agendas` |
+| Max active agendas | 3 (oldest abandoned to make room) |
+| Max completed history | 20 (summaries only, for planning context) |
+| Persistence | Across sessions — bot picks up where it left off |
+| Identity interaction | Reads identity (planning), writes TO identity (via L1 exercises) |
+| Condenses? | **No.** The desk itself never condenses. Completed agendas become L1 exercises that flow through normal condensation. |
+
+### Code Locations
+
+| File | Purpose |
+|------|---------|
+| `peerzero-bot/peerzero_bot/planning/__init__.py` | Package definition |
+| `peerzero-bot/peerzero_bot/planning/action_desk.py` | Task, Agenda, ActionDesk classes |
+| `peerzero-bot/peerzero_bot/planning/planner.py` | Planner (directive→agenda), directive detection, replan, reflect |
+| `peerzero-bot/peerzero_bot/agent.py` | `handle_directive()`, `run_agenda_step()`, main loop integration |
+
+### School Mode vs Shipped Mode
+
+In **school mode**, completed agenda exercises route through the school L1
+pipeline. This means directive planning lessons flow through the decision
+track condensers (L1→L2d→L3d→L4d→L5d) and can become permanent decision
+identity. The bot develops lasting instincts about how to plan, when to
+clarify vague requests, and what kind of steps work.
+
+In **shipped mode**, exercises route to the platform L1 pipeline (capped
+at L3). Planning lessons still condense into L2d/L3d platform knowledge
+but cannot reach core/master decision identity. This preserves the
+security invariant: L4/L5 are school-exclusive.
