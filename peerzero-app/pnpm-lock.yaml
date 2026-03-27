@@ -108,7 +108,7 @@ importers:
         specifier: ^17.3.1
         version: 17.3.1
       express:
-        specifier: ^4.21.0
+        specifier: ^4.21.2
         version: 4.22.1
       express-async-errors:
         specifier: ^3.1.1
@@ -123,7 +123,7 @@ importers:
         specifier: ^5.4.0
         version: 5.10.0
       jsonwebtoken:
-        specifier: ^9.0.2
+        specifier: ^9.0.3
         version: 9.0.3
       node-pg-migrate:
         specifier: ^7.0.0
