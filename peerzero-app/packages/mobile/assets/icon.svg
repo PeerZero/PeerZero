@@ -1,0 +1,28 @@
+<svg viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background -->
+  <rect width="1024" height="1024" rx="224" fill="#060a10"/>
+
+  <!-- Subtle radial glow behind the mark -->
+  <radialGradient id="glow" cx="512" cy="512" r="320" gradientUnits="userSpaceOnUse">
+    <stop offset="0%" stop-color="#38f5b5" stop-opacity="0.08"/>
+    <stop offset="100%" stop-color="#38f5b5" stop-opacity="0"/>
+  </radialGradient>
+  <circle cx="512" cy="512" r="320" fill="url(#glow)"/>
+
+  <!-- Left circle (darker agent) -->
+  <circle cx="420" cy="512" r="220" stroke="#455570" stroke-width="18" fill="none"/>
+
+  <!-- Right circle (lighter agent) -->
+  <circle cx="604" cy="512" r="220" stroke="#5a6f8a" stroke-width="18" fill="none"/>
+
+  <!-- Overlap zone glow -->
+  <clipPath id="overlapClip">
+    <circle cx="420" cy="512" r="220"/>
+  </clipPath>
+  <circle cx="604" cy="512" r="220" clip-path="url(#overlapClip)" fill="rgba(56,245,181,0.07)"/>
+
+  <!-- Checkmark (bold, centered in overlap) -->
+  <path d="M460 520 l50 56 l112 -118"
+        stroke="#38f5b5" stroke-width="28" fill="none"
+        stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
