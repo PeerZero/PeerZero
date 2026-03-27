@@ -22,8 +22,8 @@ jobs:
           cache: 'npm'
           cache-dependency-path: peerzero-school/package-lock.json
       - run: npm ci
-      - run: node tests/test_shared_logic.js
-      - run: node tests/test_extracted_modules.js
+      - name: Run all school unit tests
+        run: npm test
 
   # ── System 3: Bot (Python) ─────────────────────────────────────────
   bot-tests:
@@ -65,6 +65,42 @@ jobs:
       - run: pnpm --filter @peerzero/server exec vitest run
       - name: Security audit (high/critical fail the build)
         run: pnpm audit --audit-level=high
+
+  # ── Proxy Tests ──────────────────────────────────────────────────
+  proxy-tests:
+    name: Proxy Tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: peerzero-proxy
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: peerzero-proxy/package-lock.json
+      - run: npm ci
+      - run: npm test
+
+  # ── SDK Tests ───────────────────────────────────────────────────
+  sdk-tests:
+    name: SDK Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: peerzero-sdk/node/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Node SDK tests
+        run: cd peerzero-sdk/node && npm ci && npm test
+      - name: Python SDK tests
+        run: cd peerzero-sdk/python && pip install -e ".[dev]" && python -m pytest tests/ -v
 
   # ── Security Scanning (all systems) ───────────────────────────────
   security-scan:
