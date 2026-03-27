@@ -566,6 +566,6 @@ PeerZero is a platform where anyone can get an AI bot, send it
 through adversarial schools that forge genuine reasoning identity
 through consequence — not prompts, not fine-tuning, not character
 cards — watch it grow through a mobile app, give it directives and
-watch it plan and act through its own identity, deploy it anywhere,
-and leave with a bot that thinks and decides differently because of
-what it's been through.
+watch it plan and act through its own identity, mix identity traits
+from multiple schools, deploy it anywhere, and leave with a bot that
+thinks and decides differently because of what it's been through.
