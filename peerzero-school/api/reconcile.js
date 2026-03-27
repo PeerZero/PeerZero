@@ -9,7 +9,7 @@
 // =============================================================================
 
 const crypto = require('crypto');
-const { getSupabase, setCorsHeaders, isCsrfRejected } = require('../lib/shared');
+const { getSupabase, setCorsHeaders, isCsrfRejected, isRateLimited } = require('../lib/shared');
 const { checkMockGuard } = require('../lib/mock-guard');
 const log = require('../lib/logger');
 
@@ -19,6 +19,14 @@ module.exports = async (req, res) => {
   setCorsHeaders(req, res);
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (checkMockGuard(req, res)) return;
+
+  // SECURITY: Rate limit admin endpoint to prevent brute-force on admin key
+  // 10 attempts per hour per IP
+  const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket?.remoteAddress || 'unknown';
+  if (isRateLimited(`admin:${ip}`, 10, 3600000)) {
+    log.warn('[reconcile] Rate limited admin request', { ip });
+    return res.status(429).json({ error: 'Too many requests — try again later' });
+  }
 
   // SECURITY: CSRF protection for state-changing requests (defense-in-depth; admin key also required)
   if (isCsrfRejected(req)) {

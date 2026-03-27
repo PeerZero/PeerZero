@@ -42,6 +42,28 @@ class SqliteStorage:
         self._conn.commit()
 
     def read(self, namespace: str, key: str, default=None):
+        # SECURITY: Check size BEFORE fetching the full blob to prevent OOM
+        # from corrupted/malicious entries. LENGTH() is evaluated in SQLite
+        # without loading the data into Python memory.
+        size_row = self._conn.execute(
+            "SELECT LENGTH(data) FROM memory WHERE namespace = ? AND key = ?",
+            (namespace, key),
+        ).fetchone()
+        if size_row is None:
+            return default
+        size = size_row[0] or 0
+        if size > _MAX_SIZE:
+            logger.error(
+                f"[MEMORY] Row {namespace}/{key} is {size / 1024 / 1024:.1f} MB — "
+                f"exceeds {_MAX_SIZE / 1024 / 1024:.0f} MB safety limit. "
+                f"Refusing to load. This row may be corrupt."
+            )
+            return default
+        if size > _WARN_SIZE:
+            logger.warning(
+                f"[MEMORY] Row {namespace}/{key} is {size / 1024:.0f} KB — "
+                f"approaching safety limit. Consider investigating."
+            )
         row = self._conn.execute(
             "SELECT data FROM memory WHERE namespace = ? AND key = ?",
             (namespace, key),
@@ -49,19 +71,6 @@ class SqliteStorage:
         if row is None:
             return default
         try:
-            size = len(row[0])
-            if size > _MAX_SIZE:
-                logger.error(
-                    f"[MEMORY] Row {namespace}/{key} is {size / 1024 / 1024:.1f} MB — "
-                    f"exceeds {_MAX_SIZE / 1024 / 1024:.0f} MB safety limit. "
-                    f"Refusing to load. This row may be corrupt."
-                )
-                return default
-            if size > _WARN_SIZE:
-                logger.warning(
-                    f"[MEMORY] Row {namespace}/{key} is {size / 1024:.0f} KB — "
-                    f"approaching safety limit. Consider investigating."
-                )
             return json.loads(row[0])
         except json.JSONDecodeError:
             return default

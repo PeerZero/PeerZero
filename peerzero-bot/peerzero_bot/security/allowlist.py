@@ -63,24 +63,27 @@ class SecurityGateway:
     def register_adapter(self, adapter_name: str, allowed_hosts: set[str]):
         """Register an adapter with its allowed destination hosts."""
         self._adapter_hosts[adapter_name] = allowed_hosts
-        logger.debug(f"Registered adapter '{adapter_name}' with hosts: {allowed_hosts}")
+        logger.info(f"Registered adapter '{adapter_name}' with hosts: {allowed_hosts}")
 
     def validate_school_request(self, path: str):
         """Validate a request to the PeerZero School."""
         base_path = path.split("?")[0]
         if base_path not in SCHOOL_PATHS:
+            logger.warning(f"BLOCKED school request: {base_path} not in path allowlist")
             raise SecurityError(f"Blocked: {base_path} not in School path allowlist")
 
     def validate_llm_request(self, url: str):
         """Validate a request to an LLM provider."""
         host = urlparse(url).hostname
         if host not in LLM_HOSTS:
+            logger.warning(f"BLOCKED LLM request: {host} not in host allowlist")
             raise SecurityError(f"Blocked: {host} not in LLM host allowlist")
 
     def validate_academic_request(self, url: str):
         """Validate a request to an academic API."""
         host = urlparse(url).hostname
         if host not in ACADEMIC_HOSTS:
+            logger.warning(f"BLOCKED academic request: {host} not in host allowlist")
             raise SecurityError(f"Blocked: {host} not in academic host allowlist")
 
     def validate_platform_request(self, adapter_name: str, url: str):
@@ -88,6 +91,10 @@ class SecurityGateway:
         host = urlparse(url).hostname
         allowed = self._adapter_hosts.get(adapter_name, set())
         if host not in allowed:
+            logger.warning(
+                f"BLOCKED platform request: adapter '{adapter_name}' tried to reach "
+                f"{host} (allowed: {allowed})"
+            )
             raise SecurityError(
                 f"Blocked: adapter '{adapter_name}' cannot reach {host}. "
                 f"Allowed: {allowed}"

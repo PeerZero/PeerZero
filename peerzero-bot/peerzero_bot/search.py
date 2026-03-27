@@ -36,7 +36,7 @@ def _call_server_search(queries: list[str], context: str = "") -> dict:
         return {"papers": [], "search_log": {}}
 
     try:
-        with httpx.Client(timeout=60.0) as http:
+        with httpx.Client(timeout=60.0, follow_redirects=False, verify=True) as http:
             resp = http.post(
                 f"{_SCHOOL_URL}/api/papers?action=search",
                 headers={

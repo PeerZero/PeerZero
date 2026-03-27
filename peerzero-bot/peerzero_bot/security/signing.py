@@ -39,7 +39,7 @@ class ProfileVerifier:
         self._verification_url = verification_url
         self._cached_public_key: Optional[bytes] = None
         self._cache_time: float = 0.0  # monotonic timestamp of last cache fill
-        self._http = httpx.Client(timeout=10.0, follow_redirects=False)
+        self._http = httpx.Client(timeout=10.0, follow_redirects=False, verify=True)
 
     def verify(self, profile: dict) -> dict:
         """

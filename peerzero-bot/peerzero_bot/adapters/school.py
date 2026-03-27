@@ -110,15 +110,10 @@ def extract_json(text: str) -> dict | None:
                 return result
         except json.JSONDecodeError:
             pass
-        # Try replacing single quotes with double quotes
-        single_q = cleaned.replace("'", '"')
-        try:
-            result = json.loads(single_q)
-            if isinstance(result, dict):
-                logger.warning("[extract_json] Parsed after single-quote replacement")
-                return result
-        except json.JSONDecodeError:
-            pass
+        # SECURITY: Single-quote → double-quote replacement was removed.
+        # It could break strings containing intentional quotes and potentially
+        # allow prompt injection via crafted LLM responses that exploit the
+        # lossy transformation to bypass JSON validation.
 
     # Strategy 5: Fix unescaped newlines inside JSON string values
     if brace_match:
@@ -183,7 +178,7 @@ class SchoolAdapter:
         if credential_store:
             credential_store.register("school", api_key, "school")
         self._api_key_fallback = api_key if not credential_store else ""
-        self._http = httpx.Client(timeout=60.0, follow_redirects=False)
+        self._http = httpx.Client(timeout=60.0, follow_redirects=False, verify=True)
         self._skill_md: str = ""
         self._verifier = ProfileVerifier(
             verification_url=f"{self._url}/.well-known/peerzero-public-key.pem"

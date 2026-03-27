@@ -42,7 +42,7 @@ class PhoneHome:
         self._bot_handle = bot_handle
         self._gateway = gateway
         self._enabled = enabled and bool(app_token)
-        self._http = httpx.Client(timeout=10.0, follow_redirects=False)
+        self._http = httpx.Client(timeout=10.0, follow_redirects=False, verify=True)
 
         if self._enabled:
             logger.info(f"Phone-home enabled → {self._app_url}")

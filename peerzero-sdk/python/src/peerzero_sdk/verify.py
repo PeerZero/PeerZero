@@ -284,6 +284,16 @@ def verify(
     else:
         raise VerificationError(f"Unsupported public_key type: {type(public_key)}")
 
+    # SECURITY: Enforce a size limit before serializing for verification.
+    # A malicious profile with huge field values could cause DoS via memory/CPU.
+    _MAX_PROFILE_SIZE = 10 * 1024 * 1024  # 10 MB
+    profile_estimate = len(json.dumps(profile))
+    if profile_estimate > _MAX_PROFILE_SIZE:
+        raise VerificationError(
+            f"Profile too large ({profile_estimate} bytes, max {_MAX_PROFILE_SIZE}) — "
+            f"refusing to verify"
+        )
+
     # Reconstruct the unsigned payload (what the School signed)
     sorted_keys = sorted(k for k in profile if k not in _SIGNATURE_FIELDS)
     unsigned = {k: profile[k] for k in sorted_keys}

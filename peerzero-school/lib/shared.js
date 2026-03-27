@@ -39,6 +39,16 @@ function getSupabase() {
         'Missing required environment variables: SUPABASE_URL and SUPABASE_SERVICE_KEY must be set'
       );
     }
+    // SECURITY: Warn if ADMIN_SECRET is missing or weak in production.
+    // ADMIN_SECRET protects the /api/reconcile endpoint.
+    if (process.env.NODE_ENV === 'production' || process.env.VERCEL_ENV === 'production') {
+      if (!process.env.ADMIN_SECRET) {
+        log.error('[STARTUP] ADMIN_SECRET is not set — /api/reconcile will reject all requests');
+      } else if (process.env.ADMIN_SECRET.length < 32) {
+        log.error('[STARTUP] ADMIN_SECRET is too short (< 32 chars) — weak against brute force');
+      }
+    }
+
     _supabase = createClient(
       process.env.SUPABASE_URL,
       process.env.SUPABASE_SERVICE_KEY

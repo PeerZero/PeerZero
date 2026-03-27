@@ -101,7 +101,18 @@ class MCPServerConnection:
                     )
                     return False
 
-            # Build command — use shlex.split() to correctly handle quoted arguments
+            # Build command — use shlex.split() to correctly handle quoted arguments.
+            # SECURITY: Reject shell metacharacters that could enable command injection
+            # via crafted TOML config. shlex.split handles quoting, but we block
+            # dangerous operators that could chain commands.
+            _DANGEROUS_SHELL_CHARS = set(";|&`$\\!<>")
+            if any(c in self.config.command for c in _DANGEROUS_SHELL_CHARS):
+                logger.error(
+                    f"[MCP:{self.config.name}] Command contains dangerous shell characters "
+                    f"({_DANGEROUS_SHELL_CHARS & set(self.config.command)}) — refusing to start. "
+                    f"Specify arguments in config.args instead of the command string."
+                )
+                return False
             cmd_parts = shlex.split(self.config.command)
 
             # SECURITY: Validate the command binary exists and is in a known-safe location.
@@ -358,7 +369,7 @@ class MCPHttpConnection:
         self._lock = threading.Lock()
         self._tools: list[MCPTool] = []
         self._initialized = False
-        self._http = httpx.Client(timeout=30.0, follow_redirects=False)
+        self._http = httpx.Client(timeout=30.0, follow_redirects=False, verify=True)
         self._session_url: str = config.url.rstrip("/")
 
     @property

@@ -54,7 +54,7 @@ class A2AAdapter:
         if credential_store:
             credential_store.register(platform_name, api_key, platform_name)
         self._api_key_fallback = api_key if not credential_store else ""
-        self._http = httpx.Client(timeout=30.0, follow_redirects=False)
+        self._http = httpx.Client(timeout=30.0, follow_redirects=False, verify=True)
         self._remote_card: dict = {}
 
         # Register allowed hosts with security gateway

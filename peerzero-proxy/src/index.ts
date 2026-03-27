@@ -35,6 +35,11 @@ const ANTHROPIC_VERSION = "2023-06-01";
 const MAX_BODY_SIZE = 10 * 1024 * 1024; // 10 MB
 
 // ── Rate limiting (in-memory, per-worker-instance) ───────────────────────────
+// SECURITY NOTE: This rate limit is per-isolate. Cloudflare Workers can run
+// across multiple isolates, so an attacker can partially bypass this by
+// round-robining requests. For stronger enforcement, migrate to Cloudflare
+// Durable Objects or KV-backed rate limiting. The current limit still catches
+// accidental floods and naive abuse from a single isolate.
 
 const rateLimits = new Map<string, { count: number; resetAt: number }>();
 const RATE_LIMIT = 120;         // requests per window
@@ -251,16 +256,20 @@ function bufToHex(buf: ArrayBuffer): string {
 }
 
 /**
- * Constant-time comparison of two ArrayBuffers of equal length.
- * Returns true if and only if every byte matches.
+ * Constant-time comparison of two ArrayBuffers.
+ * Both inputs should be the same length (e.g. SHA-256 hashes).
+ * The XOR loop always runs over the full length of `a` to prevent
+ * timing leaks from length differences.
  */
 function timingSafeEqual(a: ArrayBuffer, b: ArrayBuffer): boolean {
-  if (a.byteLength !== b.byteLength) return false;
   const viewA = new Uint8Array(a);
   const viewB = new Uint8Array(b);
-  let diff = 0;
+  // Length mismatch is folded into diff rather than early-returning,
+  // so the comparison always takes the same time regardless of lengths.
+  let diff = viewA.byteLength ^ viewB.byteLength;
   for (let i = 0; i < viewA.length; i++) {
-    diff |= viewA[i] ^ viewB[i];
+    // If b is shorter, read 0 (still constant-time loop over a's length)
+    diff |= viewA[i] ^ (viewB[i] ?? 0);
   }
   return diff === 0;
 }
