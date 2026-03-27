@@ -65,3 +65,46 @@ jobs:
       - run: pnpm --filter @peerzero/server exec vitest run
       - name: Security audit (high/critical fail the build)
         run: pnpm audit --audit-level=high
+
+  # ── Security Scanning (all systems) ───────────────────────────────
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # ── Dependency audits ──────────────────────────────────────────
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: peerzero-school/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Audit school dependencies
+        run: cd peerzero-school && npm ci && npm audit --audit-level=high
+
+      - name: Audit proxy dependencies
+        run: cd peerzero-proxy && npm ci && npm audit --audit-level=high
+
+      - name: Audit SDK (node) dependencies
+        run: cd peerzero-sdk/node && npm ci && npm audit --audit-level=high
+
+      - name: Audit bot dependencies
+        run: pip install pip-audit && cd peerzero-bot && pip install -e . && pip-audit --severity high
+
+      # ── Semgrep static analysis ────────────────────────────────────
+      - name: Semgrep security scan
+        uses: returntocorp/semgrep-action@v1
+        with:
+          config: >-
+            p/security-audit
+            p/secrets
+            p/owasp-top-ten
+        env:
+          SEMGREP_RULES: >-
+            p/security-audit
+            p/secrets
+            p/owasp-top-ten
