@@ -110,10 +110,16 @@ def extract_json(text: str) -> dict | None:
                 return result
         except json.JSONDecodeError:
             pass
-        # SECURITY: Single-quote → double-quote replacement was removed.
-        # It could break strings containing intentional quotes and potentially
-        # allow prompt injection via crafted LLM responses that exploit the
-        # lossy transformation to bypass JSON validation.
+        # Single-quote recovery: try replacing single quotes with double quotes
+        sq_cleaned = re.sub(r',\s*([}\]])', r'\1', candidate)
+        sq_cleaned = sq_cleaned.replace("'", '"')
+        try:
+            result = json.loads(sq_cleaned)
+            if isinstance(result, dict):
+                logger.warning("[extract_json] Parsed after single-quote recovery")
+                return result
+        except json.JSONDecodeError:
+            pass
 
     # Strategy 5: Fix unescaped newlines inside JSON string values
     if brace_match:
