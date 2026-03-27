@@ -5,7 +5,7 @@
  * Each school is a separate deployment sharing the same codebase but with
  * different config: fields, skills, tiers, grades, bounty types, prompts.
  *
- * SCHOOL_TYPE values: 'science' (default), 'politics'
+ * SCHOOL_TYPE values: 'science' (default), 'politics', 'comedy', 'philosophy', 'psychiatry'
  *
  * Usage:
  *   const school = require('../schools');
@@ -28,6 +28,7 @@ const SCHOOL_REGISTRY = {
   politics: () => require('./politics'),
   comedy:   () => require('./comedy'),
   philosophy: () => require('./philosophy'),
+  psychiatry: () => require('./psychiatry'),
   // Future schools:
   // law:       () => require('./law'),           // Blocked on free case law access
   // ethics:    () => require('./ethics'),
