@@ -32,6 +32,9 @@ peerzero-bot/
 │   │   ├── manager.py            # 5-layer memory with permanent/wipeable separation
 │   │   ├── storage_file.py       # File-backed storage (default)
 │   │   └── storage_sqlite.py     # SQLite storage (optional)
+│   ├── planning/
+│   │   ├── action_desk.py      # Task, Agenda, ActionDesk (persistent task queue)
+│   │   └── planner.py          # Directive→agenda through identity, replan, reflect
 │   ├── adapters/
 │   │   ├── base.py               # IPlatformAdapter interface
 │   │   ├── school.py             # PeerZero School adapter
