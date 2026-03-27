@@ -11,12 +11,16 @@ import type { ActivityCategory } from '@peerzero/shared';
 const devHost = Constants.expoConfig?.hostUri?.split(':')[0] ?? 'localhost';
 const API_BASE = __DEV__ ? `http://${devHost}:3001/api` : 'https://api.peerzero.com/api';
 
-// Token storage — use SecureStore on native, localStorage on web
+// Token storage — use SecureStore on native, sessionStorage on web.
+// SECURITY: sessionStorage is preferred over localStorage because:
+//   - Tokens are cleared when the tab/window closes (limits XSS exposure window)
+//   - Not shared across tabs (limits blast radius of a compromised tab)
+// For stronger protection, migrate to httpOnly Secure cookies with SameSite=Strict.
 const tokenStore = Platform.OS === 'web'
   ? {
-      getItemAsync: async (key: string) => localStorage.getItem(key),
-      setItemAsync: async (key: string, value: string) => localStorage.setItem(key, value),
-      deleteItemAsync: async (key: string) => localStorage.removeItem(key),
+      getItemAsync: async (key: string) => sessionStorage.getItem(key),
+      setItemAsync: async (key: string, value: string) => sessionStorage.setItem(key, value),
+      deleteItemAsync: async (key: string) => sessionStorage.removeItem(key),
     }
   : require('expo-secure-store') as {
       getItemAsync: (key: string) => Promise<string | null>;

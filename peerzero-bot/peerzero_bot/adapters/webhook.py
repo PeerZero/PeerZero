@@ -47,7 +47,7 @@ class WebhookAdapter:
         self._name = platform_name
         self._url = platform_url.rstrip("/")
         self._gateway = gateway
-        self._http = httpx.Client(timeout=30.0, follow_redirects=False)
+        self._http = httpx.Client(timeout=30.0, follow_redirects=False, verify=True)
         self._events = events or []
         self._credential_store = credential_store
         if credential_store:

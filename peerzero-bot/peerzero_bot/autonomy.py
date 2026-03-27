@@ -18,6 +18,7 @@ but not executed.
 """
 
 import re
+import signal
 import logging
 from dataclasses import dataclass, field
 from typing import Optional
@@ -111,12 +112,17 @@ class AutonomyGate:
 
         # Pre-compile blocked content patterns with safety checks to prevent ReDoS.
         # ReDoS occurs when regex engines backtrack exponentially on crafted input.
-        # Mitigations: (1) strict length limit, (2) reject nested quantifiers,
-        # (3) catch compilation errors.
+        # Mitigations: (1) strict length limit, (2) reject nested quantifiers and
+        # alternation backtracking patterns, (3) catch compilation errors,
+        # (4) runtime timeout on regex search via signal alarm.
         _REDOS_SIGNATURES = re.compile(
-            r'(\+|\*|\{)\s*(\+|\*|\{)'   # nested quantifiers like .++ or .*{2,}
+            r'(\+|\*|\{)\s*(\+|\*|\{)'       # nested quantifiers like .++ or .*{2,}
             r'|'
-            r'\(\?[^)]*\)\s*(\+|\*|\{)'  # quantified groups with quantifiers inside
+            r'\(\?[^)]*\)\s*(\+|\*|\{)'      # quantified groups with quantifiers inside
+            r'|'
+            r'\([^)]*\|[^)]*\)\s*(\+|\*|\{)' # quantified alternation groups like (a|a)+
+            r'|'
+            r'\([^)]*(\+|\*)[^)]*\)\s*(\+|\*|\{)'  # (a+)+ style nested quantifiers
         )
         for pattern in policy.blocked_content_patterns:
             if len(pattern) > 100:
@@ -212,8 +218,26 @@ class AutonomyGate:
                     f"Content too long: {len(content)}/{policy.max_content_length} chars",
                 )
             for pattern in self._compiled_blocked_patterns:
-                # Search only first 50k chars to bound worst-case regex time
-                if pattern.search(content[:50000]):
+                # Search only first 50k chars to bound worst-case regex time.
+                # SECURITY: Wrap in a 2-second alarm to catch ReDoS patterns
+                # that slip past the static checks above.
+                try:
+                    _old_handler = signal.signal(signal.SIGALRM, lambda *_: (_ for _ in ()).throw(TimeoutError()))
+                    signal.alarm(2)
+                    matched = pattern.search(content[:50000])
+                    signal.alarm(0)
+                    signal.signal(signal.SIGALRM, _old_handler)
+                except TimeoutError:
+                    signal.alarm(0)
+                    logger.error(
+                        f"Regex timeout (>2s) on blocked pattern '{pattern.pattern}' — "
+                        f"possible ReDoS. Skipping this pattern and blocking action as precaution."
+                    )
+                    return PolicyDecision(
+                        False,
+                        f"Content check timed out on pattern: {pattern.pattern}",
+                    )
+                if matched:
                     return PolicyDecision(
                         False,
                         f"Content matches blocked pattern: {pattern.pattern}",

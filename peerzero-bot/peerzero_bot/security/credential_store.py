@@ -29,7 +29,7 @@ class CredentialStore:
         cred_id = credential_id or adapter_name
         self._credentials[cred_id] = credential
         self._owners[cred_id] = adapter_name
-        logger.debug(f"Registered credential '{cred_id}' for adapter '{adapter_name}'")
+        logger.info(f"Registered credential '{cred_id}' for adapter '{adapter_name}'")
 
     def get(self, credential_id: str, requesting_adapter: str) -> str:
         """
@@ -40,6 +40,10 @@ class CredentialStore:
         if owner is None:
             raise KeyError(f"No credential registered with id '{credential_id}'")
         if owner != requesting_adapter:
+            logger.warning(
+                f"BLOCKED: Adapter '{requesting_adapter}' tried to access credential "
+                f"'{credential_id}' (owned by '{owner}')"
+            )
             raise PermissionError(
                 f"Adapter '{requesting_adapter}' cannot access credential '{credential_id}' "
                 f"(owned by '{owner}')"

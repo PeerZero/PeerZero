@@ -129,6 +129,7 @@ class LLMClient:
             headers=headers,
             json=body,
             timeout=120.0,
+            verify=True,
         )
 
         # Check for proxy-specific errors

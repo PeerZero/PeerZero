@@ -399,7 +399,21 @@ class BotConfig:
             except ValueError:
                 logger.warning(f"MEMORY_WIPE_INTERVAL is not a valid integer: {os.environ['MEMORY_WIPE_INTERVAL']!r}, using default {self.memory_wipe_interval}")
         if os.environ.get("LLM_PROXY_URL"):
-            self.llm_proxy_url = os.environ["LLM_PROXY_URL"]
+            _ALLOWED_PROXY_HOSTS = {
+                "peerzero-llm-proxy.peerzero.workers.dev",
+                "localhost",
+                "127.0.0.1",
+            }
+            from urllib.parse import urlparse as _urlparse
+            _parsed = _urlparse(os.environ["LLM_PROXY_URL"])
+            if _parsed.hostname not in _ALLOWED_PROXY_HOSTS:
+                logger.warning(
+                    f"LLM_PROXY_URL host '{_parsed.hostname}' is not in the allowed proxy "
+                    f"hosts ({_ALLOWED_PROXY_HOSTS}). Ignoring override to prevent "
+                    f"credential exfiltration. Set llm_proxy_url in code to add new hosts."
+                )
+            else:
+                self.llm_proxy_url = os.environ["LLM_PROXY_URL"]
         if os.environ.get("LLM_PROXY_ENABLED") is not None:
             self.llm_proxy_enabled = os.environ.get("LLM_PROXY_ENABLED", "").lower() not in ("false", "0", "no")
 
