@@ -26,6 +26,7 @@ from .base import (
     PlatformAction, PlatformResult,
 )
 from ..security import SecurityGateway, CredentialStore
+from ..utils import safe_error_msg
 
 logger = logging.getLogger("peerzero-bot.a2a")
 
@@ -125,7 +126,7 @@ class A2AAdapter:
                 supports_streaming=self._remote_card.get("capabilities", {}).get("streaming", False),
             )
         except Exception as e:
-            logger.warning(f"[{self._name}] Discovery failed: {e}")
+            logger.warning(f"[{self._name}] Discovery failed: {safe_error_msg(e)}")
             return PlatformCapabilities(platform_name=self._name)
 
     def get_context(self) -> PlatformContext:
@@ -226,12 +227,12 @@ class A2AAdapter:
                 summary=f"{action.action_type} on {self._name}: {status}",
             )
         except Exception as e:
-            logger.warning(f"[{self._name}] Action failed: {e}")
+            logger.warning(f"[{self._name}] Action failed: {safe_error_msg(e)}")
             return PlatformResult(
                 success=False,
                 action_type=action.action_type,
                 platform_name=self._name,
-                error=str(e),
+                error=safe_error_msg(e),
             )
 
     def publish_agent_card(self, agent_card: dict) -> bool:

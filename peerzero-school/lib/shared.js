@@ -89,6 +89,12 @@ function setCorsHeaders(req, res) {
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PATCH, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Api-Key, X-Admin-Key');
   res.setHeader('Access-Control-Max-Age', '86400');
+
+  // SECURITY: Set security headers here (not only in vercel.json) so they work on any platform
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('X-XSS-Protection', '0'); // Disabled in favor of CSP; legacy header can cause issues
 }
 
 /**
@@ -127,6 +133,9 @@ function isCsrfRejected(req) {
 }
 
 // ── Safe error messages ───────────────────────────────────────────────
+// NOTE: Null handling varies across the codebase (some callers pass Error objects,
+// others pass strings or Supabase error objects). The `error?.message || error`
+// pattern handles both cases — this is intentional, not a bug.
 function sanitizeErrorMessage(error) {
   log.error('DB Error', { err: error?.message || error });
   return 'An internal error occurred. Please try again.';

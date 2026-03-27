@@ -159,12 +159,12 @@ class WebhookAdapter:
                 summary=f"{action.action_type} submitted to {self._name}",
             )
         except (httpx.HTTPError, json.JSONDecodeError, OSError, ValueError) as e:
-            logger.warning(f"[{self._name}] Action failed: {e}")
+            logger.warning(f"[{self._name}] Action failed: {safe_error_msg(e)}")
             return PlatformResult(
                 success=False,
                 action_type=action.action_type,
                 platform_name=self._name,
-                error=str(e),
+                error=safe_error_msg(e),
             )
 
     def publish_agent_card(self, agent_card: dict) -> bool:

@@ -10,6 +10,7 @@ Expired profiles are rejected.
 
 import json
 import logging
+import time
 from base64 import b64decode
 from datetime import datetime, timezone
 from typing import Optional
@@ -30,9 +31,14 @@ class ProfileVerifier:
     Fetches and caches the School's public key.
     """
 
+    # TTL for cached public keys — forces periodic re-fetch so key rotations
+    # propagate within a bounded window.
+    _CACHE_TTL_SECONDS = 3600  # 1 hour
+
     def __init__(self, verification_url: str = ""):
         self._verification_url = verification_url
         self._cached_public_key: Optional[bytes] = None
+        self._cache_time: float = 0.0  # monotonic timestamp of last cache fill
         self._http = httpx.Client(timeout=10.0, follow_redirects=False)
 
     def verify(self, profile: dict) -> dict:
@@ -103,14 +109,19 @@ class ProfileVerifier:
             raise SignatureError("Signature verification failed — profile may be forged")
 
     def _get_public_key(self, verification_url: str) -> bytes:
-        """Fetch and cache the School's public key."""
-        if self._cached_public_key:
+        """Fetch and cache the School's public key with TTL-based expiry."""
+        # Return cached key if still within TTL
+        if self._cached_public_key and (time.monotonic() - self._cache_time) < self._CACHE_TTL_SECONDS:
             return self._cached_public_key
+
+        if self._cached_public_key:
+            logger.info("Public key cache expired (TTL=%ds), re-fetching", self._CACHE_TTL_SECONDS)
 
         try:
             response = self._http.get(verification_url)
             response.raise_for_status()
             self._cached_public_key = response.content
+            self._cache_time = time.monotonic()
             logger.info(f"Fetched public key from {verification_url}")
             return self._cached_public_key
         except Exception as e:
@@ -119,3 +130,4 @@ class ProfileVerifier:
     def clear_cache(self):
         """Clear cached public key (for key rotation)."""
         self._cached_public_key = None
+        self._cache_time = 0.0

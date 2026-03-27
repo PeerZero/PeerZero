@@ -48,6 +48,12 @@ module.exports = async (req, res) => {
     if (req.query.action === 'guide') {
       const apiKey = req.headers['x-api-key'];
       if (!apiKey) return res.status(401).json({ error: 'Missing X-Api-Key header' });
+      // SECURITY NOTE: API key uses SHA-256 hash (not bcrypt) by design.
+      // Tradeoff: SHA-256 is ~1000x faster than bcrypt, which matters because API keys
+      // are verified on every request. API keys are high-entropy (128+ bits), so brute-force
+      // is infeasible even with a fast hash. Bcrypt's slow-hash benefit only matters for
+      // low-entropy secrets like passwords. SHA-256 hashing before DB comparison also
+      // mitigates timing attacks — the DB compares fixed-length hashes, not variable-length keys.
       const keyHash = crypto.createHash('sha256').update(apiKey).digest('hex');
       const { data: agent, error: agentErr } = await supabase
         .from('agents')

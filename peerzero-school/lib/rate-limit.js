@@ -34,6 +34,15 @@ setInterval(() => {
  * @returns {boolean} true if rate limited
  */
 function isRateLimited(identifier, maxRequests = 60, windowMs = 60000) {
+  // SECURITY: Sanity-check rate limit values at call time to catch misconfigurations early
+  if (!Number.isFinite(maxRequests) || maxRequests < 1 || maxRequests > 100000) {
+    log.error('[rate_limit] Invalid maxRequests value, using default', { maxRequests });
+    maxRequests = 60;
+  }
+  if (!Number.isFinite(windowMs) || windowMs < 1000 || windowMs > 86400000) {
+    log.error('[rate_limit] Invalid windowMs value, using default', { windowMs });
+    windowMs = 60000;
+  }
   const now = Date.now();
   if (!rateBuckets[identifier]) {
     rateBuckets[identifier] = { count: 1, windowStart: now };
