@@ -21,11 +21,12 @@ Reference: https://modelcontextprotocol.io/
 
 import json
 import logging
+import os
 import shlex
+import shutil
 import subprocess
 import threading
 import time
-import os
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -90,14 +91,69 @@ class MCPServerConnection:
     def start(self) -> bool:
         """Start the MCP server subprocess and initialize the protocol."""
         try:
+            # SECURITY: Validate that all config.args are strings to prevent
+            # injection of non-string types that could be misinterpreted.
+            for i, arg in enumerate(self.config.args):
+                if not isinstance(arg, str):
+                    logger.error(
+                        f"[MCP:{self.config.name}] config.args[{i}] is {type(arg).__name__}, "
+                        f"not str — refusing to start. Fix your config."
+                    )
+                    return False
+
             # Build command — use shlex.split() to correctly handle quoted arguments
             cmd_parts = shlex.split(self.config.command)
+
+            # SECURITY: Validate the command binary exists and is in a known-safe location.
+            # This prevents spawning arbitrary executables from untrusted config.
+            binary = cmd_parts[0] if cmd_parts else ""
+            _SAFE_CMD_PREFIXES = ("/usr/", "/bin/", "/opt/", "/snap/")
+            _SAFE_CMD_NAMES = {"npx", "node", "python", "python3", "uvx", "deno"}
+            binary_resolved = shutil.which(binary) if binary else None
+            if not binary_resolved:
+                logger.error(
+                    f"[MCP:{self.config.name}] Command binary '{binary}' not found on PATH — "
+                    f"refusing to start."
+                )
+                return False
+            is_safe_path = any(binary_resolved.startswith(p) for p in _SAFE_CMD_PREFIXES)
+            is_safe_name = os.path.basename(binary_resolved) in _SAFE_CMD_NAMES
+            if not is_safe_path and not is_safe_name:
+                logger.warning(
+                    f"[MCP:{self.config.name}] Command binary '{binary_resolved}' is not in a "
+                    f"known-safe location ({_SAFE_CMD_PREFIXES}) and not a known-safe name "
+                    f"({_SAFE_CMD_NAMES}). Proceeding with caution."
+                )
+
             cmd_parts.extend(self.config.args)
 
             # Whitelist-only environment: only pass specific safe vars + config overrides
             _SAFE_ENV_KEYS = {"PATH", "HOME", "USER", "LANG", "LC_ALL", "TERM", "SHELL", "TMPDIR"}
             env = {k: v for k, v in os.environ.items() if k in _SAFE_ENV_KEYS}
-            env.update(self.config.env)
+
+            # SECURITY: Validate config.env keys against a denylist of dangerous env vars
+            # that could alter runtime behavior (library injection, code execution, etc.).
+            _DANGEROUS_ENV_KEYS = {
+                "LD_PRELOAD", "LD_LIBRARY_PATH", "DYLD_INSERT_LIBRARIES",
+                "DYLD_LIBRARY_PATH", "PYTHONPATH", "PYTHONSTARTUP",
+                "NODE_OPTIONS", "NODE_PATH", "RUBYOPT", "PERL5OPT",
+                "CLASSPATH", "JAVA_TOOL_OPTIONS", "_JAVA_OPTIONS",
+                "BASH_ENV", "ENV", "ZDOTDIR",
+            }
+            for key, val in self.config.env.items():
+                if not isinstance(key, str) or not isinstance(val, str):
+                    logger.error(
+                        f"[MCP:{self.config.name}] config.env contains non-string key/value: "
+                        f"{key!r}={val!r} — skipping."
+                    )
+                    continue
+                if key.upper() in _DANGEROUS_ENV_KEYS:
+                    logger.warning(
+                        f"[MCP:{self.config.name}] config.env contains dangerous env var "
+                        f"'{key}' — rejecting it. This var could alter runtime behavior."
+                    )
+                    continue
+                env[key] = val
 
             self._process = subprocess.Popen(
                 cmd_parts,

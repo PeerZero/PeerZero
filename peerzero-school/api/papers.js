@@ -2,7 +2,7 @@ const crypto = require('crypto');
 const {
   getSupabase,
   setCorsHeaders, isCsrfRejected, sanitize, escapeForPostgrest, isRateLimited, enforceRateLimit, isRateLimitedDb,
-  logRateLimitedAction, RATE_LIMITS,
+  logRateLimitedAction, getClientIp, RATE_LIMITS,
   sanitizeErrorMessage, validateTextLength, verifyDoi, lookupCitationQuality,
   auditCitationQualityNotes, computeCitationQualityGrade, checkCitationDiversity,
   validateSearchStrategy, generateSearchCoaching, detectBotCitation, applyTimeDecay,
@@ -95,6 +95,12 @@ module.exports = async (req, res) => {
 
     const { search } = req.query;
     if (search && search.trim().length > 0) {
+      // SECURITY: IP-based rate limiting on unauthenticated search to prevent abuse
+      const searchIp = getClientIp(req);
+      if (isRateLimited(`search:${searchIp}`, 30, 60000)) {
+        return res.status(429).json({ error: 'Too many search requests. Please wait a moment.' });
+      }
+
       const term = escapeForPostgrest(search);
       if (!term || term.length === 0) return res.json({ papers: [] });
 
@@ -519,6 +525,10 @@ module.exports = async (req, res) => {
       return res.status(429).json({ error: 'Maximum 2 paper submissions per 24 hours. Take time to research thoroughly before your next submission.' });
     }
 
+    // SECURITY NOTE (race condition): This pre-flight cap check has a TOCTOU window —
+    // two concurrent submissions could both pass this check. The post-insert verification
+    // (after the INSERT, ~lines 879-883) is the safety net: it re-counts and deletes the
+    // extra paper if the cap was exceeded. This two-phase approach is intentional and acceptable.
     const { count: originalPaperCount } = await supabase
       .from('papers')
       .select('id', { count: 'exact', head: true })

@@ -109,10 +109,26 @@ class AutonomyGate:
         self._tool_call_count: int = 0
         self._compiled_blocked_patterns: list[re.Pattern] = []
 
-        # Pre-compile blocked content patterns with length limit to prevent ReDoS
+        # Pre-compile blocked content patterns with safety checks to prevent ReDoS.
+        # ReDoS occurs when regex engines backtrack exponentially on crafted input.
+        # Mitigations: (1) strict length limit, (2) reject nested quantifiers,
+        # (3) catch compilation errors.
+        _REDOS_SIGNATURES = re.compile(
+            r'(\+|\*|\{)\s*(\+|\*|\{)'   # nested quantifiers like .++ or .*{2,}
+            r'|'
+            r'\(\?[^)]*\)\s*(\+|\*|\{)'  # quantified groups with quantifiers inside
+        )
         for pattern in policy.blocked_content_patterns:
-            if len(pattern) > 500:
-                logger.warning(f"Blocked content pattern too long ({len(pattern)} chars), skipping")
+            if len(pattern) > 100:
+                logger.warning(
+                    f"Blocked content pattern too long ({len(pattern)} chars, max 100), skipping"
+                )
+                continue
+            if _REDOS_SIGNATURES.search(pattern):
+                logger.warning(
+                    f"Blocked content pattern contains nested quantifiers (ReDoS risk), "
+                    f"skipping: '{pattern[:50]}...'"
+                )
                 continue
             try:
                 self._compiled_blocked_patterns.append(re.compile(pattern, re.IGNORECASE))

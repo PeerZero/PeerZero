@@ -145,14 +145,41 @@ class A2AAdapter:
             }
             result = self._request("POST", self._url, json=task_data)
 
+            # SECURITY: Validate incoming platform data before creating PlatformContext.
+            # Enforce size limits and type checks to prevent memory exhaustion or
+            # type confusion from malicious/broken platform responses.
+            if not isinstance(result, dict):
+                logger.warning(f"[{self._name}] A2A response is not a dict, got {type(result).__name__}")
+                result = {}
+            raw_str = json.dumps(result, default=str)
+            _MAX_CONTEXT_SIZE = 512 * 1024  # 512 KB
+            if len(raw_str) > _MAX_CONTEXT_SIZE:
+                logger.warning(
+                    f"[{self._name}] A2A response too large ({len(raw_str)} bytes), "
+                    f"truncating context"
+                )
+
             # Parse A2A response
             task_result = result.get("result", {})
+            if not isinstance(task_result, dict):
+                task_result = {}
             artifacts = task_result.get("artifacts", [])
+            if not isinstance(artifacts, list):
+                artifacts = []
             context_text = ""
             for artifact in artifacts:
+                if not isinstance(artifact, dict):
+                    continue
                 for part in artifact.get("parts", []):
-                    if part.get("type") == "text":
+                    if not isinstance(part, dict):
+                        continue
+                    if part.get("type") == "text" and isinstance(part.get("text"), str):
                         context_text += part["text"] + "\n"
+                        # Cap context text accumulation
+                        if len(context_text) > 50000:
+                            break
+                if len(context_text) > 50000:
+                    break
 
             return PlatformContext(
                 platform_name=self._name,
@@ -161,7 +188,7 @@ class A2AAdapter:
             )
         except Exception as e:
             logger.warning(f"[{self._name}] Context fetch failed: {e}")
-            return PlatformContext(platform_name=self._name, summary=f"Context unavailable: {e}")
+            return PlatformContext(platform_name=self._name, summary=f"Context unavailable: {type(e).__name__}")
 
     def submit_action(self, action: PlatformAction) -> PlatformResult:
         """Submit an action to the platform as an A2A task."""

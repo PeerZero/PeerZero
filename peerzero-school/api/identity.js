@@ -1,4 +1,4 @@
-const { getSupabase, setCorsHeaders, isRateLimited, isRateLimitedDb, logRateLimitedAction, getClientIp, sanitizeErrorMessage, RATE_LIMITS } = require('../lib/shared');
+const { getSupabase, setCorsHeaders, isCsrfRejected, isRateLimited, isRateLimitedDb, logRateLimitedAction, getClientIp, sanitizeErrorMessage, RATE_LIMITS } = require('../lib/shared');
 const { checkMockGuard } = require('../lib/mock-guard');
 
 const supabase = getSupabase();
@@ -85,6 +85,12 @@ module.exports = async (req, res) => {
   setCorsHeaders(req, res);
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (checkMockGuard(req, res)) return;
+
+  // SECURITY: CSRF protection for state-changing requests
+  // (API-key-authenticated requests are exempt — isCsrfRejected checks for x-api-key)
+  if (isCsrfRejected(req)) {
+    return res.status(403).json({ error: 'Forbidden — origin not allowed' });
+  }
 
   const apiKey = req.headers['x-api-key'];
   if (!apiKey) return res.status(401).json({ error: 'Missing X-Api-Key header' });

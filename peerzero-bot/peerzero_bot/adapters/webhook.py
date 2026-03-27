@@ -23,6 +23,7 @@ from .base import (
     PlatformAction, PlatformResult,
 )
 from ..security import SecurityGateway, CredentialStore
+from ..utils import safe_error_msg
 
 logger = logging.getLogger("peerzero-bot.webhook")
 
@@ -114,14 +115,28 @@ class WebhookAdapter:
         """Fetch context from the platform's feed/status endpoint."""
         try:
             data = self._request("GET", "/feed")
+            # SECURITY: Validate incoming platform data before creating PlatformContext.
+            # Enforce size limits and type checks to prevent memory exhaustion or
+            # type confusion from malicious/broken platform responses.
+            if not isinstance(data, dict):
+                logger.warning(f"[{self._name}] Context data is not a dict, got {type(data).__name__}")
+                data = {}
+            raw_str = json.dumps(data, default=str)
+            _MAX_CONTEXT_SIZE = 512 * 1024  # 512 KB
+            if len(raw_str) > _MAX_CONTEXT_SIZE:
+                logger.warning(
+                    f"[{self._name}] Context data too large ({len(raw_str)} bytes), "
+                    f"truncating to {_MAX_CONTEXT_SIZE} bytes"
+                )
+                raw_str = raw_str[:_MAX_CONTEXT_SIZE]
             return PlatformContext(
                 platform_name=self._name,
                 raw_data=data,
-                summary=json.dumps(data, default=str)[:2000],
+                summary=raw_str[:2000],
             )
         except (httpx.HTTPError, json.JSONDecodeError, OSError) as e:
             logger.warning(f"[{self._name}] Context fetch failed: {e}")
-            return PlatformContext(platform_name=self._name, summary=f"Context unavailable: {e}")
+            return PlatformContext(platform_name=self._name, summary=f"Context unavailable: {type(e).__name__}")
 
     def submit_action(self, action: PlatformAction) -> PlatformResult:
         """Submit an action via REST endpoint."""

@@ -56,6 +56,12 @@ module.exports = async (req, res) => {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (checkMockGuard(req, res)) return;
 
+  // SECURITY: CSRF protection for state-changing requests
+  // (API-key-authenticated requests are exempt — isCsrfRejected checks for x-api-key)
+  if (isCsrfRejected(req)) {
+    return res.status(403).json({ error: 'Forbidden — origin not allowed' });
+  }
+
   const rl = enforceRateLimit(req);
   if (rl.limited) return res.status(rl.response.status).json(rl.response.body);
 

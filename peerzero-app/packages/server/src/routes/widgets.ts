@@ -95,6 +95,16 @@ function jwtOrWidgetToken(req: Request, res: Response, next: NextFunction): void
 router.post('/token', requireAuth, userRateLimit('write'), async (req: Request, res: Response) => {
   const userId = req.user!.userId;
 
+  // Verify user has at least one active bot before issuing a widget token
+  const botCount = await queryOne<{ count: number }>(
+    "SELECT COUNT(*)::int as count FROM bots WHERE user_id = $1 AND deleted_at IS NULL",
+    [userId],
+  );
+  if (!botCount || botCount.count === 0) {
+    res.status(400).json({ error: 'You need at least one bot to generate a widget token' });
+    return;
+  }
+
   // Generate cryptographically random token
   const token = `pwt_${crypto.randomBytes(32).toString('hex')}`;
   const tokenHash = crypto.createHash('sha256').update(token).digest('hex');

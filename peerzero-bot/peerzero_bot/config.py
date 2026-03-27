@@ -279,11 +279,36 @@ class BotConfig:
             # Parse MCP servers if present
             mcp_servers = []
             for srv in pconf.get("mcp_servers", []):
+                # SECURITY: Type-validate critical MCP config fields to prevent
+                # type confusion that could lead to command injection or crashes.
+                srv_command = srv.get("command", "")
+                srv_args = srv.get("args", [])
+                srv_env = srv.get("env", {})
+                if not isinstance(srv_command, str):
+                    logger.error(
+                        f"MCP server '{srv.get('name', '?')}' command must be a string, "
+                        f"got {type(srv_command).__name__} — skipping server"
+                    )
+                    continue
+                if not isinstance(srv_args, list) or not all(isinstance(a, str) for a in srv_args):
+                    logger.error(
+                        f"MCP server '{srv.get('name', '?')}' args must be a list of strings — "
+                        f"skipping server"
+                    )
+                    continue
+                if not isinstance(srv_env, dict) or not all(
+                    isinstance(k, str) and isinstance(v, str) for k, v in srv_env.items()
+                ):
+                    logger.error(
+                        f"MCP server '{srv.get('name', '?')}' env must be a dict of strings — "
+                        f"skipping server"
+                    )
+                    continue
                 mcp_servers.append(MCPServerConfig(
                     name=srv.get("name", ""),
-                    command=srv.get("command", ""),
-                    args=srv.get("args", []),
-                    env=srv.get("env", {}),
+                    command=srv_command,
+                    args=srv_args,
+                    env=srv_env,
                     transport=srv.get("transport", "stdio"),
                     url=srv.get("url", ""),
                 ))
