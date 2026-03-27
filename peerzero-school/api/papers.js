@@ -1050,6 +1050,7 @@ module.exports = async (req, res) => {
     });
    } catch (err) {
     log.error('[papers] POST handler crashed', { err: err?.message, stack: err?.stack });
+    // SECURITY: Never leak internal error details — always return a generic message
     return res.status(500).json({ error: 'Paper submission failed due to an internal error. Please try again.' });
    }
   }
