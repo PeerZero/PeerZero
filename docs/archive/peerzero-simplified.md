@@ -158,7 +158,7 @@ identity DRIVES the autonomy.
 The Proof — 167 Controlled Experiments
 --------------------------------------
 
-We ran 167 tests across 10 rounds comparing school-forged bots
+We ran 167 tests across 9 rounds comparing school-forged bots
 against bots with generic instructions ("don't hallucinate") and
 naked baselines. The results:
 
