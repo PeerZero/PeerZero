@@ -117,6 +117,8 @@
 <div class="grid" id="tierGrid"></div>
 <div class="section-title">All Statuses</div>
 <div class="grid" id="statusGrid"></div>
+<div class="section-title">All 30 Species (at Tier 3)</div>
+<div class="grid" id="speciesGrid"></div>
 <div class="section-title">Random Bots Gallery</div>
 <div class="grid" id="galleryGrid"></div>
 
@@ -124,12 +126,14 @@
 // ── Port of BotAvatar.tsx SVG logic to plain JS ──
 
 const COLORS = [
-  '#6C5CE7', '#FF6B9D', '#00B894', '#FDCB6E', '#E17055',
-  '#74B9FF', '#A29BFE', '#FF7675', '#55EFC4', '#FD79A8'
+  '#6C5CE7', '#FF6B6B', '#4ECDC4', '#FFE66D', '#A8E6CF',
+  '#FF8A5C', '#B8B5FF', '#85E3FF', '#F8A5C2', '#78E08F',
+  '#FF9FF3', '#C4B5FD', '#67E8F9', '#FCA5A5', '#86EFAC', '#FDE68A'
 ];
 const COLOR_NAMES = [
-  'Royal Purple', 'Rose Pink', 'Mint Green', 'Sunshine', 'Coral',
-  'Sky Blue', 'Lavender', 'Salmon', 'Teal', 'Hot Pink'
+  'Purple', 'Coral', 'Teal', 'Sunshine', 'Mint',
+  'Peach', 'Lavender', 'Sky', 'Rose', 'Leaf',
+  'Bubblegum', 'Wisteria', 'Ice', 'Blush', 'Clover', 'Honey'
 ];
 
 let selectedColor = COLORS[0];
@@ -162,10 +166,10 @@ function darken(hex, amt) { const {r,g,b}=hexToRgb(hex); return rgbToHex(r*(1-am
 function generateTraits(botId) {
   const seed = hashCode(botId);
   const r = i => seededRandom(seed, i);
-  const bodyShapes = ['round','oval','bean','pear'];
-  const earStyles = ['round','pointed','floppy','cat'];
-  const tailStyles = ['curly','fluffy','thin','stub'];
-  const patternStyles = ['spots','stripes','belly','none'];
+  const bodyShapes = ['round','oval','bean','pear','squish','tall','chonk','teardrop','blob','loaf','nuggie'];
+  const earStyles = ['round','pointed','floppy','cat','bunny','bear','antennae','horns','tiny','huge','one'];
+  const tailStyles = ['curly','fluffy','thin','stub','pom','spike','spring','fan'];
+  const patternStyles = ['spots','stripes','belly','none','freckles','heart','mustache','bandaid'];
   return {
     bodyShape: bodyShapes[Math.floor(r(0)*bodyShapes.length)],
     earStyle: earStyles[Math.floor(r(1)*earStyles.length)],
@@ -210,7 +214,11 @@ function renderAvatar(botId, color, tier, status, mood, hunger, size) {
       case 'curly': svg += `<path d="M 22 58 Q 10 55 12 45 Q 14 38 18 42" stroke="${tc}" stroke-width="3" fill="none" stroke-linecap="round"/>`; break;
       case 'fluffy': svg += `<circle cx="16" cy="52" r="6" fill="${tc}"/><circle cx="13" cy="48" r="4.5" fill="${tc}"/><circle cx="12" cy="44" r="3.5" fill="${tc}"/>`; break;
       case 'thin': svg += `<path d="M 22 58 Q 8 52 10 42" stroke="${tc}" stroke-width="2" fill="none" stroke-linecap="round"/>`; break;
-      default: svg += `<ellipse cx="20" cy="56" rx="5" ry="3.5" fill="${tc}"/>`;
+      case 'stub': svg += `<ellipse cx="20" cy="56" rx="5" ry="3.5" fill="${tc}"/>`; break;
+      case 'pom': svg += `<circle cx="18" cy="54" r="5" fill="${tc}"/><circle cx="16" cy="52" r="3.5" fill="${lighten(tc,0.15)}" opacity="0.7"/><circle cx="20" cy="52" r="3" fill="${lighten(tc,0.15)}" opacity="0.5"/><circle cx="17" cy="56" r="3" fill="${lighten(tc,0.1)}" opacity="0.6"/>`; break;
+      case 'spike': svg += `<path d="M 22 58 L 14 48 L 20 52 L 12 42 L 22 50" fill="${tc}"/>`; break;
+      case 'spring': svg += `<path d="M 22 58 Q 14 56 18 52 Q 22 48 14 46 Q 8 44 12 40 Q 16 36 10 34" stroke="${tc}" stroke-width="2.5" fill="none" stroke-linecap="round"/><circle cx="10" cy="33" r="2.5" fill="${tc}"/>`; break;
+      case 'fan': default: svg += `<g opacity="0.8"><path d="M 22 56 Q 6 48 4 36" stroke="${tc}" stroke-width="2" fill="none" stroke-linecap="round"/><path d="M 22 54 Q 8 42 10 30" stroke="${tc}" stroke-width="2" fill="none" stroke-linecap="round"/><path d="M 22 52 Q 12 38 16 28" stroke="${tc}" stroke-width="2" fill="none" stroke-linecap="round"/><circle cx="4" cy="35" r="3" fill="${lighten(tc,0.2)}"/><circle cx="10" cy="29" r="3" fill="${lighten(tc,0.15)}"/><circle cx="16" cy="27" r="3" fill="${lighten(tc,0.1)}"/></g>`; break;
     }
   }
 
@@ -235,11 +243,52 @@ function renderAvatar(botId, color, tier, status, mood, hunger, size) {
         svg += `<path d="M 66 26 Q ${74+earW} 24, ${78+earW} ${dropY} Q ${80+earW} ${dropY+6}, ${76+earW-4} ${dropY+2} Q 70 ${dropY-4}, 64 30" fill="${ec}"/>`;
         break;
       }
-      default: // cat
+      case 'cat':
         svg += `<path d="M 30 30 L ${24-4*es} ${12-6*es} L 40 ${26-2*es} Z" fill="${ec}"/>`;
         svg += `<path d="M 32 28 L ${27-2*es} ${16-4*es} L 38 ${26-es} Z" fill="${ic}" opacity="0.5"/>`;
         svg += `<path d="M 70 30 L ${76+4*es} ${12-6*es} L 60 ${26-2*es} Z" fill="${ec}"/>`;
         svg += `<path d="M 68 28 L ${73+2*es} ${16-4*es} L 62 ${26-es} Z" fill="${ic}" opacity="0.5"/>`;
+        break;
+      case 'bunny': {
+        const earH=18*es, earW2=6*es;
+        svg += `<path d="M 36 26 Q ${36-earW2} ${26-earH*0.5} ${34-earW2*0.5} ${26-earH} Q 34 ${26-earH*0.9} ${36+earW2*0.5} ${26-earH*0.3} Q 38 ${26-earH*0.1} 38 28" fill="${ec}"/>`;
+        svg += `<path d="M 64 26 Q ${64+earW2} ${26-earH*0.4} ${66+earW2*0.5} ${26-earH*0.8} Q ${68+earW2*0.3} ${26-earH*0.3} 66 24 Q 64 25 62 28" fill="${ec}"/>`;
+        break;
+      }
+      case 'bear':
+        svg += `<circle cx="34" cy="22" r="${7*es}" fill="${ec}"/><circle cx="34" cy="22" r="${7*es*0.55}" fill="${ic}" opacity="0.5"/>`;
+        svg += `<circle cx="66" cy="22" r="${7*es}" fill="${ec}"/><circle cx="66" cy="22" r="${7*es*0.55}" fill="${ic}" opacity="0.5"/>`;
+        break;
+      case 'antennae': {
+        const antH=14*es, bobR=3*es;
+        svg += `<path d="M 42 28 Q 38 ${28-antH*0.5} ${36-bobR} ${28-antH}" stroke="${ec}" stroke-width="1.5" fill="none" stroke-linecap="round"/>`;
+        svg += `<circle cx="${36-bobR}" cy="${28-antH}" r="${bobR}" fill="${ec}"/><circle cx="${36-bobR}" cy="${28-antH}" r="${bobR*0.5}" fill="${ic}" opacity="0.6"/>`;
+        svg += `<path d="M 58 28 Q 62 ${28-antH*0.5} ${64+bobR} ${28-antH}" stroke="${ec}" stroke-width="1.5" fill="none" stroke-linecap="round"/>`;
+        svg += `<circle cx="${64+bobR}" cy="${28-antH}" r="${bobR}" fill="${ec}"/><circle cx="${64+bobR}" cy="${28-antH}" r="${bobR*0.5}" fill="${ic}" opacity="0.6"/>`;
+        break;
+      }
+      case 'horns': {
+        const hornH=10*es;
+        svg += `<path d="M 36 26 Q 30 ${26-hornH*0.4} ${28-hornH*0.2} ${26-hornH}" stroke="${ec}" stroke-width="${3.5*es}" fill="none" stroke-linecap="round"/>`;
+        svg += `<path d="M 64 26 Q 70 ${26-hornH*0.4} ${72+hornH*0.2} ${26-hornH}" stroke="${ec}" stroke-width="${3.5*es}" fill="none" stroke-linecap="round"/>`;
+        svg += `<circle cx="${28-hornH*0.2}" cy="${26-hornH}" r="${1.5*es}" fill="${ic}" opacity="0.6"/>`;
+        svg += `<circle cx="${72+hornH*0.2}" cy="${26-hornH}" r="${1.5*es}" fill="${ic}" opacity="0.6"/>`;
+        break;
+      }
+      case 'tiny':
+        svg += `<circle cx="36" cy="24" r="${3*es}" fill="${ec}"/><circle cx="36" cy="24" r="${1.5*es}" fill="${ic}" opacity="0.5"/>`;
+        svg += `<circle cx="64" cy="24" r="${3*es}" fill="${ec}"/><circle cx="64" cy="24" r="${1.5*es}" fill="${ic}" opacity="0.5"/>`;
+        break;
+      case 'huge': {
+        const hugeDrop=46+10*es, hugeW=14*es;
+        svg += `<path d="M 34 24 Q ${20-hugeW} 20, ${14-hugeW} ${hugeDrop} Q ${12-hugeW} ${hugeDrop+8}, ${18-hugeW+6} ${hugeDrop+4} Q 28 ${hugeDrop-8}, 38 28" fill="${ec}"/>`;
+        svg += `<path d="M 66 24 Q ${80+hugeW} 20, ${86+hugeW} ${hugeDrop} Q ${88+hugeW} ${hugeDrop+8}, ${82+hugeW-6} ${hugeDrop+4} Q 72 ${hugeDrop-8}, 62 28" fill="${ec}"/>`;
+        break;
+      }
+      default: // one
+        svg += `<circle cx="32" cy="22" r="${10*es}" fill="${ec}"/><circle cx="32" cy="22" r="${6*es}" fill="${ic}" opacity="0.5"/>`;
+        svg += `<path d="M 64 22 L 72 22" stroke="${ic}" stroke-width="2" opacity="0.3" stroke-linecap="round"/>`;
+        svg += `<path d="M 68 19 L 68 25" stroke="${ic}" stroke-width="2" opacity="0.3" stroke-linecap="round"/>`;
     }
   }
 
@@ -263,10 +312,53 @@ function renderAvatar(botId, color, tier, status, mood, hunger, size) {
       svg += `<ellipse cx="${cx+1}" cy="${cy+4}" rx="${13+sb*0.3}" ry="${15+sb*0.3}" fill="${lc}" opacity="0.35"/>`;
       break;
     }
-    default: { // pear
+    case 'pear': {
       const pw=24+sb, ph=26+sb;
       svg += `<path d="M ${cx} ${cy-ph} C ${cx+pw*0.6} ${cy-ph}, ${cx+pw*0.7} ${cy-ph*0.3}, ${cx+pw*0.8} ${cy} C ${cx+pw} ${cy+ph*0.4}, ${cx+pw*0.5} ${cy+ph}, ${cx} ${cy+ph} C ${cx-pw*0.5} ${cy+ph}, ${cx-pw} ${cy+ph*0.4}, ${cx-pw*0.8} ${cy} C ${cx-pw*0.7} ${cy-ph*0.3}, ${cx-pw*0.6} ${cy-ph}, ${cx} ${cy-ph} Z" fill="url(#${gradId})"/>`;
       svg += `<ellipse cx="${cx}" cy="${cy+6}" rx="${14+sb*0.3}" ry="${14+sb*0.3}" fill="${lc}" opacity="0.35"/>`;
+      break;
+    }
+    case 'squish': {
+      const sw=32+sb, sh=20+sb*0.6;
+      svg += `<ellipse cx="${cx}" cy="${cy+4}" rx="${sw}" ry="${sh}" fill="url(#${gradId})"/>`;
+      svg += `<ellipse cx="${cx}" cy="${cy+8}" rx="${sw*0.6}" ry="${sh*0.5}" fill="${lc}" opacity="0.4"/>`;
+      break;
+    }
+    case 'tall': {
+      const tw=18+sb*0.7, th=32+sb;
+      svg += `<path d="M ${cx} ${cy-th} C ${cx+tw} ${cy-th}, ${cx+tw*1.1} ${cy-th*0.3}, ${cx+tw*1.1} ${cy} C ${cx+tw*1.1} ${cy+th*0.5}, ${cx+tw*0.8} ${cy+th}, ${cx} ${cy+th} C ${cx-tw*0.8} ${cy+th}, ${cx-tw*1.1} ${cy+th*0.5}, ${cx-tw*1.1} ${cy} C ${cx-tw*1.1} ${cy-th*0.3}, ${cx-tw} ${cy-th}, ${cx} ${cy-th} Z" fill="url(#${gradId})"/>`;
+      svg += `<ellipse cx="${cx}" cy="${cy+6}" rx="${tw*0.55}" ry="${th*0.35}" fill="${lc}" opacity="0.35"/>`;
+      break;
+    }
+    case 'chonk': {
+      const cr2=34+sb;
+      svg += `<circle cx="${cx}" cy="${cy+2}" r="${cr2}" fill="url(#${gradId})"/>`;
+      svg += `<ellipse cx="${cx}" cy="${cy+8}" rx="${cr2*0.55}" ry="${cr2*0.45}" fill="${lc}" opacity="0.4"/>`;
+      break;
+    }
+    case 'teardrop': {
+      const dw=26+sb, dh=28+sb;
+      svg += `<path d="M ${cx} ${cy-dh} C ${cx+dw*0.3} ${cy-dh}, ${cx+dw*0.4} ${cy-dh*0.6}, ${cx+dw*0.5} ${cy-dh*0.2} C ${cx+dw*0.8} ${cy+dh*0.1}, ${cx+dw} ${cy+dh*0.5}, ${cx+dw*0.6} ${cy+dh} Q ${cx} ${cy+dh*1.1}, ${cx-dw*0.6} ${cy+dh} C ${cx-dw} ${cy+dh*0.5}, ${cx-dw*0.8} ${cy+dh*0.1}, ${cx-dw*0.5} ${cy-dh*0.2} C ${cx-dw*0.4} ${cy-dh*0.6}, ${cx-dw*0.3} ${cy-dh}, ${cx} ${cy-dh} Z" fill="url(#${gradId})"/>`;
+      svg += `<ellipse cx="${cx}" cy="${cy+6}" rx="${dw*0.4}" ry="${dh*0.35}" fill="${lc}" opacity="0.35"/>`;
+      break;
+    }
+    case 'blob': {
+      const bw=36+sb, bh=16+sb*0.4;
+      svg += `<path d="M ${cx-bw} ${cy+bh*0.3} Q ${cx-bw*0.8} ${cy-bh}, ${cx-bw*0.3} ${cy-bh*0.8} Q ${cx} ${cy-bh*1.2}, ${cx+bw*0.3} ${cy-bh*0.8} Q ${cx+bw*0.8} ${cy-bh}, ${cx+bw} ${cy+bh*0.3} Q ${cx+bw*0.9} ${cy+bh*1.1}, ${cx} ${cy+bh} Q ${cx-bw*0.9} ${cy+bh*1.1}, ${cx-bw} ${cy+bh*0.3} Z" fill="url(#${gradId})"/>`;
+      svg += `<ellipse cx="${cx}" cy="${cy+2}" rx="${bw*0.5}" ry="${bh*0.5}" fill="${lc}" opacity="0.35"/>`;
+      break;
+    }
+    case 'loaf': {
+      const lw2=30+sb, lh2=22+sb*0.7;
+      svg += `<rect x="${cx-lw2}" y="${cy-lh2*0.6}" rx="${lh2*0.6}" ry="${lh2*0.6}" width="${lw2*2}" height="${lh2*1.4}" fill="url(#${gradId})"/>`;
+      svg += `<ellipse cx="${cx}" cy="${cy-lh2*0.55}" rx="${lw2*0.85}" ry="${lh2*0.5}" fill="${lc}" opacity="0.3"/>`;
+      svg += `<ellipse cx="${cx}" cy="${cy+4}" rx="${lw2*0.5}" ry="${lh2*0.3}" fill="${lc}" opacity="0.25"/>`;
+      break;
+    }
+    default: { // nuggie
+      const nw=26+sb, nh=24+sb;
+      svg += `<path d="M ${cx-nw*0.2} ${cy-nh} C ${cx+nw*0.5} ${cy-nh*1.05}, ${cx+nw*1.1} ${cy-nh*0.5}, ${cx+nw*0.9} ${cy-nh*0.1} C ${cx+nw*1.1} ${cy+nh*0.3}, ${cx+nw*0.8} ${cy+nh*0.9}, ${cx+nw*0.3} ${cy+nh} C ${cx-nw*0.2} ${cy+nh*1.05}, ${cx-nw*0.9} ${cy+nh*0.7}, ${cx-nw} ${cy+nh*0.2} C ${cx-nw*1.05} ${cy-nh*0.3}, ${cx-nw*0.7} ${cy-nh*0.9}, ${cx-nw*0.2} ${cy-nh} Z" fill="url(#${gradId})"/>`;
+      svg += `<ellipse cx="${cx+2}" cy="${cy+3}" rx="${nw*0.4}" ry="${nh*0.35}" fill="${lc}" opacity="0.3"/>`;
     }
   }
 
@@ -282,6 +374,18 @@ function renderAvatar(botId, color, tier, status, mood, hunger, size) {
         break;
       case 'belly':
         svg += `<ellipse cx="50" cy="56" rx="12" ry="10" fill="${pc}" opacity="0.25"/>`;
+        break;
+      case 'freckles':
+        svg += `<g opacity="0.3"><circle cx="36" cy="48" r="1.2" fill="${pc}"/><circle cx="38" cy="50" r="1" fill="${pc}"/><circle cx="34" cy="50" r="1.1" fill="${pc}"/><circle cx="64" cy="48" r="1.2" fill="${pc}"/><circle cx="62" cy="50" r="1" fill="${pc}"/><circle cx="66" cy="50" r="1.1" fill="${pc}"/></g>`;
+        break;
+      case 'heart':
+        svg += `<g opacity="0.3"><path d="M 50 55 C 50 52 46 50 44 52 C 42 54 42 57 50 62 C 58 57 58 54 56 52 C 54 50 50 52 50 55 Z" fill="${pc}"/></g>`;
+        break;
+      case 'mustache':
+        svg += `<g opacity="0.35"><path d="M 43 58 Q 45 56 47 57 Q 49 58.5 50 58 Q 51 58.5 53 57 Q 55 56 57 58" stroke="${darken(pc,0.3)}" stroke-width="1.5" fill="none" stroke-linecap="round"/></g>`;
+        break;
+      case 'bandaid':
+        svg += `<g opacity="0.35"><rect x="56" y="38" width="8" height="5" rx="1.5" fill="${pc}"/><path d="M 58 39.5 L 60 42 M 60 39.5 L 58 42" stroke="${darken(pc,0.2)}" stroke-width="0.8" stroke-linecap="round"/></g>`;
         break;
     }
   }
@@ -452,6 +556,50 @@ function render() {
     </div>`;
   }
   document.getElementById('statusGrid').innerHTML = statusHtml;
+
+  // All 30 Species
+  const SPECIES = [
+    {seed:'bubbles',name:'Bubbles',desc:'Round & friendly'},
+    {seed:'spike',name:'Spike',desc:'Sleek & sharp'},
+    {seed:'nugget',name:'Nugget',desc:'Chunky & curious'},
+    {seed:'cosmos',name:'Cosmos',desc:'Soft & dreamy'},
+    {seed:'jellybean',name:'Jellybean',desc:'Spotted & playful'},
+    {seed:'pudding',name:'Pudding',desc:'Tall & fluffy'},
+    {seed:'sprout',name:'Sprout',desc:'Round & floppy'},
+    {seed:'ember',name:'Ember',desc:'Bold & fiery'},
+    {seed:'mochi',name:'Mochi',desc:'Squishy & sweet'},
+    {seed:'phantom',name:'Phantom',desc:'Ghostly & gentle'},
+    {seed:'biscuit',name:'Biscuit',desc:'Warm & cuddly'},
+    {seed:'wisp',name:'Wisp',desc:'Tiny & mysterious'},
+    {seed:'maple',name:'Maple',desc:'Tall & graceful'},
+    {seed:'pebble',name:'Pebble',desc:'Little & mighty'},
+    {seed:'dumpling',name:'Dumpling',desc:'Plump & lovable'},
+    {seed:'cricket',name:'Cricket',desc:'Bouncy & bright'},
+    {seed:'cloud',name:'Cloud',desc:'Soft & floaty'},
+    {seed:'thorn',name:'Thorn',desc:'Spiky but sweet'},
+    {seed:'pippin',name:'Pippin',desc:'Perky & peppy'},
+    {seed:'starling',name:'Starling',desc:'Small & sparkly'},
+    {seed:'splat',name:'Splat',desc:'Melted but trying'},
+    {seed:'loafer',name:'Loafer',desc:'Bread-shaped genius'},
+    {seed:'professor',name:'Professor',desc:'One ear, all brain'},
+    {seed:'oops',name:'Oops',desc:'Happy little accident'},
+    {seed:'unit',name:'Unit',desc:'Absolute unit'},
+    {seed:'crouton',name:'Crouton',desc:'Crunchy on the outside'},
+    {seed:'gremlin',name:'Gremlin',desc:'Chaotic but lovable'},
+    {seed:'sir',name:'Sir Flops',desc:'Distinguished & floppy'},
+    {seed:'potato',name:'Potato',desc:'Peak performance'},
+    {seed:'yeet',name:'Yeet',desc:'Built for speed (not really)'},
+  ];
+  let speciesHtml = '';
+  SPECIES.forEach((sp, i) => {
+    const c = COLORS[i % COLORS.length];
+    speciesHtml += `<div class="card">
+      ${renderAvatar(sp.seed, c, 3, 'running', 'positive', 'satisfied', 120)}
+      <div class="card-title">${sp.name}</div>
+      <div class="card-label">${sp.desc}</div>
+    </div>`;
+  });
+  document.getElementById('speciesGrid').innerHTML = speciesHtml;
 
   // Gallery — random bots
   let galleryHtml = '';
