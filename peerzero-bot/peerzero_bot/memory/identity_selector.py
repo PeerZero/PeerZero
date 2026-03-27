@@ -97,6 +97,13 @@ SKILL_TRANSFER_MAP = {
     "thought_experiment_design":    "reasoning", # Scenario design transfers broadly
     "dialectical_reasoning":        "reasoning", # Engaging objections is universal
     "assumption_surfacing":         "reasoning", # Hidden premise detection transfers everywhere
+    # Psychiatry skills — most transfer (clinical reasoning is broadly applicable)
+    "differential_diagnosis":       "reasoning", # Systematic hypothesis elimination transfers everywhere
+    "biopsychosocial_integration":  "reasoning", # Multi-domain integration transfers to any complex analysis
+    "therapeutic_reasoning":        "reasoning", # Treatment-matching reasoning transfers to evidence-based decisions
+    "risk_calibration":             "reasoning", # Calibrated judgment under uncertainty is universal
+    "evidence_based_selection":     "evidence",  # Evaluating evidence quality is universal
+    "ethical_boundary_reasoning":   "reasoning", # Reasoning about autonomy, consent, boundaries transfers broadly
 }
 
 
