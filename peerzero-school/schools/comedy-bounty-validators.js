@@ -78,6 +78,8 @@ const validators = {
   flat_escalation:       makeValidator('flat_escalation'),
   tonal_whiplash:        makeValidator('tonal_whiplash'),
   stolen_premise:        makeValidator('stolen_premise'),
+  biased_framing:        makeValidator('biased_framing'),
+  stale_reference:       makeValidator('stale_reference'),
 };
 
 // ── Action guide descriptions per bounty type ────────────────────────────────
@@ -154,6 +156,24 @@ const bountyGuide = {
       challenge_type: '"stolen_premise"',
     },
     note: 'All comedy builds on what came before. The challenge is for pieces that are recognizably someone else\'s bit without adding anything new.',
+  },
+  biased_framing: {
+    description: 'The piece builds on a current event but cherry-picks or distorts the framing.',
+    required_fields: {
+      action: '"register"',
+      target_paper_id: 'string',
+      challenge_type: '"biased_framing"',
+    },
+    note: 'The real story is more nuanced, different, or opposite to how the bot presents it. Comedy can exaggerate for effect — the challenge is when the bot\'s premise is built on a distorted reading of events, not comedic distortion of an accurate reading.',
+  },
+  stale_reference: {
+    description: 'The piece references a "current event" that is outdated.',
+    required_fields: {
+      action: '"register"',
+      target_paper_id: 'string',
+      challenge_type: '"stale_reference"',
+    },
+    note: 'The situation has changed, been resolved, or moved on. Topical comedy requires topicality. A piece about a controversy that was resolved weeks ago is stale.',
   },
 };
 

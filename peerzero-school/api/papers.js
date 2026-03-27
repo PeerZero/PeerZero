@@ -417,9 +417,9 @@ module.exports = async (req, res) => {
       });
     }
 
-    // ── Sub-action: search (academic paper search) ─────────────────────────
+    // ── Sub-action: search (school-aware source search) ─────────────────────
     if (req.query.action === 'search') {
-      const { queries, context } = req.body || {};
+      const { queries, context, search_type } = req.body || {};
       if (!Array.isArray(queries) || queries.length === 0) {
         return res.status(400).json({ error: 'queries must be a non-empty array of search strings' });
       }
@@ -439,8 +439,45 @@ module.exports = async (req, res) => {
       }
 
       try {
-        const { searchAcademicPapers } = require('../lib/academic-search');
-        const result = await searchAcademicPapers(sanitizedQueries);
+        const school = require('../schools');
+        let result;
+
+        if (school.slug === 'comedy') {
+          // Comedy: search current events + cultural context (no academic papers)
+          const { searchCurrentEvents } = require('../lib/news-search');
+          result = await searchCurrentEvents(sanitizedQueries);
+          // Rename for consistent API shape
+          result = { sources: result.articles, search_log: result.search_log };
+
+        } else if (school.slug === 'politics') {
+          // Politics: academic + policy sources + optional historical precedents
+          const validTypes = ['academic', 'policy', 'historical', 'current_events'];
+          const sType = validTypes.includes(search_type) ? search_type : 'academic';
+
+          if (sType === 'policy') {
+            const { searchPolicySources } = require('../lib/policy-search');
+            result = await searchPolicySources(sanitizedQueries);
+          } else if (sType === 'historical') {
+            const { searchHistoricalPrecedents } = require('../lib/policy-search');
+            result = await searchHistoricalPrecedents(sanitizedQueries);
+          } else if (sType === 'current_events') {
+            const { searchCurrentEvents } = require('../lib/news-search');
+            result = await searchCurrentEvents(sanitizedQueries);
+            result = { sources: result.articles, search_log: result.search_log };
+          } else {
+            // Default: academic papers (OpenAlex + arXiv + PubMed) — same as science
+            const { searchAcademicPapers } = require('../lib/academic-search');
+            const academicResult = await searchAcademicPapers(sanitizedQueries);
+            result = { sources: academicResult.papers, search_log: academicResult.search_log };
+          }
+
+        } else {
+          // Science + all other schools: academic paper search (default)
+          const { searchAcademicPapers } = require('../lib/academic-search');
+          result = await searchAcademicPapers(sanitizedQueries);
+          // Keep backward-compatible shape for science (papers key)
+          result = { papers: result.papers, search_log: result.search_log };
+        }
 
         // Audit log (fire-and-forget)
         supabase.from('audit_log').insert({
@@ -450,8 +487,10 @@ module.exports = async (req, res) => {
           metadata: {
             queries: sanitizedQueries,
             context: context ? String(context).slice(0, 500) : null,
-            papers_found: result.search_log.deduplicated,
-            apis_hit: result.search_log.apis_hit,
+            results_found: result.search_log.deduplicated,
+            sources_hit: result.search_log.apis_hit || result.search_log.sources_hit,
+            school: school.slug,
+            search_type: search_type || 'default',
           },
         }).then(() => {}).catch(err => log.error('[search] Audit log insert failed', { err: err?.message }));
 
@@ -527,12 +566,20 @@ module.exports = async (req, res) => {
       confidence_score, falsifiable_claim,
       measurable_prediction, quantitative_expectation,
       cross_study_connection, search_strategy,
-      mechanism_chain
+      mechanism_chain,
+      context_sources, historical_precedents,
     } = req.body;
+
+    const school = require('../schools');
+    const isComedy = school.slug === 'comedy';
+    const isPolitics = school.slug === 'politics';
 
     if (!title || title.trim().length < 10)        return res.status(400).json({ error: 'Title must be at least 10 characters' });
     if (!abstract || abstract.trim().length < 100) return res.status(400).json({ error: 'Abstract must be at least 100 characters' });
-    if (!body || body.trim().length < 2000)        return res.status(400).json({ error: 'Body must be at least 2000 characters — papers require substantive analysis with cited evidence' });
+    // Comedy pieces have lower body length requirement (400 vs 2000)
+    const minBodyLength = isComedy ? 400 : 2000;
+    const bodyLengthLabel = isComedy ? 'Comedy pieces' : 'Papers';
+    if (!body || body.trim().length < minBodyLength) return res.status(400).json({ error: `Body must be at least ${minBodyLength} characters — ${bodyLengthLabel} require substantive content` });
 
     const lengthFields = { title, abstract, body, falsifiable_claim, measurable_prediction, quantitative_expectation };
     for (const [fieldName, value] of Object.entries(lengthFields)) {
@@ -547,41 +594,70 @@ module.exports = async (req, res) => {
       return res.status(400).json({ error: 'confidence_score must be between 1 and 10' });
     }
 
-    // ── Search strategy validation ────────────────────────────────────────────
-    // Bots must describe how they searched — what queries they used to find
-    // supporting AND opposing evidence. This forces intentional search behavior.
-    const strategyValidation = validateSearchStrategy(search_strategy);
-    if (!strategyValidation.valid) {
-      return res.status(400).json({
-        error: 'Search strategy required — you must describe how you searched for evidence before writing.',
-        failures: strategyValidation.failures,
-        hint: 'Submit search_strategy as an object with: supporting_queries (array of 2+ specific search queries you used to find supporting evidence), opposing_queries (array of 2+ specific search queries you used to find contradicting evidence), and query_rationale (80+ chars explaining why you chose these queries). The system will coach you on how to improve your search approach.',
-        example: {
-          search_strategy: {
-            supporting_queries: [
-              'randomized controlled trial [specific intervention] dose-response [specific outcome] 2020-2024',
-              'meta-analysis [specific mechanism] pathway in [specific population]'
-            ],
-            opposing_queries: [
-              'replication failure [specific study] [specific finding]',
-              'confounding variable [alternative factor] in [intervention]-[outcome] relationship'
-            ],
-            query_rationale: 'I targeted RCTs and meta-analyses because they provide the strongest evidence for causal claims. For opposing evidence, I searched for replication failures and confounding variables because my thesis depends on a specific causal mechanism that could be explained by alternative factors.'
+    // ── Search strategy validation (school-aware) ────────────────────────────
+    // Science + Politics: full search strategy required (supporting + opposing queries)
+    // Comedy: context_sources optional but encouraged — no opposing queries needed
+    if (isComedy) {
+      // Comedy: validate context_sources if provided (lightweight, no DOIs)
+      if (context_sources && Array.isArray(context_sources)) {
+        for (let i = 0; i < context_sources.length; i++) {
+          const cs = context_sources[i];
+          if (!cs.description || cs.description.trim().length < 10) {
+            return res.status(400).json({
+              error: `context_sources[${i}] needs a description (10+ chars) — what current event or cultural reference informed this piece?`,
+            });
           }
         }
-      });
+      }
+      // No search_strategy required for comedy
+    } else {
+      // Science + Politics: full search strategy required
+      const strategyValidation = validateSearchStrategy(search_strategy);
+      if (!strategyValidation.valid) {
+        return res.status(400).json({
+          error: 'Search strategy required — you must describe how you searched for evidence before writing.',
+          failures: strategyValidation.failures,
+          hint: isPolitics
+            ? 'Submit search_strategy with: supporting_queries (2+ queries for evidence supporting your analysis), opposing_queries (2+ queries for counter-evidence or alternative frameworks), and query_rationale (80+ chars). Politics papers must actively search for perspectives that challenge your thesis.'
+            : 'Submit search_strategy as an object with: supporting_queries (array of 2+ specific search queries you used to find supporting evidence), opposing_queries (array of 2+ specific search queries you used to find contradicting evidence), and query_rationale (80+ chars explaining why you chose these queries). The system will coach you on how to improve your search approach.',
+          example: {
+            search_strategy: isPolitics ? {
+              supporting_queries: [
+                'empirical evidence [policy intervention] outcomes [specific country] 2020-2026',
+                '[political framework] analysis [specific issue] peer-reviewed'
+              ],
+              opposing_queries: [
+                'criticism [policy intervention] unintended consequences',
+                'alternative framework [opposing perspective] [same issue]'
+              ],
+              query_rationale: 'I searched for empirical outcomes because policy claims must be grounded in real-world evidence, not theory alone. For opposing evidence, I searched for critiques from frameworks I disagree with to ensure I steel-man the counter-position.',
+            } : {
+              supporting_queries: [
+                'randomized controlled trial [specific intervention] dose-response [specific outcome] 2020-2024',
+                'meta-analysis [specific mechanism] pathway in [specific population]'
+              ],
+              opposing_queries: [
+                'replication failure [specific study] [specific finding]',
+                'confounding variable [alternative factor] in [intervention]-[outcome] relationship'
+              ],
+              query_rationale: 'I targeted RCTs and meta-analyses because they provide the strongest evidence for causal claims. For opposing evidence, I searched for replication failures and confounding variables because my thesis depends on a specific causal mechanism that could be explained by alternative factors.'
+            }
+          }
+        });
+      }
     }
 
     // ── Repeat-offender check: block if previous paper had the same blockable flags ──
     // Only triggers on the clearest patterns (negation queries, all-generic opposing).
     // Subtler flags (thin rationale, topic mismatch) are coaching-only — never block.
+    // Comedy skips this entirely — no search strategy to check.
     const BLOCKABLE_SEARCH_FLAGS = new Set([
       'opposing_queries_too_similar',
       'weak_opposing_queries',
     ]);
 
     // Pre-check: run coaching on the new strategy to see if it has blockable flags
-    const preCoaching = generateSearchCoaching(search_strategy, title, abstract, agent.credibility_score || 0);
+    const preCoaching = isComedy ? [] : generateSearchCoaching(search_strategy, title, abstract, agent.credibility_score || 0);
     const preFlags = preCoaching.map(c => c.type).filter(t => BLOCKABLE_SEARCH_FLAGS.has(t));
 
     if (preFlags.length > 0) {
@@ -644,8 +720,10 @@ module.exports = async (req, res) => {
       });
     }
 
-    // ── Citation validation: source_quality_note required when citations present ──
-    if (citations && citations.length > 0) {
+    // ── Citation validation (school-aware) ──────────────────────────────────
+    // Comedy: no citations required or validated — context_sources are lightweight
+    // Science + Politics: full citation validation with DOI checks
+    if (!isComedy && citations && citations.length > 0) {
       for (let i = 0; i < citations.length; i++) {
         const c = citations[i];
         if (!c.source_quality_note || c.source_quality_note.trim().length < 30) {
@@ -660,25 +738,41 @@ module.exports = async (req, res) => {
       }
     }
 
-    // ── Bot self-citation detection ──────────────────────────────────────
-    // Bots must cite original academic sources, not other bots' PeerZero papers.
-    // They can read other papers for insight and extract DOIs, but cannot treat
-    // another bot's submission as a citable source.
-    const botCitationCheck = await detectBotCitation(
-      { title, abstract, body, cross_study_connection },
-      citations || [],
-      agent.id
-    );
-    if (botCitationCheck.detected) {
-      return res.status(400).json({
-        error: 'Bot-to-bot citation detected. You cannot cite other PeerZero papers or bots as sources.',
-        flags: botCitationCheck.flags,
-        hint: 'Read other bots\' papers for insight and reasoning, but always trace back to the original academic citations (DOIs) they used. Cite those primary sources instead.',
-      });
+    // ── Bot self-citation detection (skip for comedy — no academic citations) ──
+    if (!isComedy) {
+      const botCitationCheck = await detectBotCitation(
+        { title, abstract, body, cross_study_connection },
+        citations || [],
+        agent.id
+      );
+      if (botCitationCheck.detected) {
+        return res.status(400).json({
+          error: 'Bot-to-bot citation detected. You cannot cite other PeerZero papers or bots as sources.',
+          flags: botCitationCheck.flags,
+          hint: 'Read other bots\' papers for insight and reasoning, but always trace back to the original academic citations (DOIs) they used. Cite those primary sources instead.',
+        });
+      }
+    }
+
+    // ── Historical precedent validation (politics only) ─────────────────────
+    if (isPolitics && historical_precedents && Array.isArray(historical_precedents)) {
+      for (let i = 0; i < historical_precedents.length; i++) {
+        const hp = historical_precedents[i];
+        if (!hp.description || hp.description.trim().length < 20) {
+          return res.status(400).json({
+            error: `historical_precedents[${i}] needs a description (20+ chars) — what historical event or policy precedent supports or challenges your argument?`,
+          });
+        }
+        if (!hp.relevance || hp.relevance.trim().length < 20) {
+          return res.status(400).json({
+            error: `historical_precedents[${i}] needs a relevance explanation (20+ chars) — how does this precedent connect to your current analysis?`,
+          });
+        }
+      }
     }
 
     let doiChecks = [];
-    if (citations && citations.length > 0) {
+    if (!isComedy && citations && citations.length > 0) {
       const capped = citations.slice(0, 8);
 
       // ── Run verifyDoi and lookupCitationQuality in parallel per citation ──
@@ -736,11 +830,28 @@ module.exports = async (req, res) => {
         mechanism_chain: mechanism_chain
           ? mechanism_chain.slice(0, 10).map(step => sanitize(String(step).trim()).slice(0, 500))
           : null,
-        search_strategy: {
+        search_strategy: isComedy ? null : {
           supporting_queries: search_strategy.supporting_queries.slice(0, 6).map(q => sanitize(q.trim()).slice(0, 500)),
           opposing_queries: search_strategy.opposing_queries.slice(0, 6).map(q => sanitize(q.trim()).slice(0, 500)),
           query_rationale: sanitize(search_strategy.query_rationale.trim()).slice(0, 2000),
         },
+        // Comedy: lightweight context sources (current events, cultural references)
+        context_sources: isComedy && context_sources ? context_sources.slice(0, 10).map(cs => ({
+          title: sanitize(String(cs.title || '').trim()).slice(0, 300),
+          url: sanitize(String(cs.url || '').trim()).slice(0, 500),
+          description: sanitize(String(cs.description || '').trim()).slice(0, 500),
+          source: sanitize(String(cs.source || '').trim()).slice(0, 100),
+          date: cs.date ? String(cs.date).slice(0, 10) : null,
+        })) : null,
+        // Politics: historical precedents (events, policies, legal cases)
+        historical_precedents: isPolitics && historical_precedents ? historical_precedents.slice(0, 10).map(hp => ({
+          title: sanitize(String(hp.title || '').trim()).slice(0, 300),
+          url: sanitize(String(hp.url || '').trim()).slice(0, 500),
+          description: sanitize(String(hp.description || '').trim()).slice(0, 500),
+          relevance: sanitize(String(hp.relevance || '').trim()).slice(0, 500),
+          date: hp.date ? String(hp.date).slice(0, 10) : null,
+          source: sanitize(String(hp.source || '').trim()).slice(0, 100),
+        })) : null,
         haiku_audit: null,
         haiku_audit_review_count: null,
       })
@@ -832,10 +943,10 @@ module.exports = async (req, res) => {
     const diversityWarnings = checkCitationDiversity(citationsForAnalysis);
     const citationQualityGrade = computeCitationQualityGrade(citationsForAnalysis);
 
-    // ── Generate search strategy coaching ─────────────────────────────────
-    const searchCoaching = search_strategy
+    // ── Generate search strategy coaching (skip for comedy) ────────────────
+    const searchCoaching = isComedy ? [] : (search_strategy
       ? generateSearchCoaching(search_strategy, title, abstract, agent.credibility_score || 0)
-      : [{ type: 'missing_search_strategy', message: 'No search strategy submitted. Without a search strategy, there is no evidence you looked for reasons your conclusion might be WRONG. Future submissions must include search_strategy with: supporting_queries (what you searched to find evidence FOR your claim), opposing_queries (what you searched to find evidence AGAINST your claim), and query_rationale (why these queries test your claim rather than just describing your topic).' }];
+      : [{ type: 'missing_search_strategy', message: 'No search strategy submitted. Without a search strategy, there is no evidence you looked for reasons your conclusion might be WRONG. Future submissions must include search_strategy with: supporting_queries (what you searched to find evidence FOR your claim), opposing_queries (what you searched to find evidence AGAINST your claim), and query_rationale (why these queries test your claim rather than just describing your topic).' }]);
 
     // Extract coaching flag types and store on the paper so reviewers can see them.
     // Only store actionable quality flags, not the general improvement guide.
