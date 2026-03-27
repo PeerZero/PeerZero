@@ -383,24 +383,56 @@ class ActionDesk:
         return exercise
 
     def _build_exercise(self, agenda: Agenda) -> dict:
-        """Convert a completed agenda into an L1 exercise for identity condensation."""
+        """
+        Convert a completed agenda into an L1 exercise for identity condensation.
+
+        The exercise is structured to feed BOTH learning and decision condensers:
+        - Learning track sees: what happened, what worked, what was learned
+        - Decision track sees: what was chosen, why, what consequences followed,
+          how identity shaped the plan, what the bot would choose differently
+
+        When routed through school L1 (school mode), this reaches L4d/L5d.
+        When routed through platform L1 (shipped mode), this caps at L3.
+        """
         # Build a narrative of what happened
         step_summaries = []
+        successes = []
+        failures = []
         for i, task in enumerate(agenda.tasks, 1):
             status_label = task.status.upper()
             line = f"Step {i} [{status_label}]: {task.action}"
             if task.result:
                 line += f" — {task.result[:200]}"
             step_summaries.append(line)
+            if task.status == "done":
+                successes.append(task.action)
+            elif task.status in ("failed", "skipped"):
+                failures.append(f"{task.action}: {task.result[:100]}")
+
+        # Decision-track-friendly framing: what was chosen and what happened
+        decision_narrative = (
+            f"Directive: {agenda.directive}\n"
+            f"I chose this intention: {agenda.intention}\n"
+            f"My identity reasoning: {agenda.identity_reasoning[:300]}\n"
+        )
+        if successes:
+            decision_narrative += f"Steps that worked: {'; '.join(s[:80] for s in successes[:5])}\n"
+        if failures:
+            decision_narrative += f"Steps that failed: {'; '.join(f[:80] for f in failures[:5])}\n"
+        decision_narrative += f"Outcome: {agenda.status}"
 
         return {
             "interaction_type": "autonomous_agenda",
+            "skill": "directive_planning",
+            "hit": agenda.status == "completed" and len(failures) == 0,
             "directive": agenda.directive,
             "intention": agenda.intention,
             "identity_reasoning": agenda.identity_reasoning[:300],
+            "decision_narrative": decision_narrative,
             "steps_narrative": "\n".join(step_summaries),
             "outcome": agenda.status,
             "tasks_done": sum(1 for t in agenda.tasks if t.status == "done"),
+            "tasks_failed": sum(1 for t in agenda.tasks if t.status == "failed"),
             "tasks_total": len(agenda.tasks),
         }
 

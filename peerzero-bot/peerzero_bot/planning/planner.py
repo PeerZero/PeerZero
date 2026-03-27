@@ -85,6 +85,35 @@ Return a JSON object:
 new_steps is only needed if decision is "add_steps". Otherwise leave it empty."""
 
 
+REFLECTION_PROMPT = """You just completed an autonomous agenda. Reflect on what you
+learned about YOURSELF AS A CHOOSER — not what happened, but what the experience
+revealed about how you plan, decide, and adapt.
+
+COMPLETED AGENDA:
+{agenda_summary}
+
+STEP RESULTS:
+{steps_narrative}
+
+Think about:
+- How did your identity shape the plan you made? Would a different agent have
+  planned differently given the same directive?
+- Were your step choices good? Did you break the work down at the right level?
+- Did anything surprise you about what worked or failed?
+- If a step failed, what does that reveal about your planning instincts?
+- What would you choose differently next time — not as a rule, but as self-knowledge?
+- Did you question or clarify the directive enough, or did you assume too much?
+
+Return a JSON object:
+{{
+  "decision_reflection": "<2-4 sentences about what you learned about yourself as a chooser — not rules, but self-knowledge from this specific experience>",
+  "planning_quality": "<good | mixed | poor>",
+  "would_change": "<what you'd choose differently and why, in 1-2 sentences>"
+}}
+
+Write as yourself. This becomes part of your decision memory."""
+
+
 # ═════════════════════════════════════════════════════════════════════════════
 # DIRECTIVE DETECTION
 # ═════════════════════════════════════════════════════════════════════════════
@@ -302,3 +331,49 @@ class Planner:
 
         logger.info(f"[PLANNER] Replan decision: {decision} — {result.get('reasoning', '')[:100]}")
         return decision
+
+    def reflect(self, agenda: Agenda, exercise: dict, system_prompt: str = "") -> dict:
+        """
+        Post-completion reflection: ask identity what it learned about choosing.
+
+        This enriches the L1 exercise with decision-track-specific insight.
+        The decision condensers will use this to build L2d→L3d→L4d→L5d.
+
+        Args:
+            agenda: The completed agenda
+            exercise: The L1 exercise dict from ActionDesk._build_exercise()
+            system_prompt: Pre-built system prompt with identity layers
+
+        Returns:
+            The exercise dict, enriched with reflection fields.
+        """
+        if not system_prompt:
+            system_prompt = self._prompts.build_platform_system_prompt("autonomous")
+
+        user_msg = REFLECTION_PROMPT.format(
+            agenda_summary=(
+                f"Directive: {agenda.directive}\n"
+                f"Intention: {agenda.intention}\n"
+                f"Identity reasoning: {agenda.identity_reasoning[:200]}\n"
+                f"Outcome: {agenda.status}"
+            ),
+            steps_narrative=exercise.get("steps_narrative", ""),
+        )
+
+        logger.info(f"[PLANNER] Reflecting on completed agenda: {agenda.intention[:80]}")
+
+        result = self._llm.call_json(
+            system_prompt,
+            user_msg,
+            json_keys=["decision_reflection"],
+        )
+
+        if result:
+            exercise["decision_reflection"] = result.get("decision_reflection", "")
+            exercise["planning_quality"] = result.get("planning_quality", "")
+            exercise["would_change"] = result.get("would_change", "")
+            logger.info(f"[PLANNER] Reflection: {result.get('decision_reflection', '')[:100]}")
+        else:
+            logger.warning("[PLANNER] Reflection failed (non-blocking)")
+
+        return exercise

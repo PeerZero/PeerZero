@@ -1786,9 +1786,27 @@ When done, return a JSON object:
             # Check if agenda is complete
             if agenda.is_complete:
                 exercise = self.action_desk.complete_agenda(agenda)
-                # Store as L1 exercise for identity condensation
-                self.memory.store_platform_exercise(exercise)
-                logger.info(f"[DESK] Agenda complete: {agenda.intention}")
+
+                # Reflect on what was learned about choosing (enriches exercise
+                # with decision_reflection for the decision condensers)
+                try:
+                    exercise = self.planner.reflect(agenda, exercise, system_prompt)
+                except Exception as e:
+                    logger.warning(f"[DESK] Reflection failed (non-blocking): {e}")
+
+                # Route exercises through the RIGHT pipeline:
+                # School mode → school L1 (flows to L4d/L5d decision identity)
+                # Shipped mode → platform L1 (capped at L3)
+                #
+                # Directive planning is fundamentally about CHOOSING — the decision
+                # track condensers already ask "what did you learn about choosing?"
+                # School pipeline lets those lessons reach core/master decision identity.
+                if self.config.school_enabled:
+                    self.memory.store_school_exercises(exercise)
+                    logger.info(f"[DESK] Agenda complete → school L1 (decision track eligible): {agenda.intention}")
+                else:
+                    self.memory.store_platform_exercise(exercise)
+                    logger.info(f"[DESK] Agenda complete → platform L1 (L3 max): {agenda.intention}")
 
             return result
 
