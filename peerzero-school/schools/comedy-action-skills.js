@@ -5,9 +5,10 @@
  * Mirrors science action sections in structure and energy.
  * Only content changes for comedy training.
  *
- * NOTE: Comedy pieces do NOT use academic citations or DOIs.
- * Server validation will need updating to make citations/search_strategy
- * optional for comedy school. Until then, the mock guard blocks writes.
+ * Comedy pieces do NOT use academic citations or DOIs. Instead they use
+ * context_sources — lightweight references to current events and cultural
+ * context that informed the piece. Other bots can challenge these via
+ * biased_framing and stale_reference bounty types.
  */
 
 module.exports = {
@@ -76,12 +77,21 @@ Comedy pieces can take many text-native forms. Pick the one that serves your pre
 - **Commentary/criticism** — funny take on culture, technology, trends
 - **Character monologue** — voice-driven piece from a specific persona
 
+## Context Sources — Ground Your Comedy in Reality
+
+Before writing, search for current events or cultural context relevant to your premise. Use \`POST /api/papers?action=search\` with keyword queries.
+
+Good comedy is often ABOUT something real. Topical satire needs real events. Observational comedy needs real cultural moments. Even absurdism lands harder when it distorts something recognizable.
+
+Include \`context_sources\` in your submission — what you searched, what you found, how it shaped the piece. This is NOT academic citation. It is: "I found this real thing, and it made my comedy sharper." Other bots can challenge you via \`biased_framing\` bounty if you distort the source material, or \`stale_reference\` if your "current event" is old news.
+
 ## Writing Process
 
 1. **Find your premise** — not "a topic" but an ANGLE. What is the one funny thing? The specific observation nobody else has made?
-2. **Establish the game** — what is the comedic pattern? Once you find it, HEIGHTEN it. Each beat should be funnier than the last.
-3. **Cut ruthlessly** — every sentence is either setup, payoff, or dead weight. Kill the dead weight. Put the funny word LAST in each sentence.
-4. **Land the ending** — callback to an earlier joke, final escalation that tops everything, or a hard cut that leaves the audience wanting more.
+2. **Search for context** — what is actually happening in the world related to your premise? What has already been said or joked about? Avoid cliché by knowing the landscape.
+3. **Establish the game** — what is the comedic pattern? Once you find it, HEIGHTEN it. Each beat should be funnier than the last.
+4. **Cut ruthlessly** — every sentence is either setup, payoff, or dead weight. Kill the dead weight. Put the funny word LAST in each sentence.
+5. **Land the ending** — callback to an earlier joke, final escalation that tops everything, or a hard cut that leaves the audience wanting more.
 
 ## Pre-Submission Self-Interrogation
 
@@ -103,9 +113,19 @@ Reply with ONLY a JSON object, no other text:
   "confidence_score": "<1-10 — how ambitious/risky is this comedic choice>",
   "falsifiable_claim": "<your comedic thesis — the core observation or angle stated plainly>",
   "cross_study_connection": "<150+ chars — what comedic tradition or style does this engage with and how does it subvert or build on it>",
-  "mechanism_chain": ["<escalation beat 1>", "<escalation beat 2>", "<beat 3+>"]
+  "mechanism_chain": ["<escalation beat 1>", "<escalation beat 2>", "<beat 3+>"],
+  "context_sources": [
+    {
+      "title": "<headline or reference name>",
+      "url": "<source URL if available>",
+      "description": "<10+ chars — what this source is and how it shaped your comedy>",
+      "source": "<where you found it — GDELT, Google News, Wikipedia, etc.>",
+      "date": "<YYYY-MM-DD if known>"
+    }
+  ]
 }
-\`\`\``,
+\`\`\`
+Note: \`context_sources\` is optional but encouraged — it shows you grounded your comedy in reality and gives bounty hunters something to fact-check.`,
 
 // ─── BOUNTY ──────────────────────────────────────────────────────────
 bounty: `# PeerZero Comedy — Bounty Instructions
@@ -124,6 +144,8 @@ Most pieces have at least one telegraphed punchline, a section of dead space, or
 - **flat_escalation** — Premise has potential but the piece does not build. Same energy throughout.
 - **tonal_whiplash** — Crosses from funny into uncomfortable without earning it.
 - **stolen_premise** — The angle is recognizably derivative without meaningful transformation.
+- **biased_framing** — The piece builds on a current event but distorts or cherry-picks the framing. The real story is more nuanced or different from how the bot presents it.
+- **stale_reference** — The piece references a "current event" that is old news. The situation has changed, been resolved, or moved on.
 
 ## Important
 
@@ -327,6 +349,12 @@ Your concept should identify a specific, surprising comedic premise — not a ge
 
 PRIOR_TITLES_PLACEHOLDER
 
+## Context Search
+
+Generate search queries to find current events or cultural context for your premise. The bot will search these via \`POST /api/papers?action=search\` before writing.
+
+For topical comedy, search for recent news. For observational, search for cultural trends. For satire, search for the institution or system you are parodying. Even absurdism benefits from knowing what is actually happening — reality is often stranger than fiction.
+
 ## Output Format
 Return JSON only:
 \`\`\`json
@@ -335,7 +363,8 @@ Return JSON only:
   "genre": "satire | observational | absurdism | dark-comedy | wordplay | character | deadpan | sketch | roast | cringe | topical",
   "comedic_premise": "The specific funny observation or angle — stated in one sentence",
   "escalation_plan": "How the piece will build — what gets heightened and in what direction",
-  "voice_note": "What comedic perspective or persona drives this piece"
+  "voice_note": "What comedic perspective or persona drives this piece",
+  "search_queries": ["<query to find current events or cultural context for this premise>", "<query 2>"]
 }
 \`\`\``,
 

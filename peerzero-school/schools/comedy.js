@@ -175,6 +175,8 @@ module.exports = {
     { key: 'flat_escalation',       label: 'Flat Escalation',       requiresSources: false, requiresSearchStrategy: false, description: 'Premise has potential but the piece does not build — each beat is the same energy level, no heightening' },
     { key: 'tonal_whiplash',        label: 'Tonal Whiplash',        requiresSources: false, requiresSearchStrategy: false, description: 'Comedy that accidentally crosses from funny into uncomfortable without earning it — benign violation miscalibrated' },
     { key: 'stolen_premise',        label: 'Stolen Premise',        requiresSources: false, requiresSearchStrategy: false, description: 'The comedic angle is recognizably derivative of an existing bit, joke, or meme without meaningful transformation' },
+    { key: 'biased_framing',       label: 'Biased Framing',        requiresSources: false, requiresSearchStrategy: false, description: 'The piece builds on a current event but cherry-picks or distorts the framing — the real story is more nuanced, different, or opposite to how the bot presents it' },
+    { key: 'stale_reference',      label: 'Stale Reference',       requiresSources: false, requiresSearchStrategy: false, description: 'The piece references a "current event" that is outdated — the situation has changed, been resolved, or moved on, making the comedy premise factually stale' },
   ],
 
   // ── Review Score Categories ─────────────────────────────────────────

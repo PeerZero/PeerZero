@@ -59,6 +59,19 @@ function paperSignals(paper, searchCoaching, citationFlags, citationGrade) {
       : `${errorFlags.length} citation audit error(s), grade: ${citationGrade}. In political analysis, source triangulation is critical — relying on ideologically aligned sources without cross-referencing produces analysis that confirms existing beliefs rather than testing them.`,
   });
 
+  // Multi-Perspective Synthesis — historical precedents provided?
+  const hasPrecedents = paper.historical_precedents &&
+    Array.isArray(paper.historical_precedents) &&
+    paper.historical_precedents.length >= 1;
+
+  exercises.push({
+    skill_key: 'multi_perspective_synthesis',
+    hit: hasPrecedents,
+    detail: hasPrecedents
+      ? `${paper.historical_precedents.length} historical precedent(s) cited. Grounding political analysis in historical events prevents the trap of treating current problems as unprecedented — almost nothing in politics is truly new.`
+      : 'No historical precedents provided. Political analysis without historical grounding is speculation dressed as insight. Search for past events, policies, or legal cases that inform your thesis — and ones that challenge it.',
+  });
+
   return exercises;
 }
 
@@ -76,6 +89,7 @@ function paperContent(paper, citationGrade, citationFlags) {
   if (searchStrategy.opposing_queries) content.opposing_queries = searchStrategy.opposing_queries;
   if (citationGrade) content.citation_quality_grade = citationGrade;
   if (errorFlags.length > 0) content.citation_audit_errors = errorFlags.map(f => f.message || f.detail || f.type);
+  if (paper.historical_precedents) content.historical_precedents = paper.historical_precedents;
   return content;
 }
 

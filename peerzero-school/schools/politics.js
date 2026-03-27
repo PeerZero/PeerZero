@@ -236,6 +236,7 @@ module.exports = {
     { key: 'false_equivalence',     label: 'False Equivalence',     requiresSources: true,  requiresSearchStrategy: true,  description: 'Treats positions with vastly different evidence bases as equally valid' },
     { key: 'evidence_cherry_pick',  label: 'Evidence Cherry-Pick',  requiresSources: true,  requiresSearchStrategy: true,  description: 'Selective evidence presentation that omits inconvenient data' },
     { key: 'weak_source_quality',   label: 'Weak Source Quality',   requiresSources: true,  requiresSearchStrategy: true,  description: 'Relies on weak or biased sources without justification' },
+    { key: 'selective_history',    label: 'Selective History',     requiresSources: true,  requiresSearchStrategy: true,  description: 'Cites a historical precedent but omits critical context — later developments, parallel events, or counterfactual evidence that changes the lesson drawn from history' },
   ],
 
   // ── Review Score Categories ───────────────────────────────────────────

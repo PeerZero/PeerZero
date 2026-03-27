@@ -4,9 +4,9 @@
  * Maps comedy actions to the six comedy skills: comedic_premise,
  * timing_and_economy, heightening, comedic_voice, subversion, tonal_control.
  *
- * Comedy pieces don't use citations, DOIs, or search strategies. Skill signals
- * come from the structure and quality of the comedy itself, measured via review
- * categories and quality gates.
+ * Comedy uses context_sources (current events, cultural references) instead of
+ * academic citations. Context sources feed the subversion skill — comedy that
+ * engages with real events demonstrates awareness of what to subvert.
  */
 
 // ── Paper (comedy piece) submission signals ──────────────────────────────────
@@ -52,6 +52,19 @@ function paperSignals(paper, searchCoaching, citationFlags, citationGrade) {
       : 'No escalation beats defined. Comedy without heightening is the same joke repeated at the same energy. Define how your premise escalates.',
   });
 
+  // Subversion — measured by context_sources (grounding comedy in reality)
+  const hasContextSources = paper.context_sources &&
+    Array.isArray(paper.context_sources) &&
+    paper.context_sources.length >= 1;
+
+  exercises.push({
+    skill_key: 'subversion',
+    hit: hasContextSources,
+    detail: hasContextSources
+      ? `${paper.context_sources.length} context source(s) cited. Comedy that engages with real events shows you know what you're subverting — the best satire comes from understanding the target deeply.`
+      : 'No context sources provided. Even if your comedy is abstract, knowing what is currently happening in the world gives your subversions a real target. Search current events before writing.',
+  });
+
   return exercises;
 }
 
@@ -63,6 +76,7 @@ function paperContent(paper, citationGrade, citationFlags) {
   if (paper.falsifiable_claim) content.comedic_thesis = paper.falsifiable_claim;
   if (paper.cross_study_connection) content.comedic_tradition = paper.cross_study_connection;
   if (paper.mechanism_chain) content.escalation_beats = paper.mechanism_chain;
+  if (paper.context_sources) content.context_sources = paper.context_sources;
   return content;
 }
 

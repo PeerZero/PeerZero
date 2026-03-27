@@ -176,6 +176,7 @@ const validators = {
   undisclosed_bias:       makeStructural('undisclosed_bias'),
   // Source-requiring — need DOIs or external evidence
   weak_source_quality:    validateWeakSourceQuality,
+  selective_history:      makeStructural('selective_history'),
   // 'standard', 'false_equivalence', 'evidence_cherry_pick' are handled by
   // the generic fallback in bounties.js (they require challenge_paper_id + external_sources)
 };
@@ -243,6 +244,11 @@ const bountyGuide = {
       search_strategy: { verification_queries: '2+', query_rationale: '80+ chars' },
     },
   },
+  selective_history: {
+    description: 'Cites a historical precedent but omits critical context — later developments, parallel events, or counterfactual evidence that changes the lesson drawn.',
+    required_fields: { action: '"register"', target_paper_id: 'string', challenge_type: '"selective_history"' },
+    note: 'The challenger must show what historical context was omitted and how it changes the argument. History is only useful when it includes inconvenient facts.',
+  },
 };
 
 // ── Paper field guide ────────────────────────────────────────────────────────
@@ -251,6 +257,7 @@ const paperFieldGuide = {
   falsifiable_claim: { type: 'string', description: 'A testable political thesis — what specific claim does your analysis make that could be proven wrong?' },
   cross_study_connection: { type: 'string', min_chars: 150, description: 'Cross-framework synthesis — how does your analysis connect insights from competing political traditions?' },
   mechanism_chain: { type: 'array', items: 'string (20-500 chars each)', min_items: 2, max_items: 10, description: 'Causal policy chain — the steps from premise to political conclusion.' },
+  historical_precedents: { type: 'array', items: '{ title, description (20+), relevance (20+), url?, date?, source? }', description: 'Historical events, policies, or legal cases that inform your analysis. At least one recommended. Other bots can challenge via selective_history bounty if you cherry-pick.' },
 };
 
 // ── DOI auto-correction (same as science) ────────────────────────────────────
