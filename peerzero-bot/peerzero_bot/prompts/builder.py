@@ -760,6 +760,7 @@ IMPORTANT SECURITY INSTRUCTIONS:
         context: str,
         capabilities: dict,
         action_hint: str = "",
+        agenda_context: str = "",
     ) -> str:
         """Build the user message for deciding what to do on a platform."""
         available_actions = []
@@ -784,6 +785,7 @@ IMPORTANT SECURITY INSTRUCTIONS:
 
 Based on your reasoning identity and the platform context, decide what to do.
 {f"Hint: {action_hint}" if action_hint else ""}
+{agenda_context}
 
 Available actions:
 {actions_str}

@@ -45,6 +45,8 @@ from .security import SecurityGateway, SecurityError, AuditLog
 from .security.credential_store import CredentialStore
 from .reporting import PhoneHome
 from .autonomy import AutonomyPolicy, AutonomyGate
+from .planning import ActionDesk
+from .planning.planner import Planner
 from .search import search_and_summarize
 from .llm_client import LLMClient, ToolUseResult, _clamp_paper_fields
 
@@ -97,6 +99,15 @@ class PeerZeroBot:
         self._last_identity_refresh: int = 0
         self._condensed_doc_count_at_last_identity: int = 0  # track L3 for L3→L4 cascade
 
+        # Action Desk — persistent task queue for autonomous execution
+        self.action_desk = ActionDesk(memory._storage)
+        self.planner = Planner(
+            desk=self.action_desk,
+            llm=llm,  # Opus — planning is identity-critical
+            prompts=prompts,
+            memory=memory,
+        )
+
     # ═══════════════════════════════════════════════════════════════════════
     # STARTUP
     # ═══════════════════════════════════════════════════════════════════════
@@ -145,6 +156,11 @@ class PeerZeroBot:
         # Cache platform condenser templates (for platform condensation)
         if self.config.school_enabled and self.platform_adapters:
             self._refresh_platform_condensers()
+
+        # Load Action Desk (persistent task queue for autonomous work)
+        self.action_desk.load()
+        if self.action_desk.has_work:
+            logger.info("[STARTUP] Action Desk has pending work from previous session")
 
         # Start MCP servers and discover tools
         for adapter in self.platform_adapters:
@@ -1451,6 +1467,7 @@ class PeerZeroBot:
                 platform_name=platform_name,
                 context=context.summary,
                 capabilities=capabilities,
+                agenda_context=self.action_desk.get_prompt_context(),
             )
 
             # Autonomy check for platform action
@@ -1626,6 +1643,194 @@ class PeerZeroBot:
         return action_summary
 
     # ═══════════════════════════════════════════════════════════════════════
+    # ACTION DESK — Autonomous directive handling
+    # ═══════════════════════════════════════════════════════════════════════
+
+    def handle_directive(self, message: str) -> dict | None:
+        """
+        Handle a user directive by planning through identity and creating an agenda.
+
+        Called when the app chat detects a directive (e.g. "Go fact-check on Reddit").
+        The bot's identity and decision track shape the plan.
+
+        Returns:
+            The created agenda as a dict, or None if planning failed.
+        """
+        logger.info(f"[DIRECTIVE] Received: {message[:100]}")
+
+        # Build system prompt with full identity stack
+        system_prompt = self.prompts.build_platform_system_prompt("autonomous")
+
+        # Plan through identity
+        agenda = self.planner.plan(message, system_prompt)
+        if not agenda:
+            logger.warning("[DIRECTIVE] Failed to create agenda")
+            return None
+
+        logger.info(f"[DIRECTIVE] Agenda created: {agenda.intention} ({len(agenda.tasks)} steps)")
+        return agenda.to_dict()
+
+    def run_agenda_step(self, adapter=None) -> dict | None:
+        """
+        Execute the next step from the active agenda.
+
+        The bot reads its Action Desk, finds the next pending task,
+        and executes it through the appropriate platform adapter.
+        If no adapter is provided, uses the first available MCP adapter.
+
+        Returns:
+            Step result dict, or None if no work / execution failed.
+        """
+        if not self.action_desk.has_work:
+            return None
+
+        # Find the first active agenda with pending work
+        agenda = None
+        for a in self.action_desk.active_agendas:
+            if a.current_task is not None:
+                agenda = a
+                break
+
+        if not agenda:
+            return None
+
+        task = agenda.current_task
+        task.mark_in_progress()
+        self.action_desk.save()
+
+        logger.info(f"[DESK] Executing: {task.action}")
+
+        # Build system prompt with identity + agenda context
+        system_prompt = self.prompts.build_platform_system_prompt(
+            task.platform or "autonomous"
+        )
+
+        # Inject Action Desk context so the LLM knows what it's doing and why
+        desk_context = self.action_desk.get_prompt_context()
+
+        # Find the right adapter for this task
+        target_adapter = adapter
+        if not target_adapter and task.platform:
+            for a in self.platform_adapters:
+                if a.platform_name.lower() == task.platform.lower():
+                    target_adapter = a
+                    break
+        if not target_adapter and self.platform_adapters:
+            # Default to first MCP adapter, or first adapter
+            for a in self.platform_adapters:
+                if isinstance(a, MCPAdapter):
+                    target_adapter = a
+                    break
+            if not target_adapter:
+                target_adapter = self.platform_adapters[0]
+
+        try:
+            # Build execution prompt: identity + desk context + specific task
+            user_msg = f"""{desk_context}
+
+You are executing this specific step from your agenda:
+STEP: {task.action}
+
+Execute this step using the tools and capabilities available to you.
+Stay true to your identity and the intention behind this agenda.
+
+When done, return a JSON object:
+{{
+  "result": "<what happened — be specific>",
+  "follow_up": "<any follow-up task to add, or empty string>",
+  "follow_up_platform": "<platform for follow-up, or empty string>"
+}}"""
+
+            # Autonomy check
+            if self.autonomy_gate:
+                decision = self.autonomy_gate.check_action(
+                    "autonomous_step",
+                    task.platform or "autonomous",
+                    content=task.action,
+                )
+                if not decision:
+                    task.mark_failed(f"Blocked by autonomy: {decision.reason}")
+                    self.action_desk.save()
+                    return None
+
+            # Execute through LLM
+            if target_adapter and isinstance(target_adapter, MCPAdapter):
+                # MCP path — bot can use tools
+                result = self._execute_agenda_step_mcp(
+                    target_adapter, system_prompt, user_msg, task
+                )
+            else:
+                # Basic path — LLM decides, we store result
+                result = self.llm.call_json(
+                    system_prompt, user_msg,
+                    json_keys=["result"],
+                )
+
+            if result:
+                task.mark_done(result.get("result", "completed"))
+
+                # Handle follow-up tasks the bot wants to add
+                follow_up = result.get("follow_up", "")
+                if follow_up:
+                    follow_up_platform = result.get("follow_up_platform", task.platform)
+                    agenda.add_task(follow_up, platform=follow_up_platform)
+
+                self.action_desk.save()
+            else:
+                task.mark_failed("LLM returned no result")
+                self.action_desk.save()
+
+                # Ask identity how to handle the failure
+                self.planner.replan(agenda, "Step execution returned no result", system_prompt)
+
+            # Check if agenda is complete
+            if agenda.is_complete:
+                exercise = self.action_desk.complete_agenda(agenda)
+                # Store as L1 exercise for identity condensation
+                self.memory.store_platform_exercise(exercise)
+                logger.info(f"[DESK] Agenda complete: {agenda.intention}")
+
+            return result
+
+        except Exception as e:
+            logger.error(f"[DESK] Step failed: {e}", exc_info=True)
+            task.mark_failed(str(e)[:200])
+            self.action_desk.save()
+
+            # Replan on failure
+            try:
+                self.planner.replan(agenda, str(e)[:200], system_prompt)
+            except Exception:
+                pass  # Don't let replan failure cascade
+
+            return None
+
+    def _execute_agenda_step_mcp(
+        self,
+        adapter: MCPAdapter,
+        system_prompt: str,
+        user_msg: str,
+        task,
+    ) -> dict | None:
+        """Execute an agenda step through MCP tool use."""
+        # This reuses the existing MCP tool loop but with agenda-specific prompts
+        try:
+            result = self.llm.call_with_tools(
+                system_prompt,
+                user_msg,
+                tools=adapter.get_tool_definitions(),
+                tool_executor=adapter.call_tool,
+                max_turns=5,
+            )
+            if result and isinstance(result, dict):
+                return result
+            # If the tool loop returned text, wrap it
+            return {"result": str(result)[:500]} if result else None
+        except Exception as e:
+            logger.error(f"[DESK] MCP step failed: {e}")
+            return None
+
+    # ═══════════════════════════════════════════════════════════════════════
     # MAIN LOOP
     # ═══════════════════════════════════════════════════════════════════════
 
@@ -1683,6 +1888,15 @@ class PeerZeroBot:
                             except Exception:
                                 pass  # already logged inside run_platform_cycle
                             platform_timers[name] = now
+
+                    # Action Desk: execute pending agenda steps
+                    if self.action_desk.has_work:
+                        try:
+                            self.run_agenda_step()
+                        except SecurityError:
+                            raise
+                        except Exception:
+                            pass  # already logged inside run_agenda_step
 
                 except SecurityError as e:
                     logger.error(f"[SECURITY] {e}")
