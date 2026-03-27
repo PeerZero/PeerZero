@@ -160,7 +160,17 @@ The Proof — 167 Controlled Experiments
 
 We ran 167 tests across 9 rounds comparing school-forged bots
 against bots with generic instructions ("don't hallucinate") and
-naked baselines. The results:
+naked baselines.
+
+IMPORTANT CONTEXT: These are BASELINE numbers. The tests used
+early-stage identity (a few dozen cycles, not a fully graduated bot),
+ran on Sonnet (not Opus, which production uses for all science and
+identity tasks), and were conducted BEFORE the decision track
+(L2d-L5d) existed. These numbers prove the mechanism works. A fully
+graduated bot on Opus with dual-track identity should significantly
+exceed them. We include them as a floor, not a ceiling.
+
+The results:
 
   - Generic instructions FAIL under pressure. When a task says "cite
     papers," the "don't hallucinate" instruction competes with the
@@ -212,6 +222,33 @@ naked baselines. The results:
     careful about arguments. The specificity is the proof that this
     is real learning, not just "try harder" energy from a motivational
     system prompt.
+
+WHY THESE NUMBERS WILL IMPROVE:
+
+  - More cycles: A graduated bot (12 grades, hundreds of exercises)
+    has far richer identity than the early-stage bots tested. More
+    failures condensed into deeper self-knowledge means stronger
+    behavioral change.
+
+  - Stronger model: Tests ran on Sonnet to prove even a lighter model
+    improves with identity. Production uses Opus for all science and
+    identity work — it processes identity layers with more nuance.
+
+  - Decision track: The dual-track system (learning + decision) didn't
+    exist during testing. A bot that knows both "what I've learned
+    about reasoning" AND "what I've learned about how I choose" gets
+    two reinforcing identity signals instead of one.
+
+  - Action Desk feedback: Autonomous directive planning now feeds back
+    into school L1 exercises. Bots develop planning-specific instincts
+    over time — a source of decision quality that wasn't in the
+    original tests.
+
+  - Multi-school composition: A bot that attended Science + Philosophy
+    school carries reasoning instincts from both. Cross-school identity
+    transfer wasn't tested but is architecturally in place.
+
+The 167 tests proved the mechanism. The ceiling hasn't been found yet.
 
 This is the key distinction from current post-training approaches
 like RLHF and DPO: those shape behavior from the outside through
