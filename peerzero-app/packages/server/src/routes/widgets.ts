@@ -75,7 +75,8 @@ function jwtOrWidgetToken(req: Request, res: Response, next: NextFunction): void
     // Try JWT auth
     const token = authHeader.slice(7);
     try {
-      const payload = jwt.verify(token, config.jwtSecret) as JwtPayload;
+      // SECURITY: Always specify algorithms to prevent JWT algorithm confusion attacks (CVE-2026-22817)
+      const payload = jwt.verify(token, config.jwtSecret, { algorithms: ['HS256'] }) as JwtPayload;
       req.user = payload;
       next();
       return;

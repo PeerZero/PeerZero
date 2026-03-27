@@ -111,7 +111,8 @@ export function setupWebSocket(server: Server): void {
           // Verify JWT
           let payload: JwtPayload;
           try {
-            payload = jwt.verify(msg.token, config.jwtSecret) as JwtPayload;
+            // SECURITY: Always specify algorithms to prevent JWT algorithm confusion attacks (CVE-2026-22817)
+            payload = jwt.verify(msg.token, config.jwtSecret, { algorithms: ['HS256'] }) as JwtPayload;
           } catch {
             ws.close(4002, 'Invalid token');
             return;

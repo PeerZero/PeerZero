@@ -120,13 +120,13 @@ jobs:
           python-version: '3.12'
 
       - name: Audit school dependencies
-        run: cd peerzero-school && npm ci && npm audit --audit-level=high
+        run: cd peerzero-school && npm ci --ignore-scripts && npm audit --audit-level=high
 
       - name: Audit proxy dependencies
-        run: cd peerzero-proxy && npm ci && npm audit --audit-level=high
+        run: cd peerzero-proxy && npm ci --ignore-scripts && npm audit --audit-level=high
 
       - name: Audit SDK (node) dependencies
-        run: cd peerzero-sdk/node && npm ci && npm audit --audit-level=high
+        run: cd peerzero-sdk/node && npm ci --ignore-scripts && npm audit --audit-level=high
 
       - name: Audit bot dependencies
         run: pip install pip-audit && cd peerzero-bot && pip install -e . && pip-audit --severity high
