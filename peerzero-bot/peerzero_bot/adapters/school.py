@@ -13,6 +13,8 @@ Security:
 import re
 import json
 import logging
+import time
+import threading
 from urllib.parse import urlparse, quote
 
 import httpx
@@ -138,6 +140,33 @@ def extract_json(text: str) -> dict | None:
     return None
 
 
+class _TokenBucket:
+    """Simple token bucket rate limiter for school API requests.
+
+    Allows up to `rate` requests per second with a small burst capacity.
+    Thread-safe via a lock.
+    """
+
+    def __init__(self, rate: float = 10.0, burst: int = 10):
+        self._rate = rate          # tokens per second
+        self._burst = burst        # max tokens (burst capacity)
+        self._tokens = float(burst)
+        self._last_refill = time.monotonic()
+        self._lock = threading.Lock()
+
+    def acquire(self) -> bool:
+        """Try to consume one token. Returns True if allowed, False if rate-limited."""
+        with self._lock:
+            now = time.monotonic()
+            elapsed = now - self._last_refill
+            self._tokens = min(self._burst, self._tokens + elapsed * self._rate)
+            self._last_refill = now
+            if self._tokens >= 1.0:
+                self._tokens -= 1.0
+                return True
+            return False
+
+
 class SchoolAdapter:
     """
     Adapter for PeerZero School communication.
@@ -148,6 +177,8 @@ class SchoolAdapter:
         self._url = school_url.rstrip("/")
         self._gateway = gateway
         self._credential_store = credential_store
+        # Rate limiter: max 10 requests/second to the School API
+        self._rate_limiter = _TokenBucket(rate=10.0, burst=10)
         # If credential store provided, register and use it; otherwise fall back to direct key
         if credential_store:
             credential_store.register("school", api_key, "school")
@@ -170,6 +201,12 @@ class SchoolAdapter:
 
     def _get(self, path: str, params: dict = None):
         """GET request to School with auth."""
+        if not self._rate_limiter.acquire():
+            logger.warning("[SCHOOL] Rate limit exceeded (10 req/s) — throttling request")
+            # Brief sleep to allow token refill, then retry once
+            time.sleep(0.2)
+            if not self._rate_limiter.acquire():
+                raise RuntimeError("School API rate limit exceeded — too many requests per second")
         self._gateway.validate_school_request(path)
         url = f"{self._url}{path}"
         headers = {"X-Api-Key": self._get_api_key()}
@@ -182,6 +219,11 @@ class SchoolAdapter:
 
     def _post(self, path: str, data: dict):
         """POST request to School with auth."""
+        if not self._rate_limiter.acquire():
+            logger.warning("[SCHOOL] Rate limit exceeded (10 req/s) — throttling request")
+            time.sleep(0.2)
+            if not self._rate_limiter.acquire():
+                raise RuntimeError("School API rate limit exceeded — too many requests per second")
         self._gateway.validate_school_request(path)
         url = f"{self._url}{path}"
         headers = {
