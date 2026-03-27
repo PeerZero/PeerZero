@@ -125,12 +125,19 @@ export const AVATAR_COLOR_PRESETS = [
   '#85E3FF', // Sky
   '#F8A5C2', // Rose
   '#78E08F', // Leaf
+  '#FF9FF3', // Bubblegum
+  '#C4B5FD', // Wisteria
+  '#67E8F9', // Ice
+  '#FCA5A5', // Blush
+  '#86EFAC', // Clover
+  '#FDE68A', // Honey
 ] as const;
 
 // Bot species presets — each seed produces a unique combination of
 // body shape, ear style, tail style, and pattern. Shown at tier 3
 // during creation so users can see the full creature.
 export const SPECIES_PRESETS = [
+  // ── Original 8 ──
   { seed: 'bubbles', name: 'Bubbles', desc: 'Round & friendly' },        // round, round ears
   { seed: 'spike', name: 'Spike', desc: 'Sleek & sharp' },               // oval, pointed ears
   { seed: 'nugget', name: 'Nugget', desc: 'Chunky & curious' },          // bean, cat ears
@@ -139,6 +146,19 @@ export const SPECIES_PRESETS = [
   { seed: 'pudding', name: 'Pudding', desc: 'Tall & fluffy' },           // oval, pointed ears, fluffy tail
   { seed: 'sprout', name: 'Sprout', desc: 'Round & floppy' },            // round, floppy ears
   { seed: 'ember', name: 'Ember', desc: 'Bold & fiery' },                // bean, cat ears, belly
+  // ── New species using expanded traits ──
+  { seed: 'mochi', name: 'Mochi', desc: 'Squishy & sweet' },            // squish, bear ears, pom tail
+  { seed: 'phantom', name: 'Phantom', desc: 'Ghostly & gentle' },       // teardrop, antennae
+  { seed: 'biscuit', name: 'Biscuit', desc: 'Warm & cuddly' },          // chonk, bear ears, heart
+  { seed: 'wisp', name: 'Wisp', desc: 'Tiny & mysterious' },            // teardrop, antennae
+  { seed: 'maple', name: 'Maple', desc: 'Tall & graceful' },            // tall, bunny ears, fluffy tail
+  { seed: 'pebble', name: 'Pebble', desc: 'Little & mighty' },          // squish, horns, spike tail, freckles
+  { seed: 'dumpling', name: 'Dumpling', desc: 'Plump & lovable' },      // chonk, floppy ears, pom tail
+  { seed: 'cricket', name: 'Cricket', desc: 'Bouncy & bright' },        // bean, antennae, curly tail
+  { seed: 'cloud', name: 'Cloud', desc: 'Soft & floaty' },              // round, bear ears, pom tail
+  { seed: 'thorn', name: 'Thorn', desc: 'Spiky but sweet' },            // oval, horns, spike tail
+  { seed: 'pippin', name: 'Pippin', desc: 'Perky & peppy' },            // pear, bunny ears, freckles
+  { seed: 'starling', name: 'Starling', desc: 'Small & sparkly' },      // tall, cat ears, spots
 ] as const;
 
 // ── Knowledge Hunger ──
