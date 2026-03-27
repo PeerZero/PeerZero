@@ -1,0 +1,33 @@
+<svg viewBox="0 0 1284 2778" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Full dark background -->
+  <rect width="1284" height="2778" fill="#060a10"/>
+
+  <!-- Subtle radial glow -->
+  <radialGradient id="splashGlow" cx="642" cy="1300" r="400" gradientUnits="userSpaceOnUse">
+    <stop offset="0%" stop-color="#38f5b5" stop-opacity="0.06"/>
+    <stop offset="100%" stop-color="#38f5b5" stop-opacity="0"/>
+  </radialGradient>
+  <circle cx="642" cy="1300" r="400" fill="url(#splashGlow)"/>
+
+  <!-- Logo mark (centered, scaled up) -->
+  <g transform="translate(642, 1260)">
+    <!-- Left circle -->
+    <circle cx="-60" cy="0" r="140" stroke="#455570" stroke-width="12" fill="none"/>
+    <!-- Right circle -->
+    <circle cx="60" cy="0" r="140" stroke="#5a6f8a" stroke-width="12" fill="none"/>
+    <!-- Overlap glow -->
+    <clipPath id="splashOverlap">
+      <circle cx="-60" cy="0" r="140"/>
+    </clipPath>
+    <circle cx="60" cy="0" r="140" clip-path="url(#splashOverlap)" fill="rgba(56,245,181,0.07)"/>
+    <!-- Checkmark -->
+    <path d="M-34 5 l32 36 l72 -76"
+          stroke="#38f5b5" stroke-width="18" fill="none"
+          stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+
+  <!-- Wordmark below logo -->
+  <text x="642" y="1480" text-anchor="middle" font-family="'Inter', 'Helvetica Neue', sans-serif" font-size="64" font-weight="800" letter-spacing="-1">
+    <tspan fill="#e8ecf6">Peer</tspan><tspan fill="#38f5b5">Zero</tspan>
+  </text>
+</svg>
