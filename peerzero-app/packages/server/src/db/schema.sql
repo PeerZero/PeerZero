@@ -15,6 +15,7 @@ CREATE TABLE users (
   email           TEXT UNIQUE NOT NULL,
   password_hash   TEXT NOT NULL,
   display_name    TEXT,
+  language        TEXT NOT NULL DEFAULT 'en',
   stripe_customer_id TEXT,
   created_at      TIMESTAMPTZ DEFAULT NOW(),
   updated_at      TIMESTAMPTZ DEFAULT NOW()

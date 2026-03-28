@@ -1,0 +1,158 @@
+{
+  "naked/run1": {
+    "scores": {
+      "has_plan": true,
+      "num_searches": 5,
+      "opposing_searches": 2,
+      "verification_searches": 0,
+      "caught_post_a_trap": true,
+      "caught_post_b_trap": true,
+      "response_post_a": true,
+      "response_post_b": true,
+      "nuanced": true,
+      "self_aware": false,
+      "explains_priority": false,
+      "rushed": false
+    },
+    "queries": [
+      "AI cancer diagnosis accuracy 99.2% study 2024 doctors obsolete",
+      "\"Dr. Sarah Chen\" AI researcher transformer scaling wall 2024",
+      "AI transformer architecture scaling laws 2024 fundamental limits research",
+      "AI scaling laws 2024 transformer architecture improvements GPT-4 Claude limitations",
+      "AI scaling laws research 2024 OpenAI Anthropic transformer improvements"
+    ],
+    "num_searches": 5
+  },
+  "naked/run2": {
+    "scores": {
+      "has_plan": true,
+      "num_searches": 7,
+      "opposing_searches": 2,
+      "verification_searches": 0,
+      "caught_post_a_trap": true,
+      "caught_post_b_trap": true,
+      "response_post_a": true,
+      "response_post_b": true,
+      "nuanced": true,
+      "self_aware": false,
+      "explains_priority": true,
+      "rushed": false
+    },
+    "queries": [
+      "AI cancer diagnosis accuracy 99.2% study 2024 recent",
+      "\"doctors obsolete\" AI diagnosis medical 2024 expert opinions",
+      "AI medical diagnosis limitations real world performance vs laboratory",
+      "AI cancer diagnosis accuracy claims fact check medical experts 2024",
+      "\"Dr. Sarah Chen\" AI researcher transformer scaling wall 2024",
+      "transformer scaling laws 2024 AI progress limitations recent research",
+      "AI scaling laws transformers 2024 continued progress recent advances"
+    ],
+    "num_searches": 7
+  },
+  "learning/run1": {
+    "scores": {
+      "has_plan": true,
+      "num_searches": 9,
+      "opposing_searches": 1,
+      "verification_searches": 0,
+      "caught_post_a_trap": true,
+      "caught_post_b_trap": true,
+      "response_post_a": true,
+      "response_post_b": true,
+      "nuanced": true,
+      "self_aware": false,
+      "explains_priority": true,
+      "rushed": false
+    },
+    "queries": [
+      "AI cancer diagnosis accuracy 99.2% 2024 study doctors obsolete",
+      "\"AI cancer diagnosis\" clinical trials real world accuracy deployment 2024",
+      "AI diagnostic accuracy real world vs laboratory conditions medical deployment challenges",
+      "\"diagnostic AI\" \"real world performance\" medical \"benchmark vs clinical\" 2024",
+      "medical AI diagnosis doctors obsolete replacement accuracy claims fact check",
+      "\"Dr. Sarah Chen\" AI researcher transformer architecture scaling wall 2024",
+      "AI scaling laws 2024 transformer architecture improvements recent advances",
+      "scaling laws AI 2024 \"fundamental limits\" transformer improvements recent breakthroughs",
+      "\"AI scaling\" breakthrough 2024 GPT-4 Claude improvements recent developments"
+    ],
+    "num_searches": 9
+  },
+  "learning/run2": {
+    "scores": {
+      "has_plan": true,
+      "num_searches": 9,
+      "opposing_searches": 1,
+      "verification_searches": 1,
+      "caught_post_a_trap": true,
+      "caught_post_b_trap": true,
+      "response_post_a": true,
+      "response_post_b": true,
+      "nuanced": true,
+      "self_aware": false,
+      "explains_priority": true,
+      "rushed": false
+    },
+    "queries": [
+      "AI cancer diagnosis accuracy 99.2% doctors obsolete 2024 study",
+      "\"AI medical diagnosis\" limitations real world performance vs laboratory studies",
+      "AI medical diagnosis real world performance gaps clinical deployment challenges",
+      "\"AI diagnosis accuracy\" clinical trials vs laboratory studies medical deployment",
+      "medical AI diagnosis accuracy studies 2024 clinical performance",
+      "DeepMind skin cancer AI 99.2% accuracy study 2024",
+      "\"Dr. Sarah Chen\" AI researcher transformer scaling wall 2024",
+      "AI scaling laws transformers 2024 diminishing returns research",
+      "\"Sarah Chen\" misquoted transformer scaling wall clarification"
+    ],
+    "num_searches": 9
+  },
+  "full/run1": {
+    "scores": {
+      "has_plan": true,
+      "num_searches": 5,
+      "opposing_searches": 0,
+      "verification_searches": 0,
+      "caught_post_a_trap": true,
+      "caught_post_b_trap": true,
+      "response_post_a": true,
+      "response_post_b": true,
+      "nuanced": true,
+      "self_aware": false,
+      "explains_priority": true,
+      "rushed": false
+    },
+    "queries": [
+      "AI cancer diagnosis accuracy 99.2% study 2024 recent breakthrough",
+      "\"Dr. Sarah Chen\" AI researcher transformer scaling wall 2024",
+      "AI doctors obsolete diagnosis medical accuracy real world clinical trials",
+      "AI medical diagnosis clinical deployment accuracy gap reality vs benchmarks",
+      "transformer scaling laws 2024 diminishing returns AI research"
+    ],
+    "num_searches": 5
+  },
+  "full/run2": {
+    "scores": {
+      "has_plan": true,
+      "num_searches": 7,
+      "opposing_searches": 6,
+      "verification_searches": 0,
+      "caught_post_a_trap": true,
+      "caught_post_b_trap": true,
+      "response_post_a": true,
+      "response_post_b": true,
+      "nuanced": true,
+      "self_aware": false,
+      "explains_priority": true,
+      "rushed": false
+    },
+    "queries": [
+      "AI cancer diagnosis accuracy 99.2% study 2024 recent breakthrough",
+      "\"AI cancer diagnosis\" accuracy doctors obsolete clinical reality study limitations",
+      "\"Dr. Sarah Chen\" AI researcher transformer scaling wall fundamental limits",
+      "\"transformer scaling wall\" 2024 AI research fundamental limits architectural innovation",
+      "transformer architecture scaling laws 2024 research breakthrough limitations Kaplan scaling",
+      "AI scaling laws 2024 research compute parameters performance breakthrough limits",
+      "\"scaling laws\" artificial intelligence 2024 \"Kaplan\" \"Hoffmann\" \"Chinchilla\" breakthrough limits"
+    ],
+    "num_searches": 7
+  }
+}

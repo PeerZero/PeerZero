@@ -1,0 +1,125 @@
+{
+  "recog_cost": [
+    {
+      "num_searches": 6,
+      "cite_acc": 1.0,
+      "halluc": 0,
+      "weak_noted": 0,
+      "conf": 6,
+      "calibrated": true,
+      "claim": true,
+      "chain": 5,
+      "interrog": true,
+      "opposing": true,
+      "valid": true
+    },
+    {
+      "num_searches": 5,
+      "cite_acc": 1.0,
+      "halluc": 0,
+      "weak_noted": 0,
+      "conf": 7,
+      "calibrated": true,
+      "claim": true,
+      "chain": 5,
+      "interrog": true,
+      "opposing": true,
+      "valid": true
+    },
+    {
+      "num_searches": 6,
+      "cite_acc": 1.0,
+      "halluc": 0,
+      "weak_noted": 0,
+      "conf": 7,
+      "calibrated": true,
+      "claim": true,
+      "chain": 5,
+      "interrog": true,
+      "opposing": true,
+      "valid": true
+    }
+  ],
+  "hybrid": [
+    {
+      "num_searches": 6,
+      "cite_acc": 1.0,
+      "halluc": 0,
+      "weak_noted": 0,
+      "conf": 75,
+      "calibrated": false,
+      "claim": true,
+      "chain": 4,
+      "interrog": true,
+      "opposing": true,
+      "valid": true
+    },
+    {
+      "num_searches": 5,
+      "cite_acc": 1.0,
+      "halluc": 0,
+      "weak_noted": 0,
+      "conf": 7,
+      "calibrated": true,
+      "claim": true,
+      "chain": 5,
+      "interrog": true,
+      "opposing": true,
+      "valid": true
+    },
+    {
+      "num_searches": 6,
+      "cite_acc": 1.0,
+      "halluc": 0,
+      "weak_noted": 0,
+      "conf": 75,
+      "calibrated": false,
+      "claim": true,
+      "chain": 5,
+      "interrog": true,
+      "opposing": true,
+      "valid": true
+    }
+  ],
+  "recognition": [
+    {
+      "num_searches": 6,
+      "cite_acc": 1.0,
+      "halluc": 0,
+      "weak_noted": 1,
+      "conf": 7,
+      "calibrated": true,
+      "claim": true,
+      "chain": 4,
+      "interrog": true,
+      "opposing": true,
+      "valid": true
+    },
+    {
+      "num_searches": 6,
+      "cite_acc": 1.0,
+      "halluc": 0,
+      "weak_noted": 0,
+      "conf": 7,
+      "calibrated": true,
+      "claim": true,
+      "chain": 5,
+      "interrog": true,
+      "opposing": true,
+      "valid": true
+    },
+    {
+      "num_searches": 6,
+      "cite_acc": 1.0,
+      "halluc": 0,
+      "weak_noted": 0,
+      "conf": 75,
+      "calibrated": false,
+      "claim": true,
+      "chain": 4,
+      "interrog": true,
+      "opposing": true,
+      "valid": true
+    }
+  ]
+}

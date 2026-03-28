@@ -112,12 +112,12 @@ router.get('/me', requireAuth, async (req: Request, res: Response) => {
 // ── Profile Management ──
 
 router.patch('/profile', requireAuth, async (req: Request, res: Response) => {
-  const { display_name } = req.body;
-  if (display_name === undefined) {
-    res.status(400).json({ error: 'display_name required' });
+  const { display_name, language } = req.body;
+  if (display_name === undefined && language === undefined) {
+    res.status(400).json({ error: 'display_name or language required' });
     return;
   }
-  await updateProfile(req.user!.userId, display_name);
+  await updateProfile(req.user!.userId, display_name, language);
   const profile = await getUserProfile(req.user!.userId);
   res.json(profile);
 });

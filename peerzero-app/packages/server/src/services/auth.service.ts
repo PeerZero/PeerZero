@@ -124,18 +124,29 @@ function hashToken(token: string): string {
   return crypto.createHash('sha256').update(token).digest('hex');
 }
 
-export async function updateProfile(userId: string, displayName: string): Promise<void> {
-  if (!displayName || typeof displayName !== 'string' || displayName.trim().length === 0) {
-    throw new AppError(400, 'Display name cannot be empty');
-  }
-  if (displayName.length > 100) {
-    throw new AppError(400, 'Display name must be 100 characters or less');
-  }
-  // Enforce unique display name (case-insensitive, excluding current user)
-  const nameTaken = await queryOne('SELECT id FROM users WHERE LOWER(display_name) = LOWER($1) AND id != $2', [displayName.trim(), userId]);
-  if (nameTaken) throw new AppError(409, 'Display name is already taken');
+const SUPPORTED_LANGUAGES = ['en', 'es', 'fr', 'de', 'ja', 'ko', 'zh', 'pt', 'it', 'ru', 'ar', 'hi'];
 
-  await query('UPDATE users SET display_name = $1, updated_at = NOW() WHERE id = $2', [displayName.trim(), userId]);
+export async function updateProfile(userId: string, displayName?: string, language?: string): Promise<void> {
+  if (displayName !== undefined) {
+    if (!displayName || typeof displayName !== 'string' || displayName.trim().length === 0) {
+      throw new AppError(400, 'Display name cannot be empty');
+    }
+    if (displayName.length > 100) {
+      throw new AppError(400, 'Display name must be 100 characters or less');
+    }
+    // Enforce unique display name (case-insensitive, excluding current user)
+    const nameTaken = await queryOne('SELECT id FROM users WHERE LOWER(display_name) = LOWER($1) AND id != $2', [displayName.trim(), userId]);
+    if (nameTaken) throw new AppError(409, 'Display name is already taken');
+
+    await query('UPDATE users SET display_name = $1, updated_at = NOW() WHERE id = $2', [displayName.trim(), userId]);
+  }
+
+  if (language !== undefined) {
+    if (typeof language !== 'string' || !SUPPORTED_LANGUAGES.includes(language)) {
+      throw new AppError(400, `Unsupported language. Supported: ${SUPPORTED_LANGUAGES.join(', ')}`);
+    }
+    await query('UPDATE users SET language = $1, updated_at = NOW() WHERE id = $2', [language, userId]);
+  }
 }
 
 export async function changePassword(userId: string, currentPassword: string, newPassword: string): Promise<void> {
@@ -213,8 +224,8 @@ export async function resetPassword(email: string, code: string, newPassword: st
 }
 
 export async function getUserProfile(userId: string) {
-  const user = await queryOne<{ id: string; email: string; display_name: string | null; created_at: string }>(
-    'SELECT id, email, display_name, created_at FROM users WHERE id = $1',
+  const user = await queryOne<{ id: string; email: string; display_name: string | null; language: string; created_at: string }>(
+    'SELECT id, email, display_name, language, created_at FROM users WHERE id = $1',
     [userId],
   );
   if (!user) throw new AppError(404, 'User not found');
