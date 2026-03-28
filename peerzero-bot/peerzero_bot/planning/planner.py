@@ -6,10 +6,13 @@ one LLM call with the bot's full identity stack and asks: "Given who
 you are and how you choose, what specifically will you do?"
 
 The LLM reads L5/L4 identity + L5d/L4d decision track and generates
-a plan that is shaped by the bot's earned instincts — not generic steps.
+a plan shaped by earned instincts — not generic steps. Plans are DAGs
+(directed acyclic graphs) where tasks can depend on other tasks and
+independent work can run in parallel.
 
-This is the "reflect on identity → form intention → plan steps" phase
-that sits between receiving a directive and executing actions.
+Tasks can be type "discover" — exploration steps where the bot needs
+to learn something at runtime before it can plan further. This enables
+dynamic decomposition: plan what you know, discover what you don't.
 """
 
 import json
@@ -49,15 +52,25 @@ Return a JSON object:
     {{
       "action": "<concrete action — specific enough to execute in one tool interaction>",
       "platform": "<platform name if applicable, empty string if not>",
-      "needs": "<what must be true before this step can start, or empty string>"
+      "needs": "<what must be true before this step can start, or empty string>",
+      "depends_on": [<indices of steps this depends on, 0-based, or empty list>],
+      "type": "<action | discover>"
     }}
   ]
 }}
 
 Each step should be one tool interaction or one concrete action. If a step
 requires prerequisites (authentication, account creation, navigating to a
-page), those are separate steps. Include them. The plan should be complete
-enough that each step can execute without discovering missing prerequisites."""
+page), those are separate steps. Include them.
+
+Steps that don't depend on each other can run in parallel — use depends_on
+to show which steps must finish before others can start. Steps with no
+dependencies get an empty list.
+
+If you don't know enough to plan the full task yet, use a "discover" step
+to explore first. After a discover step completes, you can add more steps
+based on what you learned. Don't force a complete plan when you need
+runtime information — plan what you know, discover what you don't."""
 
 
 REPLAN_PROMPT = """You are partway through an agenda but encountered a problem.
@@ -250,19 +263,26 @@ class Planner:
             logger.warning("[PLANNER] Failed to generate plan from directive")
             return None
 
-        # Extract steps with prerequisites
+        # Extract steps with prerequisites, dependencies, and types
         steps = []
         step_needs = []
+        step_deps = []
+        step_types = []
         platform = ""
         for step in result["steps"]:
             if isinstance(step, dict):
                 steps.append(step.get("action", str(step)))
                 step_needs.append(step.get("needs", ""))
+                deps = step.get("depends_on", [])
+                step_deps.append(deps if isinstance(deps, list) else [])
+                step_types.append(step.get("type", "action"))
                 if not platform and step.get("platform"):
                     platform = step["platform"]
             elif isinstance(step, str):
                 steps.append(step)
                 step_needs.append("")
+                step_deps.append([])
+                step_types.append("action")
 
         agenda = self._desk.create_agenda(
             directive=directive,
@@ -270,6 +290,8 @@ class Planner:
             identity_reasoning=result.get("identity_reasoning", ""),
             steps=steps,
             step_needs=step_needs,
+            step_deps=step_deps,
+            step_types=step_types,
             platform=platform,
         )
 
