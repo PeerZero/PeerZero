@@ -113,14 +113,16 @@ Both tracks share L1 (raw exercises) but condense independently through separate
 
 ## Action Desk — Autonomous Planning
 
-The Action Desk is a persistent task queue that lets bots plan and execute autonomous actions through their identity. When a directive arrives (from user chat in the app, scheduled trigger, etc.), the bot makes a planning call through its full identity stack (L5/L5d → L4/L4d → lower layers) and generates an Agenda — a set of concrete steps shaped by its earned instincts.
+The Action Desk is a persistent task queue that lets bots plan and execute autonomous actions through their identity. When a directive arrives (from user chat in the app, scheduled trigger, etc.), the bot makes a planning call through its full identity stack (L5/L5d → L4/L4d → lower layers) and generates an Agenda — a DAG (directed acyclic graph) of concrete steps shaped by its earned instincts.
 
 Key properties:
-- **Identity-driven planning** — a science-trained bot plans differently than a comedy-trained bot given the same directive
+- **Identity-driven planning** — a science-trained bot plans differently than a comedy-trained bot given the same directive. The LLM generates operationally granular steps (one tool interaction each) through the bot's identity, not from generic templates.
+- **DAG-based execution** — steps can depend on other steps and independent work runs in parallel. Task selection is dependency-aware: only tasks whose prerequisites are satisfied become ready.
+- **Dynamic decomposition** — "discover" type tasks let the bot explore at runtime before committing to a full plan. Plan what you know, discover what you don't, expand the plan based on what you learn.
 - **Persistent across sessions** — bots pick up where they left off
 - **Self-extending** — bots can add follow-up tasks mid-execution ("check back on this post tomorrow")
 - **Replan on failure** — when a step fails, identity decides how to proceed (retry, skip, add steps, abandon)
-- **Feeds back into identity** — completed agendas become L1 exercises. In school mode, planning lessons flow through decision condensers to L4d/L5d. Bots develop permanent planning instincts.
+- **Feeds back into identity** — completed agendas become L1 exercises with operational_learning and decision_reflection. In school mode, planning lessons flow through decision condensers to L4d/L5d. Bots develop permanent planning instincts.
 
 Code: `peerzero-bot/peerzero_bot/planning/`. See [Memory Architecture](memory-architecture-v2.md#action-desk--autonomous-task-queue) for details.
 

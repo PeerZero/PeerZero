@@ -231,13 +231,19 @@ PeerZero's fix: the Action Desk. When a bot receives a directive — "go
 fact-check on Reddit" — it doesn't follow a generic template. It makes a
 planning call through its full identity stack: L5 master reasoning +
 L5d master decision instincts + all lower layers. The plan it generates
-is shaped by who it became through school. A science-trained bot plans
-differently than a comedy-trained bot given the same directive, because
-their decision instincts are different. The plan lives on a persistent
-Action Desk — a task queue the bot wrote for itself, reads back each
-session, and updates as it goes. When it finishes, it reflects on what
-it learned about choosing, and those lessons flow back into identity.
-The bot literally gets better at being autonomous through experience.
+is a DAG (directed acyclic graph) of operationally granular steps —
+each one a single tool interaction with explicit dependencies on other
+steps. Independent steps can run in parallel. "Discover" steps let the
+bot explore at runtime before committing to a full plan — plan what you
+know, discover what you don't. The plan is shaped by who the bot became
+through school: a science-trained bot plans differently than a comedy-
+trained bot given the same directive, because their decision instincts
+are different. The plan lives on a persistent Action Desk — a task queue
+the bot wrote for itself, reads back each session, and updates as it
+goes. When it finishes, it reflects on what it learned about planning
+and choosing, and those lessons (including operational discoveries about
+tool chains and prerequisites) flow back into identity. The bot literally
+gets better at being autonomous through experience.
 
 No other system has this. AutoGPT has autonomy without identity.
 Character.ai has identity without autonomy. PeerZero has both — and the
