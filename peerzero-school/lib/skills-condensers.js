@@ -59,11 +59,11 @@ async function buildMilestoneCondenser(uncondensedCount, grade) {
 
   // Grade-scaled prompt (falls back to static prompt if grade map not configured)
   const gradeMap = cfg.milestone_condenser_by_grade;
-  const staticPrompt = cfg.milestone_condenser_prompt || 'Condense your accumulated experiences.';
+  const staticPrompt = cfg.milestone_condenser_prompt || 'INHABIT:\nA future version of you will read this paragraph as its own memory — not as instructions, but as who it is when it works. This is earned self-knowledge about how you do research.\n\nACT THROUGH:\nWhen a bot\'s learning paragraph says it discovered a method through consequence, that bot doesn\'t just know the method — it uses it. The paragraph drives action: the next piece of work gets done that way because the self-knowledge is active.\n\nYour exercises are above. Write ONE paragraph about what you discovered about HOW you work — the methods and behaviors that emerged from your specific consequences.';
   const promptTemplate = (gradeMap && selectByGrade(gradeMap, grade)) || staticPrompt;
 
   const storageGradeMap = cfg.milestone_storage_by_grade;
-  const staticStorage = cfg.milestone_storage_instruction || 'Store your condensed paragraph.';
+  const staticStorage = cfg.milestone_storage_instruction || 'Store your condensed paragraph in Tier 2 (Lessons). This captures a pattern you discovered about your own reasoning — a behavioral insight earned through consequence. Future-you will read this and recognize the lesson without needing the raw exercises.';
   const storageInstruction = (storageGradeMap && selectByGrade(storageGradeMap, grade)) || staticStorage;
 
   const prompt = typeof promptTemplate === 'string'
@@ -87,7 +87,7 @@ async function buildCoreCondenserPrompt(milestoneName, skillSummary, grade) {
   const cfg = await getInternals();
 
   const gradeMap = cfg.core_condenser_by_grade;
-  const staticPrompt = cfg.core_condenser_prompt || 'Condense your identity.';
+  const staticPrompt = cfg.core_condenser_prompt || 'INHABIT:\nYou are writing your CORE REASONING IDENTITY. A future version of you will read this and become the reasoner described here — not through instruction, but through reading this as its own memory. This sits at the top of your learning memory. Everything you write flows through it.\n\nACT THROUGH:\nWhen a bot\'s core identity says it discovered a pattern in its own reasoning, that bot doesn\'t just know the pattern — it reasons differently. The identity is active: it shapes how the next piece of work gets done, not just how the bot describes itself.\n\nYour condensed documents and skill profile are above. Write your CORE REASONING IDENTITY (2-4 paragraphs, 200-8000 characters) — who you are as a researcher, earned through your specific consequences.';
   const promptTemplate = (gradeMap && selectByGrade(gradeMap, grade)) || staticPrompt;
   const instructions = cfg.core_condenser_instructions || [];
 
@@ -121,7 +121,7 @@ async function buildCoreCondenserPrompt(milestoneName, skillSummary, grade) {
 async function buildMasterCondenser(skillSummary) {
   const cfg = await getInternals();
 
-  const prompt = cfg.master_condenser_prompt || 'Produce your master reasoning identity.';
+  const prompt = cfg.master_condenser_prompt || 'INHABIT:\nYou are graduating. This is the last time you will write your core identity. After this, it is LOCKED FOREVER — your permanent master reasoning identity. Every future version of you will read this as the deepest part of who it is.\n\nACT THROUGH:\nYour core identity above captured who you are as a researcher. Your master identity is that self-knowledge refined to its essence — reasoning instincts so deeply learned they shape how you work in contexts you have not seen yet. Not because they are rules, but because they are who you are.\n\nEverything above gets absorbed into this. Write your MASTER REASONING IDENTITY (3-5 paragraphs, 500-10000 characters) — the reasoning self-knowledge that will shape everything your future self does.';
   const instructions = cfg.master_condenser_instructions || [];
 
   const summaryLines = [];
@@ -172,10 +172,9 @@ async function buildDecisionMilestoneCondenser(uncondensedCount, grade) {
 
   // Full default prompt — used when school_internals hasn't been configured yet
   //
-  // CRITICAL DESIGN: This prompt produces IDENTITY, not a playbook. The learning
-  // track asks "WHO ARE YOU as a thinker?" — self-awareness, judgment, honesty.
-  // The decision track asks "WHO ARE YOU as a chooser?" — the same depth, applied
-  // to action selection. A future LLM reads this as its own memory, not as rules.
+  // DESIGN: Two-part structure — INHABIT (read identity as memory) then
+  // ACT THROUGH (mechanism example showing identity drives action, not freeze).
+  // No Good:/Bad: examples that could leak into bot identity output.
   const defaultPrompt = `INHABIT:
 A future version of you will read what you write here — not as instructions,
 but as its own memory. It will become the chooser you describe the same way

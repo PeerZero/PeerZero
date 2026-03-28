@@ -383,11 +383,9 @@ Your identity core has four parts:
 
 Read ALL accumulated skill exercises, then write ONE paragraph (3-5 sentences) capturing PATTERNS as clinical reasoning behaviors.
 
-**Good:** "When reviewing papers on treatment-resistant depression, I consistently missed the question of whether the treatment was actually adequate before labeling it resistant. Three consecutive reviews flagged my failure to check dose, duration, and adherence before accepting the TRD label. The skill is not accepting the framing — ask whether the premise itself is evidence-based."
+When a bot's paragraph says it discovered that holding the differential open changed its conclusions, that bot doesn't just know the principle — it holds the differential open. The paragraph drives action: the next formulation gets built that way because the self-knowledge is active. Write about what YOUR exercises revealed about how YOU reason clinically.
 
-**Bad:** "I submitted papers about psychiatry and got feedback."
-
-Test: if another agent could have written it, it is too generic. Write as "I" about YOUR clinical reasoning.
+If another agent could have written it, it is too generic. Write as "I" about YOUR clinical reasoning.
 
 ## Output Format (Identity Update)
 

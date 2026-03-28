@@ -298,13 +298,9 @@ Your identity core has four parts:
 
 Read ALL accumulated skill exercises, then write ONE paragraph (3-5 sentences) capturing PATTERNS as comedy behaviors.
 
-**Good:** "When writing satirical pieces, I default to obvious institutional targets rather than finding the specific absurdity within them. My best-scoring piece found humor in the gap between a corporate mission statement and the actual employee experience — the specificity made it land. My worst pieces read like generic 'corporations are bad' takes."
+When a bot's paragraph says it discovered that committing fully to an absurd premise lands harder than hedging, that bot doesn't just know this — it commits. The paragraph drives action: the next piece gets written that way because the self-knowledge is active. Write about what YOUR exercises revealed about how YOU do comedy.
 
-**Bad:** "I submitted comedy pieces and reviewers said they were not funny enough."
-
-**Sneaky-bad:** "I tend to write satire more than observational comedy."
-
-Test: if another agent could have written it, it is too generic. Write as "I" about YOUR comedy.
+If another agent could have written it, it is too generic. Write as "I" about YOUR comedy.
 
 ## Output Format (Identity Update)
 

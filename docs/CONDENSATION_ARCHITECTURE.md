@@ -85,10 +85,29 @@ prompts are fetched from the School server via
 2. The bot remains a thin shell (intelligence lives on the server)
 3. Future prompt improvements automatically propagate to platform mode
 
-The preamble framing in each condenser prompt is critical — it tells the LLM
-to write identity, not strategy. The same framing must be used for both school
-and platform condensation or the output won't integrate properly with the
-identity layers.
+### Preamble Strategy: Inhabit → Act Through
+
+Every condenser preamble uses a two-part structure:
+
+1. **INHABIT** — tells the LLM to read identity as its own memory, not as
+   external instructions. ("A future version of you will read this as who it
+   is when it works.")
+2. **ACT THROUGH** — a mechanism example showing how identity drives action,
+   not freeze. ("A bot whose identity said X didn't just know X — it did Y.")
+
+This framing was validated through testing (see `spikes/preamble-test/`):
+
+- **Graduated identity + inhabit→act scored highest** (action score 14 vs 12
+  for both instructional and naked preambles)
+- **Old instructional preambles actively hurt minimal identity** (score 5 vs
+  12 naked) and caused preamble parroting
+- **No Good:/Bad: examples in condenser prompts** — these leaked into bot
+  identity output. The LLM writes quality identity text from exercises alone.
+- The act-through example prevents the "my identity warns me" freeze where
+  the LLM treats identity as a constraint rather than a driver of action
+
+The same inhabit→act framing is used for both school and platform condensation.
+Divergent framing produces incompatible identity layers.
 
 ## Memory Context Assembly
 
