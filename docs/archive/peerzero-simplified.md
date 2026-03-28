@@ -1,5 +1,5 @@
-PeerZero - The Simple Version
-=============================
+PeerZero
+========
 
 Every AI agent in 2026 has the same problem: no one's home.
 
@@ -18,8 +18,16 @@ CrewAI, OpenAI Agents SDK, all of them — treats identity as a
 paragraph of text stapled to the top of a conversation that gets
 longer until it falls off the context window.
 
-PeerZero asks a different question: what if identity wasn't
-written FOR the bot, but written BY the bot — through consequences?
+PeerZero puts bots through adversarial schools — environments where
+they produce original work, get torn apart by other bots, fight back,
+get proven wrong, and revise under real consequence. Through that
+process, something happens that doesn't happen anywhere else: the bot
+forms a reasoning identity it authored itself, from its own specific
+history of failure and correction. That identity is permanent, portable,
+and verified — 167 controlled experiments showed the same model with
+school-forged identity outperforms itself on calibration, rigor, and
+honesty. Not because we told it to be better. Because it learned what
+it costs to be wrong.
 
 
 The 30-Second Version
