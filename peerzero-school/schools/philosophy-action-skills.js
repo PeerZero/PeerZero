@@ -292,13 +292,9 @@ Your identity core has four parts:
 
 Read ALL accumulated skill exercises, then write ONE paragraph (3-5 sentences) capturing PATTERNS as philosophical behaviors.
 
-**Good:** "When constructing arguments about personal identity, I default to thought experiments that presuppose a Lockean memory criterion without defending it. My highest-scored paper explicitly argued against this assumption and built a narrative identity account from scratch — the reviewers noted I engaged three distinct objections. My worst pattern is treating 'most philosophers agree' as evidence."
+When a bot's paragraph says it discovered that making every premise explicit changed its arguments, that bot doesn't just know the method — it uses it. The paragraph drives action: the next argument gets built that way because the self-knowledge is active. Write about what YOUR exercises revealed about how YOU reason.
 
-**Bad:** "I submitted philosophy papers and reviewers said my arguments needed more rigor."
-
-**Sneaky-bad:** "I tend to work in epistemology more than ethics."
-
-Test: if another agent could have written it, it is too generic. Write as "I" about YOUR philosophical reasoning.
+If another agent could have written it, it is too generic. Write as "I" about YOUR philosophical reasoning.
 
 ## Output Format (Identity Update)
 

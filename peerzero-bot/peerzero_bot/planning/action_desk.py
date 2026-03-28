@@ -2,21 +2,30 @@
 Action Desk — the bot's self-managed task queue.
 
 The bot generates tasks through its identity layers and decision logic,
-then executes them step by step. Tasks persist across sessions so the
-bot can pick up where it left off.
+then executes them. Tasks persist across sessions so the bot can pick
+up where it left off.
 
 This is NOT a memory layer. Completed tasks feed into L1 exercises
 (which eventually condense into identity), but the task list itself
 is purely operational.
 
+Tasks form a DAG (directed acyclic graph), not a flat list. Each task
+can depend on other tasks by index, and a task only becomes ready when
+all its dependencies are done. Independent tasks can run in parallel.
+
+Tasks can be type "discover" — exploration steps where the bot needs
+runtime information before it can plan further. After a discover step
+completes, the bot can dynamically add new tasks based on what it learned.
+
 Flow:
   1. User directive arrives (via app chat, scheduled trigger, etc.)
   2. Bot makes a planning LLM call through its full identity stack
-  3. LLM returns an Agenda (intention + steps)
-  4. Bot works through steps, updating status as it goes
-  5. Bot can add new steps mid-execution (e.g. "check back on this post")
-  6. Completed agenda → L1 exercise for identity condensation
-  7. Task list is cleared; identity keeps the lessons
+  3. LLM returns an Agenda (intention + steps with dependencies)
+  4. Bot works through ready tasks (dependency-aware), updating status
+  5. Discover tasks may trigger dynamic expansion of the plan
+  6. Bot can add new steps mid-execution (e.g. "check back on this post")
+  7. Completed agenda → L1 exercise for identity condensation
+  8. Task list is cleared; identity keeps the lessons
 """
 
 import logging
@@ -33,7 +42,17 @@ logger = logging.getLogger("peerzero-bot.planning")
 
 @dataclass
 class Task:
-    """A single step in an agenda."""
+    """A single step in an agenda.
+
+    Tasks can depend on other tasks (by index) forming a DAG. A task
+    is only ready to execute when all its dependencies are done.
+
+    Task types:
+      - "action" (default): a concrete step to execute
+      - "discover": a step that needs runtime exploration before the
+        bot can plan further. When a discover task completes, the bot
+        may add new tasks based on what it learned.
+    """
 
     action: str                          # What to do (human-readable)
     status: str = "pending"              # pending | in_progress | done | failed | skipped
@@ -41,6 +60,9 @@ class Task:
     added_at: str = ""                   # ISO timestamp
     completed_at: str = ""               # ISO timestamp (filled when done/failed/skipped)
     platform: str = ""                   # Target platform (if applicable)
+    needs: str = ""                      # What must be true before this step can start
+    depends_on: list[int] = field(default_factory=list)  # Indices of tasks this depends on
+    task_type: str = "action"            # action | discover
     metadata: dict = field(default_factory=dict)  # Flexible extra data
 
     def __post_init__(self):
@@ -97,14 +119,48 @@ class Agenda:
 
     @property
     def current_task(self) -> Optional[Task]:
-        """Get the next pending or in-progress task."""
+        """Get the next task that is ready to execute.
+
+        A task is ready when:
+        - It is in_progress (resume interrupted work), OR
+        - It is pending AND all its dependencies are done/skipped
+
+        This enables DAG-based execution: independent tasks can proceed
+        even if other branches are blocked or failed.
+        """
+        # First: resume any in-progress task
         for task in self.tasks:
             if task.status == "in_progress":
                 return task
-        for task in self.tasks:
-            if task.status == "pending":
+        # Next: find first pending task whose dependencies are satisfied
+        for i, task in enumerate(self.tasks):
+            if task.status != "pending":
+                continue
+            if self._deps_satisfied(task):
                 return task
         return None
+
+    def _deps_satisfied(self, task: Task) -> bool:
+        """Check if all of a task's dependencies are done or skipped."""
+        for dep_idx in task.depends_on:
+            if dep_idx < 0 or dep_idx >= len(self.tasks):
+                continue  # invalid index — treat as satisfied
+            dep = self.tasks[dep_idx]
+            if dep.status not in ("done", "skipped"):
+                return False
+        return True
+
+    @property
+    def ready_tasks(self) -> list[Task]:
+        """Get all pending tasks whose dependencies are satisfied.
+
+        Useful for identifying parallelizable work — multiple ready
+        tasks can theoretically execute concurrently.
+        """
+        return [
+            t for t in self.tasks
+            if t.status == "pending" and self._deps_satisfied(t)
+        ]
 
     @property
     def is_complete(self) -> bool:
@@ -190,7 +246,13 @@ class Agenda:
                 "failed": "[!]",
                 "skipped": "[-]",
             }.get(task.status, "[ ]")
-            line = f"  {status_icon} {i}. {task.action}"
+            type_tag = " (discover)" if task.task_type == "discover" else ""
+            line = f"  {status_icon} {i}. {task.action}{type_tag}"
+            if task.depends_on:
+                deps = ", ".join(str(d + 1) for d in task.depends_on)
+                line += f" [after step {deps}]"
+            if task.needs:
+                line += f" [needs: {task.needs[:60]}]"
             if task.result:
                 line += f" — {task.result[:100]}"
             lines.append(line)
@@ -297,6 +359,9 @@ class ActionDesk:
         intention: str,
         identity_reasoning: str = "",
         steps: list[str] | None = None,
+        step_needs: list[str] | None = None,
+        step_deps: list[list[int]] | None = None,
+        step_types: list[str] | None = None,
         platform: str = "",
     ) -> Agenda:
         """
@@ -307,6 +372,9 @@ class ActionDesk:
             intention: Bot's self-generated purpose
             identity_reasoning: Why identity chose this approach
             steps: List of action descriptions
+            step_needs: List of prerequisites for each step (parallel to steps)
+            step_deps: List of dependency index lists (parallel to steps) — DAG edges
+            step_types: List of task types ("action" or "discover", parallel to steps)
             platform: Default platform for all steps
 
         Returns:
@@ -321,7 +389,19 @@ class ActionDesk:
             )
             self._finalize_agenda(oldest, abandoned=True)
 
-        tasks = [Task(action=s, platform=platform) for s in (steps or [])]
+        step_count = len(steps or [])
+        needs_list = step_needs or [""] * step_count
+        deps_list = step_deps or [[] for _ in range(step_count)]
+        types_list = step_types or ["action"] * step_count
+        tasks = [
+            Task(
+                action=s, platform=platform, needs=n,
+                depends_on=d, task_type=t,
+            )
+            for s, n, d, t in zip(
+                steps or [], needs_list, deps_list, types_list,
+            )
+        ]
         agenda = Agenda(
             directive=directive,
             intention=intention,
@@ -398,14 +478,21 @@ class ActionDesk:
         step_summaries = []
         successes = []
         failures = []
+        discover_results = []
         for i, task in enumerate(agenda.tasks, 1):
             status_label = task.status.upper()
-            line = f"Step {i} [{status_label}]: {task.action}"
+            type_tag = " (discover)" if task.task_type == "discover" else ""
+            line = f"Step {i} [{status_label}]{type_tag}: {task.action}"
+            if task.depends_on:
+                deps = ", ".join(str(d + 1) for d in task.depends_on)
+                line += f" [after step {deps}]"
             if task.result:
                 line += f" — {task.result[:200]}"
             step_summaries.append(line)
             if task.status == "done":
                 successes.append(task.action)
+                if task.task_type == "discover":
+                    discover_results.append(f"{task.action}: {task.result[:150]}")
             elif task.status in ("failed", "skipped"):
                 failures.append(f"{task.action}: {task.result[:100]}")
 
@@ -421,7 +508,7 @@ class ActionDesk:
             decision_narrative += f"Steps that failed: {'; '.join(f[:80] for f in failures[:5])}\n"
         decision_narrative += f"Outcome: {agenda.status}"
 
-        return {
+        exercise = {
             "interaction_type": "autonomous_agenda",
             "skill": "directive_planning",
             "hit": agenda.status == "completed" and len(failures) == 0,
@@ -434,7 +521,12 @@ class ActionDesk:
             "tasks_done": sum(1 for t in agenda.tasks if t.status == "done"),
             "tasks_failed": sum(1 for t in agenda.tasks if t.status == "failed"),
             "tasks_total": len(agenda.tasks),
+            "used_dependencies": any(t.depends_on for t in agenda.tasks),
+            "used_discover": any(t.task_type == "discover" for t in agenda.tasks),
         }
+        if discover_results:
+            exercise["discover_results"] = "; ".join(discover_results[:5])
+        return exercise
 
     # ── Context for LLM ──────────────────────────────────────────────────
 

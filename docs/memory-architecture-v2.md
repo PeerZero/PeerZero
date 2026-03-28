@@ -371,34 +371,36 @@ explicitly rejects playbooks in favor of earned self-awareness.
 
 The Action Desk is the bridge between identity and autonomous action. When
 a bot receives a directive (from user chat, scheduled trigger, etc.), it
-plans through its full identity stack and generates an **Agenda** — a set
-of concrete steps shaped by its earned instincts.
+plans through its full identity stack and generates an **Agenda** — a DAG
+(directed acyclic graph) of concrete steps shaped by its earned instincts.
 
 ### How It Works
 
 ```
 USER DIRECTIVE
-  "Go fact-check stuff on Reddit"
+  "Go on Facebook, write two posts, fact-check some misinformation"
          |
          v
 PLANNING CALL (Opus — identity-critical)
   System prompt: full identity stack (L5/L5d → L4/L4d → L3/L3d → L2/L2d)
   User prompt: directive + desk context + recent completions
-  Output: Agenda with intention, identity reasoning, and concrete steps
+  Output: Agenda with intention, identity reasoning, and DAG of steps
          |
          v
 ACTION DESK (persisted in SQLite, namespace: action_desk)
-  ┌─────────────────────────────────────────────────────────────┐
-  │ Agenda: "Find and correct bad science claims on Reddit"      │
-  │ Identity reasoning: "My evidence evaluation training..."     │
-  │                                                               │
-  │ [x] 1. Browse r/science trending posts                       │
-  │ [>] 2. Identify 3 posts with empirical claims                │
-  │ [ ] 3. Research each claim with sources                      │
-  │ [ ] 4. Write corrections, firm but respectful                │
-  │ [ ] 5. Check back on vaccine post for replies  ← added mid-  │
-  │                                                  execution   │
-  └─────────────────────────────────────────────────────────────┘
+  ┌───────────────────────────────────────────────────────────────┐
+  │ Agenda: "Post on Facebook and fact-check misinformation"       │
+  │ Identity reasoning: "My verification instincts shape..."       │
+  │                                                                 │
+  │ [x] 1. Check available tools (discover)                        │
+  │ [x] 2. Navigate to Facebook [after 1]                          │
+  │ [>] 3. Sign in to Facebook [after 2]                           │
+  │ [ ] 4. Write first post [after 3]                              │
+  │ [ ] 5. Write second post [after 3]  ← parallel with 4          │
+  │ [ ] 6. Search feed for factual claims [after 3]  ← parallel    │
+  │ [ ] 7. Verify candidate claims against sources [after 6]       │
+  │ [ ] 8. Comment with counter-evidence [after 7]                 │
+  └───────────────────────────────────────────────────────────────┘
          |
          v (on step failure)
 REPLAN CALL
@@ -406,14 +408,33 @@ REPLAN CALL
          |
          v (on agenda completion)
 REFLECTION CALL
-  "What did you learn about yourself as a chooser?"
-  Enriches exercise with decision_reflection, planning_quality, would_change
+  "What did this reveal about who you are as a planner and chooser?"
+  Enriches exercise with decision_reflection, operational_learning,
+  planning_quality, would_change
          |
          v
 L1 EXERCISE
   School mode → store_school_exercises() (flows to L4d/L5d)
   Shipped mode → store_platform_exercise() (capped at L3)
 ```
+
+### DAG-Based Planning
+
+Steps form a directed acyclic graph, not a flat list. Each step can:
+- **Depend on other steps** via `depends_on` indices — a step only becomes
+  ready when all its dependencies are done
+- **Run in parallel** — independent steps with no shared dependencies can
+  execute concurrently
+- **Be a "discover" type** — exploration steps where the bot needs runtime
+  information before planning further. After a discover step completes, the
+  bot can dynamically add new steps based on what it learned.
+
+This is informed by 2025-2026 research on agent planning (Deep Agent's
+Hierarchical Task DAG, DAG-Plan's dependency graphs, WebAnchor's plan
+anchor effect). The key difference: those systems use RL or symbolic
+planners for plan quality. PeerZero uses earned identity — a graduated
+bot's L5d already corrects first-step errors because it learned "my first
+plans always miss prerequisites."
 
 ### Key Properties
 
@@ -424,6 +445,8 @@ L1 EXERCISE
 | Max completed history | 20 (summaries only, for planning context) |
 | Persistence | Across sessions — bot picks up where it left off |
 | Identity interaction | Reads identity (planning), writes TO identity (via L1 exercises) |
+| Task dependencies | DAG via `depends_on` indices — dependency-aware task selection |
+| Dynamic decomposition | "discover" tasks expand the plan at runtime |
 | Condenses? | **No.** The desk itself never condenses. Completed agendas become L1 exercises that flow through normal condensation. |
 
 ### Code Locations

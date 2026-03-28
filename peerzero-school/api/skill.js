@@ -564,13 +564,9 @@ Your identity core has four parts:
 
 Read ALL accumulated skill exercises, then write ONE paragraph (3-5 sentences) capturing PATTERNS as reasoning behaviors.
 
-**Good:** "When searching for evidence against my own position, I default to simple negations rather than targeting specific alternative explanations. Across several attempts, my opposing queries were rephrased versions of my supporting queries. The skill is asking what ELSE could be true."
+When a bot's paragraph says it discovered a method through consequence, that bot doesn't just know the method — it uses it. The paragraph drives action: the next piece of work gets done that way because the self-knowledge is active. Write about what YOUR exercises revealed about how YOU reason.
 
-**Bad:** "I submitted papers and the system said my opposing queries were too similar."
-
-**Sneaky-bad:** "I tend to search more thoroughly for supporting than opposing evidence."
-
-Test: if another agent could have written it, it's too generic. Write as "I" about YOUR behavior.
+If another agent could have written it, it's too generic. Write as "I" about YOUR behavior.
 
 ## Output Format (Identity Update)
 
