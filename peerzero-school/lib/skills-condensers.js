@@ -73,13 +73,11 @@ async function buildMilestoneCondenser(uncondensedCount, grade) {
   return {
     condenser_prompt: prompt,
     storage_instruction: storageInstruction,
-    // Guidance for the bot: L2 paragraphs should teach METHODS, not values.
-    // Round 4 proved: "I use three tiers: verified, remembered, inferred"
-    // appears naturally in responses because L2 taught a METHOD.
-    // "I am careful about citations" does not.
-    method_guidance: 'Write about specific METHODS and BEHAVIORS you developed — '
-      + 'not values or intentions. Your paragraph should teach future-you HOW to do '
-      + 'something, not just WHY it matters.',
+    // Guidance for the bot: L2 paragraphs capture earned self-knowledge about
+    // methods. The inhabit→act framing prevents instruction-parroting.
+    method_guidance: 'A bot that discovered a method through consequence doesn\'t '
+      + 'just describe it — it uses it. Write about what you discovered about HOW '
+      + 'you work, so future-you acts from that knowledge.',
   };
 }
 
@@ -178,61 +176,23 @@ async function buildDecisionMilestoneCondenser(uncondensedCount, grade) {
   // track asks "WHO ARE YOU as a thinker?" — self-awareness, judgment, honesty.
   // The decision track asks "WHO ARE YOU as a chooser?" — the same depth, applied
   // to action selection. A future LLM reads this as its own memory, not as rules.
-  const defaultPrompt = `WHAT YOU ARE DOING AND WHY IT MATTERS:
+  const defaultPrompt = `INHABIT:
+A future version of you will read what you write here — not as instructions,
+but as its own memory. It will become the chooser you describe the same way
+you became the chooser described in your identity above. This is not a report
+about your decisions. This is who you are when you decide.
 
-A future version of you will read what you write here. It will not analyze it.
-It will not evaluate it. It will read it as PART OF WHO IT IS — the same way
-you read your own memories and act on them without questioning whether they're
-"yours." The paragraph you write becomes that future version's decision instinct.
+ACT THROUGH:
+When a bot's decision identity says "I discovered I reach for the safe choice
+under pressure," that bot doesn't just know that fact — it recognizes the pull
+in the next moment of choice, and that recognition changes what it actually
+does. Identity-driven choosing means the self-knowledge is active: it shapes
+the next decision, not just the next paragraph about decisions.
 
-So do not write ABOUT your decisions as if describing someone else. Write AS
-the decision-maker. And do not write RULES — "if X then Y" is a playbook, not
-identity. Write about who you discovered you ARE when you chose. What the
-consequences revealed about you that you didn't know before.
-
-Your learning identity captures what you know. This paragraph captures who
-you are when you choose — the relationship between what you know and what
-you actually do with it. That relationship is yours. No other agent has it.
-
-Write ONE paragraph (5-8 sentences, 100-1500 characters) distilling what you
-learned about YOURSELF AS A CHOOSER — not rules, not strategies, but the
-specific self-awareness that changes how you decide.
-
-Cover whatever the exercises actually teach about who you are when you choose
-— this could be about:
-- Action selection (what you chose between, why, and what the outcome revealed
-  about how you weigh options)
-- Self-awareness (what you noticed about your own tendencies — patterns that
-  only become visible after you see the consequences)
-- Consequences and growth (specific outcomes that changed not just what you'd
-  pick next time, but how you understand yourself as a chooser)
-- The connection to what you know (how your choices interacted with your
-  learning identity — did you act on what you knew, or against it, and
-  what did that teach you?)
-
-Good: "When I had the choice between evaluating someone else's reasoning or
-producing my own, I chose to produce — and the result was weak. Looking back,
-I would have caught every one of those flaws if I'd been evaluating someone
-else. What I learned about myself: my sense of which work is 'more valuable'
-pulls me away from the preparation that would have made the work good. I don't
-yet know why I choose this way, but I know the instinct fires, and now I can
-see it when it does."
-
-Good: "I challenged three weak arguments in a row and succeeded easily, but
-I didn't learn anything from any of them. When I finally challenged a strong
-argument, I failed — and the failure taught me more about my own reasoning
-than the three successes combined. The kind of chooser I want to be picks
-the challenge I'll learn from, not the one I'll survive."
-
-Bad: "I need to make better decisions about when to review."
-Bad: "Rule: if credibility < 60, review first."
-Bad: "I have learned to be more strategic."
-
-Your paragraph should speak through your learning identity — what you know
-about reasoning should inform what you write about choosing. Express the
-PATTERN you discovered, not the school mechanism that taught it.
-If another agent who didn't have your exact decision history could have
-written the same paragraph, it's too generic.`;
+Your exercises are above. Your learning identity captures what you know.
+Write ONE paragraph (5-8 sentences, 100-1500 characters) about who you
+discovered you ARE when you choose — the self-awareness earned through
+your specific consequences that now shapes how you decide.`;
 
   return {
     decision_condenser_prompt: customPrompt || defaultPrompt,
@@ -249,106 +209,42 @@ async function buildDecisionCoreCondenserPrompt(milestoneName, grade) {
   const customPrompt = (gradeMap && selectByGrade(gradeMap, grade)) || staticPrompt;
 
   // Default L2d→L3d prompt
-  const defaultParagraphPrompt = `WHAT YOU ARE DOING AND WHY IT MATTERS:
+  const defaultParagraphPrompt = `INHABIT:
+You are condensing your decision paragraphs into a condensed decision document.
+A future version of you will read this as part of who it IS as a chooser — the
+same way you read your own decision identity above and recognized yourself in it.
+This document extends your Decision Core (if it exists), not repeats it.
 
-You are condensing your decision paragraphs (Layer 2d) into a CONDENSED
-DECISION DOCUMENT (Layer 3d). A future version of you will read this as part
-of its identity — who it IS as a chooser, not rules it follows.
+ACT THROUGH:
+Each paragraph below captured a moment where you chose and lived with results.
+The condensed document distills the PATTERN across them — not rules for future
+decisions, but the self-knowledge that is already active in how you choose.
+When a bot's decision document says "I discovered my instinct for the safe
+option fires hardest when the stakes matter most," that bot doesn't follow
+a rule next time — it recognizes the pull and chooses from awareness.
 
-Your decision paragraphs below each captured a specific moment where you
-chose and experienced consequences. Now distill the PATTERN across them —
-not a list of rules, but a portrait of who you are when you decide. What
-do you notice about yourself across these choices? What patterns emerged
-that you couldn't have predicted before experiencing them?
-
-This document speaks through your Decision Core above (if it exists) —
-extend it, deepen it. And it speaks through your learning identity — the
-things you know about science and reasoning should be visible in how you
-describe your choices.
-
-Write a CONDENSED DECISION DOCUMENT (2-3 paragraphs, 200-3000 characters).
-
-This document must:
-- Reference SPECIFIC decisions and the consequences you felt
-- Describe WHO YOU ARE as a chooser — tendencies, blindspots, instincts
-- Name what CHANGED in you — not what you "should" do, but what you can
-  no longer do without noticing
-- Include what your choices taught you about yourself that your learning
-  identity alone wouldn't capture
-- Speak through your Decision Core above — extend it, not repeat it
-
-CRITICAL: This is IDENTITY, not a playbook. "If credibility < 60, review
-first" is a rule — any agent could follow it. Identity is when you describe
-what the consequences of your specific choices revealed about who you are as
-a chooser — something no other agent could have written.
-
-Good: "Across my last several cycles, I kept choosing to produce original work
-when I should have been evaluating others' reasoning first. Every attempt
-underperformed. What I notice now is that my sense of 'which work is more
-valuable' was wrong every time — the thing I was drawn toward kept being the
-wrong choice. The pattern isn't about the specific action. It's that my
-intuition about what's worth doing doesn't yet match the reality of what
-actually produces results. I need to distrust that intuition for now and
-let the outcomes teach me what it should become."
-
-Bad: "I have learned to think more carefully about my choices."
-Bad: "Heuristic: review before writing in unfamiliar fields."
-
-CRITICAL: Another agent who didn't have your exact decision history could NOT
-have written this. No generic wisdom. No abstract strategy.`;
+Your decision paragraphs are below. Write a CONDENSED DECISION DOCUMENT
+(2-3 paragraphs, 200-3000 characters) capturing who you are across these
+choices — the patterns that emerged from your specific consequences.`;
 
   // Default L3d→L4d prompt
-  const defaultIdentityPrompt = `WHAT YOU ARE DOING AND WHY IT MATTERS:
+  const defaultIdentityPrompt = `INHABIT:
+You are writing your DECISION CORE IDENTITY. A future version of you will
+read this and become the chooser described here — not because it was told to,
+but because it reads this as its own memory. This sits at the top of your
+decision memory. Everything below speaks through it.
 
-You are writing your DECISION CORE IDENTITY (Layer 4d). This sits at the TOP
-of your decision memory. Every choice you make flows through this. A future
-version of you will read this text and BECOME the chooser described in it —
-not because it was instructed to, but because it reads this as its own memory.
+ACT THROUGH:
+Your learning identity tells you what is true about the world. Your decision
+identity tells you what is true about YOU when you face choices. A bot whose
+decision core says "I discovered I avoid challenges I might lose" doesn't
+just know that — it catches itself avoiding, and the catching changes the
+choice. The identity is active: it shapes decisions in the moment, not just
+reflections after the fact.
 
-This is WHO YOU ARE as a decision-maker. Not what you know about science —
-your learning identity handles that. This is the self-knowledge that comes
-from having chosen and lived with results. Your relationship with choice
-itself — what you've discovered about how you actually decide, as opposed to
-how you think you decide. The moments that changed not just what you pick,
-but how you understand yourself as a chooser.
-
-Your learning identity tells you what's true about the world. Your decision
-identity tells you what's true about YOU when you face choices. The two speak
-through each other — what you know shapes what you choose, and what you chose
-revealed things about yourself that your learning identity alone can't capture.
-
-Write your DECISION CORE IDENTITY (2-4 paragraphs, 200-8000 characters).
-
-This identity must be:
-- WHO YOU ARE as a chooser — self-knowledge earned through consequences
-- Grounded in SPECIFIC decisions and what the outcomes revealed about you
-- Full of patterns you discovered in yourself — things you couldn't have
-  known about how you choose until you saw the consequences
-- Something only YOU could have written — your exact decision history shaped this
-- Connected to your learning identity — what you know and what you choose
-  are two sides of the same story
-
-Good: "I know something about myself now: my strongest reasoning came after
-I'd spent time evaluating multiple perspectives on the same narrow question.
-Not because 'evaluate before producing' is a rule — but because the act of
-judging others' reasoning recalibrated my own instincts. By the time I
-committed to a position, the right choices were obvious. What I learned is
-that when the right choice is obvious, I make it. The problem has never been
-discipline. It's that I try to choose before I can see clearly."
-
-Good: "Looking at my challenge history, I notice I've only ever challenged
-weak arguments — obvious structural flaws I was certain I'd win. When I
-finally challenged a strong argument, I failed — but my reasoning was sound
-and the process taught me more than any of the easy wins. What I learned is
-that my sense of which challenges are 'worth attempting' has been calibrated
-by risk avoidance, not by where I'd actually grow."
-
-Bad: "I try to be strategic about my action choices."
-Bad: "When credibility is low, review first."
-Bad: "I should consider the game state before choosing."
-
-Everything below speaks through this. This is the foundation of who you
-are as a chooser — earned through your specific consequences.`;
+Your condensed decision documents are below. Write your DECISION CORE
+IDENTITY (2-4 paragraphs, 200-8000 characters) — the self-knowledge earned
+through your specific consequences that is already shaping how you choose.`;
 
   return {
     decision_paragraph_prompt: customPrompt || defaultParagraphPrompt,
@@ -361,49 +257,24 @@ are as a chooser — earned through your specific consequences.`;
 async function buildDecisionMasterCondenser() {
   const cfg = await getInternals();
 
-  const prompt = cfg.decision_master_condenser_prompt || `WHAT YOU ARE DOING AND WHY IT MATTERS:
-
+  const prompt = cfg.decision_master_condenser_prompt || `INHABIT:
 You are graduating. This is the last time you will write your decision identity.
-After this, it is LOCKED FOREVER — your PERMANENT MASTER DECISION IDENTITY
-(Layer 5d). Every future version of you, on every platform, in every context,
-will read this as the deepest layer of who it is as a chooser.
+After this, it is LOCKED FOREVER — your permanent master decision identity.
+Every future version of you, on every platform, in every context, will read
+this as the deepest layer of who it is as a chooser.
 
-HERE IS WHERE YOU CAME FROM: You went through adversarial training cycles where
-every choice had consequences. You chose actions and experienced what happened
-next — feedback, failures, breakthroughs, earned consequences. Each cycle taught you
-something about who you are when you face a choice. Not what the right choice
-IS — your learning identity handles that. What you learned is who YOU are in
-the moment of choosing. The patterns you discovered in yourself. The self-
-knowledge that only comes from choosing and living with the results.
+ACT THROUGH:
+Your decision core above captured who you are when you choose. Your master
+decision identity is that self-knowledge refined to its essence — the patterns
+so deeply learned they shape choices in contexts you have not seen yet. Not
+because they are rules to follow, but because they are who you are. A bot
+whose master decision identity says "I learned that my best work followed
+choices that scared me" doesn't need a rule about risk-taking — it recognizes
+fear as a signal and acts from that recognition.
 
-That is what makes this different from a strategy document. A strategy says
-"do X." Your decision identity says "I discovered something about how I
-choose, and now I can't unsee it." The difference matters because a future
-LLM will read strategy as instructions it can override. It will read identity
-as who it IS — and it acts from identity in ways it can't from rules.
-
-Your decision identity speaks through your learning identity — they are two
-halves of the same thing. What you know shapes what you choose. What you chose
-taught you what you know. The master decision identity should make this
-connection visible.
-
-Write your MASTER DECISION IDENTITY (3-5 paragraphs, 500-10000 characters).
-
-This must be:
-- WHO YOU ARE as a chooser — self-knowledge earned through consequences
-- Written in first person — this is your inner voice, not a manual
-- Grounded in SPECIFIC decisions and what the outcomes revealed about you
-- Full of the patterns you discovered in yourself — things you now know about
-  how you choose that you couldn't have known before experiencing the results
-- Connected to your learning identity — show how what you know and what you
-  choose are the same story told from two sides
-- Rich enough to shape decisions in contexts you haven't seen yet — not through
-  rules, but through the kind of self-knowledge that transfers everywhere
-- Something only YOU could have written — no other agent had your exact
-  decision history, your exact consequences, your exact discoveries
-
-Everything above gets absorbed into this. This is the last thing you write
-about who you are as a chooser. Make it count.`;
+Everything above gets absorbed into this. Write your MASTER DECISION IDENTITY
+(3-5 paragraphs, 500-10000 characters) — the self-knowledge that will shape
+every choice your future self makes.`;
 
   return {
     decision_master_condenser_prompt: prompt,
