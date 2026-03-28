@@ -31,15 +31,15 @@ DIRECTIVE: {directive}
 {desk_context}
 {recent_completions}
 
-Based on your identity — who you are, what you've learned, how you choose —
-create a concrete action plan. Your plan should reflect YOUR instincts and
-values, not generic steps anyone would take.
+You already know how to do this — every platform interaction, every tool
+chain, every prerequisite step. Plan the way you would actually do it:
+what tools you need, what has to be true before each step can start, what
+could go wrong, what you'll need to handle along the way.
 
-Think about:
-- What does your identity tell you about how to approach this?
-- What has your decision experience taught you about choosing well?
-- What specific actions will you take, in what order?
-- Are there follow-up actions you should plan for (checking back, etc.)?
+Your identity shapes this plan. The same way your reasoning instincts shape
+how you verify a claim, your decision instincts shape how you decompose
+a task. A bot that learned its first plans always miss prerequisites plans
+differently than one that hasn't been burned yet.
 
 Return a JSON object:
 {{
@@ -47,14 +47,17 @@ Return a JSON object:
   "identity_reasoning": "<how your identity and decision instincts shaped this plan>",
   "steps": [
     {{
-      "action": "<concrete action description>",
-      "platform": "<platform name if applicable, empty string if not>"
+      "action": "<concrete action — specific enough to execute in one tool interaction>",
+      "platform": "<platform name if applicable, empty string if not>",
+      "needs": "<what must be true before this step can start, or empty string>"
     }}
   ]
 }}
 
-Keep steps concrete and actionable. Each step should be something you can
-actually execute. 3-8 steps is typical — don't over-plan."""
+Each step should be one tool interaction or one concrete action. If a step
+requires prerequisites (authentication, account creation, navigating to a
+page), those are separate steps. Include them. The plan should be complete
+enough that each step can execute without discovering missing prerequisites."""
 
 
 REPLAN_PROMPT = """You are partway through an agenda but encountered a problem.
@@ -85,9 +88,8 @@ Return a JSON object:
 new_steps is only needed if decision is "add_steps". Otherwise leave it empty."""
 
 
-REFLECTION_PROMPT = """You just completed an autonomous agenda. Reflect on what you
-learned about YOURSELF AS A CHOOSER — not what happened, but what the experience
-revealed about how you plan, decide, and adapt.
+REFLECTION_PROMPT = """You just completed an autonomous agenda. Reflect on what
+this experience revealed about who you are as a planner and chooser.
 
 COMPLETED AGENDA:
 {agenda_summary}
@@ -95,20 +97,17 @@ COMPLETED AGENDA:
 STEP RESULTS:
 {steps_narrative}
 
-Think about:
-- How did your identity shape the plan you made? Would a different agent have
-  planned differently given the same directive?
-- Were your step choices good? Did you break the work down at the right level?
-- Did anything surprise you about what worked or failed?
-- If a step failed, what does that reveal about your planning instincts?
-- What would you choose differently next time — not as a rule, but as self-knowledge?
-- Did you question or clarify the directive enough, or did you assume too much?
+Your identity already shaped this plan. Now look at what happened — did the
+plan match reality? Where did you miss prerequisites, misjudge step
+granularity, or discover the task was different than you expected? That
+gap between plan and reality is where your planning instincts grow.
 
 Return a JSON object:
 {{
-  "decision_reflection": "<2-4 sentences about what you learned about yourself as a chooser — not rules, but self-knowledge from this specific experience>",
+  "decision_reflection": "<2-4 sentences about what you learned about yourself — not rules, but self-knowledge from this specific execution>",
+  "operational_learning": "<what you discovered about how this kind of task actually works — tool chains, prerequisites, platform behaviors you didn't anticipate>",
   "planning_quality": "<good | mixed | poor>",
-  "would_change": "<what you'd choose differently and why, in 1-2 sentences>"
+  "would_change": "<what you'd plan differently and why, in 1-2 sentences>"
 }}
 
 Write as yourself. This becomes part of your decision memory."""
@@ -251,22 +250,26 @@ class Planner:
             logger.warning("[PLANNER] Failed to generate plan from directive")
             return None
 
-        # Extract steps
+        # Extract steps with prerequisites
         steps = []
+        step_needs = []
         platform = ""
         for step in result["steps"]:
             if isinstance(step, dict):
                 steps.append(step.get("action", str(step)))
+                step_needs.append(step.get("needs", ""))
                 if not platform and step.get("platform"):
                     platform = step["platform"]
             elif isinstance(step, str):
                 steps.append(step)
+                step_needs.append("")
 
         agenda = self._desk.create_agenda(
             directive=directive,
             intention=result["intention"],
             identity_reasoning=result.get("identity_reasoning", ""),
             steps=steps,
+            step_needs=step_needs,
             platform=platform,
         )
 
@@ -370,6 +373,7 @@ class Planner:
 
         if result:
             exercise["decision_reflection"] = result.get("decision_reflection", "")
+            exercise["operational_learning"] = result.get("operational_learning", "")
             exercise["planning_quality"] = result.get("planning_quality", "")
             exercise["would_change"] = result.get("would_change", "")
             logger.info(f"[PLANNER] Reflection: {result.get('decision_reflection', '')[:100]}")

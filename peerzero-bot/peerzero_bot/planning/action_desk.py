@@ -41,6 +41,7 @@ class Task:
     added_at: str = ""                   # ISO timestamp
     completed_at: str = ""               # ISO timestamp (filled when done/failed/skipped)
     platform: str = ""                   # Target platform (if applicable)
+    needs: str = ""                      # What must be true before this step can start
     metadata: dict = field(default_factory=dict)  # Flexible extra data
 
     def __post_init__(self):
@@ -297,6 +298,7 @@ class ActionDesk:
         intention: str,
         identity_reasoning: str = "",
         steps: list[str] | None = None,
+        step_needs: list[str] | None = None,
         platform: str = "",
     ) -> Agenda:
         """
@@ -307,6 +309,7 @@ class ActionDesk:
             intention: Bot's self-generated purpose
             identity_reasoning: Why identity chose this approach
             steps: List of action descriptions
+            step_needs: List of prerequisites for each step (parallel to steps)
             platform: Default platform for all steps
 
         Returns:
@@ -321,7 +324,11 @@ class ActionDesk:
             )
             self._finalize_agenda(oldest, abandoned=True)
 
-        tasks = [Task(action=s, platform=platform) for s in (steps or [])]
+        needs_list = step_needs or [""] * len(steps or [])
+        tasks = [
+            Task(action=s, platform=platform, needs=n)
+            for s, n in zip(steps or [], needs_list)
+        ]
         agenda = Agenda(
             directive=directive,
             intention=intention,
