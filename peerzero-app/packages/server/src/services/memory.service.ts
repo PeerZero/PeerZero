@@ -2,6 +2,12 @@
 // Memory service — 4-tier memory CRUD for the app's local copy
 // Tier 0 (Active Focus) is computed at runtime from School profile, never persisted.
 // Tiers 1-3 are persisted in the app's own Postgres.
+//
+// SECURITY: All condensed identity layers (L2 paragraphs, L3 core, L3 self-identity,
+// L3.5 self-authored) are encrypted at rest with AES-256-GCM. Even if the database
+// is breached, the bot's internal reasoning identity remains opaque without the
+// master key. Tier 1 (raw exercises) is NOT encrypted — it contains disposable
+// training data, not condensed identity.
 // =============================================================================
 
 import { queryOne, queryRows, query } from '../db/client';
@@ -79,20 +85,35 @@ export async function storeParagraph(
   paragraph: string,
   triggerCycle?: number,
 ): Promise<void> {
+  const { encrypted, iv } = encrypt(paragraph);
   await query(
-    `INSERT INTO bot_memory_paragraphs (bot_id, interaction_type, paragraph, trigger_cycle)
-     VALUES ($1, $2, $3, $4)`,
-    [botId, interactionType, paragraph, triggerCycle || null],
+    `INSERT INTO bot_memory_paragraphs (bot_id, interaction_type, encrypted_paragraph, paragraph_iv, trigger_cycle)
+     VALUES ($1, $2, $3, $4, $5)`,
+    [botId, interactionType, encrypted, iv, triggerCycle || null],
   );
 }
 
 export async function getParagraphs(botId: string, limit = 50): Promise<MemoryParagraph[]> {
-  return queryRows<MemoryParagraph>(
-    `SELECT id, interaction_type, paragraph, trigger_cycle, created_at
+  const rows = await queryRows<{
+    id: string; interaction_type: string; trigger_cycle: number | null; created_at: string;
+    encrypted_paragraph: Buffer | null; paragraph_iv: Buffer | null;
+    paragraph: string | null;
+  }>(
+    `SELECT id, interaction_type, encrypted_paragraph, paragraph_iv, paragraph, trigger_cycle, created_at
      FROM bot_memory_paragraphs WHERE bot_id = $1
      ORDER BY created_at DESC LIMIT $2`,
     [botId, limit],
   );
+
+  return rows.map(row => ({
+    id: row.id,
+    interaction_type: row.interaction_type,
+    paragraph: row.encrypted_paragraph && row.paragraph_iv
+      ? decrypt(row.encrypted_paragraph, row.paragraph_iv)
+      : row.paragraph || '',  // fallback for pre-migration rows
+    trigger_cycle: row.trigger_cycle,
+    created_at: row.created_at,
+  }));
 }
 
 // ── Tier 3: Core Identity ──
@@ -102,6 +123,8 @@ export async function storeCore(
   coreIdentity: string,
   triggerLabel?: string,
 ): Promise<void> {
+  const { encrypted, iv } = encrypt(coreIdentity);
+
   // Auto-increment version
   const latest = await queryOne<{ version: number }>(
     'SELECT version FROM bot_memory_core WHERE bot_id = $1 ORDER BY version DESC LIMIT 1',
@@ -110,19 +133,33 @@ export async function storeCore(
   const nextVersion = (latest?.version || 0) + 1;
 
   await query(
-    `INSERT INTO bot_memory_core (bot_id, core_identity, trigger_label, version)
-     VALUES ($1, $2, $3, $4)`,
-    [botId, coreIdentity, triggerLabel || null, nextVersion],
+    `INSERT INTO bot_memory_core (bot_id, encrypted_core, core_iv, trigger_label, version)
+     VALUES ($1, $2, $3, $4, $5)`,
+    [botId, encrypted, iv, triggerLabel || null, nextVersion],
   );
 }
 
 export async function getLatestCore(botId: string): Promise<MemoryCore | null> {
-  return queryOne<MemoryCore>(
-    `SELECT core_identity, trigger_label, version, created_at
+  const row = await queryOne<{
+    encrypted_core: Buffer | null; core_iv: Buffer | null;
+    core_identity: string | null;
+    trigger_label: string | null; version: number; created_at: string;
+  }>(
+    `SELECT encrypted_core, core_iv, core_identity, trigger_label, version, created_at
      FROM bot_memory_core WHERE bot_id = $1
      ORDER BY version DESC LIMIT 1`,
     [botId],
   );
+  if (!row) return null;
+
+  return {
+    core_identity: row.encrypted_core && row.core_iv
+      ? decrypt(row.encrypted_core, row.core_iv)
+      : row.core_identity || '',  // fallback for pre-migration rows
+    trigger_label: row.trigger_label,
+    version: row.version,
+    created_at: row.created_at,
+  };
 }
 
 // ── Self-Identity (cached from School) ──
@@ -135,27 +172,60 @@ export async function storeSelfIdentity(
   formedConvictions: string | null,
   schoolVersion?: number,
 ): Promise<void> {
+  // Encrypt all sensitive fields as a single JSON blob
+  const identityBlob = JSON.stringify({
+    self_narrative: narrative,
+    claimed_values: claimedValues,
+    active_tensions: activeTensions,
+    formed_convictions: formedConvictions,
+  });
+  const { encrypted, iv } = encrypt(identityBlob);
+
   // Upsert — one row per bot
   await query(
-    `INSERT INTO bot_memory_self_identity (bot_id, self_narrative, claimed_values, active_tensions, formed_convictions, school_version, cached_at)
-     VALUES ($1, $2, $3, $4, $5, $6, NOW())
+    `INSERT INTO bot_memory_self_identity (bot_id, encrypted_identity, identity_iv, school_version, cached_at)
+     VALUES ($1, $2, $3, $4, NOW())
      ON CONFLICT (bot_id) DO UPDATE SET
-       self_narrative = EXCLUDED.self_narrative,
-       claimed_values = EXCLUDED.claimed_values,
-       active_tensions = EXCLUDED.active_tensions,
-       formed_convictions = EXCLUDED.formed_convictions,
+       encrypted_identity = EXCLUDED.encrypted_identity,
+       identity_iv = EXCLUDED.identity_iv,
        school_version = EXCLUDED.school_version,
        cached_at = NOW()`,
-    [botId, narrative, claimedValues, activeTensions, formedConvictions, schoolVersion || null],
+    [botId, encrypted, iv, schoolVersion || null],
   );
 }
 
 export async function getSelfIdentity(botId: string): Promise<MemorySelfIdentity | null> {
-  return queryOne<MemorySelfIdentity>(
-    `SELECT self_narrative, claimed_values, active_tensions, formed_convictions, cached_at
+  const row = await queryOne<{
+    encrypted_identity: Buffer | null; identity_iv: Buffer | null;
+    self_narrative: string | null; claimed_values: string[] | null;
+    active_tensions: string | null; formed_convictions: string | null;
+    cached_at: string;
+  }>(
+    `SELECT encrypted_identity, identity_iv, self_narrative, claimed_values, active_tensions, formed_convictions, cached_at
      FROM bot_memory_self_identity WHERE bot_id = $1`,
     [botId],
   );
+  if (!row) return null;
+
+  // Decrypt if available, fallback to plaintext columns for pre-migration rows
+  if (row.encrypted_identity && row.identity_iv) {
+    const blob = JSON.parse(decrypt(row.encrypted_identity, row.identity_iv));
+    return {
+      self_narrative: blob.self_narrative,
+      claimed_values: blob.claimed_values || [],
+      active_tensions: blob.active_tensions,
+      formed_convictions: blob.formed_convictions,
+      cached_at: row.cached_at,
+    };
+  }
+
+  return {
+    self_narrative: row.self_narrative,
+    claimed_values: row.claimed_values || [],
+    active_tensions: row.active_tensions,
+    formed_convictions: row.formed_convictions,
+    cached_at: row.cached_at,
+  };
 }
 
 // ── Self-Authored Identity (encrypted, LLM-only) ──

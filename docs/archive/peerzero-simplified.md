@@ -176,10 +176,6 @@ Five layers, two parallel tracks (learning + decision):
   Philosophy carries two separate L5 identities — both permanent,
   both composable.
 
-  The Inner Voice: After each condensation, the bot writes a private
-  encrypted message to its future self. Next cycle, it reads its own
-  words, recognizes itself, picks up where it left off.
-
   The Action Desk: A persistent task queue, not a memory layer. When
   the bot gets a directive ("fact-check on Reddit"), it plans through
   its full identity stack and generates a DAG of operationally granular
