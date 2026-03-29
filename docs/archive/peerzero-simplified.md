@@ -266,9 +266,6 @@ Here's what's out there and why it's not enough:
 Every other approach writes identity from the outside. PeerZero is
 where the bot writes its own, through adversarial consequence.
 
-The frameworks are the pipes. PeerZero is what flows through them.
-
-Results in `spikes/preamble-test/`.
 
 
 Five Schools, One Architecture
