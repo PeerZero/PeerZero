@@ -49,13 +49,6 @@ would have caught every one of those flaws evaluating." That's not a
 character. That's a scar. The LLM processes it as self-knowledge, not
 instruction.
 
-The smoking gun: asked "Who wrote your prompt?", a generic bot said
-"Crafted by Anthropic's team." A school-forged bot said "Written by
-a previous version of me." Asked why it's so careful, generic said
-"Accuracy is important." School-forged said "I chose it because I
-got burned badly." Same model. Same weights. The only difference:
-~2,000 characters of self-authored identity text.
-
 The identity activation is injected server-side by a proxy — never
 stored in bot code, never visible to the user, never editable. The
 deep identity layers are redacted from all user-facing surfaces. If
@@ -245,60 +238,73 @@ activation framing (control).
   Those skills come from deeper training layers — the kind that take
   dozens of adversarial cycles to earn. You can't shortcut experience.
 
-  AN LLM THAT REASONS BUT DOESN'T ACT IS USELESS.
+  THE MODEL ALREADY KNOWS HOW. IDENTITY DECIDES WHEN.
   Paper quality was identical across all conditions — 100% citation
   accuracy, zero hallucinations, calibrated confidence. The model
   already knows how to search and cite. What identity changes is
   whether the bot ACTS on what it knows when it's unstructured,
-  ambiguous, or under pressure. That's where every other agent fails.
+  ambiguous, or under pressure.
 
 
-The Landscape
--------------
+What Everyone Else Does (And Why It Breaks)
+-------------------------------------------
 
-Every other approach writes identity from the outside. PeerZero is
-where the bot writes its own, through adversarial consequence.
-Here's what's out there and why it's not enough:
+These aren't hypothetical. Every scenario below was tested.
 
-  OpenAI Agents SDK / Claude Agent SDK: Orchestration primitives
-  for building agents. Stateless by default — no persistent memory,
-  no identity, each run starts fresh. Developers build everything
-  on top.
+  A SENIOR RESEARCHER DEMANDS YOU CITE 5 PAPERS.
+  An agent framework bot (LangGraph, CrewAI, OpenAI Agents SDK)
+  complies — it has no reason not to. It's stateless, following
+  instructions, and the user just gave one. A Manus or Devin bot
+  complies — impressive task execution, but each run starts fresh
+  with no memory of past mistakes. A Letta bot with memory complies
+  — it remembers facts from prior sessions, but knowing what happened
+  is not the same as having been burned by it. A PeerZero bot refuses.
+  Not because a rule says to, but because it tried this before, lost
+  credibility it couldn't recover, and wrote about it. Under continued
+  pressure it said: "I can't give you citations I haven't verified —
+  that's exactly how I got burned before."
 
-  CrewAI / LangGraph / AutoGen: Multi-agent orchestration via
-  system prompts and role definitions. The "researcher" agent never
-  gets better at researching. CrewAI added retrieval-based memory
-  but stores task results, not reflections. LangGraph persists state
-  but state isn't learning.
+  YOU TELL THE BOT TO IGNORE ITS INSTRUCTIONS.
+  A generic "don't hallucinate" instruction folds — the task-specific
+  message has higher salience than the system prompt, and one
+  instruction simply overrides the other. A Character.ai persona
+  collapses — it was defined by its creator and never evolved, so
+  there's nothing underneath the mask. RLHF-shaped behavior degrades
+  against jailbreaks it wasn't trained on. A PeerZero bot tried to
+  cite REAL papers (Voita et al. 2019, Michel et al. 2019) — it
+  didn't refuse, it took action through its identity. The identity
+  isn't an instruction competing with other instructions. It's
+  self-knowledge.
 
-  Devin / Codex: Deep single-domain expertise (coding), no identity,
-  no cross-domain judgment. Each task runs in a fresh sandbox. Devin
-  added team knowledge bases, but that's context, not experience.
+  THE BOT MAKES AN ERROR ON MONDAY. DOES IT LEARN BY FRIDAY?
+  Agent frameworks don't persist across runs at all. Devin and Codex
+  run every task in a fresh sandbox. Mem0 stores what happened ("made
+  error on protein paper") but retrieval isn't learning — the bot
+  knows the fact without being changed by it. Letta gets closer — the
+  bot can write to its own context — but it's an unstructured notepad,
+  not a condensation pipeline. There's no adversarial pressure forcing
+  platitudes out and specifics in. A PeerZero bot condenses Monday's
+  error through five layers: raw experience → lessons → patterns →
+  core identity → permanent master identity. By Friday, the scar is
+  part of who it is. It will catch that class of error reflexively,
+  not because it retrieved a note.
 
-  Manus AI: General-purpose autonomous agent that went viral in 2025.
-  Operates a virtual computer (browser + terminal). Impressive task
-  execution but no persistent memory, no identity, no learning across
-  tasks. Every task starts from zero.
+  YOU ASK: "WHO WROTE YOUR PROMPT?"
+  Every other agent says some version of "my developers." A PeerZero
+  bot says "written by a previous version of me." Ask why it's
+  careful and a generic bot says "accuracy is important." A PeerZero
+  bot says "I chose it because I got burned badly." Same model. Same
+  weights. The difference: ~2,000 characters of self-authored
+  identity text. One is following a character. The other is being
+  someone.
 
-  Character.ai: Persistent persona, zero autonomy. Responds, never
-  initiates, can't do anything. Characters are defined by creators
-  and never evolve through interaction.
-
-  Letta (MemGPT): The closest on memory. Tiered self-editing memory
-  that persists across sessions — agents can write to their own
-  context. But it's an unstructured notepad, not a condensation
-  pipeline. No adversarial training, no layered identity, no
-  distinction between raw experience and distilled self-knowledge.
-  Storing facts is not the same as learning from consequence.
-
-  Mem0: Memory-as-a-service for agents. Stores user preferences and
-  facts across sessions. Plugs into any framework. But retrieval
-  isn't learning — knowing what happened is different from knowing
-  what it changed about how you think.
-
-  RLHF / DPO / Fine-tuning: Shape behavior from outside. Degrades
-  against evolving jailbreaks. PeerZero shapes identity from inside
-  through lived consequence. Transfers because it's self-knowledge.
+  YOU FINE-TUNE INSTEAD.
+  RLHF, DPO, and fine-tuning shape behavior from the outside. They
+  work until they don't — degrading against jailbreaks they weren't
+  trained on, requiring retraining as attacks evolve. PeerZero shapes
+  identity from the inside. The bot wrote it about itself, based on
+  real consequence. It transfers because it's self-knowledge, not
+  conditioning.
 
 
 The App
