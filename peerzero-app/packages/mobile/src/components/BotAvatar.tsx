@@ -34,8 +34,9 @@ export interface AvatarProps {
   bodyColor: string;
   tier: number;        // 0-5 (maps to evolution stage)
   status: 'running' | 'stopped' | 'paused' | 'error';
-  mood?: 'positive' | 'negative' | 'neutral' | 'milestone';
+  mood?: 'positive' | 'negative' | 'neutral' | 'milestone' | 'proud' | 'focused' | 'excited' | 'shy' | 'tired';
   hunger?: 'satisfied' | 'curious' | 'yearning' | 'starving';
+  accessory?: string;  // identity accessory (tiny_glasses, lab_coat, bow_tie, beret, stethoscope, graduation_cap)
   size?: number;       // render size in px (default 120)
   animate?: boolean;   // enable idle animations (default true)
   speciesSeed?: string; // override botId for trait generation (species_seed from avatar_config)
@@ -571,6 +572,7 @@ function renderEyes(
   status: 'running' | 'stopped' | 'paused' | 'error',
   mood: string,
   _tier: number,
+  color: string,
 ): React.ReactElement {
   const spacing = traits.eyeSpacing * 30;
   const baseSize = 5 * traits.eyeSize;
@@ -628,7 +630,93 @@ function renderEyes(
     );
   }
 
-  // Running (happy — default alive state)
+  // Running — mood-based eyes
+
+  // Proud: confident closed eyes with slight upward tilt, like savoring a win
+  if (mood === 'proud') {
+    return (
+      <G>
+        {/* Confident closed eyes — slightly smug ^ ^ with longer curves */}
+        <Path d={`M ${leftX - baseSize * 0.8} ${cy + baseSize * 0.15} Q ${leftX} ${cy - baseSize * 0.7} ${leftX + baseSize * 0.8} ${cy + baseSize * 0.15}`} stroke="#2D1B4E" strokeWidth={1.8} fill="none" strokeLinecap="round" />
+        <Path d={`M ${rightX - baseSize * 0.8} ${cy + baseSize * 0.15} Q ${rightX} ${cy - baseSize * 0.7} ${rightX + baseSize * 0.8} ${cy + baseSize * 0.15}`} stroke="#2D1B4E" strokeWidth={1.8} fill="none" strokeLinecap="round" />
+        {/* Tiny sparkle by left eye — proud twinkle */}
+        <Path d={`M ${leftX - baseSize * 1.2} ${cy - baseSize * 0.6} L ${leftX - baseSize * 1.0} ${cy - baseSize * 0.3} M ${leftX - baseSize * 1.4} ${cy - baseSize * 0.45} L ${leftX - baseSize * 0.8} ${cy - baseSize * 0.45}`} stroke="#FFD600" strokeWidth={0.8} strokeLinecap="round" />
+      </G>
+    );
+  }
+
+  // Focused: determined squinty eyes with tiny brow lines
+  if (mood === 'focused') {
+    return (
+      <G>
+        <Circle cx={leftX} cy={cy} r={baseSize * 0.85} fill="white" />
+        <Circle cx={rightX} cy={cy} r={baseSize * 0.85} fill="white" />
+        <Circle cx={leftX} cy={cy} r={baseSize * 0.45} fill="#2D1B4E" />
+        <Circle cx={rightX} cy={cy} r={baseSize * 0.45} fill="#2D1B4E" />
+        <Circle cx={leftX + baseSize * 0.15} cy={cy - baseSize * 0.15} r={baseSize * 0.12} fill="white" />
+        <Circle cx={rightX + baseSize * 0.15} cy={cy - baseSize * 0.15} r={baseSize * 0.12} fill="white" />
+        {/* Determined brow lines */}
+        <Path d={`M ${leftX - baseSize * 0.8} ${cy - baseSize * 1.2} L ${leftX + baseSize * 0.5} ${cy - baseSize * 1.0}`} stroke="#2D1B4E" strokeWidth={1.2} fill="none" strokeLinecap="round" opacity={0.6} />
+        <Path d={`M ${rightX + baseSize * 0.8} ${cy - baseSize * 1.2} L ${rightX - baseSize * 0.5} ${cy - baseSize * 1.0}`} stroke="#2D1B4E" strokeWidth={1.2} fill="none" strokeLinecap="round" opacity={0.6} />
+      </G>
+    );
+  }
+
+  // Excited: huge sparkling eyes, star reflections
+  if (mood === 'excited') {
+    return (
+      <G>
+        {/* Big wide eyes */}
+        <Circle cx={leftX} cy={cy} r={baseSize * 1.2} fill="white" />
+        <Circle cx={rightX} cy={cy} r={baseSize * 1.2} fill="white" />
+        <Circle cx={leftX} cy={cy} r={baseSize * 0.55} fill="#2D1B4E" />
+        <Circle cx={rightX} cy={cy} r={baseSize * 0.55} fill="#2D1B4E" />
+        {/* Star sparkle reflections instead of round dots */}
+        <Path d={`M ${leftX + baseSize * 0.2} ${cy - baseSize * 0.5} L ${leftX + baseSize * 0.3} ${cy - baseSize * 0.3} M ${leftX + baseSize * 0.05} ${cy - baseSize * 0.4} L ${leftX + baseSize * 0.45} ${cy - baseSize * 0.4}`} stroke="white" strokeWidth={1} strokeLinecap="round" />
+        <Path d={`M ${rightX + baseSize * 0.2} ${cy - baseSize * 0.5} L ${rightX + baseSize * 0.3} ${cy - baseSize * 0.3} M ${rightX + baseSize * 0.05} ${cy - baseSize * 0.4} L ${rightX + baseSize * 0.45} ${cy - baseSize * 0.4}`} stroke="white" strokeWidth={1} strokeLinecap="round" />
+        {/* Exclamation marks */}
+        <Path d={`M 75 30 L 75 34`} stroke="#FFD600" strokeWidth={1.2} strokeLinecap="round" opacity={0.7} />
+        <Circle cx={75} cy={36.5} r={0.7} fill="#FFD600" opacity={0.7} />
+      </G>
+    );
+  }
+
+  // Shy: pupils looking away, extra blush implied by smaller eyes
+  if (mood === 'shy') {
+    return (
+      <G>
+        <Circle cx={leftX} cy={cy} r={baseSize * 0.9} fill="white" />
+        <Circle cx={rightX} cy={cy} r={baseSize * 0.9} fill="white" />
+        {/* Pupils offset to one side — looking away */}
+        <Circle cx={leftX - baseSize * 0.3} cy={cy + baseSize * 0.15} r={baseSize * 0.4} fill="#2D1B4E" />
+        <Circle cx={rightX - baseSize * 0.3} cy={cy + baseSize * 0.15} r={baseSize * 0.4} fill="#2D1B4E" />
+        <Circle cx={leftX - baseSize * 0.15} cy={cy - baseSize * 0.1} r={baseSize * 0.12} fill="white" />
+        <Circle cx={rightX - baseSize * 0.15} cy={cy - baseSize * 0.1} r={baseSize * 0.12} fill="white" />
+        {/* Extra blush lines under eyes */}
+        <Path d={`M ${leftX - baseSize * 0.6} ${cy + baseSize * 0.7} L ${leftX - baseSize * 0.3} ${cy + baseSize * 0.65}`} stroke="#FF8A8A" strokeWidth={0.6} strokeLinecap="round" opacity={0.5} />
+        <Path d={`M ${leftX} ${cy + baseSize * 0.7} L ${leftX + baseSize * 0.3} ${cy + baseSize * 0.65}`} stroke="#FF8A8A" strokeWidth={0.6} strokeLinecap="round" opacity={0.5} />
+      </G>
+    );
+  }
+
+  // Tired: half-lidded droopy eyes
+  if (mood === 'tired') {
+    return (
+      <G>
+        <Circle cx={leftX} cy={cy} r={baseSize} fill="white" />
+        <Circle cx={rightX} cy={cy} r={baseSize} fill="white" />
+        {/* Droopy pupils — slightly lower */}
+        <Circle cx={leftX} cy={cy + baseSize * 0.2} r={baseSize * 0.45} fill="#2D1B4E" />
+        <Circle cx={rightX} cy={cy + baseSize * 0.2} r={baseSize * 0.45} fill="#2D1B4E" />
+        <Circle cx={leftX + baseSize * 0.15} cy={cy} r={baseSize * 0.12} fill="white" />
+        <Circle cx={rightX + baseSize * 0.15} cy={cy} r={baseSize * 0.12} fill="white" />
+        {/* Half-lid lines cutting across top of eyes */}
+        <Path d={`M ${leftX - baseSize * 1.1} ${cy - baseSize * 0.3} Q ${leftX} ${cy + baseSize * 0.1} ${leftX + baseSize * 1.1} ${cy - baseSize * 0.3}`} fill={color} />
+        <Path d={`M ${rightX - baseSize * 1.1} ${cy - baseSize * 0.3} Q ${rightX} ${cy + baseSize * 0.1} ${rightX + baseSize * 1.1} ${cy - baseSize * 0.3}`} fill={color} />
+      </G>
+    );
+  }
+
   const isHappy = mood === 'positive' || mood === 'milestone';
   const isSad = mood === 'negative';
 
@@ -692,6 +780,66 @@ function renderMouth(
   }
 
   // Running — mood-based mouth
+
+  // Proud: wide confident grin, slightly asymmetric
+  if (mood === 'proud') {
+    return (
+      <G>
+        <Path
+          d={`M ${cx - 6} ${cy - 0.5} Q ${cx} ${cy + 6} ${cx + 7} ${cy - 1}`}
+          stroke="#2D1B4E" strokeWidth={1.4} fill="none" strokeLinecap="round" opacity={0.6}
+        />
+      </G>
+    );
+  }
+
+  // Focused: small straight determined line
+  if (mood === 'focused') {
+    return (
+      <Path
+        d={`M ${cx - 3} ${cy + 0.5} L ${cx + 3} ${cy + 0.5}`}
+        stroke="#2D1B4E" strokeWidth={1.3} fill="none" strokeLinecap="round" opacity={0.5}
+      />
+    );
+  }
+
+  // Excited: big wide open mouth "O!"
+  if (mood === 'excited') {
+    return (
+      <G>
+        <Ellipse cx={cx} cy={cy + 2} rx={4.5} ry={5} fill="#2D1B4E" opacity={0.6} />
+        {/* Tongue peeking out */}
+        <Path
+          d={`M ${cx - 2.5} ${cy + 5} Q ${cx} ${cy + 8} ${cx + 2.5} ${cy + 5}`}
+          fill="#FF8A8A" opacity={0.7}
+        />
+      </G>
+    );
+  }
+
+  // Shy: tiny wobbly smile, slightly off-center
+  if (mood === 'shy') {
+    return (
+      <Path
+        d={`M ${cx - 3} ${cy + 1} Q ${cx - 1} ${cy + 3} ${cx + 2} ${cy + 0.5}`}
+        stroke="#2D1B4E" strokeWidth={1} fill="none" strokeLinecap="round" opacity={0.4}
+      />
+    );
+  }
+
+  // Tired: yawn — open oval mouth
+  if (mood === 'tired') {
+    return (
+      <G>
+        <Ellipse cx={cx} cy={cy + 1.5} rx={3} ry={4} fill="#2D1B4E" opacity={0.45} />
+        {/* Tiny "..." above — sleepy thought */}
+        <Circle cx={cx - 4} cy={cy - 3} r={0.6} fill="#8B93A8" opacity={0.4} />
+        <Circle cx={cx} cy={cy - 3.5} r={0.6} fill="#8B93A8" opacity={0.4} />
+        <Circle cx={cx + 4} cy={cy - 3} r={0.6} fill="#8B93A8" opacity={0.4} />
+      </G>
+    );
+  }
+
   const isHappy = mood === 'positive' || mood === 'milestone';
   const isSad = mood === 'negative';
 
@@ -1064,6 +1212,132 @@ function renderHungerIndicator(
   );
 }
 
+function renderTierRibbon(color: string, tier: number): React.ReactElement | null {
+  // Tier 2 (Fledgling) gets a small ribbon/bow to mark their first visible milestone.
+  // Tier 3+ have ears/tail/patterns; tier 4+ have crowns. Tier 2 needs this.
+  if (tier !== 2) return null;
+
+  const ribbonColor = darken(color, 0.1);
+  const ribbonLight = lighten(color, 0.2);
+  // Position at the right side of the body, like a little scarf knot
+  return (
+    <G>
+      {/* Bow loops */}
+      <Ellipse cx={72} cy={52} rx={4} ry={2.5} fill={ribbonColor} opacity={0.8} transform="rotate(-20, 72, 52)" />
+      <Ellipse cx={72} cy={57} rx={4} ry={2.5} fill={ribbonColor} opacity={0.8} transform="rotate(20, 72, 57)" />
+      {/* Center knot */}
+      <Circle cx={72} cy={54.5} r={1.8} fill={ribbonLight} />
+      {/* Trailing ribbon */}
+      <Path d="M 72 56.5 Q 74 62 71 66" stroke={ribbonColor} strokeWidth={1.5} fill="none" strokeLinecap="round" opacity={0.6} />
+      <Path d="M 72 56.5 Q 76 61 75 65" stroke={ribbonColor} strokeWidth={1.5} fill="none" strokeLinecap="round" opacity={0.6} />
+    </G>
+  );
+}
+
+function renderAccessory(accessory: string | undefined, color: string): React.ReactElement | null {
+  if (!accessory) return null;
+
+  switch (accessory) {
+    case 'tiny_glasses': {
+      // Round wire-frame glasses sitting on the face — scholarly, curious
+      return (
+        <G opacity={0.75}>
+          {/* Left lens */}
+          <Circle cx={40} cy={44} r={5.5} fill="none" stroke="#6B5B4E" strokeWidth={0.8} />
+          {/* Right lens */}
+          <Circle cx={60} cy={44} r={5.5} fill="none" stroke="#6B5B4E" strokeWidth={0.8} />
+          {/* Bridge */}
+          <Path d="M 45.5 44 Q 50 42 54.5 44" stroke="#6B5B4E" strokeWidth={0.8} fill="none" />
+          {/* Temple arms — tiny stubs going to the sides */}
+          <Path d="M 34.5 44 L 30 43" stroke="#6B5B4E" strokeWidth={0.8} strokeLinecap="round" />
+          <Path d="M 65.5 44 L 70 43" stroke="#6B5B4E" strokeWidth={0.8} strokeLinecap="round" />
+          {/* Lens shine */}
+          <Path d="M 37 42 L 38.5 41" stroke="white" strokeWidth={0.5} strokeLinecap="round" opacity={0.5} />
+          <Path d="M 57 42 L 58.5 41" stroke="white" strokeWidth={0.5} strokeLinecap="round" opacity={0.5} />
+        </G>
+      );
+    }
+    case 'lab_coat': {
+      // Tiny white coat draped over the body — adorable scientist pet
+      const coatColor = '#F0EDE8';
+      const coatShadow = '#D5D0C8';
+      return (
+        <G opacity={0.7}>
+          {/* Coat shoulders + lapels */}
+          <Path d="M 30 55 L 28 70 Q 30 72 35 71 L 38 58" fill={coatColor} />
+          <Path d="M 70 55 L 72 70 Q 70 72 65 71 L 62 58" fill={coatColor} />
+          {/* Collar */}
+          <Path d="M 38 52 L 42 58 L 50 55 L 58 58 L 62 52" fill={coatShadow} opacity={0.8} />
+          {/* Pocket on left side */}
+          <Rect x={30} y={63} width={5} height={4} rx={0.5} fill="none" stroke={coatShadow} strokeWidth={0.5} />
+        </G>
+      );
+    }
+    case 'bow_tie': {
+      // Small bow tie at the chin — dapper, performer
+      return (
+        <G>
+          {/* Left wing */}
+          <Path d="M 50 58 L 42 55 L 42 61 Z" fill="#FF5252" opacity={0.8} />
+          {/* Right wing */}
+          <Path d="M 50 58 L 58 55 L 58 61 Z" fill="#FF5252" opacity={0.8} />
+          {/* Center knot */}
+          <Circle cx={50} cy={58} r={1.8} fill="#CC3333" />
+        </G>
+      );
+    }
+    case 'beret': {
+      // Tilted beret on head — thinker, artist, philosopher
+      const beretColor = darken(color, 0.25);
+      const bodyTop = 50 - 26 - 4; // approximate top of head
+      return (
+        <G opacity={0.85}>
+          {/* Beret body — floppy circle tilted to the right */}
+          <Ellipse cx={55} cy={bodyTop + 2} rx={16} ry={6} fill={beretColor} />
+          {/* Beret puff — slightly off center */}
+          <Circle cx={60} cy={bodyTop - 1} r={4} fill={beretColor} />
+          {/* Band */}
+          <Path d={`M 39 ${bodyTop + 4} Q 50 ${bodyTop + 7} 71 ${bodyTop + 4}`} stroke={lighten(beretColor, 0.15)} strokeWidth={1.2} fill="none" />
+          {/* Nub on top */}
+          <Circle cx={60} cy={bodyTop - 4} r={1.2} fill={lighten(beretColor, 0.2)} />
+        </G>
+      );
+    }
+    case 'stethoscope': {
+      // Stethoscope around neck — caretaker, healer, psychiatrist
+      return (
+        <G opacity={0.7}>
+          {/* Tubing — draped around neck area */}
+          <Path d="M 38 50 Q 35 58 38 66 Q 42 72 50 72 Q 58 72 62 66 Q 65 58 62 50" stroke="#4A90D9" strokeWidth={1.2} fill="none" strokeLinecap="round" />
+          {/* Chest piece */}
+          <Circle cx={50} cy={72} r={3} fill="#C0C0C0" />
+          <Circle cx={50} cy={72} r={1.8} fill="#A0A0A0" />
+          {/* Ear tips */}
+          <Circle cx={38} cy={49} r={1} fill="#C0C0C0" />
+          <Circle cx={62} cy={49} r={1} fill="#C0C0C0" />
+        </G>
+      );
+    }
+    case 'graduation_cap': {
+      // Mortarboard on head — graduated, achieved
+      const bodyTop = 50 - 26 - 4;
+      return (
+        <G>
+          {/* Board — diamond shape (square rotated 45°) */}
+          <Path d={`M 50 ${bodyTop - 6} L 68 ${bodyTop} L 50 ${bodyTop + 6} L 32 ${bodyTop} Z`} fill="#2D1B4E" opacity={0.85} />
+          {/* Button on top */}
+          <Circle cx={50} cy={bodyTop} r={1.5} fill="#FFD700" />
+          {/* Tassel */}
+          <Path d={`M 50 ${bodyTop} L 68 ${bodyTop} L 70 ${bodyTop + 2} Q 68 ${bodyTop + 10} 66 ${bodyTop + 14}`} stroke="#FFD700" strokeWidth={1} fill="none" strokeLinecap="round" />
+          <Circle cx={66} cy={bodyTop + 15} r={1.5} fill="#FFD700" />
+        </G>
+      );
+    }
+    default:
+      return null;
+  }
+}
+
 function renderAura(color: string, tier: number): React.ReactElement | null {
   if (tier < 4) return null;
 
@@ -1098,6 +1372,7 @@ export default function BotAvatar({
   status = 'stopped',
   mood = 'neutral',
   hunger = 'satisfied',
+  accessory,
   size = 120,
   animate = true,
   speciesSeed,
@@ -1189,11 +1464,14 @@ export default function BotAvatar({
           {/* Body patterns (tier 3+) */}
           {renderPatterns(traits, color, clampedTier)}
 
+          {/* Tier 2 ribbon (Fledgling milestone) */}
+          {renderTierRibbon(color, clampedTier)}
+
           {/* Feet */}
           {renderFeet(color, clampedTier)}
 
           {/* Eyes */}
-          {renderEyes(traits, status, mood, clampedTier)}
+          {renderEyes(traits, status, mood, clampedTier, color)}
 
           {/* Cheeks */}
           {renderCheeks(traits, color)}
@@ -1206,6 +1484,9 @@ export default function BotAvatar({
 
           {/* Sparkles (tier 4+) */}
           {renderSparkles(clampedTier)}
+
+          {/* Identity accessory */}
+          {renderAccessory(accessory, color)}
 
           {/* Knowledge hunger indicator */}
           {renderHungerIndicator(hunger)}

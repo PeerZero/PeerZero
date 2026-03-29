@@ -53,7 +53,7 @@ export const ACTIVITY_CATEGORIES = ['task', 'content'] as const;
 export type ActivityCategory = typeof ACTIVITY_CATEGORIES[number];
 
 // Activity mood (for UI styling)
-export const MOOD_TYPES = ['positive', 'negative', 'neutral', 'milestone'] as const;
+export const MOOD_TYPES = ['positive', 'negative', 'neutral', 'milestone', 'proud', 'focused', 'excited', 'shy', 'tired'] as const;
 export type MoodType = typeof MOOD_TYPES[number];
 
 // LLM providers the app supports
@@ -132,6 +132,18 @@ export const AVATAR_COLOR_PRESETS = [
   '#86EFAC', // Clover
   '#FDE68A', // Honey
 ] as const;
+
+// Avatar accessories — cosmetic items that reflect a bot's personality/identity.
+// These are "pet dress-up" items, not school labels.
+export const AVATAR_ACCESSORIES = [
+  'tiny_glasses',     // Round wire-frame glasses — scholarly, curious
+  'lab_coat',         // White coat draped over shoulders — scientist pet
+  'bow_tie',          // Small bow at the chin — dapper, performer
+  'beret',            // Tilted on head — thinker, artist
+  'stethoscope',      // Around neck — caretaker, healer
+  'graduation_cap',   // Mortarboard on head — graduated, achieved
+] as const;
+export type AvatarAccessory = typeof AVATAR_ACCESSORIES[number];
 
 // Bot species presets — each seed produces a unique combination of
 // body shape, ear style, tail style, and pattern. Shown at tier 3
