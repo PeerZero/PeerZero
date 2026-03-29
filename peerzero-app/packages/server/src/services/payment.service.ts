@@ -61,13 +61,17 @@ export async function createCheckout(
     [userId, productId, product.price_cents],
   );
 
+  if (!purchase) {
+    throw new Error('Failed to create purchase record');
+  }
+
   // Create Stripe checkout session
   const session = await getStripe().checkout.sessions.create({
     customer: customerId,
     mode: 'payment',
     line_items: [{ price: product.stripe_price_id, quantity: 1 }],
     metadata: {
-      purchase_id: purchase!.id,
+      purchase_id: purchase.id,
       user_id: userId,
       product_id: productId,
       ...metadata,
@@ -79,7 +83,7 @@ export async function createCheckout(
   // Store session ID
   await query(
     'UPDATE purchases SET stripe_session_id = $1 WHERE id = $2',
-    [session.id, purchase!.id],
+    [session.id, purchase.id],
   );
 
   return { session_url: session.url! };

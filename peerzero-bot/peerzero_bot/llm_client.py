@@ -575,8 +575,10 @@ class LLMClient:
                 try:
                     tool_output = tool_executor(tool_name, arguments)
                     output_text = str(tool_output.get("output", tool_output))
+                    is_error = tool_output.get("is_error", False)
                 except Exception as e:
                     output_text = f"Tool execution error: {e}"
+                    is_error = True
 
                 messages.append({
                     "role": "tool",
@@ -587,6 +589,7 @@ class LLMClient:
                     "tool": tool_name,
                     "arguments": arguments,
                     "output": output_text[:500],
+                    "is_error": is_error,
                 })
 
         return result

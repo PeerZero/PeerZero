@@ -34,7 +34,9 @@ async function searchOpenAlex(query) {
       const inv = w.abstract_inverted_index;
       if (!inv || typeof inv !== 'object' || Object.keys(inv).length === 0) continue;
 
-      const maxPos = Math.max(...Object.values(inv).flat());
+      const flatPositions = Object.values(inv).flat();
+      if (flatPositions.length === 0) continue;
+      const maxPos = Math.max(...flatPositions);
       const words = new Array(maxPos + 1).fill('');
       for (const [word, positions] of Object.entries(inv)) {
         for (const pos of positions) {

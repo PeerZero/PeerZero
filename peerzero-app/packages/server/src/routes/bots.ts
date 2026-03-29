@@ -391,7 +391,8 @@ router.get('/:id/skills', userRateLimit('read'), async (req: Request, res: Respo
 router.get('/:id/stats', userRateLimit('read'), async (req: Request, res: Response) => {
   // Verify ownership
   await botService.getBotDetail(req.user!.userId, req.params.id);
-  const days = parseInt(req.query.days as string) || 30;
+  const parsedDays = parseInt(req.query.days as string, 10);
+  const days = Number.isFinite(parsedDays) && parsedDays > 0 ? parsedDays : 30;
   const stats = await statsService.getBotStats(req.params.id, Math.min(days, 365));
   res.json(stats);
 });

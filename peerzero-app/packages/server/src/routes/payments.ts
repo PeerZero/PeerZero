@@ -99,7 +99,9 @@ router.get('/grade-price-preview/:botId', requireAuth, userRateLimit('read'), as
   const targetParam = req.query.through as string;
   const unlockedGrades = await paymentService.getUnlockedGrades(req.params.botId);
   const highestUnlocked = unlockedGrades.length > 0 ? Math.max(...unlockedGrades) : 0;
-  const target = (targetParam === 'graduation' || targetParam === 'all') ? 12 : parseInt(targetParam, 10) || 12;
+  const parsedGrade = parseInt(targetParam, 10);
+  const target = (targetParam === 'graduation' || targetParam === 'all') ? 12 :
+    (Number.isFinite(parsedGrade) && parsedGrade > 0 && parsedGrade <= 12) ? parsedGrade : 12;
   const preview = paymentService.calculateBulkPrice(highestUnlocked, target);
   res.json(preview);
 });
