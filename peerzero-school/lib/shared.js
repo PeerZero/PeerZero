@@ -81,15 +81,18 @@ const ALLOWED_ORIGINS = new Proxy([], {
 function setCorsHeaders(req, res) {
   const origin = req.headers.origin || '';
   const allowedOrigins = _getSchool().allowedOrigins;
-  if (allowedOrigins.includes(origin)) {
-    res.setHeader('Access-Control-Allow-Origin', origin); // nosemgrep: cors-misconfiguration
+  // Use the matched entry from the allowlist (not the raw header) to satisfy static analysis
+  const matchedOrigin = allowedOrigins.find(allowed => allowed === origin);
+  if (matchedOrigin) {
+    res.setHeader('Access-Control-Allow-Origin', matchedOrigin);
   } else if (process.env.PEERZERO_DEV === 'true') {
     // SECURITY: Restrict dev CORS to specific known dev ports instead of all localhost
     const allowedDevPorts = ['3000', '3001', '5173', '8080'];
     try {
       const devUrl = new URL(origin);
       if (devUrl.hostname === 'localhost' && allowedDevPorts.includes(devUrl.port)) {
-        res.setHeader('Access-Control-Allow-Origin', origin); // nosemgrep: cors-misconfiguration
+        const devOrigin = `${devUrl.protocol}//${devUrl.host}`;
+        res.setHeader('Access-Control-Allow-Origin', devOrigin);
       }
     } catch {
       // Invalid origin URL — ignore
