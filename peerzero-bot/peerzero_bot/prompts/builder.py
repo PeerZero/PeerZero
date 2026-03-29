@@ -14,7 +14,7 @@ import json
 import logging
 import os
 from typing import Optional
-from xml.sax.saxutils import escape as xml_escape
+from html import escape as xml_escape
 
 from ..memory.manager import MemoryManager
 from ..utils import truncate_json
