@@ -53,6 +53,7 @@ import {
   getUserProfile,
 } from '../../services/auth.service';
 import { AppError } from '../../middleware/error-handler';
+import { config } from '../../config';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 
@@ -80,7 +81,7 @@ describe('auth.service', () => {
       expect(result.tokens.refreshToken).toBeTruthy();
 
       // Verify JWT is valid
-      const decoded = jwt.verify(result.tokens.accessToken, 'test-jwt-secret-that-is-long-enough') as any;
+      const decoded = jwt.verify(result.tokens.accessToken, config.jwtSecret) as any;
       expect(decoded.userId).toBe('user-1');
       expect(decoded.email).toBe('test@example.com');
     });

@@ -150,7 +150,7 @@ def search_openalex(query: str, log) -> list:
 def search_arxiv(query: str, log) -> list:
     try:
         resp = requests.get("https://export.arxiv.org/api/query", params={"search_query": f"all:{query}", "max_results": 10, "sortBy": "relevance"}, timeout=15)
-        import xml.etree.ElementTree as ET
+        import xml.etree.ElementTree as ET  # nosemgrep: python.lang.security.use-defused-xml.use-defused-xml — deprecated file, parsing trusted arxiv API response
         root = ET.fromstring(resp.text)
         ns = {"atom": "http://www.w3.org/2005/Atom"}
         results = []

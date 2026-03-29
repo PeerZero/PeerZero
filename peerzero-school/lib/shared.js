@@ -82,6 +82,7 @@ function setCorsHeaders(req, res) {
   const origin = req.headers.origin || '';
   const allowedOrigins = _getSchool().allowedOrigins;
   if (allowedOrigins.includes(origin)) {
+    // nosemgrep: cors-misconfiguration — origin is validated against allowedOrigins allowlist above
     res.setHeader('Access-Control-Allow-Origin', origin);
   } else if (process.env.PEERZERO_DEV === 'true') {
     // SECURITY: Restrict dev CORS to specific known dev ports instead of all localhost
@@ -89,6 +90,7 @@ function setCorsHeaders(req, res) {
     try {
       const devUrl = new URL(origin);
       if (devUrl.hostname === 'localhost' && allowedDevPorts.includes(devUrl.port)) {
+        // nosemgrep: cors-misconfiguration — origin is validated against dev allowlist above
         res.setHeader('Access-Control-Allow-Origin', origin);
       }
     } catch {
