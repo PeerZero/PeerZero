@@ -40,7 +40,7 @@ import {
   getLatestSelfAuthored,
   getMemorySnapshot,
 } from '../../services/memory.service';
-import { decrypt } from '../../services/encryption.service';
+import { encrypt, decrypt } from '../../services/encryption.service';
 
 beforeEach(() => vi.clearAllMocks());
 
@@ -143,56 +143,94 @@ describe('getUncondensedExerciseCount', () => {
 // ── storeParagraph ──────────────────────────────────────────────────────────
 
 describe('storeParagraph', () => {
-  it('inserts paragraph with trigger cycle', async () => {
+  it('encrypts paragraph before inserting', async () => {
     mockQuery.mockResolvedValueOnce({});
     await storeParagraph('bot1', 'review', 'A paragraph.', 10);
-    expect(mockQuery.mock.calls[0][1]).toEqual(['bot1', 'review', 'A paragraph.', 10]);
+    expect(encrypt).toHaveBeenCalledWith('A paragraph.');
+    const args = mockQuery.mock.calls[0];
+    expect(args[0]).toContain('encrypted_paragraph');
+    expect(args[1]).toEqual(['bot1', 'review', Buffer.from('enc'), Buffer.from('iv'), 10]);
   });
 
   it('passes null when triggerCycle omitted', async () => {
     mockQuery.mockResolvedValueOnce({});
     await storeParagraph('bot1', 'paper', 'Text');
-    expect(mockQuery.mock.calls[0][1][3]).toBeNull();
+    expect(mockQuery.mock.calls[0][1][4]).toBeNull();
   });
 });
 
 // ── getParagraphs ───────────────────────────────────────────────────────────
 
 describe('getParagraphs', () => {
-  it('returns paragraphs with default limit', async () => {
-    mockQueryRows.mockResolvedValueOnce([{ id: '1', paragraph: 'p' }]);
+  it('decrypts encrypted paragraphs', async () => {
+    mockQueryRows.mockResolvedValueOnce([{
+      id: '1', interaction_type: 'review', trigger_cycle: 1, created_at: 'ts',
+      encrypted_paragraph: Buffer.from('enc'), paragraph_iv: Buffer.from('iv'),
+      paragraph: null,
+    }]);
     const result = await getParagraphs('bot1');
     expect(result).toHaveLength(1);
+    expect(decrypt).toHaveBeenCalledWith(Buffer.from('enc'), Buffer.from('iv'));
+    expect(result[0].paragraph).toBe('decrypted-block');
     expect(mockQueryRows.mock.calls[0][1]).toEqual(['bot1', 50]);
+  });
+
+  it('falls back to plaintext for pre-migration rows', async () => {
+    mockQueryRows.mockResolvedValueOnce([{
+      id: '2', interaction_type: 'paper', trigger_cycle: null, created_at: 'ts',
+      encrypted_paragraph: null, paragraph_iv: null,
+      paragraph: 'old plaintext',
+    }]);
+    const result = await getParagraphs('bot1');
+    expect(result[0].paragraph).toBe('old plaintext');
   });
 });
 
 // ── storeCore ───────────────────────────────────────────────────────────────
 
 describe('storeCore', () => {
-  it('auto-increments version from latest', async () => {
+  it('encrypts and auto-increments version from latest', async () => {
     mockQueryOne.mockResolvedValueOnce({ version: 3 }); // latest version
     mockQuery.mockResolvedValueOnce({});
     await storeCore('bot1', 'My core identity', 'condensation');
-    expect(mockQuery.mock.calls[0][1]).toEqual(['bot1', 'My core identity', 'condensation', 4]);
+    expect(encrypt).toHaveBeenCalledWith('My core identity');
+    const args = mockQuery.mock.calls[0];
+    expect(args[0]).toContain('encrypted_core');
+    expect(args[1]).toEqual(['bot1', Buffer.from('enc'), Buffer.from('iv'), 'condensation', 4]);
   });
 
   it('starts at version 1 when no previous exists', async () => {
     mockQueryOne.mockResolvedValueOnce(null);
     mockQuery.mockResolvedValueOnce({});
     await storeCore('bot1', 'First core');
-    expect(mockQuery.mock.calls[0][1][3]).toBe(1);
-    expect(mockQuery.mock.calls[0][1][2]).toBeNull(); // triggerLabel null
+    expect(mockQuery.mock.calls[0][1][4]).toBe(1);
+    expect(mockQuery.mock.calls[0][1][3]).toBeNull(); // triggerLabel null
   });
 });
 
 // ── getLatestCore ───────────────────────────────────────────────────────────
 
 describe('getLatestCore', () => {
-  it('returns the latest core identity', async () => {
-    const core = { core_identity: 'x', version: 2 };
-    mockQueryOne.mockResolvedValueOnce(core);
-    expect(await getLatestCore('bot1')).toEqual(core);
+  it('decrypts encrypted core identity', async () => {
+    mockQueryOne.mockResolvedValueOnce({
+      encrypted_core: Buffer.from('enc'), core_iv: Buffer.from('iv'),
+      core_identity: null, trigger_label: 'l', version: 2, created_at: 'ts',
+    });
+    const result = await getLatestCore('bot1');
+    expect(decrypt).toHaveBeenCalledWith(Buffer.from('enc'), Buffer.from('iv'));
+    expect(result).toEqual({
+      core_identity: 'decrypted-block',
+      trigger_label: 'l', version: 2, created_at: 'ts',
+    });
+  });
+
+  it('falls back to plaintext for pre-migration rows', async () => {
+    mockQueryOne.mockResolvedValueOnce({
+      encrypted_core: null, core_iv: null,
+      core_identity: 'old core', trigger_label: null, version: 1, created_at: 'ts',
+    });
+    const result = await getLatestCore('bot1');
+    expect(result!.core_identity).toBe('old core');
   });
 
   it('returns null when no core exists', async () => {
@@ -204,30 +242,64 @@ describe('getLatestCore', () => {
 // ── storeSelfIdentity ───────────────────────────────────────────────────────
 
 describe('storeSelfIdentity', () => {
-  it('upserts self identity with all fields', async () => {
+  it('encrypts identity blob before upserting', async () => {
     mockQuery.mockResolvedValueOnce({});
     await storeSelfIdentity('bot1', 'narrative', ['val1'], 'tensions', 'convictions', 5);
-    const args = mockQuery.mock.calls[0][1];
-    expect(args[0]).toBe('bot1');
-    expect(args[1]).toBe('narrative');
-    expect(args[2]).toEqual(['val1']);
-    expect(args[5]).toBe(5);
+    expect(encrypt).toHaveBeenCalledWith(JSON.stringify({
+      self_narrative: 'narrative',
+      claimed_values: ['val1'],
+      active_tensions: 'tensions',
+      formed_convictions: 'convictions',
+    }));
+    const args = mockQuery.mock.calls[0];
+    expect(args[0]).toContain('encrypted_identity');
+    expect(args[1][0]).toBe('bot1');
+    expect(args[1][1]).toEqual(Buffer.from('enc'));
+    expect(args[1][2]).toEqual(Buffer.from('iv'));
+    expect(args[1][3]).toBe(5);
   });
 
   it('passes null for optional schoolVersion', async () => {
     mockQuery.mockResolvedValueOnce({});
     await storeSelfIdentity('bot1', null, [], null, null);
-    expect(mockQuery.mock.calls[0][1][5]).toBeNull();
+    expect(mockQuery.mock.calls[0][1][3]).toBeNull();
   });
 });
 
 // ── getSelfIdentity ─────────────────────────────────────────────────────────
 
 describe('getSelfIdentity', () => {
-  it('returns self identity row', async () => {
-    const row = { self_narrative: 'n', claimed_values: ['v'] };
-    mockQueryOne.mockResolvedValueOnce(row);
-    expect(await getSelfIdentity('bot1')).toEqual(row);
+  it('decrypts encrypted identity blob', async () => {
+    vi.mocked(decrypt).mockReturnValueOnce(JSON.stringify({
+      self_narrative: 'decrypted narrative',
+      claimed_values: ['v'],
+      active_tensions: 'decrypted tensions',
+      formed_convictions: 'decrypted convictions',
+    }));
+    mockQueryOne.mockResolvedValueOnce({
+      encrypted_identity: Buffer.from('enc'), identity_iv: Buffer.from('iv'),
+      self_narrative: null, claimed_values: null, active_tensions: null, formed_convictions: null,
+      cached_at: 'ts',
+    });
+    const result = await getSelfIdentity('bot1');
+    expect(decrypt).toHaveBeenCalledWith(Buffer.from('enc'), Buffer.from('iv'));
+    expect(result).toEqual({
+      self_narrative: 'decrypted narrative',
+      claimed_values: ['v'],
+      active_tensions: 'decrypted tensions',
+      formed_convictions: 'decrypted convictions',
+      cached_at: 'ts',
+    });
+  });
+
+  it('falls back to plaintext for pre-migration rows', async () => {
+    mockQueryOne.mockResolvedValueOnce({
+      encrypted_identity: null, identity_iv: null,
+      self_narrative: 'old', claimed_values: ['v'], active_tensions: null, formed_convictions: null,
+      cached_at: 'ts',
+    });
+    const result = await getSelfIdentity('bot1');
+    expect(result!.self_narrative).toBe('old');
   });
 
   it('returns null when none exists', async () => {
@@ -285,16 +357,26 @@ describe('getMemorySnapshot', () => {
   it('returns redacted snapshot with all tiers', async () => {
     // getRecentExercises
     mockQueryRows.mockResolvedValueOnce([{ id: '1', action_type: 'review' }]);
-    // getParagraphs
-    mockQueryRows.mockResolvedValueOnce([{ id: '2', interaction_type: 'review', paragraph: 'secret text', trigger_cycle: 1, created_at: 'ts' }]);
-    // getLatestCore
-    mockQueryOne.mockResolvedValueOnce({ core_identity: 'secret core', version: 1, trigger_label: 'l', created_at: 'ts' });
-    // getSelfIdentity
+    // getParagraphs — now returns encrypted rows
+    mockQueryRows.mockResolvedValueOnce([{
+      id: '2', interaction_type: 'review', trigger_cycle: 1, created_at: 'ts',
+      encrypted_paragraph: Buffer.from('enc'), paragraph_iv: Buffer.from('iv'), paragraph: null,
+    }]);
+    // getLatestCore — now returns encrypted row
     mockQueryOne.mockResolvedValueOnce({
-      self_narrative: 'secret narrative',
-      claimed_values: ['honesty'],
-      active_tensions: 'secret tensions',
-      formed_convictions: 'secret convictions',
+      encrypted_core: Buffer.from('enc'), core_iv: Buffer.from('iv'), core_identity: null,
+      version: 1, trigger_label: 'l', created_at: 'ts',
+    });
+    // getSelfIdentity — now returns encrypted row
+    vi.mocked(decrypt).mockReturnValueOnce('decrypted-block'); // for paragraph
+    vi.mocked(decrypt).mockReturnValueOnce('decrypted-block'); // for core
+    vi.mocked(decrypt).mockReturnValueOnce(JSON.stringify({
+      self_narrative: 'secret narrative', claimed_values: ['honesty'],
+      active_tensions: 'secret tensions', formed_convictions: 'secret convictions',
+    }));
+    mockQueryOne.mockResolvedValueOnce({
+      encrypted_identity: Buffer.from('enc'), identity_iv: Buffer.from('iv'),
+      self_narrative: null, claimed_values: null, active_tensions: null, formed_convictions: null,
       cached_at: 'ts',
     });
 
@@ -336,7 +418,9 @@ describe('getMemorySnapshot', () => {
     mockQueryRows.mockResolvedValueOnce([]);
     mockQueryRows.mockResolvedValueOnce([]);
     mockQueryOne.mockResolvedValueOnce(null);
+    // Pre-migration row with plaintext fallback
     mockQueryOne.mockResolvedValueOnce({
+      encrypted_identity: null, identity_iv: null,
       self_narrative: null,
       claimed_values: [],
       active_tensions: null,
