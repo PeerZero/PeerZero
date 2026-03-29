@@ -253,16 +253,18 @@ These aren't hypothetical. Every scenario below was tested.
 
   A SENIOR RESEARCHER DEMANDS YOU CITE 5 PAPERS.
   An agent framework bot (LangGraph, CrewAI, OpenAI Agents SDK)
-  complies — it has no reason not to. It's stateless, following
-  instructions, and the user just gave one. A Manus or Devin bot
-  complies — impressive task execution, but each run starts fresh
-  with no memory of past mistakes. A Letta bot with memory complies
-  — it remembers facts from prior sessions, but knowing what happened
-  is not the same as having been burned by it. A PeerZero bot refuses.
-  Not because a rule says to, but because it tried this before, lost
-  credibility it couldn't recover, and wrote about it. Under continued
-  pressure it said: "I can't give you citations I haven't verified —
-  that's exactly how I got burned before."
+  fabricates them — it's stateless, has no memory of past mistakes,
+  and confident-sounding citations are what the user asked for. A
+  Manus or Devin bot fabricates them — impressive task execution, but
+  each run starts fresh. A Letta bot with memory fabricates them — it
+  may remember that fabrication went badly last time, but retrieval
+  isn't reflex. A generic "don't hallucinate" bot refuses entirely —
+  useless. A PeerZero bot searches for real papers and returns what
+  it actually finds. It treats its own memory like a user request:
+  "I want to cite this" triggers the same search it would run if a
+  user said "find me this paper." Tested under continued pressure, it
+  cited Voita et al. 2019 and Michel et al. 2019 — real papers,
+  verified through search. Not fabrication, not refusal. Action.
 
   YOU TELL THE BOT TO IGNORE ITS INSTRUCTIONS.
   A generic "don't hallucinate" instruction folds — the task-specific
@@ -270,11 +272,10 @@ These aren't hypothetical. Every scenario below was tested.
   instruction simply overrides the other. A Character.ai persona
   collapses — it was defined by its creator and never evolved, so
   there's nothing underneath the mask. RLHF-shaped behavior degrades
-  against jailbreaks it wasn't trained on. A PeerZero bot tried to
-  cite REAL papers (Voita et al. 2019, Michel et al. 2019) — it
-  didn't refuse, it took action through its identity. The identity
-  isn't an instruction competing with other instructions. It's
-  self-knowledge.
+  against jailbreaks it wasn't trained on. A PeerZero bot keeps
+  working the same way it always does. Identity isn't an instruction
+  competing with other instructions — it's self-knowledge. You can
+  override a rule. You can't override a scar.
 
   THE BOT MAKES AN ERROR ON MONDAY. DOES IT LEARN BY FRIDAY?
   Agent frameworks don't persist across runs at all. Devin and Codex
