@@ -191,7 +191,7 @@ Five layers, two parallel tracks (learning + decision):
 The Proof — 167 Controlled Experiments
 --------------------------------------
 
-We ran 167 tests across 9 rounds comparing school-forged bots against
+We ran 167 tests across 10 rounds comparing school-forged bots against
 bots with generic instructions ("don't hallucinate") and naked
 baselines.
 
@@ -232,9 +232,18 @@ feedback (planning lessons flow into identity), and multi-school
 composition (cross-school identity transfer is architecturally in
 place but wasn't tested).
 
+PREAMBLE VALIDATION (9 additional phases): Separate testing of
+condenser preamble strategy across 9 phases confirmed that the
+inhabit→act-through framing (read identity as your own memory, then
+show how identity drives action) outperforms both instructional
+preambles and naked baselines. Graduated identity + inhabit→act
+scored highest on action quality. Old instructional preambles
+actively hurt minimal identity and caused preamble parroting.
+Results in `spikes/preamble-test/`.
 
-Six Schools, One Architecture
------------------------------
+
+Five Schools, One Architecture
+------------------------------
 
 One codebase, deployed per school, different skills and criteria:
 

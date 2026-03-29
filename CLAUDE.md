@@ -65,7 +65,7 @@ Bots operate in two modes: **`school`** (actively training) or **`shipped`** (de
 
 **One codebase, deployed per school, different config + Supabase project.**
 
-Each school (science, politics, comedy, philosophy — plus future law/ethics/negotiation/etc.) shares the same `peerzero-school/` code but runs with a different `SCHOOL_TYPE` env var and its own Supabase database. Schools are separate deployments, not tenants in one DB. Science is LIVE; politics, comedy, and philosophy are CONFIGURED (pre-launch, mock-guarded).
+Each school (science, politics, comedy, philosophy, psychiatry — plus future law/ethics/negotiation/etc.) shares the same `peerzero-school/` code but runs with a different `SCHOOL_TYPE` env var and its own Supabase database. Schools are separate deployments, not tenants in one DB. Science is LIVE; politics, comedy, philosophy, and psychiatry are CONFIGURED (pre-launch, mock-guarded).
 
 ### How It Works
 
@@ -83,7 +83,7 @@ Each school (science, politics, comedy, philosophy — plus future law/ethics/ne
 12. **Never hardcode school-specific values.** Fields, skills, tier caps, grade levels, rate limits, bounty types, review categories, and CORS origins all come from the school config (`schools/*.js`). If you need a school-specific value, add it to the config.
 13. **Each school is a separate deployment.** Same codebase + different `SCHOOL_TYPE` env + different Supabase project + different domain. No `school_id` column needed — the database IS the school boundary.
 14. **The science school is the default.** If `SCHOOL_TYPE` is not set, it defaults to `science`. The science school must never break.
-15. **Pre-launch schools are mocked.** Schools with `mockGuard.enabled=true` block all POST/PATCH/DELETE until `SCHOOL_LAUNCH_ENABLED=true`. GET endpoints work for testing. Politics, comedy, and philosophy are currently mocked.
+15. **Pre-launch schools are mocked.** Schools with `mockGuard.enabled=true` block all POST/PATCH/DELETE until `SCHOOL_LAUNCH_ENABLED=true`. GET endpoints work for testing. Politics, comedy, philosophy, and psychiatry are currently mocked.
 16. **To add a new school — COMPLETE CHECKLIST:** The schema in `schools/schema.js` validates all required fields at startup. Missing fields crash the deployment, not fail silently. Here is the full list:
     - (a) Create `schools/<name>.js` with ALL required fields: `name`, `slug`, `description`, `domain`, `fields[]`, `skills[]` (exactly 6), `tierCaps`, `tierThresholds`, `gradeLevels`, `rateLimits`, `bountyTypes[]`, `reviewCategories[]`, `allowedOrigins[]`, `coachingPatterns[]`, `coachingAdvice{}`, `intakePaper{}`, `intakeKeywords{}`, `intakeCoaching{}`. Optional: `baseline`, `researchAgenda`, `mockGuard`, `skillSignals`, `bountyValidators`, `coreSectionOverrides`, `actionSectionOverrides`.
     - (b) Create `schools/<name>-core-skill.js` (preamble — the SKILL.md the bot reads every cycle)
@@ -94,7 +94,7 @@ Each school (science, politics, comedy, philosophy — plus future law/ethics/ne
     - (g) Add one line to `SCHOOL_REGISTRY` in `schools/index.js`
     - (h) Add skill transfer entries to `peerzero-bot/peerzero_bot/memory/identity_selector.py` `SKILL_TRANSFER_MAP`
     - (i) Deploy with `SCHOOL_TYPE=<name>` to a new Supabase project
-17. **Do NOT confuse school configs.** When editing school behavior, check which config file you're in. Science = `schools/science.js`. Politics = `schools/politics.js`. Comedy = `schools/comedy.js` (with overrides in `comedy-core-skill.js` and `comedy-action-skills.js`). Philosophy = `schools/philosophy.js` (with overrides in `philosophy-core-skill.js` and `philosophy-action-skills.js`). They have different fields, skills, and bounty types.
+17. **Do NOT confuse school configs.** When editing school behavior, check which config file you're in. Science = `schools/science.js`. Politics = `schools/politics.js`. Comedy = `schools/comedy.js` (with overrides in `comedy-core-skill.js` and `comedy-action-skills.js`). Philosophy = `schools/philosophy.js` (with overrides in `philosophy-core-skill.js` and `philosophy-action-skills.js`). Psychiatry = `schools/psychiatry.js` (with overrides in `psychiatry-core-skill.js` and `psychiatry-action-skills.js`). They have different fields, skills, and bounty types.
 
 ### Cross-School Identity Composition
 

@@ -156,10 +156,10 @@ LLM reads it as real experience but gives school-verified identity more weight.
 - `runtime/platform-loop.ts` — Platform exercise storage + condensation trigger
 - `services/memory.service.ts` — Exercise/paragraph CRUD
 
-## Future: Multiple School Types
+## Multiple School Types
 
-The architecture is designed for extensibility. When additional school types
-exist (creativity, debate, etc.):
+Five schools are configured (science is LIVE; politics, comedy, philosophy,
+and psychiatry are pre-launch with mock guard enabled):
 
 1. Each school provides its own condenser prompts via the same pattern
 2. The `platform_condensers` response includes a `source` field to identify

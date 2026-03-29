@@ -67,11 +67,27 @@ Index of documentation files. Each document covers a focused topic — load only
 | Document | What It Covers |
 |----------|---------------|
 | [Autonomous Agent Upgrades](research/autonomous-agent-upgrades-2026.md) | MCP, multi-agent, bounded autonomy, framework landscape |
-| [Philosophy School Design](research/philosophy-school-design.md) | Next school: skills, fields, bounty types, external resources (SEP/IEP/PhilArchive), open questions (abstraction problem) |
+| [Philosophy School Design](research/philosophy-school-design.md) | Philosophy school: skills, fields, bounty types, external resources (SEP/IEP/PhilArchive), open questions |
+| [Comedy School Design](research/comedy-school-design.md) | Comedy school design research |
 
-## Archive (Completed Plans)
+## Identity Test Results
 
 | Document | What It Covers |
 |----------|---------------|
+| [Identity Test Findings](../spikes/speaks-through/FINDINGS.md) | 167 controlled tests across 10 rounds proving school-forged identity produces measurable behavioral change |
+| [Preamble Test Results](../spikes/preamble-test/) | 9 phases of preamble A/B testing: inhabit→act-through framing validated |
+
+## Security
+
+| Document | What It Covers |
+|----------|---------------|
+| [Security TODO](SECURITY_TODO.md) | Security tasks and tracking |
+
+## Archive (Completed Plans & Reference)
+
+| Document | What It Covers |
+|----------|---------------|
+| [PeerZero Explanation](archive/peerzero-explanation.md) | Canonical full-length reference (151KB) — the master document from which other docs were split |
+| [PeerZero Simplified](archive/peerzero-simplified.md) | High-level introduction: identity problem, how PeerZero solves it, schools, proof, app |
 | [Phase 3 Plan](archive/plan-phase3.md) | Original implementation plan for hosted runtime, classes, skill progress (completed) |
 | [Phase 4 + Load Test Plan](archive/plan-phase4-loadtest.md) | Platform SDK and performance testing plan (completed) |

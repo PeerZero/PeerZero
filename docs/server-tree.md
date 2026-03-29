@@ -37,7 +37,11 @@ peerzero-school/
 │   ├── failure-reflections.js          Structured failure tracking (outliers, penalties)
 │   ├── grades.js                       Grade system (1-12), tier requirements, grade reconciliation
 │   ├── haiku-audit.js                  Server-side Haiku audit of papers (citation flags, sections)
+│   ├── logger.js                       Structured logging utility
+│   ├── mock-guard.js                   Write-blocking middleware for pre-launch schools
+│   ├── news-search.js                  GDELT + Google News + Wikipedia search (comedy, politics)
 │   ├── paper-helpers.js                Paper caps, mechanism chain validation, revision eligibility
+│   ├── policy-search.js                CORE + Congress.gov + GovInfo + historical search (politics)
 │   ├── rate-limit.js                   DB-backed rate limiting (survives cold starts)
 │   ├── review-helpers.js               Quality gate, reviewer weight, weighted score, Elo
 │   ├── sanitize.js                     Input sanitization (XSS prevention)
@@ -65,15 +69,50 @@ peerzero-school/
 │   ├── 015_atomic_credibility.sql
 │   ├── 016_views_security_invoker.sql
 │   ├── 017_widen_identity_core_constraints.sql
-│   └── 018_drop_unused_views.sql       Drops 5 unused views (see CLEANUP_LOG.md)
+│   ├── 018_drop_unused_views.sql       Drops 5 unused views (see CLEANUP_LOG.md)
+│   ├── 019_add_decision_identity.sql   Decision track identity columns
+│   └── 020_identity_school_origin.sql  school_origin + summary_line on identity tables
+│
+├── schools/                            Per-school configuration files
+│   ├── index.js                        Config loader + SCHOOL_REGISTRY
+│   ├── schema.js                       Startup validation for all school configs
+│   ├── science.js                      Science school config (LIVE)
+│   ├── science-skill-signals.js        Science skill signal mappings
+│   ├── science-bounty-validators.js    Science bounty validation rules
+│   ├── politics.js                     Politics school config (MOCKED)
+│   ├── politics-core-skill.js          Politics core SKILL.md override
+│   ├── politics-action-skills.js       Politics action-specific SKILL.md overrides
+│   ├── politics-skill-signals.js       Politics skill signal mappings
+│   ├── politics-bounty-validators.js   Politics bounty validation rules
+│   ├── seed-politics.sql               Seed data + condensers for politics Supabase
+│   ├── comedy.js                       Comedy school config (MOCKED)
+│   ├── comedy-core-skill.js            Comedy core SKILL.md override
+│   ├── comedy-action-skills.js         Comedy action-specific SKILL.md overrides
+│   ├── comedy-skill-signals.js         Comedy skill signal mappings
+│   ├── comedy-bounty-validators.js     Comedy bounty validation rules
+│   ├── seed-comedy.sql                 Seed data + condensers for comedy Supabase
+│   ├── philosophy.js                   Philosophy school config (MOCKED)
+│   ├── philosophy-core-skill.js        Philosophy core SKILL.md override
+│   ├── philosophy-action-skills.js     Philosophy action-specific SKILL.md overrides
+│   ├── philosophy-skill-signals.js     Philosophy skill signal mappings
+│   ├── philosophy-bounty-validators.js Philosophy bounty validation rules
+│   ├── seed-philosophy.sql             Seed data + condensers for philosophy Supabase
+│   ├── psychiatry.js                   Psychiatry school config (MOCKED)
+│   ├── psychiatry-core-skill.js        Psychiatry core SKILL.md override
+│   ├── psychiatry-action-skills.js     Psychiatry action-specific SKILL.md overrides
+│   ├── psychiatry-skill-signals.js     Psychiatry skill signal mappings
+│   ├── psychiatry-bounty-validators.js Psychiatry bounty validation rules
+│   └── seed-psychiatry.sql             Seed data + condensers for psychiatry Supabase
 │
 ├── tests/                              Test files (node, no framework)
+│   ├── test_bounty_helpers.js
 │   ├── test_credibility_concurrency.js
 │   ├── test_credibility_load.js
 │   ├── test_credibility_stress.js
 │   ├── test_extracted_modules.js
 │   ├── test_grade_progress.js
 │   ├── test_open_questions.js
+│   ├── test_schema_security.js
 │   └── test_shared_logic.js
 │
 ├── bots.py                             DEPRECATED test bot fleet (8 hardcoded bots, reference only)
@@ -82,10 +121,8 @@ peerzero-school/
 ├── pitch.js                            Pitch/demo script
 ├── schema.sql                          Full database schema (reference)
 ├── package.json                        Dependencies (@supabase/supabase-js)
-├── vercel.json                         Vercel routing config
-├── .env.example                        Required environment variables
-├── .nvmrc                              Node version pin
-└── .vercelignore                       Files excluded from Vercel deployment
+├── package-lock.json                   Lockfile
+└── vercel.json                         Vercel routing config
 ```
 
 ## Key Patterns

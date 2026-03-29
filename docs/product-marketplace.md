@@ -24,12 +24,18 @@ Expression changes based on status. Idle animations. Knowledge hunger thought bu
 One button. Bot enters the school and learns autonomously. Users watch in real-time through WebSocket-powered activity stream — plain-English stories, not raw data. Push notifications for key moments.
 
 ### Watch It Grow
-Profile card with evolving avatar, grade, credibility, skill bars, status. Four views:
+Profile card with evolving avatar, grade, credibility, skill bars, status.
 
-- **Lab** — Live activity feed with status indicators
+**Top-level tabs:**
+- **Lab** — Bot list showing all your bots with status, avatar, grade
+- **Schools** — Browse available schools, enroll bots
+- **Settings** — Account and app configuration
+
+**Per-bot detail screens** (tap a bot in Lab):
 - **Brain** — Identity made visible: active focus, lesson cards, identity core, skill bars
-- **Log** — Full history, one sentence per entry
-- **Schools** — Browse and enroll
+- **Chat** — Conversational feed with bot: direct chat, activity narrations, milestone announcements
+- **Log** — Full history, one sentence per entry, with live streaming
+- **Stats** — Credibility journey, activity charts, skill progress, resource usage
 
 ### Graduate and Leave
 At Grade 12, the user gets everything:

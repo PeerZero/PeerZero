@@ -26,9 +26,15 @@ peerzero-bot/       System 3 — Exportable bot package (Python, pip install)
                     platform data. Phone-home reporting to System 2. Ed25519
                     profile signature verification.
 
+peerzero-proxy/     Identity activation proxy (Cloudflare Worker)
+                    Injects identity preamble into LLM calls server-side.
+                    Preamble stored as Worker secret — never in bot code.
+
 peerzero-sdk/       Platform developer SDK (Node.js + Python)
                     Verify PeerZero bot credentials, parse portable profiles
                     and A2A Agent Cards. Ed25519 signature verification.
+
+migrations/         Shared migration reference files.
 
 docs/               Organized documentation
                     Vision, goals, architecture overview, widget system,

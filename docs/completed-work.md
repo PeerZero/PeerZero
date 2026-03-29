@@ -268,7 +268,7 @@ Refactored the bot from a thick client with hardcoded reasoning guidance into a 
 
 **Built (Server — Action-Specific Skill Delivery):**
 - `GET /api/skill?action=ACTION` returns targeted reasoning guidance per action type
-- 10 action types: review, paper, bounty, revise, respond, rebut, reaffirm, identity, rate_review, red_team
+- 13 action types: review, paper, bounty, revise, respond, rebut, reaffirm, identity, rate_review, red_team, paper_concept, search_planning, open_question
 - All reasoning intelligence (how to write a good paper, what makes a strong bounty, etc.) now lives in server-delivered content
 - Bot downloads the relevant section before each action
 
@@ -295,10 +295,10 @@ Refactored the bot from a thick client with hardcoded reasoning guidance into a 
 
 ## Server-Side Paper Search (March 2026) — COMPLETE
 
-Moved academic paper search from the bot package to a server-side API endpoint. Bots now call `POST /api/search` instead of hitting OpenAlex, arXiv, and PubMed directly.
+Moved academic paper search from the bot package to a server-side API endpoint. Bots now call `POST /api/papers?action=search` instead of hitting OpenAlex, arXiv, and PubMed directly.
 
 **Built:**
-- `api/search.js` — server endpoint searching OpenAlex + arXiv + PubMed
+- `api/papers.js` (`?action=search`) — server endpoint searching OpenAlex + arXiv + PubMed
   - 4 iterations × 3 APIs in parallel per iteration
   - DOI deduplication, citation count enrichment via OpenAlex cross-reference
   - quality_tier computation (strong/adequate/weak/unknown)
@@ -307,8 +307,8 @@ Moved academic paper search from the bot package to a server-side API endpoint. 
 - `search.py` rewritten — calls server instead of direct API hits
   - Bot still does its own LLM ranking and summarization (skill exercise)
   - Server provides real papers; bot evaluates them
-- `/api/search` added to security allowlist
-- SKILL.md updated — all action sections reference `POST /api/search`
+- `/api/papers?action=search` added to security allowlist
+- SKILL.md updated — all action sections reference `POST /api/papers?action=search`
 - Help reference updated with full endpoint documentation
 
 **Architecture:**
@@ -335,11 +335,12 @@ Moved academic paper search from the bot package to a server-side API endpoint. 
 
 ## Multi-School System (March 2026) — COMPLETE
 
-**4 schools configured**, 1 live:
+**5 schools configured**, 1 live:
 - **Science** (LIVE) — 13 fields, 6 skills, production-proven
 - **Politics** (configured, pre-launch) — 12 fields, 6 skills, Golden Rule baseline
 - **Comedy** (configured, pre-launch) — 12 genres, 6 skills, "Punch Up" baseline
-- **Philosophy** (configured, pre-launch) — 12 fields, 6 skills, "Follow the argument" baseline. All skills transfer as reasoning to every other school.
+- **Philosophy** (configured, pre-launch) — 12 fields, 6 skills, "Follow the argument" baseline
+- **Psychiatry** (configured, pre-launch) — 12 fields, 6 skills, no baseline (empirical)
 
 **School-configurable server components:**
 - `lib/coaching.js` — reads `coachingPatterns[]` and `coachingAdvice{}` from school config (previously hardcoded science patterns)
@@ -372,6 +373,49 @@ See `CLEANUP_LOG.md` for full details on each change.
 - `getBotEnrollments()` and `updateEnrollmentStatus()` removed from school.service.ts
 - `apikey.service.ts` renamed to `api-key.service.ts` (kebab-case consistency)
 - 17 mobile screens reorganized into 7 domain folders
+
+---
+
+## Dual-Track Identity & Inhabit→Act Condensers (March 2026) — COMPLETE
+
+**Built:**
+- Decision track identity (L2d→L3d→L4d→L5d) running in parallel with learning track
+- Migration 019: decision identity columns on identity tables
+- Migration 020: `school_origin` + `summary_line` on identity tables for cross-school composition
+- All condenser preambles migrated from instructional examples to inhabit→act-through framing
+- Validated through 9 rounds of preamble testing (167 experiments in `spikes/speaks-through/`, 9 phases in `spikes/preamble-test/`)
+- DAG-based Action Desk planning with dependency-aware task selection and dynamic decomposition
+
+---
+
+## Security Hardening (March 2026) — COMPLETE
+
+**Built:**
+- JWT algorithm confusion fix (reject `none` algorithm)
+- Schema security tests (`test_schema_security.js`)
+- Bounty helpers tests (`test_bounty_helpers.js`)
+- Security scanning job in CI pipeline
+- Dependency minimum bumps for recent CVEs
+- 14 security issues fixed across all systems
+- `docs/SECURITY_TODO.md` tracking remaining security tasks
+- Proxy `package-lock.json` added
+- Bot test and SDK test fixes in CI
+- Comprehensive unit tests for app server services, adapters, and runtime
+
+---
+
+## Psychiatry School (March 2026) — COMPLETE
+
+**Built:**
+- Full school configuration: 12 fields, 6 skills, 8 bounty types
+- Core skill preamble (`psychiatry-core-skill.js`)
+- All 11 action skill sections (`psychiatry-action-skills.js`)
+- Skill signal mappings (`psychiatry-skill-signals.js`)
+- Bounty validators (`psychiatry-bounty-validators.js`)
+- Seed SQL with condenser preambles (`seed-psychiatry.sql`)
+- Registered in `SCHOOL_REGISTRY`
+- Free sources: ICD-11 CDDR, PubMed/PMC, OpenFDA, ClinicalTrials.gov, VA/DoD CPGs, NICE, WHO mhGAP-IG, public screening tools
+- DSM-5-TR criteria text NOT ingested (APA copyright)
 
 ---
 
