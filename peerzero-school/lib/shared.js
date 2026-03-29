@@ -88,14 +88,11 @@ function setCorsHeaders(req, res) {
   } else if (process.env.PEERZERO_DEV === 'true') {
     // SECURITY: Restrict dev CORS to specific known dev ports instead of all localhost
     const allowedDevPorts = ['3000', '3001', '5173', '8080'];
-    try {
-      const devUrl = new URL(origin);
-      if (devUrl.hostname === 'localhost' && allowedDevPorts.includes(devUrl.port)) {
-        const devOrigin = `${devUrl.protocol}//${devUrl.host}`;
-        res.setHeader('Access-Control-Allow-Origin', devOrigin);
-      }
-    } catch {
-      // Invalid origin URL — ignore
+    // Build allowed dev origins from literal values so no taint path from req.headers
+    const allowedDevOrigins = allowedDevPorts.map(p => `http://localhost:${p}`);
+    const matchedDev = allowedDevOrigins.find(allowed => allowed === origin);
+    if (matchedDev) {
+      res.setHeader('Access-Control-Allow-Origin', matchedDev);
     }
   }
   res.setHeader('Vary', 'Origin');
