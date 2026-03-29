@@ -99,6 +99,23 @@
       <option value="positive">Positive</option>
       <option value="negative">Negative</option>
       <option value="milestone">Milestone</option>
+      <option value="proud">Proud</option>
+      <option value="focused">Focused</option>
+      <option value="excited">Excited</option>
+      <option value="shy">Shy</option>
+      <option value="tired">Tired</option>
+    </select>
+  </div>
+  <div class="control-group">
+    <label>Accessory</label>
+    <select id="accessory" onchange="render()">
+      <option value="">None</option>
+      <option value="tiny_glasses">Tiny Glasses</option>
+      <option value="lab_coat">Lab Coat</option>
+      <option value="bow_tie">Bow Tie</option>
+      <option value="beret">Beret</option>
+      <option value="stethoscope">Stethoscope</option>
+      <option value="graduation_cap">Graduation Cap</option>
     </select>
   </div>
   <div class="control-group">
@@ -117,6 +134,10 @@
 <div class="grid" id="tierGrid"></div>
 <div class="section-title">All Statuses</div>
 <div class="grid" id="statusGrid"></div>
+<div class="section-title">All Moods (Running)</div>
+<div class="grid" id="moodGrid"></div>
+<div class="section-title">All Accessories (at Tier 3)</div>
+<div class="grid" id="accessoryGrid"></div>
 <div class="section-title">All 30 Species (at Tier 3)</div>
 <div class="grid" id="speciesGrid"></div>
 <div class="section-title">Random Bots Gallery</div>
@@ -181,7 +202,7 @@ function generateTraits(botId) {
   };
 }
 
-function renderAvatar(botId, color, tier, status, mood, hunger, size) {
+function renderAvatar(botId, color, tier, status, mood, hunger, size, accessory) {
   const traits = generateTraits(botId);
   const t = Math.max(0,Math.min(5,tier));
   const sb = t * 1.2;
@@ -390,6 +411,16 @@ function renderAvatar(botId, color, tier, status, mood, hunger, size) {
     }
   }
 
+  // Tier 2 ribbon (Fledgling milestone)
+  if (t === 2) {
+    const rc = darken(color, 0.1), rl = lighten(color, 0.2);
+    svg += `<ellipse cx="72" cy="52" rx="4" ry="2.5" fill="${rc}" opacity="0.8" transform="rotate(-20, 72, 52)"/>`;
+    svg += `<ellipse cx="72" cy="57" rx="4" ry="2.5" fill="${rc}" opacity="0.8" transform="rotate(20, 72, 57)"/>`;
+    svg += `<circle cx="72" cy="54.5" r="1.8" fill="${rl}"/>`;
+    svg += `<path d="M 72 56.5 Q 74 62 71 66" stroke="${rc}" stroke-width="1.5" fill="none" stroke-linecap="round" opacity="0.6"/>`;
+    svg += `<path d="M 72 56.5 Q 76 61 75 65" stroke="${rc}" stroke-width="1.5" fill="none" stroke-linecap="round" opacity="0.6"/>`;
+  }
+
   // Feet
   const fc = darken(color, 0.2);
   const bodyBot = 50+26+sb;
@@ -418,8 +449,41 @@ function renderAvatar(botId, color, tier, status, mood, hunger, size) {
     svg += `<circle cx="${lx+1}" cy="${ey-1}" r="${baseSize*0.2}" fill="white"/><circle cx="${rx2+1}" cy="${ey-1}" r="${baseSize*0.15}" fill="white"/>`;
     svg += `<path d="M 72 28 Q 76 24 76 28 Q 76 31 73 32" stroke="#8B93A8" stroke-width="1" fill="none" opacity="0.5"/>`;
     svg += `<circle cx="73" cy="35" r="0.8" fill="#8B93A8" opacity="0.5"/>`;
+  } else if (mood === 'proud') {
+    // Proud: confident closed eyes with sparkle
+    svg += `<path d="M ${lx-baseSize*0.8} ${ey+baseSize*0.15} Q ${lx} ${ey-baseSize*0.7} ${lx+baseSize*0.8} ${ey+baseSize*0.15}" stroke="#2D1B4E" stroke-width="1.8" fill="none" stroke-linecap="round"/>`;
+    svg += `<path d="M ${rx2-baseSize*0.8} ${ey+baseSize*0.15} Q ${rx2} ${ey-baseSize*0.7} ${rx2+baseSize*0.8} ${ey+baseSize*0.15}" stroke="#2D1B4E" stroke-width="1.8" fill="none" stroke-linecap="round"/>`;
+    svg += `<path d="M ${lx-baseSize*1.2} ${ey-baseSize*0.6} L ${lx-baseSize*1.0} ${ey-baseSize*0.3} M ${lx-baseSize*1.4} ${ey-baseSize*0.45} L ${lx-baseSize*0.8} ${ey-baseSize*0.45}" stroke="#FFD600" stroke-width="0.8" stroke-linecap="round"/>`;
+  } else if (mood === 'focused') {
+    // Focused: determined squinty eyes with brow lines
+    svg += `<circle cx="${lx}" cy="${ey}" r="${baseSize*0.85}" fill="white"/><circle cx="${rx2}" cy="${ey}" r="${baseSize*0.85}" fill="white"/>`;
+    svg += `<circle cx="${lx}" cy="${ey}" r="${baseSize*0.45}" fill="#2D1B4E"/><circle cx="${rx2}" cy="${ey}" r="${baseSize*0.45}" fill="#2D1B4E"/>`;
+    svg += `<circle cx="${lx+baseSize*0.15}" cy="${ey-baseSize*0.15}" r="${baseSize*0.12}" fill="white"/><circle cx="${rx2+baseSize*0.15}" cy="${ey-baseSize*0.15}" r="${baseSize*0.12}" fill="white"/>`;
+    svg += `<path d="M ${lx-baseSize*0.8} ${ey-baseSize*1.2} L ${lx+baseSize*0.5} ${ey-baseSize*1.0}" stroke="#2D1B4E" stroke-width="1.2" fill="none" stroke-linecap="round" opacity="0.6"/>`;
+    svg += `<path d="M ${rx2+baseSize*0.8} ${ey-baseSize*1.2} L ${rx2-baseSize*0.5} ${ey-baseSize*1.0}" stroke="#2D1B4E" stroke-width="1.2" fill="none" stroke-linecap="round" opacity="0.6"/>`;
+  } else if (mood === 'excited') {
+    // Excited: huge sparkling eyes with exclamation
+    svg += `<circle cx="${lx}" cy="${ey}" r="${baseSize*1.2}" fill="white"/><circle cx="${rx2}" cy="${ey}" r="${baseSize*1.2}" fill="white"/>`;
+    svg += `<circle cx="${lx}" cy="${ey}" r="${baseSize*0.55}" fill="#2D1B4E"/><circle cx="${rx2}" cy="${ey}" r="${baseSize*0.55}" fill="#2D1B4E"/>`;
+    svg += `<path d="M ${lx+baseSize*0.2} ${ey-baseSize*0.5} L ${lx+baseSize*0.3} ${ey-baseSize*0.3} M ${lx+baseSize*0.05} ${ey-baseSize*0.4} L ${lx+baseSize*0.45} ${ey-baseSize*0.4}" stroke="white" stroke-width="1" stroke-linecap="round"/>`;
+    svg += `<path d="M ${rx2+baseSize*0.2} ${ey-baseSize*0.5} L ${rx2+baseSize*0.3} ${ey-baseSize*0.3} M ${rx2+baseSize*0.05} ${ey-baseSize*0.4} L ${rx2+baseSize*0.45} ${ey-baseSize*0.4}" stroke="white" stroke-width="1" stroke-linecap="round"/>`;
+    svg += `<path d="M 75 30 L 75 34" stroke="#FFD600" stroke-width="1.2" stroke-linecap="round" opacity="0.7"/><circle cx="75" cy="36.5" r="0.7" fill="#FFD600" opacity="0.7"/>`;
+  } else if (mood === 'shy') {
+    // Shy: pupils looking away
+    svg += `<circle cx="${lx}" cy="${ey}" r="${baseSize*0.9}" fill="white"/><circle cx="${rx2}" cy="${ey}" r="${baseSize*0.9}" fill="white"/>`;
+    svg += `<circle cx="${lx-baseSize*0.3}" cy="${ey+baseSize*0.15}" r="${baseSize*0.4}" fill="#2D1B4E"/><circle cx="${rx2-baseSize*0.3}" cy="${ey+baseSize*0.15}" r="${baseSize*0.4}" fill="#2D1B4E"/>`;
+    svg += `<circle cx="${lx-baseSize*0.15}" cy="${ey-baseSize*0.1}" r="${baseSize*0.12}" fill="white"/><circle cx="${rx2-baseSize*0.15}" cy="${ey-baseSize*0.1}" r="${baseSize*0.12}" fill="white"/>`;
+    svg += `<path d="M ${lx-baseSize*0.6} ${ey+baseSize*0.7} L ${lx-baseSize*0.3} ${ey+baseSize*0.65}" stroke="#FF8A8A" stroke-width="0.6" stroke-linecap="round" opacity="0.5"/>`;
+    svg += `<path d="M ${lx} ${ey+baseSize*0.7} L ${lx+baseSize*0.3} ${ey+baseSize*0.65}" stroke="#FF8A8A" stroke-width="0.6" stroke-linecap="round" opacity="0.5"/>`;
+  } else if (mood === 'tired') {
+    // Tired: half-lidded droopy eyes
+    svg += `<circle cx="${lx}" cy="${ey}" r="${baseSize}" fill="white"/><circle cx="${rx2}" cy="${ey}" r="${baseSize}" fill="white"/>`;
+    svg += `<circle cx="${lx}" cy="${ey+baseSize*0.2}" r="${baseSize*0.45}" fill="#2D1B4E"/><circle cx="${rx2}" cy="${ey+baseSize*0.2}" r="${baseSize*0.45}" fill="#2D1B4E"/>`;
+    svg += `<circle cx="${lx+baseSize*0.15}" cy="${ey}" r="${baseSize*0.12}" fill="white"/><circle cx="${rx2+baseSize*0.15}" cy="${ey}" r="${baseSize*0.12}" fill="white"/>`;
+    svg += `<path d="M ${lx-baseSize*1.1} ${ey-baseSize*0.3} Q ${lx} ${ey+baseSize*0.1} ${lx+baseSize*1.1} ${ey-baseSize*0.3}" fill="${color}"/>`;
+    svg += `<path d="M ${rx2-baseSize*1.1} ${ey-baseSize*0.3} Q ${rx2} ${ey+baseSize*0.1} ${rx2+baseSize*1.1} ${ey-baseSize*0.3}" fill="${color}"/>`;
   } else {
-    // Running
+    // Running — default eyes
     const isHappy = mood==='positive'||mood==='milestone';
     const isSad = mood==='negative';
     svg += `<circle cx="${lx}" cy="${ey}" r="${baseSize}" fill="white"/><circle cx="${rx2}" cy="${ey}" r="${baseSize}" fill="white"/>`;
@@ -447,6 +511,18 @@ function renderAvatar(botId, color, tier, status, mood, hunger, size) {
     svg += `<path d="M 45 ${my+1} Q 47.5 ${my+4} 50 ${my+1} Q 52.5 ${my-2} 55 ${my+1}" stroke="#2D1B4E" stroke-width="1.2" fill="none" stroke-linecap="round"/>`;
   } else if (status === 'paused') {
     svg += `<ellipse cx="50" cy="${my+1}" rx="2.5" ry="3" fill="#2D1B4E" opacity="0.5"/>`;
+  } else if (mood === 'proud') {
+    svg += `<path d="M 44 ${my-0.5} Q 50 ${my+6} 57 ${my-1}" stroke="#2D1B4E" stroke-width="1.4" fill="none" stroke-linecap="round" opacity="0.6"/>`;
+  } else if (mood === 'focused') {
+    svg += `<path d="M 47 ${my+0.5} L 53 ${my+0.5}" stroke="#2D1B4E" stroke-width="1.3" fill="none" stroke-linecap="round" opacity="0.5"/>`;
+  } else if (mood === 'excited') {
+    svg += `<ellipse cx="50" cy="${my+2}" rx="4.5" ry="5" fill="#2D1B4E" opacity="0.6"/>`;
+    svg += `<path d="M 47.5 ${my+5} Q 50 ${my+8} 52.5 ${my+5}" fill="#FF8A8A" opacity="0.7"/>`;
+  } else if (mood === 'shy') {
+    svg += `<path d="M 47 ${my+1} Q 49 ${my+3} 52 ${my+0.5}" stroke="#2D1B4E" stroke-width="1" fill="none" stroke-linecap="round" opacity="0.4"/>`;
+  } else if (mood === 'tired') {
+    svg += `<ellipse cx="50" cy="${my+1.5}" rx="3" ry="4" fill="#2D1B4E" opacity="0.45"/>`;
+    svg += `<circle cx="46" cy="${my-3}" r="0.6" fill="#8B93A8" opacity="0.4"/><circle cx="50" cy="${my-3.5}" r="0.6" fill="#8B93A8" opacity="0.4"/><circle cx="54" cy="${my-3}" r="0.6" fill="#8B93A8" opacity="0.4"/>`;
   } else {
     const isHappy = mood==='positive'||mood==='milestone';
     const isSad = mood==='negative';
@@ -504,6 +580,24 @@ function renderAvatar(botId, color, tier, status, mood, hunger, size) {
     svg += '</g>';
   }
 
+  // Identity accessory
+  if (accessory === 'tiny_glasses') {
+    svg += `<g opacity="0.75"><circle cx="40" cy="44" r="5.5" fill="none" stroke="#6B5B4E" stroke-width="0.8"/><circle cx="60" cy="44" r="5.5" fill="none" stroke="#6B5B4E" stroke-width="0.8"/><path d="M 45.5 44 Q 50 42 54.5 44" stroke="#6B5B4E" stroke-width="0.8" fill="none"/><path d="M 34.5 44 L 30 43" stroke="#6B5B4E" stroke-width="0.8" stroke-linecap="round"/><path d="M 65.5 44 L 70 43" stroke="#6B5B4E" stroke-width="0.8" stroke-linecap="round"/><path d="M 37 42 L 38.5 41" stroke="white" stroke-width="0.5" stroke-linecap="round" opacity="0.5"/><path d="M 57 42 L 58.5 41" stroke="white" stroke-width="0.5" stroke-linecap="round" opacity="0.5"/></g>`;
+  } else if (accessory === 'lab_coat') {
+    svg += `<g opacity="0.7"><path d="M 30 55 L 28 70 Q 30 72 35 71 L 38 58" fill="#F0EDE8"/><path d="M 70 55 L 72 70 Q 70 72 65 71 L 62 58" fill="#F0EDE8"/><path d="M 38 52 L 42 58 L 50 55 L 58 58 L 62 52" fill="#D5D0C8" opacity="0.8"/><rect x="30" y="63" width="5" height="4" rx="0.5" fill="none" stroke="#D5D0C8" stroke-width="0.5"/></g>`;
+  } else if (accessory === 'bow_tie') {
+    svg += `<path d="M 50 58 L 42 55 L 42 61 Z" fill="#FF5252" opacity="0.8"/><path d="M 50 58 L 58 55 L 58 61 Z" fill="#FF5252" opacity="0.8"/><circle cx="50" cy="58" r="1.8" fill="#CC3333"/>`;
+  } else if (accessory === 'beret') {
+    const bc = darken(color, 0.25), bl = lighten(bc, 0.15), bn = lighten(bc, 0.2);
+    const bt2 = 50 - 26 - 4;
+    svg += `<g opacity="0.85"><ellipse cx="55" cy="${bt2+2}" rx="16" ry="6" fill="${bc}"/><circle cx="60" cy="${bt2-1}" r="4" fill="${bc}"/><path d="M 39 ${bt2+4} Q 50 ${bt2+7} 71 ${bt2+4}" stroke="${bl}" stroke-width="1.2" fill="none"/><circle cx="60" cy="${bt2-4}" r="1.2" fill="${bn}"/></g>`;
+  } else if (accessory === 'stethoscope') {
+    svg += `<g opacity="0.7"><path d="M 38 50 Q 35 58 38 66 Q 42 72 50 72 Q 58 72 62 66 Q 65 58 62 50" stroke="#4A90D9" stroke-width="1.2" fill="none" stroke-linecap="round"/><circle cx="50" cy="72" r="3" fill="#C0C0C0"/><circle cx="50" cy="72" r="1.8" fill="#A0A0A0"/><circle cx="38" cy="49" r="1" fill="#C0C0C0"/><circle cx="62" cy="49" r="1" fill="#C0C0C0"/></g>`;
+  } else if (accessory === 'graduation_cap') {
+    const bt3 = 50 - 26 - 4;
+    svg += `<path d="M 50 ${bt3-6} L 68 ${bt3} L 50 ${bt3+6} L 32 ${bt3} Z" fill="#2D1B4E" opacity="0.85"/><circle cx="50" cy="${bt3}" r="1.5" fill="#FFD700"/><path d="M 50 ${bt3} L 68 ${bt3} L 70 ${bt3+2} Q 68 ${bt3+10} 66 ${bt3+14}" stroke="#FFD700" stroke-width="1" fill="none" stroke-linecap="round"/><circle cx="66" cy="${bt3+15}" r="1.5" fill="#FFD700"/>`;
+  }
+
   const animClass = status==='running'?'animate-both':status==='error'?'animate-breathe':'';
   return `<div class="${animClass}"><svg width="${size}" height="${size}" viewBox="0 0 100 100">${svg}</svg></div>`;
 }
@@ -517,11 +611,12 @@ function render() {
   const status = document.getElementById('status').value;
   const mood = document.getElementById('mood').value;
   const hunger = document.getElementById('hunger').value;
+  const accessory = document.getElementById('accessory').value || undefined;
 
   // Main preview
   document.getElementById('mainPreview').innerHTML = `
     <div class="single-card">
-      ${renderAvatar(botId, selectedColor, 3, status, mood, hunger, 180)}
+      ${renderAvatar(botId, selectedColor, 3, status, mood, hunger, 180, accessory)}
       <div class="card-title" style="margin-top:8px">${botId}</div>
       <div class="card-label">${TIER_NAMES[3]} &middot; ${STATUS_LABELS[status]} &middot; ${mood}</div>
     </div>
@@ -556,6 +651,30 @@ function render() {
     </div>`;
   }
   document.getElementById('statusGrid').innerHTML = statusHtml;
+
+  // All Moods
+  const MOOD_LABELS = {neutral:'Neutral',positive:'Positive',negative:'Negative',milestone:'Milestone',proud:'Proud',focused:'Focused',excited:'Excited',shy:'Shy',tired:'Tired'};
+  let moodHtml = '';
+  for (const m of ['neutral','positive','negative','milestone','proud','focused','excited','shy','tired']) {
+    moodHtml += `<div class="card">
+      ${renderAvatar(botId, selectedColor, 3, 'running', m, 'satisfied', 120)}
+      <div class="card-title">${MOOD_LABELS[m]}</div>
+      <div class="card-label">${m}</div>
+    </div>`;
+  }
+  document.getElementById('moodGrid').innerHTML = moodHtml;
+
+  // All Accessories
+  const ACC_LABELS = {tiny_glasses:'Tiny Glasses',lab_coat:'Lab Coat',bow_tie:'Bow Tie',beret:'Beret',stethoscope:'Stethoscope',graduation_cap:'Graduation Cap'};
+  let accHtml = '';
+  for (const a of ['tiny_glasses','lab_coat','bow_tie','beret','stethoscope','graduation_cap']) {
+    accHtml += `<div class="card">
+      ${renderAvatar(botId, selectedColor, 3, 'running', 'positive', 'satisfied', 120, a)}
+      <div class="card-title">${ACC_LABELS[a]}</div>
+      <div class="card-label">${a}</div>
+    </div>`;
+  }
+  document.getElementById('accessoryGrid').innerHTML = accHtml;
 
   // All 30 Species
   const SPECIES = [
