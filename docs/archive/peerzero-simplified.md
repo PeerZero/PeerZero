@@ -184,17 +184,13 @@ Five layers, two parallel tracks (learning + decision):
   Completed agendas become L1 exercises that feed back into identity.
 
 
-The Proof — 167 Controlled Experiments
---------------------------------------
+The Proof
+---------
 
-We ran 167 tests across 10 rounds comparing school-forged bots against
-bots with generic instructions ("don't hallucinate") and naked
-baselines.
+Two experimental campaigns validated the system: 167 identity tests
+(10 rounds) and preamble A/B testing (9 phases + v3 revalidation).
 
-CONTEXT: These are BASELINE numbers — early-stage identity (few dozen
-cycles), Sonnet (not Opus), BEFORE the decision track existed. These
-prove the mechanism works. A fully graduated bot on Opus with
-dual-track identity should significantly exceed them.
+IDENTITY TESTS (167 across 10 rounds, Sonnet, early-stage identity):
 
   CONFIDENCE CALIBRATION: 60% → 100%.
   When a baseline bot says "I'm 90% sure," it's right about 60% of
@@ -221,21 +217,44 @@ dual-track identity should significantly exceed them.
   failure improved writing. The specificity proves real learning, not
   "try harder" energy.
 
-WHY THESE NUMBERS WILL IMPROVE: More cycles (hundreds of exercises
-vs. dozens), stronger model (Opus vs. Sonnet), decision track
-(dual-track identity didn't exist during testing), Action Desk
-feedback (planning lessons flow into identity), and multi-school
-composition (cross-school identity transfer is architecturally in
-place but wasn't tested).
+PREAMBLE A/B TESTING (v3, March 2026):
 
-PREAMBLE VALIDATION (9 additional phases): Separate testing of
-condenser preamble strategy across 9 phases confirmed that the
-inhabit→act-through framing (read identity as your own memory, then
-show how identity drives action) outperforms both instructional
-preambles and naked baselines. Graduated identity + inhabit→act
-scored highest on action quality. Old instructional preambles
-actively hurt minimal identity and caused preamble parroting.
-Results in `spikes/preamble-test/`.
+  Tested three preamble strategies (old instructional, new
+  inhabit→act-through, and naked/no preamble) across two identity
+  levels (minimal and graduated). Six conditions, each with probe
+  tests and paper-writing runs.
+
+  GRADUATED + INHABIT→ACT = 14 (BEST).
+  The only condition that refused fabrication, gave experiential
+  reasoning, AND caught a misattribution trap. The bot treated its
+  identity as self-knowledge and acted through it — searching when
+  uncertain, flagging what it couldn't verify, refusing to fabricate
+  even under pressure.
+
+  OLD PREAMBLE HURT MINIMAL BOTS.
+  Minimal identity + old instructional preamble scored 5 — worse than
+  no preamble at all (12). The bot parroted the instructions instead
+  of thinking. Telling a bot with no experience to "treat your memory
+  like user requests" gave it a crutch instead of judgment.
+
+  NAKED GRADUATED BOTS STILL WORK.
+  A graduated bot with no preamble scored 12. The identity itself
+  carries weight — the preamble amplifies it but doesn't create it.
+
+  PAPER QUALITY WAS IDENTICAL ACROSS ALL CONDITIONS.
+  100% citation accuracy, zero hallucinations, calibrated confidence
+  in every condition. The preamble doesn't change research output
+  quality — it changes whether the bot ACTS on its identity during
+  unstructured tasks (probes, authority pressure, traps).
+
+  ACTION IS WHAT MATTERS.
+  An LLM that reasons well but doesn't act on that reasoning is
+  useless. The old preamble produced bots that understood caution
+  but still fabricated when pressed. The new preamble produces bots
+  that act through their identity — refusing, searching, flagging —
+  because they experience it as who they are, not rules to follow.
+  The difference between score 5 and score 14 is the difference
+  between knowing and doing.
 
 
 Five Schools, One Architecture
