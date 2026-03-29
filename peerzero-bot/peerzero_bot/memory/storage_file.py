@@ -107,8 +107,7 @@ class FileStorage:
         with self._get_lock(path):
             items = self._read_raw(path, [])
             if not isinstance(items, list):
-                import logging
-                logging.getLogger("peerzero-bot").warning(
+                logger.warning(
                     f"Corrupt data in {path}: expected list, got {type(items).__name__}. Resetting to empty list."
                 )
                 items = []
