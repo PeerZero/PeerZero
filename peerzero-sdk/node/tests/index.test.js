@@ -32,7 +32,7 @@ function makeProfile(overrides = {}) {
 
 function signProfile(profile, privateKey) {
   const keys = Object.keys(profile).sort();
-  const canonical = JSON.stringify(profile, keys);
+  const canonical = JSON.stringify(profile, Object.keys(profile).sort());
   const signature = crypto.sign(null, Buffer.from(canonical), privateKey);
   return {
     ...profile,

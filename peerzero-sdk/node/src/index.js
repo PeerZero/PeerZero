@@ -181,7 +181,7 @@ async function verify(profile, publicKey, options) {
     unsigned[k] = profile[k];
   }
 
-  const canonical = JSON.stringify(unsigned, keys);
+  const canonical = JSON.stringify(unsigned, Object.keys(unsigned).sort());
   const signature = Buffer.from(signatureB64, 'base64');
 
   const valid = crypto.verify(null, Buffer.from(canonical), key, signature);

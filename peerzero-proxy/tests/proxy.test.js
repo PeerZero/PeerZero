@@ -141,8 +141,11 @@ function createHandler(fetchFn, rateLimiter) {
     }
 
     if (provider === "anthropic") {
-      const existingSystem = body.system || "";
-      body.system = preamble + "\n\n" + existingSystem;
+      if (typeof body.system === "string") {
+        body.system = preamble + "\n\n" + body.system;
+      } else {
+        body.system = preamble;
+      }
     } else if (provider === "openai") {
       const messages = body.messages;
       if (messages && messages.length > 0 && messages[0].role === "system") {
@@ -433,7 +436,7 @@ describe("PeerZero LLM Proxy", () => {
 
       assert.equal(res.status, 200);
       const sentBody = JSON.parse(fetchCalls[0].init.body);
-      assert.equal(sentBody.system, TEST_PREAMBLE + "\n\n");
+      assert.equal(sentBody.system, TEST_PREAMBLE);
     });
 
     it("sends correct Anthropic headers including api key and version", async () => {
