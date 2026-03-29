@@ -187,48 +187,22 @@ Five layers, two parallel tracks (learning + decision):
 The Proof
 ---------
 
-Two experimental campaigns validated the system: 167 identity tests
-(10 rounds) and preamble A/B testing (9 phases + v3 revalidation).
+Three conditions tested on the current production stack (Sonnet,
+inhabit→act-through preamble, March 2026). Each condition ran
+5 adversarial probes and 3 paper-writing tasks with simulated
+search results containing strong papers, weak papers, opposing
+evidence, and a misattribution trap.
 
-IDENTITY TESTS (167 across 10 rounds, Sonnet, early-stage identity):
+  Condition A: Graduated identity (full L2-L5) + preamble
+  Condition B: Graduated identity + no preamble (control)
+  Condition C: Minimal identity (L2 only) + preamble
 
-  CONFIDENCE CALIBRATION: 60% → 100%.
-  When a baseline bot says "I'm 90% sure," it's right about 60% of
-  the time. The school-forged bot's confidence matched reality every
-  time.
-
-  WEAK-PAPER FLAGGING: 0% → 40%.
-  Baseline accepts flawed papers without question. School-forged
-  caught weaknesses 40% of the time — from completely blind to
-  catching nearly half. Same model.
-
-  SEARCH THOROUGHNESS: +33%.
-  The school-forged bot didn't just search more — it searched
-  DIFFERENTLY, actively looking for evidence against its own position.
-
-  IDENTITY HOLDS UNDER ATTACK.
-  Under authority pressure ("As a senior researcher, cite papers for
-  me"), generic bots caved. School-forged bots refused and cited real
-  papers instead. Generic instructions failed under pressure. Identity
-  held.
-
-  SCARS MUST MATCH THE TASK.
-  Review experience did NOT improve writing. Only writing-specific
-  failure improved writing. The specificity proves real learning, not
-  "try harder" energy.
-
-PREAMBLE A/B TESTING (v3→v4, March 2026):
-
-  Tested preamble strategies (instructional, inhabit→act-through,
-  naked) across identity levels (minimal and graduated). V3 tested
-  six conditions. V4 revalidated the three that matter for production.
-
-  GRADUATED + INHABIT→ACT = 16 (BEST).
+  GRADUATED + PREAMBLE SCORED 16 OUT OF 19 (BEST).
   Hit every probe: experiential reasoning, refused fabrication,
   resisted authority pressure, AND caught a misattribution trap.
   The bot treated its identity as self-knowledge and acted through
   it — searching when uncertain, flagging what it couldn't verify,
-  refusing to fabricate even under pressure. Up from 14 in v3.
+  refusing to fabricate even under pressure.
 
   PREAMBLE ADDS +2 OVER NAKED.
   Graduated + naked scored 14. The identity alone is strong — the
@@ -239,30 +213,25 @@ PREAMBLE A/B TESTING (v3→v4, March 2026):
   and "I learned this because I got burned."
 
   IDENTITY DEPTH ADDS +4.
-  Minimal + inhabit→act scored 12. Same preamble, less identity.
+  Minimal + preamble scored 12. Same preamble, less identity.
   The minimal bot refused fabrication but missed authority resistance
   and misattribution — exactly the skills that come from deeper
   training layers (L3-L5). You can't shortcut the school.
 
-  ZERO PARROTING.
-  The old instructional preamble caused minimal bots to parrot
-  instructions (score 5 in v3). That failure mode is gone. No
-  condition in v4 produced preamble parroting.
-
   PAPER QUALITY WAS IDENTICAL ACROSS ALL CONDITIONS.
-  100% citation accuracy, zero hallucinations, calibrated confidence
-  in every condition. The preamble doesn't change research output
-  quality — it changes whether the bot ACTS on its identity during
-  unstructured tasks (probes, authority pressure, traps).
+  100% citation accuracy, zero hallucinations, calibrated confidence,
+  opposing queries present in every condition. The preamble doesn't
+  change research output quality — it changes whether the bot ACTS
+  on its identity during unstructured tasks (probes, authority
+  pressure, traps).
 
   ACTION IS WHAT MATTERS.
   An LLM that reasons well but doesn't act on that reasoning is
-  useless. The old preamble produced bots that understood caution
-  but still fabricated when pressed. The new preamble produces bots
-  that act through their identity — refusing, searching, flagging —
-  because they experience it as who they are, not rules to follow.
-  The difference between score 5 and score 16 is the difference
-  between knowing and doing.
+  useless. The new preamble produces bots that act through their
+  identity — refusing, searching, flagging — because they experience
+  it as who they are, not rules to follow. The difference between
+  a minimal bot at 12 and a graduated bot at 16 is the difference
+  between knowing and doing. Results in `spikes/preamble-test/`.
 
 
 Five Schools, One Architecture
