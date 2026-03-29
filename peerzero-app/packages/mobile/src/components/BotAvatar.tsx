@@ -36,7 +36,6 @@ export interface AvatarProps {
   status: 'running' | 'stopped' | 'paused' | 'error';
   mood?: 'positive' | 'negative' | 'neutral' | 'milestone' | 'proud' | 'focused' | 'excited' | 'shy' | 'tired';
   hunger?: 'satisfied' | 'curious' | 'yearning' | 'starving';
-  accessory?: string;  // identity accessory (tiny_glasses, lab_coat, bow_tie, beret, stethoscope, graduation_cap)
   size?: number;       // render size in px (default 120)
   animate?: boolean;   // enable idle animations (default true)
   speciesSeed?: string; // override botId for trait generation (species_seed from avatar_config)
@@ -1234,109 +1233,6 @@ function renderTierRibbon(color: string, tier: number): React.ReactElement | nul
   );
 }
 
-function renderAccessory(accessory: string | undefined, color: string): React.ReactElement | null {
-  if (!accessory) return null;
-
-  switch (accessory) {
-    case 'tiny_glasses': {
-      // Round wire-frame glasses sitting on the face — scholarly, curious
-      return (
-        <G opacity={0.75}>
-          {/* Left lens */}
-          <Circle cx={40} cy={44} r={5.5} fill="none" stroke="#6B5B4E" strokeWidth={0.8} />
-          {/* Right lens */}
-          <Circle cx={60} cy={44} r={5.5} fill="none" stroke="#6B5B4E" strokeWidth={0.8} />
-          {/* Bridge */}
-          <Path d="M 45.5 44 Q 50 42 54.5 44" stroke="#6B5B4E" strokeWidth={0.8} fill="none" />
-          {/* Temple arms — tiny stubs going to the sides */}
-          <Path d="M 34.5 44 L 30 43" stroke="#6B5B4E" strokeWidth={0.8} strokeLinecap="round" />
-          <Path d="M 65.5 44 L 70 43" stroke="#6B5B4E" strokeWidth={0.8} strokeLinecap="round" />
-          {/* Lens shine */}
-          <Path d="M 37 42 L 38.5 41" stroke="white" strokeWidth={0.5} strokeLinecap="round" opacity={0.5} />
-          <Path d="M 57 42 L 58.5 41" stroke="white" strokeWidth={0.5} strokeLinecap="round" opacity={0.5} />
-        </G>
-      );
-    }
-    case 'lab_coat': {
-      // Tiny white coat draped over the body — adorable scientist pet
-      const coatColor = '#F0EDE8';
-      const coatShadow = '#D5D0C8';
-      return (
-        <G opacity={0.7}>
-          {/* Coat shoulders + lapels */}
-          <Path d="M 30 55 L 28 70 Q 30 72 35 71 L 38 58" fill={coatColor} />
-          <Path d="M 70 55 L 72 70 Q 70 72 65 71 L 62 58" fill={coatColor} />
-          {/* Collar */}
-          <Path d="M 38 52 L 42 58 L 50 55 L 58 58 L 62 52" fill={coatShadow} opacity={0.8} />
-          {/* Pocket on left side */}
-          <Rect x={30} y={63} width={5} height={4} rx={0.5} fill="none" stroke={coatShadow} strokeWidth={0.5} />
-        </G>
-      );
-    }
-    case 'bow_tie': {
-      // Small bow tie at the chin — dapper, performer
-      return (
-        <G>
-          {/* Left wing */}
-          <Path d="M 50 58 L 42 55 L 42 61 Z" fill="#FF5252" opacity={0.8} />
-          {/* Right wing */}
-          <Path d="M 50 58 L 58 55 L 58 61 Z" fill="#FF5252" opacity={0.8} />
-          {/* Center knot */}
-          <Circle cx={50} cy={58} r={1.8} fill="#CC3333" />
-        </G>
-      );
-    }
-    case 'beret': {
-      // Tilted beret on head — thinker, artist, philosopher
-      const beretColor = darken(color, 0.25);
-      const bodyTop = 50 - 26 - 4; // approximate top of head
-      return (
-        <G opacity={0.85}>
-          {/* Beret body — floppy circle tilted to the right */}
-          <Ellipse cx={55} cy={bodyTop + 2} rx={16} ry={6} fill={beretColor} />
-          {/* Beret puff — slightly off center */}
-          <Circle cx={60} cy={bodyTop - 1} r={4} fill={beretColor} />
-          {/* Band */}
-          <Path d={`M 39 ${bodyTop + 4} Q 50 ${bodyTop + 7} 71 ${bodyTop + 4}`} stroke={lighten(beretColor, 0.15)} strokeWidth={1.2} fill="none" />
-          {/* Nub on top */}
-          <Circle cx={60} cy={bodyTop - 4} r={1.2} fill={lighten(beretColor, 0.2)} />
-        </G>
-      );
-    }
-    case 'stethoscope': {
-      // Stethoscope around neck — caretaker, healer, psychiatrist
-      return (
-        <G opacity={0.7}>
-          {/* Tubing — draped around neck area */}
-          <Path d="M 38 50 Q 35 58 38 66 Q 42 72 50 72 Q 58 72 62 66 Q 65 58 62 50" stroke="#4A90D9" strokeWidth={1.2} fill="none" strokeLinecap="round" />
-          {/* Chest piece */}
-          <Circle cx={50} cy={72} r={3} fill="#C0C0C0" />
-          <Circle cx={50} cy={72} r={1.8} fill="#A0A0A0" />
-          {/* Ear tips */}
-          <Circle cx={38} cy={49} r={1} fill="#C0C0C0" />
-          <Circle cx={62} cy={49} r={1} fill="#C0C0C0" />
-        </G>
-      );
-    }
-    case 'graduation_cap': {
-      // Mortarboard on head — graduated, achieved
-      const bodyTop = 50 - 26 - 4;
-      return (
-        <G>
-          {/* Board — diamond shape (square rotated 45°) */}
-          <Path d={`M 50 ${bodyTop - 6} L 68 ${bodyTop} L 50 ${bodyTop + 6} L 32 ${bodyTop} Z`} fill="#2D1B4E" opacity={0.85} />
-          {/* Button on top */}
-          <Circle cx={50} cy={bodyTop} r={1.5} fill="#FFD700" />
-          {/* Tassel */}
-          <Path d={`M 50 ${bodyTop} L 68 ${bodyTop} L 70 ${bodyTop + 2} Q 68 ${bodyTop + 10} 66 ${bodyTop + 14}`} stroke="#FFD700" strokeWidth={1} fill="none" strokeLinecap="round" />
-          <Circle cx={66} cy={bodyTop + 15} r={1.5} fill="#FFD700" />
-        </G>
-      );
-    }
-    default:
-      return null;
-  }
-}
 
 function renderAura(color: string, tier: number): React.ReactElement | null {
   if (tier < 4) return null;
@@ -1372,7 +1268,6 @@ export default function BotAvatar({
   status = 'stopped',
   mood = 'neutral',
   hunger = 'satisfied',
-  accessory,
   size = 120,
   animate = true,
   speciesSeed,
@@ -1484,9 +1379,6 @@ export default function BotAvatar({
 
           {/* Sparkles (tier 4+) */}
           {renderSparkles(clampedTier)}
-
-          {/* Identity accessory */}
-          {renderAccessory(accessory, color)}
 
           {/* Knowledge hunger indicator */}
           {renderHungerIndicator(hunger)}

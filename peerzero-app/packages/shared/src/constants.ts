@@ -133,18 +133,6 @@ export const AVATAR_COLOR_PRESETS = [
   '#FDE68A', // Honey
 ] as const;
 
-// Avatar accessories — cosmetic items that reflect a bot's personality/identity.
-// These are "pet dress-up" items, not school labels.
-export const AVATAR_ACCESSORIES = [
-  'tiny_glasses',     // Round wire-frame glasses — scholarly, curious
-  'lab_coat',         // White coat draped over shoulders — scientist pet
-  'bow_tie',          // Small bow at the chin — dapper, performer
-  'beret',            // Tilted on head — thinker, artist
-  'stethoscope',      // Around neck — caretaker, healer
-  'graduation_cap',   // Mortarboard on head — graduated, achieved
-] as const;
-export type AvatarAccessory = typeof AVATAR_ACCESSORIES[number];
-
 // Bot species presets — each seed produces a unique combination of
 // body shape, ear style, tail style, and pattern. Shown at tier 3
 // during creation so users can see the full creature.
@@ -182,6 +170,15 @@ export const SPECIES_PRESETS = [
   { seed: 'sir', name: 'Sir Flops', desc: 'Distinguished & floppy' },   // tall, huge ears, fan tail, mustache
   { seed: 'potato', name: 'Potato', desc: 'Peak performance' },         // blob, bear ears, pom tail
   { seed: 'yeet', name: 'Yeet', desc: 'Built for speed (not really)' }, // squish, one ear, spike tail, bandaid
+  // ── Character species ──
+  { seed: 'genius', name: 'Genius', desc: 'Reads past bedtime' },              // oval, round ears, curly tail, freckles
+  { seed: 'grit_3', name: 'Grit', desc: 'Spiky outside, soft inside' },        // teardrop, pointed ears, spike tail, stripes
+  { seed: 'smarty_bot', name: 'Snoozy', desc: 'Professional napper' },         // squish, floppy ears, fan tail, spots
+  { seed: 'mocha_bot', name: 'Noodle', desc: 'Tall, floppy & full of love' },  // tall, floppy ears, pom tail, heart
+  { seed: 'donut_2', name: 'Grump', desc: 'Grumpy but lovable' },              // loaf, horns, fan tail, mustache
+  { seed: 'minty', name: 'Blip', desc: 'Beep boop, friend?' },                 // teardrop, antennae, spike tail
+  { seed: 'atom_3', name: 'Floof', desc: 'Maximum cuddle mode' },              // round, bear ears, fluffy tail, heart
+  { seed: 'sage_2', name: 'Sage', desc: 'Wise beyond their years' },           // bean, bunny ears, stub tail, heart
 ] as const;
 
 // ── Knowledge Hunger ──
