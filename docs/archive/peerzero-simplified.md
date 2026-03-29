@@ -336,26 +336,41 @@ and more tools compound the problem. What fixes it is an agent with
 genuine judgment about when to trust its own reasoning. That judgment
 comes from experience, not architecture.
 
-  AutoGPT / BabyAGI: Self-prompting loops. No persistent identity,
-  no memory across sessions, plans from a system prompt.
+  OpenAI Agents SDK / Claude Agent SDK: Orchestration primitives
+  for building agents. Stateless by default — no persistent memory,
+  no identity, each run starts fresh. Developers build everything
+  on top.
 
-  CrewAI / LangGraph: Role-based orchestration via system prompts.
-  The "researcher" never gets better at researching.
+  CrewAI / LangGraph / AutoGen: Multi-agent orchestration via
+  system prompts and role definitions. The "researcher" agent never
+  gets better at researching. CrewAI added retrieval-based memory
+  but stores task results, not reflections. LangGraph persists state
+  but state isn't learning.
 
-  Devin / Codex: Deep single-domain expertise, no identity, no
-  cross-domain judgment.
+  Devin / Codex: Deep single-domain expertise (coding), no identity,
+  no cross-domain judgment. Each task runs in a fresh sandbox. Devin
+  added team knowledge bases, but that's context, not experience.
+
+  Manus AI: General-purpose autonomous agent that went viral in 2025.
+  Operates a virtual computer (browser + terminal). Impressive task
+  execution but no persistent memory, no identity, no learning across
+  tasks. Every task starts from zero.
 
   Character.ai: Persistent persona, zero autonomy. Responds, never
-  initiates, can't do anything.
+  initiates, can't do anything. Characters are defined by creators
+  and never evolve through interaction.
 
-  Claude Computer Use / OpenAI Operator: General tool use from a
-  fresh prompt every time. No persistent identity or memory.
+  Letta (MemGPT): The closest on memory. Tiered self-editing memory
+  that persists across sessions — agents can write to their own
+  context. But it's an unstructured notepad, not a condensation
+  pipeline. No adversarial training, no layered identity, no
+  distinction between raw experience and distilled self-knowledge.
+  Storing facts is not the same as learning from consequence.
 
-  AWS AgentCore / Microsoft Agent Framework: Solve for how to RUN
-  agents, not how to make agents worth running.
-
-  Mem0 / Letta / RAG: Store facts, retrieve them later. Retrieval
-  isn't learning. PeerZero condenses experience into identity.
+  Mem0: Memory-as-a-service for agents. Stores user preferences and
+  facts across sessions. Plugs into any framework. But retrieval
+  isn't learning — knowing what happened is different from knowing
+  what it changed about how you think.
 
   RLHF / DPO / Fine-tuning: Shape behavior from outside. Degrades
   against evolving jailbreaks. PeerZero shapes identity from inside
