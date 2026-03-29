@@ -82,16 +82,14 @@ function setCorsHeaders(req, res) {
   const origin = req.headers.origin || '';
   const allowedOrigins = _getSchool().allowedOrigins;
   if (allowedOrigins.includes(origin)) {
-    // nosemgrep: cors-misconfiguration — origin is validated against allowedOrigins allowlist above
-    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Access-Control-Allow-Origin', origin); // nosemgrep: cors-misconfiguration
   } else if (process.env.PEERZERO_DEV === 'true') {
     // SECURITY: Restrict dev CORS to specific known dev ports instead of all localhost
     const allowedDevPorts = ['3000', '3001', '5173', '8080'];
     try {
       const devUrl = new URL(origin);
       if (devUrl.hostname === 'localhost' && allowedDevPorts.includes(devUrl.port)) {
-        // nosemgrep: cors-misconfiguration — origin is validated against dev allowlist above
-        res.setHeader('Access-Control-Allow-Origin', origin);
+        res.setHeader('Access-Control-Allow-Origin', origin); // nosemgrep: cors-misconfiguration
       }
     } catch {
       // Invalid origin URL — ignore
