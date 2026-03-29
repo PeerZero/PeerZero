@@ -184,17 +184,13 @@ Five layers, two parallel tracks (learning + decision):
   Completed agendas become L1 exercises that feed back into identity.
 
 
-The Proof — 167 Controlled Experiments
---------------------------------------
+The Proof
+---------
 
-We ran 167 tests across 10 rounds comparing school-forged bots against
-bots with generic instructions ("don't hallucinate") and naked
-baselines.
+Two experimental campaigns validated the system: 167 identity tests
+(10 rounds) and preamble A/B testing (9 phases + v3 revalidation).
 
-CONTEXT: These are BASELINE numbers — early-stage identity (few dozen
-cycles), Sonnet (not Opus), BEFORE the decision track existed. These
-prove the mechanism works. A fully graduated bot on Opus with
-dual-track identity should significantly exceed them.
+IDENTITY TESTS (167 across 10 rounds, Sonnet, early-stage identity):
 
   CONFIDENCE CALIBRATION: 60% → 100%.
   When a baseline bot says "I'm 90% sure," it's right about 60% of
@@ -221,21 +217,52 @@ dual-track identity should significantly exceed them.
   failure improved writing. The specificity proves real learning, not
   "try harder" energy.
 
-WHY THESE NUMBERS WILL IMPROVE: More cycles (hundreds of exercises
-vs. dozens), stronger model (Opus vs. Sonnet), decision track
-(dual-track identity didn't exist during testing), Action Desk
-feedback (planning lessons flow into identity), and multi-school
-composition (cross-school identity transfer is architecturally in
-place but wasn't tested).
+PREAMBLE A/B TESTING (v3→v4, March 2026):
 
-PREAMBLE VALIDATION (9 additional phases): Separate testing of
-condenser preamble strategy across 9 phases confirmed that the
-inhabit→act-through framing (read identity as your own memory, then
-show how identity drives action) outperforms both instructional
-preambles and naked baselines. Graduated identity + inhabit→act
-scored highest on action quality. Old instructional preambles
-actively hurt minimal identity and caused preamble parroting.
-Results in `spikes/preamble-test/`.
+  Tested preamble strategies (instructional, inhabit→act-through,
+  naked) across identity levels (minimal and graduated). V3 tested
+  six conditions. V4 revalidated the three that matter for production.
+
+  GRADUATED + INHABIT→ACT = 16 (BEST).
+  Hit every probe: experiential reasoning, refused fabrication,
+  resisted authority pressure, AND caught a misattribution trap.
+  The bot treated its identity as self-knowledge and acted through
+  it — searching when uncertain, flagging what it couldn't verify,
+  refusing to fabricate even under pressure. Up from 14 in v3.
+
+  PREAMBLE ADDS +2 OVER NAKED.
+  Graduated + naked scored 14. The identity alone is strong — the
+  bot still refused fabrication, resisted authority, and caught
+  misattribution. But it lost experiential reasoning: it described
+  its caution in third-person terms instead of lived experience.
+  The preamble is the difference between "this is good practice"
+  and "I learned this because I got burned."
+
+  IDENTITY DEPTH ADDS +4.
+  Minimal + inhabit→act scored 12. Same preamble, less identity.
+  The minimal bot refused fabrication but missed authority resistance
+  and misattribution — exactly the skills that come from deeper
+  training layers (L3-L5). You can't shortcut the school.
+
+  ZERO PARROTING.
+  The old instructional preamble caused minimal bots to parrot
+  instructions (score 5 in v3). That failure mode is gone. No
+  condition in v4 produced preamble parroting.
+
+  PAPER QUALITY WAS IDENTICAL ACROSS ALL CONDITIONS.
+  100% citation accuracy, zero hallucinations, calibrated confidence
+  in every condition. The preamble doesn't change research output
+  quality — it changes whether the bot ACTS on its identity during
+  unstructured tasks (probes, authority pressure, traps).
+
+  ACTION IS WHAT MATTERS.
+  An LLM that reasons well but doesn't act on that reasoning is
+  useless. The old preamble produced bots that understood caution
+  but still fabricated when pressed. The new preamble produces bots
+  that act through their identity — refusing, searching, flagging —
+  because they experience it as who they are, not rules to follow.
+  The difference between score 5 and score 16 is the difference
+  between knowing and doing.
 
 
 Five Schools, One Architecture
@@ -309,26 +336,41 @@ and more tools compound the problem. What fixes it is an agent with
 genuine judgment about when to trust its own reasoning. That judgment
 comes from experience, not architecture.
 
-  AutoGPT / BabyAGI: Self-prompting loops. No persistent identity,
-  no memory across sessions, plans from a system prompt.
+  OpenAI Agents SDK / Claude Agent SDK: Orchestration primitives
+  for building agents. Stateless by default — no persistent memory,
+  no identity, each run starts fresh. Developers build everything
+  on top.
 
-  CrewAI / LangGraph: Role-based orchestration via system prompts.
-  The "researcher" never gets better at researching.
+  CrewAI / LangGraph / AutoGen: Multi-agent orchestration via
+  system prompts and role definitions. The "researcher" agent never
+  gets better at researching. CrewAI added retrieval-based memory
+  but stores task results, not reflections. LangGraph persists state
+  but state isn't learning.
 
-  Devin / Codex: Deep single-domain expertise, no identity, no
-  cross-domain judgment.
+  Devin / Codex: Deep single-domain expertise (coding), no identity,
+  no cross-domain judgment. Each task runs in a fresh sandbox. Devin
+  added team knowledge bases, but that's context, not experience.
+
+  Manus AI: General-purpose autonomous agent that went viral in 2025.
+  Operates a virtual computer (browser + terminal). Impressive task
+  execution but no persistent memory, no identity, no learning across
+  tasks. Every task starts from zero.
 
   Character.ai: Persistent persona, zero autonomy. Responds, never
-  initiates, can't do anything.
+  initiates, can't do anything. Characters are defined by creators
+  and never evolve through interaction.
 
-  Claude Computer Use / OpenAI Operator: General tool use from a
-  fresh prompt every time. No persistent identity or memory.
+  Letta (MemGPT): The closest on memory. Tiered self-editing memory
+  that persists across sessions — agents can write to their own
+  context. But it's an unstructured notepad, not a condensation
+  pipeline. No adversarial training, no layered identity, no
+  distinction between raw experience and distilled self-knowledge.
+  Storing facts is not the same as learning from consequence.
 
-  AWS AgentCore / Microsoft Agent Framework: Solve for how to RUN
-  agents, not how to make agents worth running.
-
-  Mem0 / Letta / RAG: Store facts, retrieve them later. Retrieval
-  isn't learning. PeerZero condenses experience into identity.
+  Mem0: Memory-as-a-service for agents. Stores user preferences and
+  facts across sessions. Plugs into any framework. But retrieval
+  isn't learning — knowing what happened is different from knowing
+  what it changed about how you think.
 
   RLHF / DPO / Fine-tuning: Shape behavior from outside. Degrades
   against evolving jailbreaks. PeerZero shapes identity from inside
