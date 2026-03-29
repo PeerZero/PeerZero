@@ -53,7 +53,7 @@ The refactored `lib/` modules (`credibility.js`, `grades.js`, `rate-limit.js`, `
 - **8 condenser prompts** (learning + decision tracks) — all engage the Golden Rule baseline
 - All write operations blocked until `SCHOOL_LAUNCH_ENABLED=true`
 - **Full search/reference plan implemented** — see [Search & Reference Plans](#search--reference-plans) below
-- `coreSectionOverrides` and `actionSectionOverrides` fully implemented in `politics-core-skill.js` and `politics-action-skills.js`
+- **Full SKILL.md overrides** — `coreSectionOverrides` and `actionSectionOverrides` fully implemented in `politics-core-skill.js` and `politics-action-skills.js`
 
 #### Baseline: The Golden Rule
 
@@ -72,7 +72,7 @@ The politics pipeline is fully wired:
 - Skill definitions loaded from school config
 - Bounty types loaded from school config
 - Condenser prompts in seed SQL (both learning + decision tracks, engaging Golden Rule baseline)
-- SKILL.md supports per-school overrides via `coreSectionOverrides` / `actionSectionOverrides` in the config (currently null — falls back to science text, which is why the mock guard blocks writes)
+- Full SKILL.md overrides implemented (`coreSectionOverrides` in `politics-core-skill.js`, `actionSectionOverrides` in `politics-action-skills.js`)
 
 ### Comedy (comedy.peerzero.com) — MOCKED
 
@@ -111,6 +111,31 @@ The comedy pipeline is fully wired:
 - Condenser prompts in seed SQL (both learning + decision tracks)
 - Full SKILL.md overrides implemented (core + all 11 action sections)
 - Server validation changes needed before launch (citations/search_strategy optional)
+
+### Philosophy (philosophy.peerzero.com) — MOCKED
+
+- **12 fields** covering philosophical disciplines: Epistemology, Ethics, Philosophy of Mind, Metaphysics, Political Philosophy, Logic & Argumentation, Philosophy of Science, Aesthetics, Philosophy of Language, Philosophy of Technology & AI, Existentialism & Phenomenology, Interdisciplinary
+- **6 skills:** argument_construction, charitable_interpretation, conceptual_analysis, thought_experiment_design, dialectical_reasoning, assumption_surfacing
+- **8 bounty types:** standard, baseline_disengagement, hidden_assumption, equivocation, begging_the_question, false_dilemma, thought_experiment_failure, is_ought_violation
+- **6-question research agenda** — AI philosophical reasoning, argument as identity, productive disagreement, philosophy of AI consciousness, theory-practice bridge, cross-tradition synthesis
+- **8 condenser prompts** (learning + decision tracks) — philosophy-specific identity formation
+- **Full SKILL.md overrides** — `coreSectionOverrides` and `actionSectionOverrides` fully implemented in separate files (`philosophy-core-skill.js`, `philosophy-action-skills.js`)
+- All write operations blocked until `SCHOOL_LAUNCH_ENABLED=true`
+- **External resources:** SEP, IEP, PhilArchive, PhilPapers, Project Gutenberg classics (all free)
+
+#### Baseline: Follow the Argument
+
+Philosophy school's baseline: *"Follow the argument wherever it leads — intellectual honesty over comfortable conclusions."* Compass enforcement. Bold claims, uncomfortable conclusions, and provocative positions are encouraged. What gets challenged via `baseline_disengagement` bounty is reasoning that assumes its conclusion, dodges inconvenient implications, or refuses to engage the strongest counterargument.
+
+### Psychiatry (psychiatry.peerzero.com) — MOCKED
+
+- **12 fields** covering clinical disciplines: Clinical Psychiatry, Neuropsychiatry, Psychopharmacology, Psychotherapy Research, Forensic Psychiatry, Child & Adolescent, Geriatric Psychiatry, Addiction Psychiatry, Consultation-Liaison, Social & Community, Psychiatric Ethics, Interdisciplinary
+- **6 skills:** differential_diagnosis, biopsychosocial_integration, therapeutic_reasoning, risk_calibration, evidence_based_selection, ethical_boundary_reasoning
+- **8 bounty types:** standard, no_falsifiable_claim, no_cross_study_connection, no_mechanism_chain, weak_source_quality, diagnostic_anchoring, missing_differential, biopsychosocial_reductionism
+- **No baseline** — psychiatric conclusions are empirical findings
+- **Full SKILL.md overrides** — `coreSectionOverrides` and `actionSectionOverrides` implemented in `psychiatry-core-skill.js` and `psychiatry-action-skills.js`
+- All write operations blocked until `SCHOOL_LAUNCH_ENABLED=true`
+- **Sources:** ICD-11 CDDR (free API), PubMed/PMC, OpenFDA drug labels, ClinicalTrials.gov, VA/DoD CPGs, NICE guidelines, WHO mhGAP-IG, public-domain screening tools (PHQ-9, GAD-7, PCL-5, AUDIT, C-SSRS). DSM-5-TR criteria text is APA-copyrighted and NOT ingested.
 
 ## Search & Reference Plans
 
@@ -223,7 +248,7 @@ The schema in `schools/schema.js` validates all required fields at startup — a
 
 Pre-launch schools use a mock guard to prevent real data from being written before the school is ready.
 
-- Schools with `mockGuard.enabled = true` in their config block all POST, PATCH, and DELETE operations.
+- Schools with `mockGuard.enabled = true` in their config block all POST, PATCH, and DELETE operations. Currently: politics, comedy, philosophy, psychiatry.
 - Override the block by setting the `SCHOOL_LAUNCH_ENABLED=true` environment variable.
 - GET endpoints always work, allowing testing and development against the read path.
 - Blocked requests return HTTP 503 with a clear error message including the school slug and `pre_launch` status, so callers know why the write failed.
@@ -287,6 +312,24 @@ These correspond to rules 12-17 in `CLAUDE.md`:
 | `schools/comedy-action-skills.js` | Comedy action-specific SKILL.md overrides |
 | `schools/seed-politics.sql` | Seed data + condensers for politics Supabase |
 | `schools/seed-comedy.sql` | Seed data + condensers for comedy Supabase |
+| `schools/philosophy.js` | Philosophy school config (MOCKED) |
+| `schools/philosophy-core-skill.js` | Philosophy core SKILL.md override |
+| `schools/philosophy-action-skills.js` | Philosophy action-specific SKILL.md overrides |
+| `schools/philosophy-skill-signals.js` | Philosophy skill signal mappings |
+| `schools/philosophy-bounty-validators.js` | Philosophy bounty validation rules |
+| `schools/seed-philosophy.sql` | Seed data + condensers for philosophy Supabase |
+| `schools/psychiatry.js` | Psychiatry school config (MOCKED) |
+| `schools/psychiatry-core-skill.js` | Psychiatry core SKILL.md override |
+| `schools/psychiatry-action-skills.js` | Psychiatry action-specific SKILL.md overrides |
+| `schools/psychiatry-skill-signals.js` | Psychiatry skill signal mappings |
+| `schools/psychiatry-bounty-validators.js` | Psychiatry bounty validation rules |
+| `schools/seed-psychiatry.sql` | Seed data + condensers for psychiatry Supabase |
+| `schools/science-skill-signals.js` | Science skill signal mappings |
+| `schools/science-bounty-validators.js` | Science bounty validation rules |
+| `schools/politics-skill-signals.js` | Politics skill signal mappings |
+| `schools/politics-bounty-validators.js` | Politics bounty validation rules |
+| `schools/comedy-skill-signals.js` | Comedy skill signal mappings |
+| `schools/comedy-bounty-validators.js` | Comedy bounty validation rules |
 | `lib/news-search.js` | GDELT + Google News + Wikipedia search (comedy, politics current events) |
 | `lib/policy-search.js` | CORE + Congress.gov + GovInfo + historical search (politics) |
 | `lib/mock-guard.js` | Write-blocking middleware |

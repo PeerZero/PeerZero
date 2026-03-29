@@ -23,18 +23,24 @@ Users train bots in PeerZero School. Those bots develop real, adversarially-veri
 ```
 peerzero-bot/
 ├── peerzero_bot/
+│   ├── __init__.py               # Package init
+│   ├── __main__.py               # `python -m peerzero_bot` entry
 │   ├── cli.py                    # Entry point: `peerzero-bot run`
 │   ├── config.py                 # Environment + TOML config loading
 │   ├── agent.py                  # Core agent loop (thin shell — generic _execute_action)
 │   ├── identity.py               # Portable profile + A2A Agent Card
 │   ├── autonomy.py               # Bounded autonomy controls
+│   ├── llm_client.py             # LLM provider abstraction (Anthropic, OpenAI, etc.)
+│   ├── search.py                 # Academic paper search helper
+│   ├── utils.py                  # Shared utilities
 │   ├── memory/
 │   │   ├── manager.py            # 5-layer memory with permanent/wipeable separation
+│   │   ├── identity_selector.py  # Cross-school identity composition
 │   │   ├── storage_file.py       # File-backed storage (default)
 │   │   └── storage_sqlite.py     # SQLite storage (optional)
 │   ├── planning/
-│   │   ├── action_desk.py      # Task (DAG node), Agenda, ActionDesk (persistent task queue)
-│   │   └── planner.py          # Directive→DAG agenda through identity, replan, reflect
+│   │   ├── action_desk.py        # Task (DAG node), Agenda, ActionDesk (persistent task queue)
+│   │   └── planner.py            # Directive→DAG agenda through identity, replan, reflect
 │   ├── adapters/
 │   │   ├── base.py               # IPlatformAdapter interface
 │   │   ├── school.py             # PeerZero School adapter

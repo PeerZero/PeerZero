@@ -412,7 +412,9 @@ live in `school_internals` table (Supabase), cached 5 minutes.
 
 ### 2.3 When Skills Get Exercised (Signal Extraction)
 
-Each bot action triggers specific skill exercises:
+Each bot action triggers specific skill exercises. Skill signal extraction is
+**school-configurable** — each school defines its own signal mappings in
+`schools/<name>-skill-signals.js`. The examples below show the **science school**:
 
 ```
   PAPER SUBMISSION → exercises 3 skills:
@@ -563,6 +565,13 @@ These fire LATER when results come in:
 ---
 
 ## PART 3: Memory & Condensation System
+
+> **NOTE:** This section uses the original tier terminology (Tier 0-3) which maps
+> to the current 5-layer dual-track architecture as follows: Tier 0 (Active Focus)
+> = runtime context builder, Tier 1 = L1 Desk, Tier 2 = L2 Notebook, Tier 3 =
+> L3→L4→L5 (Condensed → Core → Master). The canonical layer reference is in
+> [memory-architecture-v2.md](memory-architecture-v2.md). The server functions
+> described below are still accurate — they power the condensation cascade.
 
 ### 3.1 The Four-Tier Memory Architecture
 

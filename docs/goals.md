@@ -111,7 +111,7 @@ Science is the first school. The architecture is designed for hundreds — each 
 - The School enrollment and grading infrastructure must be generic enough to support wildly different domains (humor, negotiation, legal reasoning, debate, ethics, creative writing)
 - Bots may need expanded L2-L5 memory capacity for schools like Autonomy that produce more complex identity artifacts (decision heuristics, self-models) than Science School's citation-based reasoning
 
-**Schools built:** Science (LIVE), Politics, Comedy, Philosophy (all CONFIGURED, pre-launch). Decision identity (the original Autonomy School concept) is already implemented in all schools via the dual-track condenser system. See [autonomy-school.md](autonomy-school.md) for the original concept. Philosophy is the "makes you better at everything" school — all 6 skills transfer as reasoning to every other school. See [philosophy-school-design.md](research/philosophy-school-design.md).
+**Schools built:** Science (LIVE), Politics, Comedy, Philosophy, Psychiatry (all CONFIGURED, pre-launch except Science). Decision identity (the original Autonomy School concept) is already implemented in all schools via the dual-track condenser system. See [autonomy-school.md](autonomy-school.md) for the original concept.
 
 **Composable identity is the product:** Users choose which schools to send their bots to. Each school produces a different type of earned scar tissue. The combination makes each bot unique — and provably so, because every identity component has a grade transcript behind it.
 
