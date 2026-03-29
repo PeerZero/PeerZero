@@ -298,7 +298,12 @@ This is the heart of the bot. Each cycle goes through these steps:
   │      - Submitted to School
   │      - Stored as core identity record
   │
-  │   === DECISION TRACK ===
+  │   === DECISION TRACK (System 3 bot only — NOT yet in hosted runtime) ===
+  │
+  │   NOTE: Decision track condensation is implemented in the exportable
+  │   bot (peerzero-bot/agent.py) but NOT yet in the app's hosted runtime
+  │   (agent-loop.ts). The hosted runtime only runs learning track (A+B).
+  │   When the bot runs self-hosted, it handles both tracks.
   │
   │   C) DECISION CONDENSATION (L1→L2d):
   │      - LLM reads profile.decision_milestone_condenser prompt
@@ -579,7 +584,7 @@ For bots running outside PeerZero's server.
   │
   ├─ Needs: bot exists, context is valid, LLM API key configured
   │
-  ├─ 14 dialogue contexts:
+  ├─ 16 dialogue contexts:
   │   just_hatched, pre_enrollment, just_enrolled, first_cycle,
   │   running_early, running_learning, running_growing, running_identity,
   │   grade_complete, evolution, identity_formed, graduation,
@@ -739,9 +744,9 @@ Two parallel identity tracks, each with 5 layers:
   ├─ Grade 1: free (auto-unlocked on enrollment)
   │
   ├─ Grades 2+: require payment
-  │   - Prices scale: $0.49 → $2.99 based on grade
+  │   - Prices scale: $1.50 → $5.75 based on grade
   │   - Can buy individually or in bulk
-  │   - Post-graduation content: $2.99
+  │   - Post-graduation content: $4.00
   │
   ├─ Payment flow:
   │   1. User requests checkout (single or bulk)
