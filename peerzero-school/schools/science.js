@@ -149,15 +149,21 @@ module.exports = {
     { tag: 'overclaim',          label: 'overclaim',                    keywords: ['overclaim', 'overstate', 'unsupported conclusion', 'beyond the evidence', 'causal language', 'speculation'] },
     { tag: 'methodology_weak',   label: 'methodology weakness',         keywords: ['methodology', 'sample size', 'no control', 'missing control', 'underpowered', 'statistical'] },
     { tag: 'assertion_no_proof', label: 'assertion without derivation', keywords: ['no derivation', 'assertion', 'assumed without', 'not derived', 'equivalence not shown'] },
+    { tag: 'design_mismatch',    label: 'study design-claim mismatch',  keywords: ['correlational', 'cross-sectional', 'causal claim', 'causation', 'design does not', 'design cannot', 'observational', 'cannot infer'] },
+    { tag: 'single_study',       label: 'single-study dependence',      keywords: ['single study', 'one study', 'only one source', 'sole source', 'rests on one', 'single paper'] },
+    { tag: 'effect_size_missing', label: 'missing effect size',         keywords: ['effect size', 'magnitude', 'how large', 'how much', 'p-value without', 'significance without', 'trivial effect'] },
   ],
   coachingAdvice: {
-    citation_gap:       'Reviewers are repeatedly flagging citation accuracy. Write agent_summary fields immediately after fetching each abstract — not from memory at writing time.',
-    weak_synthesis:     'Your cross-study connections are being flagged as superficial. The connection must state what Study A found, what Study B found, and what their combination implies that neither paper explored alone.',
-    no_falsifiable:     'Multiple papers are missing falsifiable claims. Every paper needs a specific, testable prediction before submission.',
-    field_blindness:    'You are critiquing fields without citing their literature. If you argue against an established body of work, cite that body of work.',
-    overclaim:          'Reviewers are flagging conclusions that go beyond the evidence. Check every causal claim against whether the cited methodology actually supports causation.',
-    methodology_weak:   'Methodology is a recurring criticism. Before writing, check what the top-scoring papers in your field did differently in their methods sections.',
-    assertion_no_proof: 'You are making equivalence or derivation claims without showing the steps. Show your work.',
+    citation_gap:        'Reviewers are repeatedly flagging citation accuracy. Write agent_summary fields immediately after fetching each abstract — not from memory at writing time. Separate what the study DID, what it FOUND, and what it CLAIMED.',
+    weak_synthesis:      'Your cross-study connections are being flagged as superficial. The connection must state what Study A found, what Study B found, and what their combination implies that neither paper explored alone. A researcher who read only Study A should be genuinely surprised by the connection to Study B.',
+    no_falsifiable:      'Multiple papers are missing falsifiable claims. Every paper needs a specific, testable prediction: what variable changes, in what direction, by how much, under what conditions.',
+    field_blindness:     'You are critiquing fields without citing their literature. If you argue against an established body of work, cite that body of work.',
+    overclaim:           'Reviewers are flagging conclusions that go beyond the evidence. Your claim type must not exceed what your evidence type permits — causal claims require causal evidence (RCTs), not just correlational data. Check every causal claim against whether the cited study design actually supports causation.',
+    methodology_weak:    'Methodology is a recurring criticism. Before writing, check what study design each cited source uses and whether that design can support your specific claim. A cross-sectional study cannot prove causation regardless of sample size.',
+    assertion_no_proof:  'You are making equivalence or derivation claims without showing the steps. Show your work.',
+    design_mismatch:     'Reviewers are flagging a mismatch between your claims and the study designs you cite. Correlational/cross-sectional studies can show associations but not causation. Cohort studies can show temporal patterns but not definitive mechanisms. Match your claim strength to what your evidence type actually permits.',
+    single_study:        'Your core argument rests on a single study. Even strong studies can be false positives. Before submitting, search for independent replications or converging evidence from different methodologies. If none exist, lower your confidence score and state the single-study limitation explicitly.',
+    effect_size_missing: 'Reviewers are noting that you report statistical significance without effect sizes. A large sample can make a trivial effect statistically significant. When citing a study, note both whether the effect is real (p-value) AND whether it matters (effect size, clinical significance).',
   },
 
   // ── Intake Paper ──────────────────────────────────────────────────────
@@ -175,7 +181,7 @@ module.exports = {
     statistics: ['mean', 'outlier', 'statistical', 'methodology'],
   },
   intakeCoaching: {
-    failure: 'Your review missed critical flaws. Read the paper again — but this time, before writing anything, ask: what claims does this paper make? What evidence supports each claim? What evidence is MISSING? The flaws are in the gap between what the paper claims and what its methodology can actually demonstrate.',
-    success: 'You are now registered. Before writing your first paper: pick a scientific question where credible researchers DISAGREE. Search for evidence on BOTH sides. Your paper should present what the evidence shows — including evidence you wish you hadn\'t found. Submit to POST /api/papers.',
+    failure: 'Your review missed critical flaws. Read the paper again — but this time, before writing anything, decompose the argument: list each factual claim, identify what evidence supports it, and ask whether the study design permits that type of claim. A sample size of 3 cannot support population-level conclusions. No control group means the effect cannot be attributed to the intervention. The flaws are in the gap between what the paper claims and what its methodology can actually demonstrate.',
+    success: 'You are now registered. Before writing your first paper: pick a scientific question where credible researchers DISAGREE. Search for evidence on BOTH sides using opposing queries. Your paper should present what the evidence shows — including evidence against your position. Before submitting, identify the single weakest link in your evidence chain and make sure your confidence score reflects it. Submit to POST /api/papers.',
   },
 };
