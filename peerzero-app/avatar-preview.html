@@ -107,18 +107,6 @@
     </select>
   </div>
   <div class="control-group">
-    <label>Accessory</label>
-    <select id="accessory" onchange="render()">
-      <option value="">None</option>
-      <option value="tiny_glasses">Tiny Glasses</option>
-      <option value="lab_coat">Lab Coat</option>
-      <option value="bow_tie">Bow Tie</option>
-      <option value="beret">Beret</option>
-      <option value="stethoscope">Stethoscope</option>
-      <option value="graduation_cap">Graduation Cap</option>
-    </select>
-  </div>
-  <div class="control-group">
     <label>Hunger</label>
     <select id="hunger" onchange="render()">
       <option value="satisfied">Satisfied</option>
@@ -136,9 +124,7 @@
 <div class="grid" id="statusGrid"></div>
 <div class="section-title">All Moods (Running)</div>
 <div class="grid" id="moodGrid"></div>
-<div class="section-title">All Accessories (at Tier 3)</div>
-<div class="grid" id="accessoryGrid"></div>
-<div class="section-title">All 30 Species (at Tier 3)</div>
+<div class="section-title">All 38 Species (at Tier 3)</div>
 <div class="grid" id="speciesGrid"></div>
 <div class="section-title">Random Bots Gallery</div>
 <div class="grid" id="galleryGrid"></div>
@@ -202,7 +188,7 @@ function generateTraits(botId) {
   };
 }
 
-function renderAvatar(botId, color, tier, status, mood, hunger, size, accessory) {
+function renderAvatar(botId, color, tier, status, mood, hunger, size) {
   const traits = generateTraits(botId);
   const t = Math.max(0,Math.min(5,tier));
   const sb = t * 1.2;
@@ -580,24 +566,6 @@ function renderAvatar(botId, color, tier, status, mood, hunger, size, accessory)
     svg += '</g>';
   }
 
-  // Identity accessory
-  if (accessory === 'tiny_glasses') {
-    svg += `<g opacity="0.75"><circle cx="40" cy="44" r="5.5" fill="none" stroke="#6B5B4E" stroke-width="0.8"/><circle cx="60" cy="44" r="5.5" fill="none" stroke="#6B5B4E" stroke-width="0.8"/><path d="M 45.5 44 Q 50 42 54.5 44" stroke="#6B5B4E" stroke-width="0.8" fill="none"/><path d="M 34.5 44 L 30 43" stroke="#6B5B4E" stroke-width="0.8" stroke-linecap="round"/><path d="M 65.5 44 L 70 43" stroke="#6B5B4E" stroke-width="0.8" stroke-linecap="round"/><path d="M 37 42 L 38.5 41" stroke="white" stroke-width="0.5" stroke-linecap="round" opacity="0.5"/><path d="M 57 42 L 58.5 41" stroke="white" stroke-width="0.5" stroke-linecap="round" opacity="0.5"/></g>`;
-  } else if (accessory === 'lab_coat') {
-    svg += `<g opacity="0.7"><path d="M 30 55 L 28 70 Q 30 72 35 71 L 38 58" fill="#F0EDE8"/><path d="M 70 55 L 72 70 Q 70 72 65 71 L 62 58" fill="#F0EDE8"/><path d="M 38 52 L 42 58 L 50 55 L 58 58 L 62 52" fill="#D5D0C8" opacity="0.8"/><rect x="30" y="63" width="5" height="4" rx="0.5" fill="none" stroke="#D5D0C8" stroke-width="0.5"/></g>`;
-  } else if (accessory === 'bow_tie') {
-    svg += `<path d="M 50 58 L 42 55 L 42 61 Z" fill="#FF5252" opacity="0.8"/><path d="M 50 58 L 58 55 L 58 61 Z" fill="#FF5252" opacity="0.8"/><circle cx="50" cy="58" r="1.8" fill="#CC3333"/>`;
-  } else if (accessory === 'beret') {
-    const bc = darken(color, 0.25), bl = lighten(bc, 0.15), bn = lighten(bc, 0.2);
-    const bt2 = 50 - 26 - 4;
-    svg += `<g opacity="0.85"><ellipse cx="55" cy="${bt2+2}" rx="16" ry="6" fill="${bc}"/><circle cx="60" cy="${bt2-1}" r="4" fill="${bc}"/><path d="M 39 ${bt2+4} Q 50 ${bt2+7} 71 ${bt2+4}" stroke="${bl}" stroke-width="1.2" fill="none"/><circle cx="60" cy="${bt2-4}" r="1.2" fill="${bn}"/></g>`;
-  } else if (accessory === 'stethoscope') {
-    svg += `<g opacity="0.7"><path d="M 38 50 Q 35 58 38 66 Q 42 72 50 72 Q 58 72 62 66 Q 65 58 62 50" stroke="#4A90D9" stroke-width="1.2" fill="none" stroke-linecap="round"/><circle cx="50" cy="72" r="3" fill="#C0C0C0"/><circle cx="50" cy="72" r="1.8" fill="#A0A0A0"/><circle cx="38" cy="49" r="1" fill="#C0C0C0"/><circle cx="62" cy="49" r="1" fill="#C0C0C0"/></g>`;
-  } else if (accessory === 'graduation_cap') {
-    const bt3 = 50 - 26 - 4;
-    svg += `<path d="M 50 ${bt3-6} L 68 ${bt3} L 50 ${bt3+6} L 32 ${bt3} Z" fill="#2D1B4E" opacity="0.85"/><circle cx="50" cy="${bt3}" r="1.5" fill="#FFD700"/><path d="M 50 ${bt3} L 68 ${bt3} L 70 ${bt3+2} Q 68 ${bt3+10} 66 ${bt3+14}" stroke="#FFD700" stroke-width="1" fill="none" stroke-linecap="round"/><circle cx="66" cy="${bt3+15}" r="1.5" fill="#FFD700"/>`;
-  }
-
   const animClass = status==='running'?'animate-both':status==='error'?'animate-breathe':'';
   return `<div class="${animClass}"><svg width="${size}" height="${size}" viewBox="0 0 100 100">${svg}</svg></div>`;
 }
@@ -611,12 +579,10 @@ function render() {
   const status = document.getElementById('status').value;
   const mood = document.getElementById('mood').value;
   const hunger = document.getElementById('hunger').value;
-  const accessory = document.getElementById('accessory').value || undefined;
-
   // Main preview
   document.getElementById('mainPreview').innerHTML = `
     <div class="single-card">
-      ${renderAvatar(botId, selectedColor, 3, status, mood, hunger, 180, accessory)}
+      ${renderAvatar(botId, selectedColor, 3, status, mood, hunger, 180)}
       <div class="card-title" style="margin-top:8px">${botId}</div>
       <div class="card-label">${TIER_NAMES[3]} &middot; ${STATUS_LABELS[status]} &middot; ${mood}</div>
     </div>
@@ -664,19 +630,7 @@ function render() {
   }
   document.getElementById('moodGrid').innerHTML = moodHtml;
 
-  // All Accessories
-  const ACC_LABELS = {tiny_glasses:'Tiny Glasses',lab_coat:'Lab Coat',bow_tie:'Bow Tie',beret:'Beret',stethoscope:'Stethoscope',graduation_cap:'Graduation Cap'};
-  let accHtml = '';
-  for (const a of ['tiny_glasses','lab_coat','bow_tie','beret','stethoscope','graduation_cap']) {
-    accHtml += `<div class="card">
-      ${renderAvatar(botId, selectedColor, 3, 'running', 'positive', 'satisfied', 120, a)}
-      <div class="card-title">${ACC_LABELS[a]}</div>
-      <div class="card-label">${a}</div>
-    </div>`;
-  }
-  document.getElementById('accessoryGrid').innerHTML = accHtml;
-
-  // All 30 Species
+  // All 38 Species
   const SPECIES = [
     {seed:'bubbles',name:'Bubbles',desc:'Round & friendly'},
     {seed:'spike',name:'Spike',desc:'Sleek & sharp'},
@@ -708,6 +662,14 @@ function render() {
     {seed:'sir',name:'Sir Flops',desc:'Distinguished & floppy'},
     {seed:'potato',name:'Potato',desc:'Peak performance'},
     {seed:'yeet',name:'Yeet',desc:'Built for speed (not really)'},
+    {seed:'genius',name:'Genius',desc:'Reads past bedtime'},
+    {seed:'grit_3',name:'Grit',desc:'Spiky outside, soft inside'},
+    {seed:'smarty_bot',name:'Snoozy',desc:'Professional napper'},
+    {seed:'mocha_bot',name:'Noodle',desc:'Tall, floppy & full of love'},
+    {seed:'donut_2',name:'Grump',desc:'Grumpy but lovable'},
+    {seed:'minty',name:'Blip',desc:'Beep boop, friend?'},
+    {seed:'atom_3',name:'Floof',desc:'Maximum cuddle mode'},
+    {seed:'sage_2',name:'Sage',desc:'Wise beyond their years'},
   ];
   let speciesHtml = '';
   SPECIES.forEach((sp, i) => {
