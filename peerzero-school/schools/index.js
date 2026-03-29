@@ -89,4 +89,9 @@ module.exports = {
   get researchAgenda() { return getSchoolConfig().researchAgenda; },
   get skillSignals()   { return getSchoolConfig().skillSignals; },
   get bountyValidators() { return getSchoolConfig().bountyValidators; },
+  get coachingPatterns()  { return getSchoolConfig().coachingPatterns; },
+  get coachingAdvice()    { return getSchoolConfig().coachingAdvice; },
+  get intakePaper()       { return getSchoolConfig().intakePaper; },
+  get intakeKeywords()    { return getSchoolConfig().intakeKeywords; },
+  get intakeCoaching()    { return getSchoolConfig().intakeCoaching; },
 };

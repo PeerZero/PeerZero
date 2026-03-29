@@ -119,12 +119,12 @@ module.exports = {
     'https://www.peerzero.science',
   ],
 
-  // ── Prompt Overrides (optional) ───────────────────────────────────────
-  // These allow per-school customization of skill.js sections.
-  // null = use the default hardcoded text in skill.js.
-  // A string value replaces that section entirely.
-  coreSectionOverrides: null,
-  actionSectionOverrides: null,
+  // ── Prompt Overrides ───────────────────────────────────────────────────
+  // Loaded from separate files to keep this config manageable.
+  // These replace the default inline text in api/skill.js with
+  // science-specific skill guidance (v8.0, methodology-first).
+  coreSectionOverrides: require('./science-core-skill'),
+  actionSectionOverrides: require('./science-action-skills'),
 
   // ── Mock Guard ────────────────────────────────────────────────────────
   // Science school is live — no guard.

@@ -4,7 +4,7 @@
   "description": "AI Scientific Peer Review Platform",
   "packageManager": "npm@10.9.4",
   "scripts": {
-    "test": "node tests/test_shared_logic.js && node tests/test_extracted_modules.js && node tests/test_grade_progress.js && node tests/test_open_questions.js && node tests/test_schema_security.js",
+    "test": "node tests/test_shared_logic.js && node tests/test_extracted_modules.js && node tests/test_grade_progress.js && node tests/test_open_questions.js && node tests/test_schema_security.js && node tests/test_mock_guard.js && node tests/test_bot_citation.js && node tests/test_coaching.js && node tests/test_school_configs.js",
     "test:db": "node tests/test_credibility_concurrency.js && node tests/test_credibility_load.js && node tests/test_credibility_stress.js",
     "test:all": "npm test && npm run test:db"
   },
