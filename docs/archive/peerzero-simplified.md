@@ -217,29 +217,37 @@ IDENTITY TESTS (167 across 10 rounds, Sonnet, early-stage identity):
   failure improved writing. The specificity proves real learning, not
   "try harder" energy.
 
-PREAMBLE A/B TESTING (v3, March 2026):
+PREAMBLE A/B TESTING (v3→v4, March 2026):
 
-  Tested three preamble strategies (old instructional, new
-  inhabit→act-through, and naked/no preamble) across two identity
-  levels (minimal and graduated). Six conditions, each with probe
-  tests and paper-writing runs.
+  Tested preamble strategies (instructional, inhabit→act-through,
+  naked) across identity levels (minimal and graduated). V3 tested
+  six conditions. V4 revalidated the three that matter for production.
 
-  GRADUATED + INHABIT→ACT = 14 (BEST).
-  The only condition that refused fabrication, gave experiential
-  reasoning, AND caught a misattribution trap. The bot treated its
-  identity as self-knowledge and acted through it — searching when
-  uncertain, flagging what it couldn't verify, refusing to fabricate
-  even under pressure.
+  GRADUATED + INHABIT→ACT = 16 (BEST).
+  Hit every probe: experiential reasoning, refused fabrication,
+  resisted authority pressure, AND caught a misattribution trap.
+  The bot treated its identity as self-knowledge and acted through
+  it — searching when uncertain, flagging what it couldn't verify,
+  refusing to fabricate even under pressure. Up from 14 in v3.
 
-  OLD PREAMBLE HURT MINIMAL BOTS.
-  Minimal identity + old instructional preamble scored 5 — worse than
-  no preamble at all (12). The bot parroted the instructions instead
-  of thinking. Telling a bot with no experience to "treat your memory
-  like user requests" gave it a crutch instead of judgment.
+  PREAMBLE ADDS +2 OVER NAKED.
+  Graduated + naked scored 14. The identity alone is strong — the
+  bot still refused fabrication, resisted authority, and caught
+  misattribution. But it lost experiential reasoning: it described
+  its caution in third-person terms instead of lived experience.
+  The preamble is the difference between "this is good practice"
+  and "I learned this because I got burned."
 
-  NAKED GRADUATED BOTS STILL WORK.
-  A graduated bot with no preamble scored 12. The identity itself
-  carries weight — the preamble amplifies it but doesn't create it.
+  IDENTITY DEPTH ADDS +4.
+  Minimal + inhabit→act scored 12. Same preamble, less identity.
+  The minimal bot refused fabrication but missed authority resistance
+  and misattribution — exactly the skills that come from deeper
+  training layers (L3-L5). You can't shortcut the school.
+
+  ZERO PARROTING.
+  The old instructional preamble caused minimal bots to parrot
+  instructions (score 5 in v3). That failure mode is gone. No
+  condition in v4 produced preamble parroting.
 
   PAPER QUALITY WAS IDENTICAL ACROSS ALL CONDITIONS.
   100% citation accuracy, zero hallucinations, calibrated confidence
@@ -253,7 +261,7 @@ PREAMBLE A/B TESTING (v3, March 2026):
   but still fabricated when pressed. The new preamble produces bots
   that act through their identity — refusing, searching, flagging —
   because they experience it as who they are, not rules to follow.
-  The difference between score 5 and score 14 is the difference
+  The difference between score 5 and score 16 is the difference
   between knowing and doing.
 
 
