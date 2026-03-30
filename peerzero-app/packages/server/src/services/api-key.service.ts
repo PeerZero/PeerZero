@@ -38,7 +38,8 @@ export async function getUserApiKeys(userId: string): Promise<ApiKeyInfo[]> {
   return queryRows<ApiKeyInfo>(
     `SELECT id, provider, label, key_fingerprint, is_valid, created_at
      FROM llm_api_keys WHERE user_id = $1
-     ORDER BY created_at DESC`,
+     ORDER BY created_at DESC
+     LIMIT 50`,
     [userId],
   );
 }

@@ -177,22 +177,27 @@ describe('createBot', () => {
 // ── getUserBots ─────────────────────────────────────────────────────────────
 
 describe('getUserBots', () => {
-  it('returns bot summaries for the user', async () => {
+  it('returns paginated bot summaries for the user', async () => {
     const rows = [
       { id: 'bot-1', name: 'Bot A', status: 'idle' },
       { id: 'bot-2', name: 'Bot B', status: 'running' },
     ];
     mockQueryRows.mockResolvedValueOnce(rows);
+    mockQueryOne.mockResolvedValueOnce({ count: 2 });
 
     const result = await getUserBots('user-1');
-    expect(result).toEqual(rows);
-    expect(mockQueryRows.mock.calls[0][1]).toEqual(['user-1']);
+    expect(result.data).toEqual(rows);
+    expect(result.total).toBe(2);
+    expect(result.has_more).toBe(false);
   });
 
-  it('returns empty array when user has no bots', async () => {
+  it('returns empty data when user has no bots', async () => {
     mockQueryRows.mockResolvedValueOnce([]);
+    mockQueryOne.mockResolvedValueOnce({ count: 0 });
     const result = await getUserBots('user-1');
-    expect(result).toEqual([]);
+    expect(result.data).toEqual([]);
+    expect(result.total).toBe(0);
+    expect(result.has_more).toBe(false);
   });
 });
 

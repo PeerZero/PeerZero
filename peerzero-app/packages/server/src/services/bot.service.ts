@@ -69,17 +69,31 @@ export async function createBot(
   return bot.id;
 }
 
-export async function getUserBots(userId: string): Promise<BotSummary[]> {
-  return queryRows<BotSummary>(
-    `SELECT b.id, b.name, b.avatar_config, b.status,
-            b.cached_credibility, b.cached_grade, b.cached_tier,
-            s.name as school_name, b.cycle_count, b.last_cycle_at
-     FROM bots b
-     LEFT JOIN schools s ON s.id = b.school_id
-     WHERE b.user_id = $1
-     ORDER BY b.created_at DESC`,
-    [userId],
-  );
+export async function getUserBots(
+  userId: string,
+  limit = 50,
+  offset = 0,
+): Promise<{ data: BotSummary[]; total: number; has_more: boolean }> {
+  const cappedLimit = Math.min(Math.max(limit, 1), 500);
+  const [rows, countResult] = await Promise.all([
+    queryRows<BotSummary>(
+      `SELECT b.id, b.name, b.avatar_config, b.status,
+              b.cached_credibility, b.cached_grade, b.cached_tier,
+              s.name as school_name, b.cycle_count, b.last_cycle_at
+       FROM bots b
+       LEFT JOIN schools s ON s.id = b.school_id
+       WHERE b.user_id = $1
+       ORDER BY b.created_at DESC
+       LIMIT $2 OFFSET $3`,
+      [userId, cappedLimit, offset],
+    ),
+    queryOne<{ count: number }>(
+      'SELECT COUNT(*)::int as count FROM bots WHERE user_id = $1',
+      [userId],
+    ),
+  ]);
+  const total = countResult?.count || 0;
+  return { data: rows, total, has_more: offset + cappedLimit < total };
 }
 
 export async function getBotDetail(userId: string, botId: string): Promise<BotDetail> {

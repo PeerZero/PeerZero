@@ -131,7 +131,8 @@ export async function resolveActiveSkills(
       `SELECT id, bot_id, name, instruction, trigger, priority, category, is_active, source, version, created_at, updated_at
        FROM bot_skills
        WHERE bot_id = $1 AND is_active = true
-       ORDER BY priority ASC, created_at ASC`,
+       ORDER BY priority ASC, created_at ASC
+       LIMIT 100`,
       [botId],
     );
     setCachedSkills(botId, skills);
@@ -320,7 +321,8 @@ export async function listSkills(botId: string, userId: string): Promise<BotSkil
     `SELECT id, bot_id, name, instruction, trigger, priority, category, is_active, source, version, created_at, updated_at
      FROM bot_skills
      WHERE bot_id = $1
-     ORDER BY priority ASC, created_at ASC`,
+     ORDER BY priority ASC, created_at ASC
+     LIMIT 100`,
     [botId],
   );
 }

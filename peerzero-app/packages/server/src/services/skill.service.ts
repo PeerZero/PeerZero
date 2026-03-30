@@ -54,7 +54,8 @@ export async function getSkillSnapshots(botId: string): Promise<SkillSnapshot[]>
     `SELECT skill_key, strength, reliability, reps, streak, status
      FROM bot_skill_snapshots
      WHERE bot_id = $1
-     ORDER BY strength DESC`,
+     ORDER BY strength DESC
+     LIMIT 50`,
     [botId],
   );
 }

@@ -16,15 +16,19 @@ import { broadcastMessage } from '../websocket/activity-stream';
 import { addBotCycleJob, removeBotJobs, isQueueAvailable } from '../jobs/queue';
 import { logAudit } from '../services/audit.service';
 import type { ActivityCategory, FocusChunk } from '@peerzero/shared';
-import { ACTIVITY_CATEGORIES, validateBotName } from '@peerzero/shared';
+import { ACTIVITY_CATEGORIES, SUPPORTED_MODEL_IDS, validateBotName } from '@peerzero/shared';
 
 const router = Router();
 router.use(requireAuth);
 
-// List user's bots
+// List user's bots (paginated)
 router.get('/', userRateLimit('read'), async (req: Request, res: Response) => {
-  const bots = await botService.getUserBots(req.user!.userId);
-  res.json(bots);
+  const rawLimit = parseInt(req.query.limit as string);
+  const limit = Number.isFinite(rawLimit) && rawLimit > 0 ? Math.min(rawLimit, 500) : 50;
+  const rawOffset = parseInt(req.query.offset as string);
+  const offset = Number.isFinite(rawOffset) && rawOffset >= 0 ? rawOffset : 0;
+  const result = await botService.getUserBots(req.user!.userId, limit, offset);
+  res.json(result);
 });
 
 // Get bot detail
@@ -43,6 +47,10 @@ router.post('/', userRateLimit('write'), async (req: Request, res: Response) => 
   const nameCheck = validateBotName(name);
   if (!nameCheck.valid) {
     res.status(400).json({ error: nameCheck.error });
+    return;
+  }
+  if (llm_model && !SUPPORTED_MODEL_IDS.includes(llm_model)) {
+    res.status(400).json({ error: `Unsupported model. Must be one of: ${SUPPORTED_MODEL_IDS.join(', ')}` });
     return;
   }
   const botId = await botService.createBot(req.user!.userId, name, avatar_config, llm_api_key_id, llm_model, extended_thinking);
