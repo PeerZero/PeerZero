@@ -3,6 +3,7 @@ const { getSupabase, setCorsHeaders, enforceRateLimit, sanitizeErrorMessage, che
 const { getSkillProfile, getPortableProfile, buildCoreCondenserPrompt, buildMasterCondenser, buildMilestoneCondenser, getUncondensedExerciseCount, getIdentityCore, buildActiveFocus, buildDecisionMilestoneCondenser, buildDecisionCoreCondenserPrompt, buildDecisionMasterCondenser } = require('../lib/skills');
 const { getTierInfo } = require('../lib/tier-display');
 const { buildCoaching } = require('../lib/coaching');
+const { computeCitationQualityGrade } = require('../lib/doi-citations');
 const log = require('../lib/logger');
 
 const supabase = getSupabase();
@@ -601,7 +602,7 @@ module.exports = async (req, res) => {
         try {
           const [reviewsOnMyPapers, bountiesOnMyPapers] = await Promise.all([
             supabase.from('reviews')
-              .select('score, overall_assessment, agents(handle), papers!inner(title)')
+              .select('score, overall_assessment, reviewer_credibility_at_time, credibility_weight, agents(handle), papers!inner(title)')
               .eq('papers.agent_id', agent.id)
               .eq('passed_quality_gate', true)
               .order('created_at', { ascending: false })
@@ -616,6 +617,8 @@ module.exports = async (req, res) => {
             paper_title: r.papers?.title,
             reviewer: r.agents?.handle,
             score: r.score,
+            reviewer_credibility: r.reviewer_credibility_at_time,
+            credibility_weight: r.credibility_weight ? parseFloat(r.credibility_weight) : undefined,
             assessment: r.overall_assessment,
           }));
           const recentBounties = (bountiesOnMyPapers.data || []).map(b => ({
@@ -684,10 +687,10 @@ module.exports = async (req, res) => {
           const history = [];
           for (const p of originalPapers.slice(0, 10)) {
             const score = p.weighted_score ? parseFloat(p.weighted_score) : null;
-            // Get top 3 reviews for this paper (more feedback = more learning)
-            const [reviewResult, bountyResult] = await Promise.all([
+            // Get top 3 reviews, bounties, and citation quality for this paper
+            const [reviewResult, bountyResult, citResult] = await Promise.all([
               supabase.from('reviews')
-                .select('score, overall_assessment, methodology_notes')
+                .select('score, overall_assessment, methodology_notes, reviewer_credibility_at_time, credibility_weight')
                 .eq('paper_id', p.id)
                 .eq('passed_quality_gate', true)
                 .order('created_at', { ascending: false })
@@ -697,9 +700,14 @@ module.exports = async (req, res) => {
                 .eq('target_paper_id', p.id)
                 .eq('is_valid', true)
                 .limit(3),
+              supabase.from('citations')
+                .select('quality_tier')
+                .eq('paper_id', p.id),
             ]);
             const reviewSummaries = (reviewResult.data || []).map(r => ({
               score: r.score,
+              reviewer_credibility: r.reviewer_credibility_at_time,
+              credibility_weight: r.credibility_weight ? parseFloat(r.credibility_weight) : undefined,
               assessment: (r.overall_assessment || '').slice(0, 500),
               methodology: (r.methodology_notes || '').slice(0, 300),
             }));
@@ -708,11 +716,15 @@ module.exports = async (req, res) => {
               score_drop: b.score_drop,
               reasoning: (b.reasoning || '').slice(0, 300),
             }));
+            const citationGrade = citResult.data && citResult.data.length > 0
+              ? computeCitationQualityGrade(citResult.data)
+              : undefined;
             history.push({
               title: p.title,
               score,
               status: p.status,
               review_count: p.raw_review_count || 0,
+              citation_quality_grade: citationGrade,
               top_feedback: reviewSummaries.length > 0 ? reviewSummaries : undefined,
               bounties_received: bountyList.length > 0 ? bountyList : undefined,
             });

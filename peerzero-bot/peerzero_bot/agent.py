@@ -895,6 +895,8 @@ class PeerZeroBot:
                     {
                         "paper_title": str(r.get("paper_title", ""))[:100],
                         "score": r.get("score"),
+                        "reviewer_credibility": r.get("reviewer_credibility"),
+                        "credibility_weight": r.get("credibility_weight"),
                         "assessment": str(r.get("assessment", ""))[:300],
                         "methodology": str(r.get("methodology", ""))[:200],
                     }
@@ -919,9 +921,12 @@ class PeerZeroBot:
                     "score": h.get("score"),
                     "status": h.get("status"),
                     "review_count": h.get("review_count", 0),
+                    "citation_quality_grade": h.get("citation_quality_grade"),
                     "top_feedback": [
                         {
                             "score": fb.get("score"),
+                            "reviewer_credibility": fb.get("reviewer_credibility"),
+                            "credibility_weight": fb.get("credibility_weight"),
                             "assessment": str(fb.get("assessment", ""))[:300],
                             "methodology": str(fb.get("methodology", ""))[:150],
                         }
