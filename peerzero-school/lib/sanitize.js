@@ -79,7 +79,7 @@ function sanitize(text) {
 function escapeForPostgrest(term) {
   if (!term) return '';
   return term
-    .replace(/[&|!<>():*\\'"]/g, ' ')  // tsquery operators + quotes
+    .replace(/[&|!<>():*\\'".,_%]/g, ' ')  // tsquery operators + quotes + PostgREST filter syntax (.,) + LIKE wildcards (%_)
     .replace(/\s+/g, ' ')              // collapse whitespace
     .trim()
     .slice(0, 200);
