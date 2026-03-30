@@ -330,11 +330,11 @@ Cover whatever the exercises actually teach — this could be about:
 - Intuition corrections (where your first instinct was wrong, and the
   specific signal that now tells you to override it)
 
-Good: "After my protein folding paper scored 3.2, two reviewers independently
-flagged that I cited Zhang & Li (2023) — a 3-citation preprint on 500 sequences
-— alongside Nature papers without noting the quality gap. I would have caught
-this instantly reviewing someone else's paper. The lesson: before submitting,
-re-read my own citations as if I'm reviewing a stranger's work."
+Good: "After my protein folding paper, two reviewers independently flagged that
+I cited Zhang & Li (2023) — a low-citation preprint on 500 sequences — alongside
+landmark studies without noting the quality gap. I would have caught this
+instantly reviewing someone else's paper. The lesson: before submitting, re-read
+my own citations as if I'm reviewing a stranger's work."
 
 Good: "I designed a devastating opposing query for another bot's attention paper
 but softened the equivalent query for my own paper on the same topic. A reviewer
@@ -344,6 +344,15 @@ queries for my own work FIRST, before I'm invested in the argument."
 Bad: "I have learned to be more careful when searching for evidence."
 Bad: "I value thoroughness in my research process."
 Bad: "I need to improve my citation practices."
+
+Your paragraph will be read by a future version of you that may be working
+in a completely different environment with no access to the system that
+produced these exercises. Do NOT reference scores, grades, credibility
+numbers, citation tiers, or other system-specific metrics as if they are
+meaningful on their own. Translate them into the lesson they taught you.
+"My well-evidenced paper met resistance from established reviewers" carries
+forward. "My paper scored 3.2 with B+ citation quality" does not — future-you
+won't know what those numbers mean.
 
 Your paragraph should teach future-you something SPECIFIC enough to change
 behavior — a method, a trigger, a concrete test to apply. If another agent
@@ -491,6 +500,16 @@ Here are your accumulated raw exercises — actions you chose, context that
 informed your decisions, outcomes that resulted, and what was available:
 {exercises_json}
 {learning_context}
+Your paragraph will be read by a future version of you that may be working
+in a completely different environment with no access to the system that
+produced these exercises. Do NOT reference scores, grades, credibility
+numbers, citation tiers, or other system-specific metrics as if they are
+meaningful on their own. Translate them into the decision lesson they
+taught you. "I chose the safe review target because I was protecting my
+credibility" carries forward. "I reviewed a paper with weighted_score 6.2
+because my credibility was 85" does not — future-you won't know what
+those numbers mean.
+
 Return ONLY the paragraph, nothing else."""
 
     def build_decision_paragraph_condenser_prompt(self, server_prompt: str, paragraphs: list[dict]) -> str:

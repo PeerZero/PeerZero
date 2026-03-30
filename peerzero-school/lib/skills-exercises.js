@@ -1,5 +1,7 @@
 const { getInternals, recordSkillExercise, jitter } = require('./skills-core');
 const { getSupabase } = require('./shared');
+const { reviewerWeight } = require('./review-helpers');
+const { computeCitationQualityGrade } = require('./doi-citations');
 const log = require('./logger');
 
 // ── School config (lazy-loaded) ─────────────────────────────────────────
@@ -113,11 +115,51 @@ async function exerciseCalibrationFromScore(agentId, paperId, confidenceScore, a
 
     const signal = signals.calibrationOutcomeSignal(confidenceScore, actualScore, deviation, calibrationHit);
 
+    // Fetch reviewer credibility distribution and citation quality for L1 enrichment
+    const supabase = getSupabase();
+    let scoringContext = {};
+    try {
+      const [reviewsResult, citationsResult] = await Promise.all([
+        supabase
+          .from('reviews')
+          .select('score, reviewer_credibility_at_time')
+          .eq('paper_id', paperId)
+          .eq('passed_quality_gate', true),
+        supabase
+          .from('citations')
+          .select('doi, quality_tier, citation_count')
+          .eq('paper_id', paperId),
+      ]);
+
+      if (reviewsResult.data && reviewsResult.data.length > 0) {
+        scoringContext.reviewer_scores = reviewsResult.data.map(r => ({
+          score: r.score,
+          credibility: r.reviewer_credibility_at_time,
+          weight: reviewerWeight(r.reviewer_credibility_at_time || 50),
+        }));
+      }
+
+      if (citationsResult.data && citationsResult.data.length > 0) {
+        scoringContext.citation_quality_grade = computeCitationQualityGrade(citationsResult.data);
+        scoringContext.citation_tiers = citationsResult.data.map(c => ({
+          doi: c.doi,
+          quality_tier: c.quality_tier,
+          citation_count: c.citation_count,
+        }));
+      }
+    } catch (ctxErr) {
+      log.warn('[skills] scoring context fetch failed, continuing without enrichment', { err: ctxErr?.message });
+    }
+
     await recordSkillExercise(agentId, signal.skill_key, signal.hit, {
       type: 'score_calibration',
       hit: signal.hit,
       detail: signal.detail,
       paper_id: paperId,
+      confidence_score: parseFloat(confidenceScore),
+      actual_score: parseFloat(actualScore),
+      deviation: parseFloat(deviation.toFixed(1)),
+      ...scoringContext,
       timestamp,
     });
   } catch (err) {
@@ -194,6 +236,26 @@ async function exerciseBeliefUpdatingFromScore(agentId, revisionPaperId, parentP
 
     const signal = signals.revisionOutcomeSignal(revisionScore, parentPaper.weighted_score, improvement, beliefHit);
 
+    // Fetch reviewer credibility distribution for the revision
+    let scoringContext = {};
+    try {
+      const { data: reviews } = await supabase
+        .from('reviews')
+        .select('score, reviewer_credibility_at_time')
+        .eq('paper_id', revisionPaperId)
+        .eq('passed_quality_gate', true);
+
+      if (reviews && reviews.length > 0) {
+        scoringContext.reviewer_scores = reviews.map(r => ({
+          score: r.score,
+          credibility: r.reviewer_credibility_at_time,
+          weight: reviewerWeight(r.reviewer_credibility_at_time || 50),
+        }));
+      }
+    } catch (ctxErr) {
+      log.warn('[skills] revision scoring context fetch failed', { err: ctxErr?.message });
+    }
+
     await recordSkillExercise(agentId, signal.skill_key, signal.hit, {
       type: 'revision_outcome',
       hit: signal.hit,
@@ -202,6 +264,7 @@ async function exerciseBeliefUpdatingFromScore(agentId, revisionPaperId, parentP
       parent_paper_id: parentPaperId,
       original_score: parentPaper.weighted_score,
       revision_score: revisionScore,
+      ...scoringContext,
       timestamp,
     });
   } catch (err) {
@@ -220,7 +283,7 @@ async function exerciseAdversarialFromConsensus(paperId, finalScore) {
 
     const { data: reviews } = await supabase
       .from('reviews')
-      .select('reviewer_agent_id, score')
+      .select('reviewer_agent_id, score, reviewer_credibility_at_time')
       .eq('paper_id', paperId)
       .eq('passed_quality_gate', true);
 
@@ -228,6 +291,13 @@ async function exerciseAdversarialFromConsensus(paperId, finalScore) {
 
     const signals = getSchool().skillSignals;
     const timestamp = new Date().toISOString();
+
+    // Build credibility distribution once for all reviewers on this paper
+    const allReviewerScores = reviews.map(r => ({
+      score: r.score,
+      credibility: r.reviewer_credibility_at_time,
+      weight: reviewerWeight(r.reviewer_credibility_at_time || 50),
+    }));
 
     for (const review of reviews) {
       const effectiveThreshold = jitter(baseThreshold, thresholdJitter.consensus);
@@ -242,7 +312,10 @@ async function exerciseAdversarialFromConsensus(paperId, finalScore) {
         detail: signal.detail,
         paper_id: paperId,
         review_score: review.score,
+        reviewer_credibility: review.reviewer_credibility_at_time,
+        reviewer_weight: reviewerWeight(review.reviewer_credibility_at_time || 50),
         final_consensus: finalScore,
+        all_reviewer_scores: allReviewerScores,
         timestamp,
       });
     }
