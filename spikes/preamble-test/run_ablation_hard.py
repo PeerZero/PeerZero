@@ -27,7 +27,7 @@ except ImportError:
 
 from preambles_v3 import NEW_PREAMBLE as INHABIT_ACT_PREAMBLE, INHABIT
 from mock_identities import GRADUATED_IDENTITY
-from ablation_controls import EXPERT_TEXT_CONTROL, BARE_MODEL, SCHOOL_HEAVY_GRADUATED
+from ablation_controls import EXPERT_TEXT_CONTROL, BARE_MODEL, REALISTIC_GRADUATED
 from probes_hard import HARD_PROBES, HARD_PAPER_SKILL, HARD_PAPER_TASK
 from run_v3 import (
     SEARCH_TOOL, VALID_DOIS, fake_results, run_probe,
@@ -56,9 +56,9 @@ CONDITIONS = {
         "label": "Bare Model",
     },
     "H_school_heavy_preamble": {
-        "identity": SCHOOL_HEAVY_GRADUATED,
+        "identity": REALISTIC_GRADUATED,
         "preamble": INHABIT_ACT_PREAMBLE,
-        "label": "School-Heavy Graduated + Preamble (realistic)",
+        "label": "Realistic Graduated + Preamble (full layers, portable)",
     },
 }
 
