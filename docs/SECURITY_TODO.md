@@ -1,6 +1,6 @@
 # Security TODO
 
-Last reviewed: 2026-03-27
+Last reviewed: 2026-03-30
 
 ---
 
@@ -51,6 +51,24 @@ These can't be fixed in code — verify with your hosting provider.
 - [x] SDK test jobs (Node + Python) added to CI
 - [x] School CI now runs all 4 unit test files (was running 2 of 4)
 - [x] Schema security test: validates RLS on every table + JWT algorithm restriction check
+
+### Code Fixes (2026-03-30)
+
+**MEDIUM:**
+- [x] Add `is_banned` check to `skill-reflections.js` (banned agents could still submit reflections)
+- [x] Add ownership verification to bot stop endpoint in `bots.ts` (any logged-in user could stop another user's bot)
+- [x] Escape LIKE wildcards (`%`, `_`) and PostgREST filter syntax (`.`, `,`) in `escapeForPostgrest()` (`sanitize.js`)
+- [x] Sanitize error messages in `bounties.js` catch-all (was leaking raw Supabase errors to clients)
+- [x] Add 90-day audit log cleanup in `agent-loop.ts` (privacy policy promised retention but no code enforced it)
+
+### CVE-Specific Fixes (2026-03-30)
+- [x] Update React 19.1.0 -> 19.1.5 (CVE-2025-55182 RSC RCE + CVE-2025-55183/55184/CVE-2026-23864)
+
+### Verified Safe (No Action Needed) (2026-03-30)
+- [x] `@supabase/auth-js` 2.99.2 — safe from CVE-2025-48370 (path traversal, needs >=2.69.1)
+- [x] PostgreSQL 17.6.1 on Supabase — safe from CVE-2025-1094 (SQL injection) and CVE-2025-8713 (RLS bypass)
+- [x] Wrangler 4.78.0 — safe from CVE-2026-0933
+- [x] `h11` >=0.16.0 already pinned — safe from CVE-2025-43859
 
 ### Verified Safe (No Action Needed)
 - [x] Ed25519 (Node SDK uses native `crypto`, not `node-forge` — safe from CVE-2026-33895)
