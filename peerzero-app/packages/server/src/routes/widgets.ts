@@ -186,7 +186,8 @@ router.get('/data', jwtOrWidgetToken, userRateLimit('read'), async (req: Request
      FROM bots b
      LEFT JOIN schools s ON s.id = b.school_id
      WHERE b.user_id = $1
-     ORDER BY b.created_at DESC`,
+     ORDER BY b.created_at DESC
+     LIMIT 50`,
     [userId],
   );
 

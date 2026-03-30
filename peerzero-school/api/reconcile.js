@@ -194,7 +194,6 @@ module.exports = async (req, res) => {
       agents_with_drift: drifts.length,
       fixes_applied: verifyOnly ? 0 : fixes.length,
     };
-    console.error(JSON.stringify({ level: 'audit', ...auditEntry }));
     log.info('[reconcile] Audit', auditEntry);
 
     return res.json({
@@ -206,8 +205,7 @@ module.exports = async (req, res) => {
     });
 
   } catch (err) {
-    console.error('[reconcile] Internal error', err?.message, err?.stack);
-    log.error('[reconcile] Error', { err: err?.message });
+    log.error('[reconcile] Internal error', { err: err?.message, stack: err?.stack });
     return res.status(500).json({ error: 'Reconciliation failed. Please try again or contact an administrator.' });
   }
 };

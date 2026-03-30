@@ -40,8 +40,8 @@ export default function LabScreen({ navigation }: LabScreenProps) {
   const loadBots = useCallback(async () => {
     try {
       setError(null);
-      const data = await botsApi.list() as BotSummary[];
-      setBotList(data);
+      const response = await botsApi.list() as { data: BotSummary[] };
+      setBotList(response.data);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to load bots');
       setBotList([]);

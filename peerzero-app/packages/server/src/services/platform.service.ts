@@ -21,7 +21,8 @@ export async function getAvailablePlatforms(): Promise<PlatformRegistryEntry[]> 
     `SELECT id, slug, name, description, adapter_type, auth_type, icon_url, is_active
      FROM platform_registry
      WHERE is_active = true
-     ORDER BY name`,
+     ORDER BY name
+     LIMIT 100`,
   );
 }
 
@@ -37,7 +38,8 @@ export async function listPlatforms(botId: string, userId: string): Promise<BotP
             error_message, created_at
      FROM bot_platforms
      WHERE bot_id = $1
-     ORDER BY created_at DESC`,
+     ORDER BY created_at DESC
+     LIMIT 50`,
     [botId],
   );
 }

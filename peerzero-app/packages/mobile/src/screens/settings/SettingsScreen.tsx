@@ -75,8 +75,8 @@ export default function SettingsScreen() {
 
   const loadWidgetBots = useCallback(async () => {
     try {
-      const data = await botsApi.list() as BotSummary[];
-      setWidgetBots(data);
+      const response = await botsApi.list() as { data: BotSummary[] };
+      setWidgetBots(response.data);
     } catch { /* ignore */ }
   }, []);
 

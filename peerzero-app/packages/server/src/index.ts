@@ -71,8 +71,8 @@ app.use(cors({
 // Authenticated routes get per-user Redis-backed limits applied at the route level.
 
 // Raw body for Stripe webhooks (must come before express.json)
-app.use('/api/payments/webhook', express.raw({ type: 'application/json' }));
-app.use(express.json());
+app.use('/api/payments/webhook', express.raw({ type: 'application/json', limit: '5mb' }));
+app.use(express.json({ limit: '5mb' }));
 
 // ── Routes ──
 app.use('/api/auth', authLimiter, authRoutes);
@@ -141,3 +141,14 @@ async function shutdown() {
 
 process.on('SIGTERM', shutdown);
 process.on('SIGINT', shutdown);
+
+// ── Crash handlers ──
+process.on('unhandledRejection', (reason) => {
+  logger.fatal({ err: reason }, 'Unhandled promise rejection — shutting down');
+  shutdown().finally(() => process.exit(1));
+});
+
+process.on('uncaughtException', (err) => {
+  logger.fatal({ err }, 'Uncaught exception — shutting down');
+  shutdown().finally(() => process.exit(1));
+});

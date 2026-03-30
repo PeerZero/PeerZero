@@ -245,7 +245,8 @@ describe('Bots', () => {
 
     const res = await api.get('/api/bots');
     expect(res.status).toBe(200);
-    expect(res.body.length).toBeGreaterThanOrEqual(2);
+    expect(res.body.data.length).toBeGreaterThanOrEqual(2);
+    expect(res.body.total).toBeGreaterThanOrEqual(2);
   });
 
   it('gets bot detail', async () => {
@@ -563,7 +564,7 @@ describe('Cross-User Isolation', () => {
     await registerUser(api);
     const res = await api.get('/api/bots');
     expect(res.status).toBe(200);
-    const names = res.body.map((b: { name: string }) => b.name);
+    const names = res.body.data.map((b: { name: string }) => b.name);
     expect(names).not.toContain('UserA Bot');
   });
 });
