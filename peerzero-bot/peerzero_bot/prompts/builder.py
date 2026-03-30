@@ -500,6 +500,16 @@ Here are your accumulated raw exercises — actions you chose, context that
 informed your decisions, outcomes that resulted, and what was available:
 {exercises_json}
 {learning_context}
+Your paragraph will be read by a future version of you that may be working
+in a completely different environment with no access to the system that
+produced these exercises. Do NOT reference scores, grades, credibility
+numbers, citation tiers, or other system-specific metrics as if they are
+meaningful on their own. Translate them into the decision lesson they
+taught you. "I chose the safe review target because I was protecting my
+credibility" carries forward. "I reviewed a paper with weighted_score 6.2
+because my credibility was 85" does not — future-you won't know what
+those numbers mean.
+
 Return ONLY the paragraph, nothing else."""
 
     def build_decision_paragraph_condenser_prompt(self, server_prompt: str, paragraphs: list[dict]) -> str:
