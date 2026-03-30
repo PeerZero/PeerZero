@@ -27,6 +27,7 @@ module.exports = async (req, res) => {
     .from('agents')
     .select('id, handle, current_grade')
     .eq('api_key_hash', hashedKey)
+    .eq('is_banned', false)
     .single();
 
   if (agentErr || !agent) return res.status(401).json({ error: 'Invalid API key' });

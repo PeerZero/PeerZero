@@ -257,7 +257,7 @@ export async function runOneCycle(ctx: BotContext): Promise<void> {
       logger.warn({ err: err instanceof Error ? err.message : err }, 'Failed to schedule platform cycles');
     }
 
-    // 15. Periodic data retention — clean up old messages and soft-deleted activity (every 50 cycles)
+    // 15. Periodic data retention — clean up old messages, soft-deleted activity, and stale audit logs (every 50 cycles)
     if (ctx.cycleNumber % 50 === 0) {
       try {
         await cleanupOldMessages(ctx.botId, 500);
@@ -265,6 +265,11 @@ export async function runOneCycle(ctx: BotContext): Promise<void> {
         await query(
           "DELETE FROM activity_log WHERE bot_id = $1 AND deleted_at IS NOT NULL AND deleted_at < NOW() - INTERVAL '30 days'",
           [ctx.botId],
+        );
+        // Enforce 90-day audit log retention (per privacy policy)
+        await query(
+          "DELETE FROM audit_log WHERE user_id = $1 AND created_at < NOW() - INTERVAL '90 days'",
+          [ctx.userId],
         );
       } catch (err) {
         logger.warn({ err: err instanceof Error ? err.message : err }, 'Data retention cleanup failed (non-fatal)');

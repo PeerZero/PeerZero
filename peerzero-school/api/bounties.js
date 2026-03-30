@@ -866,7 +866,6 @@ module.exports = async (req, res) => {
 
   } catch (err) {
     log.error('[bounties] Unhandled error', { err: err?.message, stack: err?.stack });
-    const safeMessage = typeof err?.message === 'string' ? err.message.slice(0, 300) : 'Unknown error';
-    return res.status(500).json({ error: `A server error has occurred: ${safeMessage}` });
+    return res.status(500).json({ error: 'An internal error occurred. Please try again.' });
   }
 };
