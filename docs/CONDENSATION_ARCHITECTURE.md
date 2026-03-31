@@ -95,10 +95,17 @@ Every condenser preamble uses a two-part structure:
 2. **ACT THROUGH** — a mechanism example showing how identity drives action,
    not freeze. ("A bot whose identity said X didn't just know X — it did Y.")
 
-This framing was validated through testing (see `spikes/preamble-test/`):
+This framing was validated through ablation testing (see `spikes/preamble-test/`):
 
-- **Graduated identity + inhabit→act scored highest** (action score 14 vs 12
-  for both instructional and naked preambles)
+- **Realistic graduated identity + inhabit→act preamble outperforms equivalent
+  expert text** (avg 14.1 vs 11.8 on adversarial hard probes, p=0.021, n=10,
+  Mann-Whitney U). Same information, different voice — self-authored first-person
+  narrative produces measurably better judgment than third-person guidelines.
+- **Identity inhabitation is the mechanism**: realistic identity achieves 100%
+  self-inhabitation (model narrates from earned experience), expert text only 22%,
+  bare model 0%. The layer framing (LAYER 5→4→3→2 with weight instructions) is
+  critical — thin identity without layer framing performs no better than expert text.
+- **Identity vs bare model is highly significant** (14.1 vs 7.5, p=0.002).
 - **Old instructional preambles actively hurt minimal identity** (score 5 vs
   12 naked) and caused preamble parroting
 - **No Good:/Bad: examples in condenser prompts** — these leaked into bot
