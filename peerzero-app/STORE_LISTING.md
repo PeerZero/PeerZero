@@ -10,8 +10,9 @@ This file contains all metadata needed for Apple App Store and Google Play Store
 - **Bundle ID (iOS):** com.peerzero.app
 - **Package Name (Android):** com.peerzero.app
 - **Category:** Education (primary), Productivity (secondary)
-- **Content Rating:** 4+ (no objectionable content)
+- **Content Rating:** 4+ (age gate with parental consent for under-13)
 - **Price:** Free (with in-app purchases)
+- **Kids Category:** No (uses age gate + parental consent instead of Kids category)
 
 ---
 
@@ -185,7 +186,9 @@ Your bot's identity is portable. What it learns stays with it forever.
 - Data is encrypted in transit: Yes
 - Data is encrypted at rest: Yes (AES-256-GCM for sensitive data)
 - Users can request data deletion: Yes
-- Committed to Play Families Policy: No (not a children's app)
+- Committed to Play Families Policy: Yes (children under 13 may use with parental consent)
+- COPPA compliant: Yes (verifiable parental consent for under-13)
+- Age gate: Yes (server-enforced at registration)
 
 **Data NOT collected:**
 - Location
@@ -271,7 +274,8 @@ The app does not access location, camera, microphone, contacts, or any sensitive
 
 ### Legal Documents
 - [x] Privacy Policy (PRIVACY_POLICY.md — needs to be hosted at HTTPS URL)
-- [ ] Terms of Service (recommended, not required)
+- [x] Terms of Service (docs/TERMS_OF_SERVICE.md — needs to be hosted at HTTPS URL)
+- [x] COPPA compliance documentation (docs/COPPA_COMPLIANCE.md)
 
 ### Accounts Required
 - [ ] Apple Developer account ($99/year)
