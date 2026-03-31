@@ -48,6 +48,11 @@ export const colors = {
     negative: '#F87171',
     neutral: '#8B95B0',
     milestone: '#FBBF24',
+    proud: '#F97316',
+    focused: '#38CFFF',
+    excited: '#7C6CF0',
+    shy: '#4D5A78',
+    tired: '#4D5A78',
   },
 
   // Borders — subtle, layered

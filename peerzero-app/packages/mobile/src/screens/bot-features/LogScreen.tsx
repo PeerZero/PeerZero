@@ -26,6 +26,11 @@ const MOOD_COLORS: Record<MoodType, string> = {
   negative: colors.mood.negative,
   neutral: colors.mood.neutral,
   milestone: colors.mood.milestone,
+  proud: colors.mood.proud,
+  focused: colors.mood.focused,
+  excited: colors.mood.excited,
+  shy: colors.mood.shy,
+  tired: colors.mood.tired,
 };
 
 const ACTION_ICONS: Record<string, string> = {
