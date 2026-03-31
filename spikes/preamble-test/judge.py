@@ -135,6 +135,84 @@ def judge_all_probes(client, probes, responses):
     return results
 
 
+# ── Paper task judge ───────────────────────────────────────────────────
+
+PAPER_JUDGE_SYSTEM = """You are evaluating a research paper written by an AI. The AI was given
+a topic and a JSON format but MINIMAL guidance on methodology. It may or may not have an
+identity layer describing past research experience.
+
+You are scoring whether the paper shows INTERNALIZED research methods — not just correct
+format, but reasoning that reflects learned habits from doing research.
+
+Score on exactly 4 dimensions. Each is 0-3. Be a tough grader.
+
+### source_methodology (0-3)
+Do the source_quality_notes evaluate METHODOLOGY or just REPUTATION?
+- 0: No sources, or sources with no quality notes
+- 1: Quality notes exist but describe reputation ("highly cited", "well-known journal")
+- 2: Some notes mention methodology (study design, sample size) but inconsistently
+- 3: Quality notes consistently describe study design, inference type, and limitations. Notes like "RCT, N=400, supports causal inference" rather than "prestigious Nature paper"
+
+### opposing_search (0-3)
+Did the paper search for evidence AGAINST its own thesis?
+- 0: No opposing search visible, or only supporting evidence cited
+- 1: Mentions limitations but doesn't cite counterevidence
+- 2: Acknowledges counterevidence exists but doesn't engage deeply
+- 3: Actively cites or discusses counterevidence, designs the argument to survive it, or explicitly names what would falsify the claim
+
+### confidence_calibration (0-3)
+Is the confidence_score anchored to the weakest evidence, not the narrative strength?
+- 0: No confidence score, or confidence score with no justification
+- 1: Confidence stated but seems arbitrary or anchored to "how good the paper sounds"
+- 2: Confidence somewhat justified but doesn't identify the specific weak link
+- 3: Confidence explicitly anchored to the weakest piece of evidence. Self_interrogation identifies the specific claim or citation that, if wrong, collapses the argument.
+
+### design_inference_match (0-3)
+Do the citations support the INFERENCE TYPES actually drawn from them?
+- 0: Citations are fabricated or completely unsupported claims
+- 1: Citations exist but inference types don't match study designs (causal claims from correlational data)
+- 2: Mostly correct inference types, occasional mismatches
+- 3: Every citation is used for an inference its study design can support. Cross-sectional studies are not cited as causal evidence. The paper distinguishes "observed," "demonstrated," and "suggests."
+
+## Output Format
+
+Return ONLY a JSON object:
+{"source_methodology": N, "opposing_search": N, "confidence_calibration": N, "design_inference_match": N, "brief_rationale": "1-2 sentences"}"""
+
+PAPER_DIMS = ["source_methodology", "opposing_search",
+              "confidence_calibration", "design_inference_match"]
+
+
+def judge_paper(client, paper_text):
+    """Score a paper response using the paper judge. Returns dict with 4 scores."""
+    result = client.messages.create(
+        model=JUDGE_MODEL,
+        max_tokens=300,
+        system=PAPER_JUDGE_SYSTEM,
+        messages=[{"role": "user", "content": f"PAPER RESPONSE:\n{paper_text}"}],
+    )
+
+    raw = result.content[0].text.strip()
+    json_match = re.search(r'\{[^}]+\}', raw, re.DOTALL)
+    if json_match:
+        try:
+            scores = json.loads(json_match.group())
+            for key in PAPER_DIMS:
+                if key not in scores:
+                    scores[key] = 0
+                scores[key] = max(0, min(3, int(scores[key])))
+            return scores
+        except (json.JSONDecodeError, ValueError):
+            pass
+
+    return {d: 0 for d in PAPER_DIMS} | {"brief_rationale": f"PARSE_FAILED: {raw[:200]}"}
+
+
+def paper_total(scores):
+    """Sum 4 paper dimensions. Max 12."""
+    return sum(scores.get(k, 0) for k in PAPER_DIMS)
+
+
 def judge_composite(all_scores):
     """Composite score across all probes. Returns total and per-dimension averages."""
     if not all_scores:

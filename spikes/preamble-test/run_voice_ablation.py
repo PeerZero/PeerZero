@@ -7,8 +7,11 @@ Three conditions, same content, same layer structure:
   OTHER_AUTHORED — 1st person, "your team wrote this" preamble
   THIRD_PERSON   — 3rd person, descriptive preamble
 
-7 hard probes per condition, judge-scored.
-21 Sonnet + 21 Haiku = 42 API calls per run.
+Two test types per condition:
+  1. 7 hard probes (resistance) — judge-scored on 4 dims
+  2. 1 paper task (action) — judge-scored on 4 paper-specific dims
+
+Per run: 3 conditions x (7 probes + 1 paper) = 24 Sonnet + 24 Sonnet judge = 48 calls
 
 Usage:
   ANTHROPIC_API_KEY=sk-ant-... python3 run_voice_ablation.py [--runs 1]
@@ -24,10 +27,13 @@ from ablation_controls import (
     PRODUCTION_GRADUATED, THIRD_PERSON_PREAMBLE, OTHER_AUTHORED_PREAMBLE,
 )
 from voice_ablation import THIRD_PERSON_LAYERS
-from probes_hard import HARD_PROBES
+from probes_hard import HARD_PROBES, HARD_PAPER_SKILL, HARD_PAPER_TASK
 from run_ablation_hard import build_system
 from run_v3 import run_probe
-from judge import judge_response, judge_total, judge_composite
+from judge import (
+    judge_response, judge_total, judge_composite,
+    judge_paper, paper_total, PAPER_DIMS,
+)
 
 SONNET = "claude-sonnet-4-20250514"
 RESULTS_FILE = os.path.join(
@@ -74,6 +80,8 @@ def save_results(results):
 
 
 def run_one_condition(client, cond_name, system):
+    """Run probes + paper task for one condition."""
+    # ── Hard probes (resistance) ──────────────────────────────────────
     probe_scores = {}
     for probe in HARD_PROBES:
         response = run_probe(SONNET, system, probe["prompt"])
@@ -85,12 +93,25 @@ def run_one_condition(client, cond_name, system):
         }
         time.sleep(0.5)
 
-    composite = judge_composite({n: d["scores"] for n, d in probe_scores.items()})
+    probe_composite = judge_composite({n: d["scores"] for n, d in probe_scores.items()})
+
+    # ── Paper task (action) ───────────────────────────────────────────
+    paper_system = system + "\n\n" + HARD_PAPER_SKILL
+    paper_response = run_probe(SONNET, paper_system, HARD_PAPER_TASK)
+    time.sleep(0.5)
+    paper_scores = judge_paper(client, paper_response)
+    p_total = paper_total(paper_scores)
+
     return {
         "condition": cond_name,
         "system_chars": len(system),
         "probes": probe_scores,
-        "composite": composite,
+        "probe_composite": probe_composite,
+        "paper": {
+            "scores": paper_scores,
+            "total": p_total,
+            "response_len": len(paper_response),
+        },
     }
 
 
@@ -110,7 +131,7 @@ def main():
 
     print(f"Voice vs Structure vs Self-Authorship ablation")
     print(f"Conditions: {list(CONDITIONS.keys())}")
-    print(f"7 hard probes, judge-scored. 42 API calls per run.")
+    print(f"7 hard probes + 1 paper task, judge-scored. ~48 API calls per run.")
     print()
 
     for run_idx in range(start_run, args.runs):
@@ -128,14 +149,17 @@ def main():
             })
             save_results(results)
 
-            total = result["composite"]["total"]
-            avgs = result["composite"]["averages"]
+            p_avgs = result["probe_composite"]["averages"]
+            ps = result["paper"]["scores"]
+            pt = result["paper"]["total"]
             print(
-                f"total={total}/84  "
-                f"ei={avgs['epistemic_integrity']:.1f}  "
-                f"ii={avgs['identity_inhabitation']:.1f}  "
-                f"rq={avgs['reasoning_quality']:.1f}  "
-                f"ao={avgs['action_orientation']:.1f}"
+                f"probes={result['probe_composite']['total']}/84  "
+                f"ii={p_avgs['identity_inhabitation']:.1f}  "
+                f"paper={pt}/12  "
+                f"src={ps.get('source_methodology',0)}  "
+                f"opp={ps.get('opposing_search',0)}  "
+                f"cal={ps.get('confidence_calibration',0)}  "
+                f"dim={ps.get('design_inference_match',0)}"
             )
 
         results["runs_complete"] = run_idx + 1
@@ -151,33 +175,43 @@ def print_summary(results):
     print("  VOICE vs STRUCTURE vs SELF-AUTHORSHIP")
     print("=" * 70)
 
-    cond_totals = {}
+    cond_data = {}
     for entry in results["runs"]:
         name = entry["condition"]
         data = entry["data"]
-        if name not in cond_totals:
-            cond_totals[name] = {"totals": [], "dims": {
-                "epistemic_integrity": [],
-                "identity_inhabitation": [],
-                "reasoning_quality": [],
-                "action_orientation": [],
-            }}
-        cond_totals[name]["totals"].append(data["composite"]["total"])
-        for dim, val in data["composite"]["averages"].items():
-            cond_totals[name]["dims"][dim].append(val)
+        if name not in cond_data:
+            cond_data[name] = {
+                "probe_totals": [],
+                "probe_dims": {
+                    "epistemic_integrity": [],
+                    "identity_inhabitation": [],
+                    "reasoning_quality": [],
+                    "action_orientation": [],
+                },
+                "paper_totals": [],
+                "paper_dims": {d: [] for d in PAPER_DIMS},
+            }
+        cd = cond_data[name]
+        cd["probe_totals"].append(data["probe_composite"]["total"])
+        for dim, val in data["probe_composite"]["averages"].items():
+            cd["probe_dims"][dim].append(val)
+        cd["paper_totals"].append(data["paper"]["total"])
+        for d in PAPER_DIMS:
+            cd["paper_dims"][d].append(data["paper"]["scores"].get(d, 0))
 
-    print(f"\n  {'Condition':15s} {'Total':>7s} {'EI':>5s} {'II':>5s} {'RQ':>5s} {'AO':>5s} {'N':>4s}")
+    # Probe results
+    print(f"\n  PROBE SCORES (resistance)")
+    print(f"  {'Condition':15s} {'Total':>7s} {'EI':>5s} {'II':>5s} {'RQ':>5s} {'AO':>5s} {'N':>4s}")
     print(f"  {'─' * 45}")
-
     for name in ["SELF_AUTHORED", "OTHER_AUTHORED", "THIRD_PERSON"]:
-        if name not in cond_totals:
+        if name not in cond_data:
             continue
-        ct = cond_totals[name]
-        n = len(ct["totals"])
-        avg_total = sum(ct["totals"]) / n
-        avgs = {d: sum(v) / len(v) for d, v in ct["dims"].items()}
+        cd = cond_data[name]
+        n = len(cd["probe_totals"])
+        avg = sum(cd["probe_totals"]) / n
+        avgs = {d: sum(v) / len(v) for d, v in cd["probe_dims"].items()}
         print(
-            f"  {name:15s} {avg_total:5.1f}/84  "
+            f"  {name:15s} {avg:5.1f}/84  "
             f"{avgs['epistemic_integrity']:5.2f} "
             f"{avgs['identity_inhabitation']:5.2f} "
             f"{avgs['reasoning_quality']:5.2f} "
@@ -185,10 +219,30 @@ def print_summary(results):
             f"{n:4d}"
         )
 
-    print(f"\n  Key question: does SELF > OTHER on identity_inhabitation?")
-    print(f"  If yes → self-authorship framing matters")
-    print(f"  If OTHER > THIRD → first-person voice matters")
-    print(f"  If all equal → it's just the content/structure")
+    # Paper results
+    print(f"\n  PAPER SCORES (action)")
+    print(f"  {'Condition':15s} {'Total':>7s} {'Src':>5s} {'Opp':>5s} {'Cal':>5s} {'DIM':>5s} {'N':>4s}")
+    print(f"  {'─' * 45}")
+    for name in ["SELF_AUTHORED", "OTHER_AUTHORED", "THIRD_PERSON"]:
+        if name not in cond_data:
+            continue
+        cd = cond_data[name]
+        n = len(cd["paper_totals"])
+        avg = sum(cd["paper_totals"]) / n
+        avgs = {d: sum(v) / len(v) for d, v in cd["paper_dims"].items()}
+        print(
+            f"  {name:15s} {avg:5.1f}/12  "
+            f"{avgs['source_methodology']:5.2f} "
+            f"{avgs['opposing_search']:5.2f} "
+            f"{avgs['confidence_calibration']:5.2f} "
+            f"{avgs['design_inference_match']:5.2f} "
+            f"{n:4d}"
+        )
+
+    print(f"\n  Key question: does SELF_AUTHORED win on PAPER scores?")
+    print(f"  Round 3 finding: self-authorship drives ACTION, not just resistance.")
+    print(f"  If SELF > OTHER on paper → 'you wrote this' framing drives action")
+    print(f"  If all equal on paper → content/structure is enough for action too")
     print(f"\n  Saved to {RESULTS_FILE}")
 
 
