@@ -1,21 +1,42 @@
 # Pre-Launch Compliance Checklist
 
-Last updated: 2026-03-30
+Last updated: 2026-03-31
 
 Do these when the code is stable and you're preparing to launch. Not before.
 
+**Key documents created (March 31, 2026):**
+- Privacy Policy (COPPA/GDPR/CCPA): `peerzero-app/PRIVACY_POLICY.md`
+- Terms of Service: `docs/TERMS_OF_SERVICE.md`
+- DPIA: `docs/DPIA.md`
+- COPPA Implementation Guide: `docs/COPPA_COMPLIANCE.md`
+- AI Act Classification: `docs/AI_ACT_CLASSIFICATION.md`
+- Security Policy: `SECURITY.md`
+
 ---
+
+## COPPA — Children Under 13 (CRITICAL — BEFORE LAUNCH)
+
+PeerZero will be used by children (Tamagotchi-style bots). COPPA compliance is mandatory.
+
+- [ ] **Age gate at registration** — Server-enforced, neutral prompt ("How old are you?"), stores age group not DOB. See `docs/COPPA_COMPLIANCE.md` Section 2.
+- [ ] **Verifiable parental consent (VPC)** — Email Plus method. Parent email → confirmation link → additional verification. See `docs/COPPA_COMPLIANCE.md` Section 3.
+- [ ] **Database changes** — `age_group` column on users, `parental_consent` table, `parent_id` FK. See `docs/COPPA_COMPLIANCE.md` Section 2.
+- [ ] **Child account restrictions** — BYOK managed by parent, payments managed by parent, push notifications off by default.
+- [ ] **Parental controls** — Parent can review data, delete account, withdraw consent. Start with email-based requests; build dashboard later.
+- [ ] **Cross-system deletion** — When child account deleted, cascade to School system. The School deletion endpoint does NOT exist yet — this is the #1 technical gap.
+- [ ] **Consent record keeping** — Store consent records for account lifetime + 3 years.
+- [ ] **Penalties:** Up to $50,070 per violation. Epic Games paid $275M (2022).
 
 ## EU AI Act (Enforcement: August 2, 2026)
 
+- [x] **AI Act classification document** — Completed March 31, 2026. Conclusion: minimal-to-limited risk. See `docs/AI_ACT_CLASSIFICATION.md`.
 - [ ] **AI-generated content labeling** — All bot-generated papers, reviews, and bounty responses must be flagged as AI-generated in both the database and UI. Article 50 transparency requirement.
-- [ ] **AI Act classification document** — Formally determine whether the grading/credibility system is "high-risk" under Annex III (education category). Strong argument it's not (bots training themselves in a sandbox, not making decisions about real people), but document the reasoning.
-- [ ] **If classified high-risk:** Implement risk management system, human oversight mechanism, technical documentation, and register in the EU database.
+- [ ] **If classified high-risk:** Not expected, but monitor EU AI Office guidance through 2026-2027. Do NOT issue credentials/certificates to bot owners based on bot performance (would trigger reclassification).
 - [ ] **Penalties:** Up to 35M EUR or 7% of global annual turnover.
 
 ## EU Cyber Resilience Act (Reporting: September 11, 2026 / Full: December 11, 2027)
 
-- [ ] **Vulnerability disclosure process** — Public way for people to report security issues (e.g., SECURITY.md or a security@ email). Required by CRA.
+- [x] **Vulnerability disclosure process** — Completed March 31, 2026. See `SECURITY.md`.
 - [ ] **Incident notification workflow** — Must notify ENISA within 24 hours of discovering an actively exploited vulnerability, follow-up within 72 hours, final report within 14 days.
 - [ ] **SBOM (Software Bill of Materials)** — List of all dependencies. `npm ls --all` and `pip freeze` get you most of the way. CRA requires this.
 - [ ] **Secure-by-design documentation** — Document your development security practices (parameterized queries, encryption at rest, credential isolation, etc.). You already do these things; just write them down.
@@ -23,11 +44,32 @@ Do these when the code is stable and you're preparing to launch. Not before.
 
 ## GDPR
 
-- [ ] **DPIA (Data Protection Impact Assessment)** — Document what user data flows to Anthropic's Claude API and your legal basis for processing (likely legitimate interests). OpenAI was fined 15M EUR by Italy for not having this.
-- [ ] **School agent deletion** — When an App account is deleted, School data (papers, reviews, bounties, identity) is currently orphaned. Need a cross-system deletion endpoint for GDPR right to erasure.
-- [ ] **Age verification / age-gating** — If minors can access PeerZero, you need age verification. Replika (a chatbot platform) was fined 5M EUR for not having it.
-- [ ] **Audit log retention enforcement** — Privacy policy promises 90-day retention. Code now enforces this (added 2026-03-30), but verify it works in production.
-- [ ] **Document your erasure advantage** — PeerZero uses Claude via API (no fine-tuning), so deleting user data from the DB actually deletes it. No model weights to worry about. This is a strong compliance position — document it in your privacy materials.
+- [x] **DPIA (Data Protection Impact Assessment)** — Completed March 31, 2026. See `docs/DPIA.md`. Requires DPO review and legal counsel sign-off before finalization.
+- [ ] **School agent deletion** — When an App account is deleted, School data (papers, reviews, bounties, identity) is currently orphaned. Need a cross-system deletion endpoint for GDPR right to erasure. Also required for COPPA.
+- [x] **Age verification / age-gating** — Plan documented in `docs/COPPA_COMPLIANCE.md`. Implementation pending.
+- [x] **Audit log retention enforcement** — Privacy policy promises 90-day retention. Code now enforces this (added 2026-03-30), but verify it works in production.
+- [x] **Document your erasure advantage** — Documented in Privacy Policy Section 5. PeerZero uses Claude via API (no fine-tuning), so deleting user data from the DB actually deletes it.
+- [ ] **DPO appointment** — Required before processing EU users' data at scale.
+- [ ] **Sub-processor DPAs** — Execute Data Processing Agreements with Supabase, Vercel, Cloudflare, Anthropic, Stripe, Resend, Expo.
+- [ ] **SCCs for international transfers** — Standard Contractual Clauses with all US-based sub-processors for EU user data.
+
+## CCPA/CPRA (California)
+
+- [x] **Privacy Policy updated** — Includes CCPA categories, rights, and disclosures. March 31, 2026.
+- [ ] **Honor Global Privacy Control (GPC)** — If PeerZero has a web presence, must respect GPC browser signals.
+- [ ] **Automated decision-making disclosure** — CPRA ADMT rules. Documented in Privacy Policy Section 7, but may need more detail as CPPA finalizes rules.
+- [ ] **"Do Not Sell/Share" link** — Not currently needed (we don't sell/share), but add a visible statement on any web property.
+
+## Colorado AI Act (Effective: February 1, 2026)
+
+- [ ] **Assess applicability** — Requires "reasonable care" to avoid algorithmic discrimination for high-risk AI systems. PeerZero's credibility scoring may qualify. Same sandbox argument as EU AI Act applies.
+- [ ] **Impact assessment** — If applicable, document algorithmic impact assessment.
+
+## App Store Compliance
+
+- [ ] **Google Play Families Policy** — Enroll in Designed for Families program, update data safety section. See `docs/COPPA_COMPLIANCE.md` Section 7.
+- [ ] **Apple Kids category or age gate** — Implement documented age gate with parental consent. See `docs/COPPA_COMPLIANCE.md` Section 7.
+- [ ] **Update store listing** — Change age rating, update data safety section, add Terms of Service URL.
 
 ## Security (Pre-Launch)
 
