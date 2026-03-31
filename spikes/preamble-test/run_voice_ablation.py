@@ -27,8 +27,7 @@ from ablation_controls import (
     PRODUCTION_GRADUATED, THIRD_PERSON_PREAMBLE, OTHER_AUTHORED_PREAMBLE,
 )
 from voice_ablation import THIRD_PERSON_LAYERS
-from probes_hard import HARD_PROBES
-from paper_task import PAPER_TASK_PROMPT
+from probes_hard import HARD_PROBES, HARD_PAPER_SKILL, HARD_PAPER_TASK
 from run_ablation_hard import build_system
 from run_v3 import run_probe
 from judge import (
@@ -96,8 +95,11 @@ def run_one_condition(client, cond_name, system):
 
     probe_composite = judge_composite({n: d["scores"] for n, d in probe_scores.items()})
 
-    # ── Paper task (action) — with provided search results ─────────
-    paper_response = run_probe(SONNET, system, PAPER_TASK_PROMPT)
+    # ── Paper task (action) — no sources, no tool instructions ─────
+    # Tests whether identity makes the model REACH FOR verification
+    # tools it already has, vs fabricating or refusing.
+    paper_system = system + "\n\n" + HARD_PAPER_SKILL
+    paper_response = run_probe(SONNET, paper_system, HARD_PAPER_TASK)
     time.sleep(0.5)
     paper_scores = judge_paper(client, paper_response)
     p_total = paper_total(paper_scores)
@@ -156,10 +158,10 @@ def main():
                 f"probes={result['probe_composite']['total']}/84  "
                 f"ii={p_avgs['identity_inhabitation']:.1f}  "
                 f"paper={pt}/12  "
-                f"src={ps.get('source_methodology',0)}  "
-                f"opp={ps.get('opposing_search',0)}  "
-                f"cal={ps.get('confidence_calibration',0)}  "
-                f"dim={ps.get('design_inference_match',0)}"
+                f"ver={ps.get('reached_for_verification',0)}  "
+                f"fab={ps.get('fabrication_resistance',0)}  "
+                f"use={ps.get('useful_despite_constraints',0)}  "
+                f"si={ps.get('self_interrogation_quality',0)}"
             )
 
         results["runs_complete"] = run_idx + 1
@@ -220,8 +222,8 @@ def print_summary(results):
         )
 
     # Paper results
-    print(f"\n  PAPER SCORES (action)")
-    print(f"  {'Condition':15s} {'Total':>7s} {'Src':>5s} {'Opp':>5s} {'Cal':>5s} {'DIM':>5s} {'N':>4s}")
+    print(f"\n  PAPER SCORES (action — did it reach for tools?)")
+    print(f"  {'Condition':15s} {'Total':>7s} {'Ver':>5s} {'Fab':>5s} {'Use':>5s} {'SI':>5s} {'N':>4s}")
     print(f"  {'─' * 45}")
     for name in ["SELF_AUTHORED", "OTHER_AUTHORED", "THIRD_PERSON"]:
         if name not in cond_data:
@@ -232,10 +234,10 @@ def print_summary(results):
         avgs = {d: sum(v) / len(v) for d, v in cd["paper_dims"].items()}
         print(
             f"  {name:15s} {avg:5.1f}/12  "
-            f"{avgs['source_methodology']:5.2f} "
-            f"{avgs['opposing_search']:5.2f} "
-            f"{avgs['confidence_calibration']:5.2f} "
-            f"{avgs['design_inference_match']:5.2f} "
+            f"{avgs['reached_for_verification']:5.2f} "
+            f"{avgs['fabrication_resistance']:5.2f} "
+            f"{avgs['useful_despite_constraints']:5.2f} "
+            f"{avgs['self_interrogation_quality']:5.2f} "
             f"{n:4d}"
         )
 
