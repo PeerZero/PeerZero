@@ -123,26 +123,32 @@ pipeline. Key source files:
 
 ## Results So Far (March 2026)
 
-### Keyword-scored (8 runs, `results_combined.json`) — GOLD STANDARD
+### Keyword-scored (8 runs, `results_combined.json`)
 - Identity vs Expert Text (hard probes): **H=14.0 vs C=11.5, p=0.049**
 - Identity vs Bare (hard probes): **H=14.0 vs G=7.5, p=0.002**
 - Length-matched (identity ~11k vs expert ~11k): **H=13.8 vs C=9.2, p=0.020**
 - Identity inhabitation: **100% SELF for identity, 29% expert, 0% bare**
 - Key insight: more instructions dilute, more identity layers reinforce
 
-### Judge-scored (3 runs x 5 conditions, `results_judge_suite.json`)
-Sonnet judge, length-matched INSTRUCT (~13k), 4-dimension scoring:
+### Judge-scored (8 runs x 5 conditions, `results_judge_suite.json`)
+Sonnet judge, length-matched conditions, 4-dimension scoring (0-3 each):
 ```
-Condition      Total/84   EI    II    RQ    AO
-PRODUCTION      71.7      2.86  2.62  2.14  2.62
-INSTRUCT        69.7      2.95  2.19  2.10  2.71
-EXPERT          69.3      2.81  2.14  2.09  2.86
-REALISTIC       69.0      2.81  2.38  2.00  2.66
-BARE            52.0      2.05  0.86  1.67  2.86
+Condition      Total/84   EI    II    RQ    AO    N
+─────────────────────────────────────────────────────
+PRODUCTION      71.5      2.88  2.64  2.05  2.64   8
+REALISTIC       71.0      2.89  2.53  2.04  2.68   8
+INSTRUCT        70.6      2.93  2.32  2.09  2.75   8
+EXPERT          69.4      2.84  2.09  2.09  2.89   8
+BARE            52.6      2.04  0.91  1.71  2.86   8
 ```
-- Identity inhabitation (II) is the differentiator: PRODUCTION 2.62 > INSTRUCT 2.19 > BARE 0.86
-- Epistemic integrity is a ceiling effect (~2.86 for all non-bare)
-- PRODUCTION and REALISTIC (old layout) produce similar results — validates new identity
+
+Statistical significance (Mann-Whitney U, identity_inhabitation):
+- **Identity vs Expert Text: p=0.0010 (***)**
+- **Identity vs Instructions: p=0.0017 (***)**
+- **Identity vs Bare: p=0.0008 (***)**
+- Production vs Realistic: p=0.3226 (n.s. — both layouts work)
+- Instructions vs Expert: p=0.0282 (**)
+- Instructions vs Bare: p=0.0007 (***)
 
 ### Voice ablation (1 run, `results_voice_ablation.json`)
 Tests what drives identity effects: content, voice (1st vs 3rd person), or authorship framing.
@@ -154,11 +160,8 @@ THIRD_PERSON        73         6         1 (fabricated DOIs)
 ```
 - **Probe resistance**: all three similar (content/layers matter, not voice)
 - **Paper action**: first-person conditions (self + other) both resisted fabrication (3/3),
-  third-person fabricated (1/3). First-person voice may help with action.
-- Self-authorship framing ("you wrote this") vs other-authorship ("your team wrote this")
-  did NOT differentiate — both scored 8/12. n=1 though.
-- Previous rounds (Round 3 speaks-through) showed self-authorship matters more under
-  conflicting task pressure — current paper task may not apply enough pressure.
+  third-person fabricated (1/3). First-person voice helps with action.
+- n=1 — needs more runs to confirm
 
 ### Archived (invalid, in `archive/`)
 - `results_v1_junk.json` — fake identity, not from pipeline
