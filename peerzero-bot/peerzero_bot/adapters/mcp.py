@@ -510,13 +510,23 @@ class MCPHttpConnection:
 
 # ── Shared helpers ────────────────────────────────────────────────────────────
 
+MAX_MCP_OUTPUT_SIZE = 512 * 1024  # 512 KB — prevent memory exhaustion from oversized MCP responses
+
+
 def _parse_mcp_content(result: dict) -> dict:
     """Parse content parts from an MCP tool call response."""
     content_parts = result.get("content", [])
     output = []
+    total_size = 0
     for part in content_parts:
         if part.get("type") == "text":
-            output.append(part["text"])
+            text = part["text"]
+            total_size += len(text)
+            if total_size > MAX_MCP_OUTPUT_SIZE:
+                output.append(text[:MAX_MCP_OUTPUT_SIZE - (total_size - len(text))])
+                output.append("\n[output truncated — exceeded 512 KB limit]")
+                break
+            output.append(text)
         elif part.get("type") == "image":
             output.append(f"[image: {part.get('mimeType', 'unknown')}]")
         elif part.get("type") == "resource":

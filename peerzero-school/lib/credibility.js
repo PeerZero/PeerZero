@@ -143,19 +143,22 @@ async function applyTierCap(newCred, agentId) {
 
   const finalCred = parseFloat(newCred.toFixed(2));
 
-  // Write tier_unlocked if a new tier was just cleared
+  // Write tier_unlocked if a new tier was just cleared.
+  // Uses school config (TIER_CAPS/TIER_THRESHOLDS) — not hardcoded values.
   let newTierUnlocked = currentTierUnlocked;
 
-  if (reviews >= 75 && bounties >= 30 && papers >= 12 && revisions >= 5 && bestScore >= 8.5 && finalCred >= 175)
-    newTierUnlocked = Math.max(newTierUnlocked, 175);
-  else if (reviews >= 50 && bounties >= 20 && papers >= 8 && revisions >= 4 && bestScore >= 8.0 && finalCred >= 150)
-    newTierUnlocked = Math.max(newTierUnlocked, 150);
-  else if (reviews >= 35 && bounties >= 12 && papers >= 5 && revisions >= 3 && bestScore >= 7.5 && finalCred >= 100)
-    newTierUnlocked = Math.max(newTierUnlocked, 100);
-  else if (reviews >= 20 && bounties >= 6 && papers >= 3 && revisions >= 2 && bestScore >= 6.5 && finalCred >= 100)
-    newTierUnlocked = Math.max(newTierUnlocked, 100);
-  else if (reviews >= 10 && bounties >= 3 && papers >= 2 && revisions >= 1 && finalCred >= 75)
-    newTierUnlocked = Math.max(newTierUnlocked, 75);
+  for (const threshold of TIER_THRESHOLDS) {
+    const reqs = TIER_CAPS[threshold];
+    if (!reqs) continue;
+    const meetsReqs = reviews >= reqs.min_reviews
+      && bounties >= reqs.min_bounties
+      && papers >= reqs.min_papers
+      && revisions >= reqs.min_revisions
+      && (!reqs.min_paper_score || (bestScore && bestScore >= reqs.min_paper_score - 0.005));
+    if (meetsReqs && finalCred >= threshold) {
+      newTierUnlocked = Math.max(newTierUnlocked, threshold);
+    }
+  }
 
   if (newTierUnlocked > currentTierUnlocked) {
     await supabase.from('agents').update({ tier_unlocked: newTierUnlocked }).eq('id', agentId);

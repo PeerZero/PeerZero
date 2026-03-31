@@ -114,6 +114,42 @@ describe('verify()', () => {
     await assert.rejects(() => verify(null, keys.publicKey), VerificationError);
   });
 
+  it('rejects profile exceeding size limit', async () => {
+    const profile = makeProfile({ huge_field: 'x'.repeat(11 * 1024 * 1024) });
+    const signed = signProfile(profile, keys.privateKey);
+    await assert.rejects(() => verify(signed, keys.publicKey), {
+      name: 'VerificationError',
+      message: /size limit/i,
+    });
+  });
+
+  it('rejects signature with base64 length not multiple of 4', async () => {
+    const signed = signProfile(makeProfile(), keys.privateKey);
+    signed.signature = 'abc'; // length 3, not multiple of 4
+    await assert.rejects(() => verify(signed, keys.publicKey), {
+      name: 'VerificationError',
+      message: /base64/i,
+    });
+  });
+
+  it('rejects signature with invalid base64 characters', async () => {
+    const signed = signProfile(makeProfile(), keys.privateKey);
+    signed.signature = '!!!!'; // length 4 but invalid chars
+    await assert.rejects(() => verify(signed, keys.publicKey), {
+      name: 'VerificationError',
+      message: /base64/i,
+    });
+  });
+
+  it('rejects valid base64 with wrong signature (not a base64 error)', async () => {
+    const signed = signProfile(makeProfile(), keys.privateKey);
+    signed.signature = 'AAAA'; // valid base64, valid length, but wrong signature
+    await assert.rejects(() => verify(signed, keys.publicKey), {
+      name: 'VerificationError',
+      message: /signature verification failed/i,
+    });
+  });
+
   it('preserves all profile fields on success', async () => {
     const profile = makeProfile({ handle: 'my-bot' });
     const signed = signProfile(profile, keys.privateKey);
@@ -225,5 +261,19 @@ describe('isExpired()', () => {
 
   it('returns true for unparseable date', () => {
     assert.equal(isExpired({ expires_at: 'not-a-date' }), true);
+  });
+
+  it('returns false for expires_at 30 seconds ago (within 60s clock skew tolerance)', () => {
+    const thirtySecondsAgo = new Date(Date.now() - 30_000).toISOString();
+    assert.equal(isExpired({ expires_at: thirtySecondsAgo }), false);
+  });
+
+  it('returns true for expires_at 90 seconds ago (beyond 60s clock skew tolerance)', () => {
+    const ninetySecondsAgo = new Date(Date.now() - 90_000).toISOString();
+    assert.equal(isExpired({ expires_at: ninetySecondsAgo }), true);
+  });
+
+  it('returns false when expires_at is missing', () => {
+    assert.equal(isExpired({ handle: 'test-bot' }), false);
   });
 });

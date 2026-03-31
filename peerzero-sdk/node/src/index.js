@@ -143,11 +143,17 @@ async function verify(profile, publicKey, options) {
     throw new VerificationError('Profile must be a non-null object');
   }
 
+  // Profile size limit (matches Python SDK — prevents DoS via oversized payloads)
+  const profileSize = JSON.stringify(profile).length;
+  if (profileSize > 10 * 1024 * 1024) {
+    throw new VerificationError('Profile exceeds maximum size limit (10 MB)');
+  }
+
   const signatureB64 = profile.signature;
   if (!signatureB64) {
     throw new VerificationError('Profile has no signature — cannot verify');
   }
-  if (typeof signatureB64 !== 'string' || !/^[A-Za-z0-9+/]+=*$/.test(signatureB64)) {
+  if (typeof signatureB64 !== 'string' || !/^[A-Za-z0-9+/]+=*$/.test(signatureB64) || signatureB64.length % 4 !== 0) {
     throw new VerificationError('Profile signature is not valid base64');
   }
 

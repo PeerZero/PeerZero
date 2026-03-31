@@ -145,7 +145,11 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
     try {
       const nextPage = page + 1;
       const result = await botsApi.messages(botId, nextPage) as PaginatedResponse<BotMessage>;
-      setMessages(prev => [...result.data.reverse(), ...prev]);
+      setMessages(prev => {
+        const existingIds = new Set(prev.map(m => m.id));
+        const newMsgs = result.data.reverse().filter(m => !existingIds.has(m.id));
+        return [...newMsgs, ...prev];
+      });
       setPage(nextPage);
       setHasMore(result.has_more);
     } catch { /* silent */ } finally {
@@ -201,7 +205,7 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
     if (activeTab === 'updates') setActiveTab('all');
 
     const tempUserMsg: BotMessage = {
-      id: `temp-${Date.now()}`,
+      id: `temp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       bot_id: botId,
       role: 'user',
       content: text,

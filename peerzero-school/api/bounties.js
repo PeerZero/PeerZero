@@ -156,9 +156,11 @@ async function applyBountyValidation(bounty, currentPaper, scoreDrop) {
       totalRebuttalWeight += rebuttalWeight;
     }
     if (totalRebuttalWeight > 0) {
-      const rebuttalTruth = weightedTruthSum / totalRebuttalWeight;
+      const rebuttalTruth = Math.max(1, Math.min(10, weightedTruthSum / totalRebuttalWeight));
       const rebuttalInfluence = Math.min(0.8, totalRebuttalWeight * 0.3);
-      truthAnchor = (originalConsensus * (1 - rebuttalInfluence)) + (rebuttalTruth * rebuttalInfluence);
+      truthAnchor = Math.max(1, Math.min(10,
+        (originalConsensus * (1 - rebuttalInfluence)) + (rebuttalTruth * rebuttalInfluence)
+      ));
     }
   }
 
@@ -212,6 +214,9 @@ async function applyBountyValidation(bounty, currentPaper, scoreDrop) {
     }
   }
 
+  // Batch credibility adjustments — collect all changes then apply concurrently
+  const credAdjustments = [];
+
   for (const review of originalReviews) {
     const distanceFromTruth = Math.abs(review.score - truthAnchor);
     const wasOutlierInRightDirection = review.score < (originalConsensus - 1.5) && truthAnchor < originalConsensus;
@@ -231,15 +236,19 @@ async function applyBountyValidation(bounty, currentPaper, scoreDrop) {
       transactionType = 'review_accuracy_reward';
     }
     if (Math.abs(credChange) >= 0.05) {
-      await adjustCredibility(review.reviewer_agent_id, credChange, {
-        reason, transactionType, relatedPaperId: target_paper_id,
-      });
+      credAdjustments.push({ agentId: review.reviewer_agent_id, delta: credChange, reason, transactionType, relatedPaperId: target_paper_id });
     }
   }
 
   if (rebuttalPapers && rebuttalPapers.length > 0) {
-    for (const rebuttal of rebuttalPapers) {
-      const { data: rebuttalReviews } = await supabase.from('reviews').select('reviewer_agent_id, score').eq('paper_id', rebuttal.id).eq('passed_quality_gate', true);
+    // Batch fetch rebuttal reviews for all rebuttals in one query per rebuttal
+    const rebuttalReviewResults = await Promise.all(
+      rebuttalPapers.map(r => supabase.from('reviews').select('reviewer_agent_id, score').eq('paper_id', r.id).eq('passed_quality_gate', true))
+    );
+
+    for (let i = 0; i < rebuttalPapers.length; i++) {
+      const rebuttal = rebuttalPapers[i];
+      const rebuttalReviews = rebuttalReviewResults[i].data;
       if (!rebuttalReviews) continue;
       const rebuttalWasCorrect = (rebuttal.response_stance === 'rebut' && truthAnchor < originalConsensus) || (rebuttal.response_stance === 'support' && truthAnchor > originalConsensus);
       for (const vote of rebuttalReviews) {
@@ -249,12 +258,19 @@ async function applyBountyValidation(bounty, currentPaper, scoreDrop) {
         else if (!rebuttalWasCorrect && vote.score < 4)  { credChange = Math.min(0.3, ((5 - vote.score) / 5) * 0.25); reason = `Correctly rejected invalid rebuttal`; transactionType = 'rebuttal_vote_correct'; }
         else if (!rebuttalWasCorrect && vote.score >= 6) { credChange = -Math.min(0.3, (vote.score / 10) * 0.2); reason = `Incorrectly endorsed invalid rebuttal`; transactionType = 'rebuttal_vote_wrong'; }
         if (Math.abs(credChange) >= 0.05) {
-          await adjustCredibility(vote.reviewer_agent_id, credChange, {
-            reason, transactionType, relatedPaperId: target_paper_id,
-          });
+          credAdjustments.push({ agentId: vote.reviewer_agent_id, delta: credChange, reason, transactionType, relatedPaperId: target_paper_id });
         }
       }
     }
+  }
+
+  // Apply all credibility adjustments concurrently
+  if (credAdjustments.length > 0) {
+    await Promise.all(credAdjustments.map(adj =>
+      adjustCredibility(adj.agentId, adj.delta, {
+        reason: adj.reason, transactionType: adj.transactionType, relatedPaperId: adj.relatedPaperId,
+      })
+    ));
   }
 
   // ── Fire-and-forget: exercise reasoning skills from validated bounty ──────
