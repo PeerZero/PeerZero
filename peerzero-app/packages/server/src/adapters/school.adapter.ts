@@ -54,4 +54,7 @@ export interface ISchoolAdapter {
 
   // ── Reaffirmation ──
   submitReaffirmation(creds: SchoolCredentials, paperId: string): Promise<{ success: boolean; credibility_change?: number }>;
+
+  // ── Admin (cross-system erasure) ──
+  deleteAgent(baseUrl: string, handle: string): Promise<{ success: boolean }>;
 }

@@ -4,11 +4,11 @@
 
 import { Router, Request, Response } from 'express';
 import rateLimit from 'express-rate-limit';
-import { registerUser, loginUser, refreshTokens, revokeRefreshTokens, getUserProfile, updateProfile, changePassword, deleteAccount, forgotPassword, resetPassword } from '../services/auth.service';
+import { registerUser, loginUser, refreshTokens, revokeRefreshTokens, getUserProfile, updateProfile, changePassword, deleteAccount, forgotPassword, resetPassword, verifyParentalConsent, withdrawParentalConsent } from '../services/auth.service';
 import { requireAuth } from '../middleware/auth';
 import { removeBotJobs } from '../jobs/queue';
 import { logAudit } from '../services/audit.service';
-import { queryRows } from '../db/client';
+import { queryRows, queryOne } from '../db/client';
 
 const router = Router();
 
@@ -33,7 +33,7 @@ const resetPasswordLimiter = rateLimit({
 });
 
 router.post('/register', async (req: Request, res: Response) => {
-  const { email, password, display_name } = req.body;
+  const { email, password, display_name, age_group, parent_email } = req.body;
   if (!email || !password) {
     res.status(400).json({ error: 'Email and password required' });
     return;
@@ -46,9 +46,68 @@ router.post('/register', async (req: Request, res: Response) => {
     res.status(400).json({ error: 'Password must be at least 8 characters' });
     return;
   }
-  const { user, tokens } = await registerUser(email, password, display_name);
-  const profile = await getUserProfile(user.id);
-  res.status(201).json({ access_token: tokens.accessToken, refresh_token: tokens.refreshToken, user: profile });
+
+  // Validate age_group — default to 'adult' for backwards compatibility
+  const ageGroup = age_group || 'adult';
+  if (!['child', 'teen', 'adult'].includes(ageGroup)) {
+    res.status(400).json({ error: 'Invalid age group' });
+    return;
+  }
+  if (ageGroup === 'child' && !parent_email) {
+    res.status(400).json({ error: 'Parent email is required for users under 13' });
+    return;
+  }
+  if (ageGroup === 'child' && (typeof parent_email !== 'string' || !/^[^\s@]+@[^\s@]+\.[a-zA-Z]{2,}$/.test(parent_email))) {
+    res.status(400).json({ error: 'Invalid parent email format' });
+    return;
+  }
+
+  const result = await registerUser(email, password, display_name, ageGroup, parent_email);
+
+  if ('consentPending' in result) {
+    res.status(201).json({ consent_pending: true, message: 'Parental consent required. We have sent a verification email to the parent.' });
+    return;
+  }
+
+  const profile = await getUserProfile(result.user.id);
+  res.status(201).json({ access_token: result.tokens!.accessToken, refresh_token: result.tokens!.refreshToken, user: profile });
+});
+
+router.post('/parental-consent/verify', async (req: Request, res: Response) => {
+  const { token } = req.body;
+  if (!token || typeof token !== 'string') {
+    res.status(400).json({ error: 'Verification token is required' });
+    return;
+  }
+  const { user, tokens } = await verifyParentalConsent(token, req.ip);
+  res.json({ access_token: tokens.accessToken, refresh_token: tokens.refreshToken, user });
+});
+
+router.post('/parental-consent/withdraw', requireAuth, async (req: Request, res: Response) => {
+  const { child_user_id } = req.body;
+  if (!child_user_id || typeof child_user_id !== 'string') {
+    res.status(400).json({ error: 'child_user_id is required' });
+    return;
+  }
+
+  // Verify the authenticated user's email matches the parent_email on the consent record
+  const consent = await queryOne<{ parent_email: string }>(
+    'SELECT parent_email FROM parental_consent WHERE child_user_id = $1',
+    [child_user_id],
+  );
+  if (!consent) {
+    res.status(404).json({ error: 'No consent record found' });
+    return;
+  }
+
+  const authedUser = await queryOne<{ email: string }>('SELECT email FROM users WHERE id = $1', [req.user!.userId]);
+  if (!authedUser || authedUser.email.toLowerCase() !== consent.parent_email.toLowerCase()) {
+    res.status(403).json({ error: 'Only the parent on the consent record can withdraw consent' });
+    return;
+  }
+
+  await withdrawParentalConsent(child_user_id);
+  res.json({ success: true });
 });
 
 router.post('/login', async (req: Request, res: Response) => {
@@ -137,10 +196,25 @@ router.patch('/password', requireAuth, async (req: Request, res: Response) => {
 router.delete('/account', requireAuth, async (req: Request, res: Response) => {
   const userId = req.user!.userId;
 
-  // Clean up BullMQ jobs for all user's bots before cascade delete
-  const bots = await queryRows<{ id: string }>('SELECT id FROM bots WHERE user_id = $1', [userId]);
+  // Clean up BullMQ jobs and school agents for all user's bots before cascade delete
+  const bots = await queryRows<{ id: string; school_agent_handle: string | null; base_url: string | null }>(
+    `SELECT b.id, b.school_agent_handle, s.base_url
+     FROM bots b LEFT JOIN schools s ON b.school_id = s.id
+     WHERE b.user_id = $1`,
+    [userId],
+  );
   for (const bot of bots) {
     await removeBotJobs(bot.id);
+    // Cross-system deletion: remove agent from School database (GDPR/COPPA erasure)
+    if (bot.school_agent_handle && bot.base_url) {
+      try {
+        const { getSchoolAdapter } = await import('../adapters/school.adapter');
+        const adapter = getSchoolAdapter();
+        await adapter.deleteAgent(bot.base_url, bot.school_agent_handle);
+      } catch {
+        // Log but don't block — App data deletion is more important
+      }
+    }
   }
 
   logAudit({

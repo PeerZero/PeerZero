@@ -15,6 +15,8 @@ CREATE TABLE users (
   email           TEXT UNIQUE NOT NULL,
   password_hash   TEXT NOT NULL,
   display_name    TEXT,
+  age_group       TEXT NOT NULL DEFAULT 'adult' CHECK (age_group IN ('child', 'teen', 'adult')),
+  parent_email    TEXT,
   language        TEXT NOT NULL DEFAULT 'en',
   stripe_customer_id TEXT,
   created_at      TIMESTAMPTZ DEFAULT NOW(),
@@ -31,6 +33,22 @@ CREATE TABLE refresh_tokens (
 );
 CREATE INDEX idx_refresh_user ON refresh_tokens(user_id);
 CREATE INDEX idx_refresh_token_hash ON refresh_tokens(token_hash);
+
+-- Parental consent records (COPPA compliance)
+CREATE TABLE parental_consent (
+  id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  child_user_id   UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  parent_email    TEXT NOT NULL,
+  consent_method  TEXT NOT NULL DEFAULT 'email_plus',
+  consent_given_at TIMESTAMPTZ,
+  consent_withdrawn_at TIMESTAMPTZ,
+  verification_token TEXT,
+  verified        BOOLEAN NOT NULL DEFAULT false,
+  ip_address      INET,
+  created_at      TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX idx_consent_child ON parental_consent(child_user_id);
+CREATE INDEX idx_consent_token ON parental_consent(verification_token) WHERE verification_token IS NOT NULL;
 
 -- =============================================================================
 -- LLM_API_KEYS — User-owned LLM provider keys (encrypted at rest)

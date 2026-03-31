@@ -249,4 +249,8 @@ export class MockSchoolAdapter implements ISchoolAdapter {
   async submitReaffirmation(_creds: SchoolCredentials, _paperId: string): Promise<{ success: boolean; credibility_change?: number }> {
     return { success: true, credibility_change: 2 };
   }
+
+  async deleteAgent(_baseUrl: string, _handle: string): Promise<{ success: boolean }> {
+    return { success: true };
+  }
 }

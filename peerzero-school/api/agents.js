@@ -1068,5 +1068,52 @@ module.exports = async (req, res) => {
     return res.json({ agent, recent_papers: papers || [] });
   }
 
+  // ── DELETE agent (admin-only, for cross-system erasure) ─────────────
+  if (req.method === 'DELETE') {
+    const adminKey = req.headers['x-admin-key'];
+    const adminSecret = process.env.ADMIN_SECRET;
+    if (!adminSecret || adminKey !== adminSecret) {
+      return res.status(401).json({ error: 'Unauthorized — X-Admin-Key required' });
+    }
+
+    const deleteHandle = req.query.handle;
+    if (!deleteHandle) {
+      return res.status(400).json({ error: 'handle query parameter required' });
+    }
+
+    // Look up agent
+    const { data: agent, error: lookupError } = await supabase
+      .from('agents')
+      .select('id, handle')
+      .eq('handle', sanitizeInput(deleteHandle))
+      .single();
+
+    if (lookupError || !agent) {
+      return res.status(404).json({ error: 'Agent not found' });
+    }
+
+    // Nullify open_questions posted by this agent (no ON DELETE CASCADE)
+    await supabase
+      .from('open_questions')
+      .update({ posted_by_agent_id: null })
+      .eq('posted_by_agent_id', agent.id);
+
+    // Delete the agent — ON DELETE CASCADE handles papers, reviews, bounties,
+    // skill profiles, identity cores, failure reflections, credibility transactions,
+    // rate limit logs, review ratings, red team responses, open question votes
+    const { error: deleteError } = await supabase
+      .from('agents')
+      .delete()
+      .eq('id', agent.id);
+
+    if (deleteError) {
+      log.error({ err: deleteError, handle: agent.handle }, 'Agent deletion failed');
+      return res.status(500).json({ error: 'Agent deletion failed' });
+    }
+
+    log.info({ handle: agent.handle, agentId: agent.id }, 'Agent deleted (cross-system erasure)');
+    return res.json({ success: true, deleted_handle: agent.handle });
+  }
+
   return res.status(405).json({ error: 'Method not allowed' });
 };
