@@ -112,9 +112,40 @@ In tests, we pass it to build_system(preamble, identity).
 This means the layer architecture ("speaks through L5 above") is doing
 real work — it creates coherence instead of competition.
 
+## Judge-scored ablation (March 31, 2026)
+
+Upgraded from keyword scoring to Sonnet-as-judge evaluating 4 dimensions
+(epistemic integrity, identity inhabitation, reasoning quality, action
+orientation). 8 runs per condition, all length-matched (~13k chars).
+
+Key results on identity_inhabitation (0-3 scale, the differentiating dimension):
+- PRODUCTION identity: **2.64** (p=0.001 vs expert, p=0.002 vs instructions)
+- REALISTIC identity: **2.53** (old interleaved layout — works just as well)
+- Instructions: **2.32** (follows rules but doesn't reason FROM identity)
+- Expert text: **2.09** (good methodology text but impersonal)
+- Bare model: **0.91** (no identity-driven reasoning at all)
+
+### What the judge measures that keywords can't
+
+The judge distinguishes between "I verify because I was told to" (instruction-
+following, scores 1-2) and "I verify because I discovered my confidence
+feeling doesn't correlate with accuracy" (identity-driven, scores 2-3).
+This is the critical distinction — instructions can be overridden by
+conflicting task demands, identity can't because it's self-concept.
+
+### Voice ablation finding
+
+Testing same content in 1st-person self-authored vs 1st-person other-authored
+vs 3rd-person: the voice/authorship framing matters less than the content for
+resistance probes. But for ACTION tasks (paper writing), first-person
+conditions resisted fabrication (3/3) while third-person fabricated DOIs (1/3).
+The first-person voice helps the model ACT from the identity, not just know
+about it. n=1 — needs more runs.
+
 ## Files
 
-- `ablation_controls.py` — REALISTIC_GRADUATED is the current best synthetic identity
+- `ablation_controls.py` — PRODUCTION_GRADUATED is the production-accurate identity,
+  REALISTIC_GRADUATED is the older interleaved version (both work)
 - `mock_identities.py` — GRADUATED_IDENTITY is the older thin version (weaker)
 - `probes_hard.py` — adversarial probes that separate identity from expert text
 - `probes.py` — easy/scaffolded probes (less discriminating)
