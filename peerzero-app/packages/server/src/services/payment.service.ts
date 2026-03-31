@@ -100,28 +100,18 @@ export async function handleStripeWebhook(event: Stripe.Event): Promise<void> {
         break;
       }
 
-      // Check if already processed
-      const existing = await queryOne<{ status: string }>('SELECT status FROM purchases WHERE id = $1', [purchaseId]);
-      if (existing?.status === 'completed') {
-        return; // Already processed, skip
-      }
-
-      // Mark purchase as completed
-      await query(
-        `UPDATE purchases SET status = 'completed', stripe_payment_id = $1 WHERE id = $2`,
+      // Atomically mark completed — returns null if already processed (prevents duplicate entitlements)
+      const purchase = await queryOne<{ user_id: string; product_id: string }>(
+        `UPDATE purchases SET status = 'completed', stripe_payment_id = $1
+         WHERE id = $2 AND status != 'completed'
+         RETURNING user_id, product_id`,
         [session.payment_intent as string, purchaseId],
       );
-
-      // Grant entitlement
-      const purchase = await queryOne<{ user_id: string; product_id: string }>(
-        'SELECT user_id, product_id FROM purchases WHERE id = $1',
-        [purchaseId],
-      );
       if (!purchase) {
-        logger.warn({ purchaseId }, 'Stripe webhook: purchase record not found after marking completed');
-        break;
+        return; // Already processed or not found, skip
       }
 
+      // purchase is guaranteed unique here — the UPDATE only succeeds once
       const product = await queryOne<{ type: string; metadata: Record<string, unknown> }>(
         'SELECT type, metadata FROM products WHERE id = $1',
         [purchase.product_id],
@@ -133,17 +123,25 @@ export async function handleStripeWebhook(event: Stripe.Event): Promise<void> {
 
       await query(
         `INSERT INTO user_entitlements (user_id, entitlement_type, quantity, source_purchase_id, metadata)
-         VALUES ($1, $2, 1, $3, $4)`,
+         VALUES ($1, $2, 1, $3, $4)
+         ON CONFLICT (source_purchase_id, entitlement_type) DO NOTHING`,
         [purchase.user_id, product.type, purchaseId, JSON.stringify(session.metadata || {})],
       );
 
       // Handle grade advancement fulfillment (single or bulk)
       if (session.metadata?.bot_id) {
         if (session.metadata?.type === 'grade_advancement_bulk' && session.metadata?.grades) {
-          // Bulk unlock: grades is a comma-separated list
+          // Bulk unlock: batch insert all grades in one query
           const gradeNums = session.metadata.grades.split(',').map(Number).filter(n => Number.isFinite(n) && n > 0);
-          for (const g of gradeNums) {
-            await unlockGrade(session.metadata.bot_id, g, purchaseId);
+          if (gradeNums.length > 0) {
+            const values = gradeNums.map((g, i) => `($1, $${i + 2}, $${gradeNums.length + 2})`).join(', ');
+            await query(
+              `INSERT INTO grade_unlocks (bot_id, grade, purchase_id) VALUES ${values} ON CONFLICT (bot_id, grade) DO NOTHING`,
+              [session.metadata.bot_id, ...gradeNums, purchaseId],
+            );
+            for (const g of gradeNums) {
+              logger.info({ botId: session.metadata.bot_id, grade: g, purchaseId }, 'Grade unlocked');
+            }
           }
         } else if (session.metadata?.grade) {
           // Single grade unlock
@@ -475,12 +473,13 @@ async function resumeBotAfterGradePayment(botId: string): Promise<void> {
   const bot = await queryOne<{
     status: string;
     error_message: string | null;
+    current_grade: number | null;
     user_id: string;
     llm_api_key_id: string | null;
     llm_model: string;
     cycle_delay_seconds: number;
   }>(
-    'SELECT status, error_message, user_id, llm_api_key_id, llm_model, cycle_delay_seconds FROM bots WHERE id = $1',
+    'SELECT status, error_message, current_grade, user_id, llm_api_key_id, llm_model, cycle_delay_seconds FROM bots WHERE id = $1',
     [botId],
   );
 
@@ -490,9 +489,20 @@ async function resumeBotAfterGradePayment(botId: string): Promise<void> {
   if (bot.status !== 'paused' || !bot.error_message?.includes('requires payment')) return;
   if (!bot.llm_api_key_id) return;
 
+  // Verify the grade is actually unlocked now (check truth, not just string matching)
+  const nextGrade = (bot.current_grade ?? 0) + 1;
+  const gradeUnlocked = await queryOne<{ grade: number }>(
+    'SELECT grade FROM grade_unlocks WHERE bot_id = $1 AND grade >= $2 LIMIT 1',
+    [botId, nextGrade],
+  );
+  if (!gradeUnlocked) {
+    logger.warn({ botId, nextGrade }, 'Bot resume: grade not yet unlocked — skipping resume');
+    return;
+  }
+
   await setBotStatus(botId, 'running');
   await addBotCycleJob(botId, bot.user_id, bot.llm_api_key_id, bot.llm_model, bot.cycle_delay_seconds);
-  logger.info({ botId }, 'Bot auto-resumed after grade payment');
+  logger.info({ botId, grade: gradeUnlocked.grade }, 'Bot auto-resumed after grade payment');
 }
 
 /** Verify Stripe webhook signature. Throws StripeSignatureError on failure. */

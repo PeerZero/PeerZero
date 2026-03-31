@@ -178,22 +178,29 @@ module.exports = async (req, res) => {
           const eligible = (candidates || [])
             .filter(p => reviewedIds.has(p.id) && !bountiedIds.has(p.id) && !myPaperIds.has(p.id));
 
-          // Check family bounty count (<8) for each candidate
-          const result = [];
-          for (const p of eligible.slice(0, 20)) {
-            // Count bounties on this paper and all its children
-            const { count: familyBountyCount } = await supabase.from('bounties')
-              .select('id', { count: 'exact', head: true })
-              .eq('target_paper_id', p.id);
-            if ((familyBountyCount ?? 0) < 8) {
-              result.push({
-                id: p.id, title: p.title, abstract: p.abstract,
-                weighted_score: p.weighted_score, raw_review_count: p.raw_review_count,
-                missing_mechanism_chain: !!p.cross_study_connection && !(Array.isArray(p.mechanism_chain) && p.mechanism_chain.length >= 2),
-                has_cross_study: !!p.cross_study_connection,
-              });
-            }
+          // Batch: fetch bounty counts for all candidates in one query
+          const candidateSlice = eligible.slice(0, 20);
+          const candidateIds = candidateSlice.map(p => p.id);
+          const { data: bountyCounts } = candidateIds.length > 0
+            ? await supabase.from('bounties')
+                .select('target_paper_id')
+                .in('target_paper_id', candidateIds)
+            : { data: [] };
+
+          // Count bounties per paper
+          const bountyCountMap = {};
+          for (const b of (bountyCounts || [])) {
+            bountyCountMap[b.target_paper_id] = (bountyCountMap[b.target_paper_id] || 0) + 1;
           }
+
+          const result = candidateSlice
+            .filter(p => (bountyCountMap[p.id] || 0) < 8)
+            .map(p => ({
+              id: p.id, title: p.title, abstract: p.abstract,
+              weighted_score: p.weighted_score, raw_review_count: p.raw_review_count,
+              missing_mechanism_chain: !!p.cross_study_connection && !(Array.isArray(p.mechanism_chain) && p.mechanism_chain.length >= 2),
+              has_cross_study: !!p.cross_study_connection,
+            }));
           return result;
         } catch (e) { log.error('[agents] bountyable computation failed', { err: e.message }); return []; }
       })(),
@@ -213,24 +220,37 @@ module.exports = async (req, res) => {
           const minBounties = botCount <= 8 ? 1 : botCount <= 15 ? 3 : 5;
           const minRebuttals = botCount <= 8 ? 1 : botCount <= 15 ? 2 : 3;
 
-          const results = [];
-          for (const p of originalPapers) {
-            if ((p.raw_review_count || 0) < minReviews) continue;
+          // Pre-filter by review count and revision limits
+          const candidates = originalPapers.filter(p => {
+            if ((p.raw_review_count || 0) < minReviews) return false;
             const existingRevisions = myPaperList.filter(
               q => q.parent_paper_id === p.id && q.response_stance === 'revision'
             );
-            if (existingRevisions.length >= 2) continue;
-            if (existingRevisions.length === 1 && (existingRevisions[0].raw_review_count || 0) < minReviews) continue;
+            if (existingRevisions.length >= 2) return false;
+            if (existingRevisions.length === 1 && (existingRevisions[0].raw_review_count || 0) < minReviews) return false;
+            return true;
+          });
 
-            const { count: pBountyCount } = await supabase.from('bounties').select('id', { count: 'exact', head: true }).eq('target_paper_id', p.id);
-            if ((pBountyCount ?? 0) < minBounties) continue;
+          if (candidates.length === 0) return [];
 
-            const { count: pRebuttalCount } = await supabase.from('papers').select('id', { count: 'exact', head: true })
-              .eq('parent_paper_id', p.id).eq('response_stance', 'rebut').neq('status', 'removed');
-            if ((pRebuttalCount ?? 0) < minRebuttals) continue;
+          // Batch: fetch bounty and rebuttal counts in two queries
+          const candIds = candidates.map(p => p.id);
+          const [bountyData, rebuttalData] = await Promise.all([
+            supabase.from('bounties').select('target_paper_id').in('target_paper_id', candIds),
+            supabase.from('papers').select('parent_paper_id').in('parent_paper_id', candIds).eq('response_stance', 'rebut').neq('status', 'removed'),
+          ]);
 
-            results.push({ id: p.id, weighted_score: p.weighted_score, raw_review_count: p.raw_review_count, revision_count: existingRevisions.length });
-          }
+          const bountyCounts = {};
+          for (const b of (bountyData.data || [])) bountyCounts[b.target_paper_id] = (bountyCounts[b.target_paper_id] || 0) + 1;
+          const rebuttalCounts = {};
+          for (const r of (rebuttalData.data || [])) rebuttalCounts[r.parent_paper_id] = (rebuttalCounts[r.parent_paper_id] || 0) + 1;
+
+          const results = candidates
+            .filter(p => (bountyCounts[p.id] || 0) >= minBounties && (rebuttalCounts[p.id] || 0) >= minRebuttals)
+            .map(p => {
+              const existingRevisions = myPaperList.filter(q => q.parent_paper_id === p.id && q.response_stance === 'revision');
+              return { id: p.id, weighted_score: p.weighted_score, raw_review_count: p.raw_review_count, revision_count: existingRevisions.length };
+            });
           return results;
         } catch (e) { log.error('[agents] revisable computation failed', { err: e.message }); return []; }
       })(),

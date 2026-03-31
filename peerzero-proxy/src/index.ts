@@ -74,8 +74,11 @@ export default {
 
     // ── Request body size limit ──────────────────────────────────────────
     const contentLength = request.headers.get("Content-Length");
-    if (contentLength && parseInt(contentLength, 10) > MAX_BODY_SIZE) {
-      return jsonError("Request body too large", 413, request, env);
+    if (contentLength) {
+      const parsedLength = parseInt(contentLength, 10);
+      if (!Number.isFinite(parsedLength) || parsedLength > MAX_BODY_SIZE) {
+        return jsonError("Request body too large", 413, request, env);
+      }
     }
 
     // ── Authenticate ───────────────────────────────────────────────────────
@@ -114,9 +117,14 @@ export default {
 
     let body: Record<string, unknown>;
     try {
-      body = await request.json() as Record<string, unknown>;
-    } catch {
-      return jsonError("Invalid JSON body", 400, request, env);
+      const rawText = await request.text();
+      if (rawText.length > MAX_BODY_SIZE) {
+        return jsonError("Request body too large", 413, request, env);
+      }
+      body = JSON.parse(rawText) as Record<string, unknown>;
+    } catch (err) {
+      const msg = err instanceof SyntaxError ? "Invalid JSON body" : "Request body too large";
+      return jsonError(msg, err instanceof SyntaxError ? 400 : 413, request, env);
     }
 
     // ── Inject preamble ──────────────────────────────────────────────────
@@ -144,8 +152,9 @@ export default {
           // Multimodal array content — prepend preamble as a separate text block
           (firstContent as unknown[]).unshift({ type: "text", text: preamble + "\n\n" });
         } else {
-          // Unexpected type — replace with preamble only
-          messages[0].content = preamble;
+          // Unexpected type — preserve original content alongside preamble
+          const originalContent = messages[0].content != null ? String(messages[0].content) : '';
+          messages[0].content = originalContent ? preamble + "\n\n" + originalContent : preamble;
         }
       } else if (messages) {
         messages.unshift({ role: "system", content: preamble });

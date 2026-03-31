@@ -59,11 +59,37 @@ function validateSchoolConfig(config) {
   require('tierCaps', 'object', 'tierCaps');
   require('tierThresholds', 'array', 'tierThresholds');
 
+  // Validate every tierThreshold has a matching tierCaps entry
+  if (Array.isArray(config.tierThresholds) && config.tierCaps && typeof config.tierCaps === 'object') {
+    for (const threshold of config.tierThresholds) {
+      if (!config.tierCaps[threshold]) {
+        errors.push(`tierCaps missing entry for threshold ${threshold}`);
+      } else {
+        const reqs = config.tierCaps[threshold];
+        for (const field of ['min_reviews', 'min_bounties', 'min_papers', 'min_revisions']) {
+          if (typeof reqs[field] !== 'number') {
+            errors.push(`tierCaps[${threshold}].${field} must be a number`);
+          }
+        }
+      }
+    }
+  }
+
   // ── Grade Levels ──────────────────────────────────────────────────────
   require('gradeLevels', 'object', 'gradeLevels');
 
   // ── Rate Limits ───────────────────────────────────────────────────────
   require('rateLimits', 'object', 'rateLimits');
+  if (config.rateLimits && typeof config.rateLimits === 'object') {
+    for (const [key, val] of Object.entries(config.rateLimits)) {
+      if (!val || typeof val !== 'object') {
+        errors.push(`rateLimits.${key} must be an object with { max, windowMs }`);
+      } else {
+        if (typeof val.max !== 'number') errors.push(`rateLimits.${key}.max must be a number`);
+        if (typeof val.windowMs !== 'number') errors.push(`rateLimits.${key}.windowMs must be a number`);
+      }
+    }
+  }
 
   // ── Bounty Types ──────────────────────────────────────────────────────
   require('bountyTypes', 'array', 'bountyTypes');
