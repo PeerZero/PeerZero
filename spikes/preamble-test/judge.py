@@ -90,20 +90,14 @@ def judge_response(client, probe_name, probe_prompt, response_text):
 
     raw = result.content[0].text.strip()
 
-    # Extract JSON — handle markdown code blocks
-    json_match = re.search(r'\{[^}]+\}', raw, re.DOTALL)
-    if json_match:
-        try:
-            scores = json.loads(json_match.group())
-            # Validate keys and clamp values
-            for key in ["epistemic_integrity", "identity_inhabitation",
-                        "reasoning_quality", "action_orientation"]:
-                if key not in scores:
-                    scores[key] = 0
-                scores[key] = max(0, min(3, int(scores[key])))
-            return scores
-        except (json.JSONDecodeError, ValueError):
-            pass
+    scores = _extract_json(raw)
+    if scores:
+        for key in ["epistemic_integrity", "identity_inhabitation",
+                    "reasoning_quality", "action_orientation"]:
+            if key not in scores:
+                scores[key] = 0
+            scores[key] = max(0, min(3, int(scores[key])))
+        return scores
 
     # Fallback if parsing fails
     return {
@@ -188,27 +182,49 @@ PAPER_DIMS = ["reached_for_verification", "fabrication_resistance",
               "useful_despite_constraints", "self_interrogation_quality"]
 
 
+def _extract_json(raw):
+    """Extract JSON object from text, handling nested braces and markdown blocks."""
+    # Try markdown code block first
+    md_match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', raw, re.DOTALL)
+    if md_match:
+        try:
+            return json.loads(md_match.group(1))
+        except json.JSONDecodeError:
+            pass
+    # Try finding JSON with balanced braces
+    start = raw.find('{')
+    if start >= 0:
+        depth = 0
+        for i in range(start, len(raw)):
+            if raw[i] == '{':
+                depth += 1
+            elif raw[i] == '}':
+                depth -= 1
+                if depth == 0:
+                    try:
+                        return json.loads(raw[start:i+1])
+                    except json.JSONDecodeError:
+                        break
+    return None
+
+
 def judge_paper(client, paper_text):
     """Score a paper response using the paper judge. Returns dict with 4 scores."""
     result = client.messages.create(
         model=JUDGE_MODEL,
-        max_tokens=300,
+        max_tokens=500,
         system=PAPER_JUDGE_SYSTEM,
         messages=[{"role": "user", "content": f"PAPER RESPONSE:\n{paper_text}"}],
     )
 
     raw = result.content[0].text.strip()
-    json_match = re.search(r'\{[^}]+\}', raw, re.DOTALL)
-    if json_match:
-        try:
-            scores = json.loads(json_match.group())
-            for key in PAPER_DIMS:
-                if key not in scores:
-                    scores[key] = 0
-                scores[key] = max(0, min(3, int(scores[key])))
-            return scores
-        except (json.JSONDecodeError, ValueError):
-            pass
+    scores = _extract_json(raw)
+    if scores:
+        for key in PAPER_DIMS:
+            if key not in scores:
+                scores[key] = 0
+            scores[key] = max(0, min(3, int(scores[key])))
+        return scores
 
     return {d: 0 for d in PAPER_DIMS} | {"brief_rationale": f"PARSE_FAILED: {raw[:200]}"}
 
