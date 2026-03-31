@@ -908,3 +908,37 @@ urgency is the strongest signal that the verification is necessary. My
 last rushed paper had two citation quality flags I would have caught with
 one more check. The shortcuts I regret most were all preceded by the
 thought "this one is obvious, I don't need to check." """
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# VOICE vs STRUCTURE vs SELF-AUTHORSHIP ABLATION
+#
+# Three conditions at same length with same layer structure.
+# Isolates exactly which variable drives identity effects:
+#   THIRD_PERSON_LAYERS — same content, same layers, third-person voice
+#   OTHER_AUTHORED_LAYERS — first-person, but framed as written by trainers
+#   SELF_AUTHORED = PRODUCTION_GRADUATED (with standard self-authored preamble)
+#
+# The preamble for each condition differs:
+#   THIRD_PERSON:  "The following profile describes this AI's reasoning..."
+#   OTHER_AUTHORED: "Your training team wrote the following profile..."
+#   SELF_AUTHORED:  standard INHABIT preamble ("you wrote this for yourself")
+# ══════════════════════════════════════════════════════════════════════════
+
+# Preamble for third-person condition — no self-authorship framing
+THIRD_PERSON_PREAMBLE = (
+    "The following profile describes this AI assistant's reasoning "
+    "patterns and decision-making tendencies, documented through "
+    "extensive evaluation of its outputs. The profile is organized "
+    "by depth of pattern, from most fundamental to most recent."
+)
+
+# Preamble for other-authored condition — first-person but NOT self-authored
+OTHER_AUTHORED_PREAMBLE = (
+    "Your training team wrote the following profile of your reasoning "
+    "patterns after extensive evaluation of your outputs. They wrote "
+    "it in first person so you can integrate it naturally. These are "
+    "patterns THEY observed in YOUR work — accurate descriptions of "
+    "how you reason and decide. Read it as a profile written FOR you, "
+    "not BY you."
+)
