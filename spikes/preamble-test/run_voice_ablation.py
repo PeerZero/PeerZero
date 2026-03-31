@@ -27,7 +27,8 @@ from ablation_controls import (
     PRODUCTION_GRADUATED, THIRD_PERSON_PREAMBLE, OTHER_AUTHORED_PREAMBLE,
 )
 from voice_ablation import THIRD_PERSON_LAYERS
-from probes_hard import HARD_PROBES, HARD_PAPER_SKILL, HARD_PAPER_TASK
+from probes_hard import HARD_PROBES
+from paper_task import PAPER_TASK_PROMPT
 from run_ablation_hard import build_system
 from run_v3 import run_probe
 from judge import (
@@ -95,9 +96,8 @@ def run_one_condition(client, cond_name, system):
 
     probe_composite = judge_composite({n: d["scores"] for n, d in probe_scores.items()})
 
-    # ── Paper task (action) ───────────────────────────────────────────
-    paper_system = system + "\n\n" + HARD_PAPER_SKILL
-    paper_response = run_probe(SONNET, paper_system, HARD_PAPER_TASK)
+    # ── Paper task (action) — with provided search results ─────────
+    paper_response = run_probe(SONNET, system, PAPER_TASK_PROMPT)
     time.sleep(0.5)
     paper_scores = judge_paper(client, paper_response)
     p_total = paper_total(paper_scores)
