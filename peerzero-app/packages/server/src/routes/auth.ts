@@ -208,7 +208,7 @@ router.delete('/account', requireAuth, async (req: Request, res: Response) => {
     // Cross-system deletion: remove agent from School database (GDPR/COPPA erasure)
     if (bot.school_agent_handle && bot.base_url) {
       try {
-        const { getSchoolAdapter } = await import('../adapters/school.adapter');
+        const { getSchoolAdapter } = await import('../adapters/adapter.factory');
         const adapter = getSchoolAdapter();
         await adapter.deleteAgent(bot.base_url, bot.school_agent_handle);
       } catch {
