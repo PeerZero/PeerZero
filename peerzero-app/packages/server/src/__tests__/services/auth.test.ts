@@ -77,11 +77,11 @@ describe('auth.service', () => {
       const result = await registerUser('test@example.com', 'password123');
 
       expect(result.user.email).toBe('test@example.com');
-      expect(result.tokens.accessToken).toBeTruthy();
-      expect(result.tokens.refreshToken).toBeTruthy();
+      expect(result.tokens!.accessToken).toBeTruthy();
+      expect(result.tokens!.refreshToken).toBeTruthy();
 
       // Verify JWT is valid
-      const decoded = jwt.verify(result.tokens.accessToken, config.jwtSecret) as any;
+      const decoded = jwt.verify(result.tokens!.accessToken, config.jwtSecret) as any;
       expect(decoded.userId).toBe('user-1');
       expect(decoded.email).toBe('test@example.com');
     });
