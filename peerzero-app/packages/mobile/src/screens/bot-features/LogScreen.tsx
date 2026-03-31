@@ -45,6 +45,11 @@ const ACTION_ICONS: Record<string, string> = {
   error: '!',
 };
 
+// Content-creation actions that should carry an AI-Generated label (EU AI Act Art. 50)
+const AI_CONTENT_ACTIONS = new Set([
+  'paper', 'review', 'bounty', 'revision', 'reaffirmation', 'response', 'rebuttal',
+]);
+
 type TabKey = 'task' | 'content' | 'external';
 
 export default function LogScreen({ route }: LogScreenProps) {
@@ -223,7 +228,14 @@ export default function LogScreen({ route }: LogScreenProps) {
           <Text style={styles.actionIconText}>{icon}</Text>
         </View>
         <View style={styles.entryContent}>
-          <Text style={styles.headline}>{item.translated?.headline || item.action_type}</Text>
+          <View style={styles.taskHeadlineRow}>
+            <Text style={[styles.headline, { flex: 1 }]}>{item.translated?.headline || item.action_type}</Text>
+            {AI_CONTENT_ACTIONS.has(item.action_type) && (
+              <View style={styles.aiLabel}>
+                <Text style={styles.aiLabelText}>AI-Generated</Text>
+              </View>
+            )}
+          </View>
           <Text style={styles.summary}>{item.translated?.summary || ''}</Text>
           {item.translated?.credibility_change != null && item.translated.credibility_change !== 0 && (
             <Text style={[styles.credChange, { color: item.translated.credibility_change > 0 ? colors.accent.success : colors.accent.error }]}>
@@ -258,12 +270,17 @@ export default function LogScreen({ route }: LogScreenProps) {
       >
         <View style={[styles.moodBar, { backgroundColor: MOOD_COLORS[mood] }]} />
         <View style={styles.entryContent}>
-          {/* Type badge + timestamp row */}
+          {/* Type badge + AI label + timestamp row */}
           <View style={styles.contentHeader}>
-            <View style={[styles.typeBadge, { backgroundColor: MOOD_COLORS[mood] + '20' }]}>
-              <Text style={[styles.typeBadgeText, { color: MOOD_COLORS[mood] }]}>
-                {ACTION_ICONS[item.action_type] || '?'} {item.action_type.toUpperCase()}
-              </Text>
+            <View style={styles.contentHeaderLeft}>
+              <View style={[styles.typeBadge, { backgroundColor: MOOD_COLORS[mood] + '20' }]}>
+                <Text style={[styles.typeBadgeText, { color: MOOD_COLORS[mood] }]}>
+                  {ACTION_ICONS[item.action_type] || '?'} {item.action_type.toUpperCase()}
+                </Text>
+              </View>
+              <View style={styles.aiLabel}>
+                <Text style={styles.aiLabelText}>AI-Generated</Text>
+              </View>
             </View>
             <Text style={styles.metaText}>Cycle {item.cycle_number} · {formatTime(item.created_at)}</Text>
           </View>
@@ -546,6 +563,15 @@ const styles = StyleSheet.create({
     fontSize: fontSize.xs, color: colors.accent.secondary, backgroundColor: colors.accent.secondary + '15',
     paddingHorizontal: spacing.xs, paddingVertical: 2, borderRadius: borderRadius.sm,
     overflow: 'hidden', textTransform: 'capitalize',
+  },
+  taskHeadlineRow: { flexDirection: 'row', alignItems: 'center' },
+  contentHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  aiLabel: {
+    backgroundColor: 'rgba(139, 92, 246, 0.15)',
+    paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, marginLeft: 6,
+  },
+  aiLabelText: {
+    fontSize: 10, color: '#8B5CF6', fontWeight: '600', letterSpacing: 0.5,
   },
   empty: { padding: spacing.xxl, alignItems: 'center' },
   emptyText: { color: colors.text.secondary, fontSize: fontSize.md, textAlign: 'center' },

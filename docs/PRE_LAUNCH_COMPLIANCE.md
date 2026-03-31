@@ -18,19 +18,24 @@ Do these when the code is stable and you're preparing to launch. Not before.
 
 PeerZero will be used by children (Tamagotchi-style bots). COPPA compliance is mandatory.
 
-- [ ] **Age gate at registration** — Server-enforced, neutral prompt ("How old are you?"), stores age group not DOB. See `docs/COPPA_COMPLIANCE.md` Section 2.
-- [ ] **Verifiable parental consent (VPC)** — Email Plus method. Parent email → confirmation link → additional verification. See `docs/COPPA_COMPLIANCE.md` Section 3.
-- [ ] **Database changes** — `age_group` column on users, `parental_consent` table, `parent_id` FK. See `docs/COPPA_COMPLIANCE.md` Section 2.
-- [ ] **Child account restrictions** — BYOK managed by parent, payments managed by parent, push notifications off by default.
-- [ ] **Parental controls** — Parent can review data, delete account, withdraw consent. Start with email-based requests; build dashboard later.
-- [ ] **Cross-system deletion** — When child account deleted, cascade to School system. The School deletion endpoint does NOT exist yet — this is the #1 technical gap.
-- [ ] **Consent record keeping** — Store consent records for account lifetime + 3 years.
+- [x] **Age gate at registration** — Server-enforced, neutral prompt ("How old are you?"), stores age group not DOB. Implemented March 31, 2026 in `RegisterScreen.tsx` + `auth.ts` + `auth.service.ts`.
+- [x] **Verifiable parental consent (VPC)** — Token-based flow implemented. Endpoints: `POST /parental-consent/verify`, `POST /parental-consent/withdraw`. Child accounts locked until parent verifies.
+- [x] **Database changes** — `age_group` column on users, `parental_consent` table with verification_token, consent tracking. See `schema.sql`.
+- [x] **Consent record keeping** — `parental_consent` table stores parent_email, consent_method, consent_given_at, ip_address. Retention: account lifetime + 3 years (per Privacy Policy).
+- [x] **Cross-system deletion** — School `DELETE /api/agents?handle=X` endpoint (admin-key protected). App account deletion cascades to School via `school.adapter.real.ts`.
+- [ ] **Send parental consent email** — The VPC flow creates tokens but does NOT yet send the email to the parent. Wire up Resend to send the consent email with the verification link. See `auth.service.ts` line 78 (`// TODO: Send verification email`).
+- [ ] **Deploy DB migration** — Run the `age_group` column + `parental_consent` table migration on the production Supabase instance. The schema is in `schema.sql` but needs to be applied as a migration.
+- [ ] **Set SCHOOL_ADMIN_SECRET env var** — The App server needs `SCHOOL_ADMIN_SECRET` set to match the School server's `ADMIN_SECRET` so cross-system deletion works.
+- [ ] **Child account restrictions** — BYOK managed by parent, payments managed by parent, push notifications off by default. UI enforcement not yet built.
+- [ ] **Parental controls dashboard** — Parent can review data, delete account, withdraw consent. Currently email-based only (`POST /parental-consent/withdraw`). Build parent dashboard later.
+- [ ] **Legal counsel review** — All compliance docs (Privacy Policy, ToS, DPIA, COPPA guide, AI Act classification) need review by a privacy attorney before launch.
 - [ ] **Penalties:** Up to $50,070 per violation. Epic Games paid $275M (2022).
 
 ## EU AI Act (Enforcement: August 2, 2026)
 
 - [x] **AI Act classification document** — Completed March 31, 2026. Conclusion: minimal-to-limited risk. See `docs/AI_ACT_CLASSIFICATION.md`.
-- [ ] **AI-generated content labeling** — All bot-generated papers, reviews, and bounty responses must be flagged as AI-generated in both the database and UI. Article 50 transparency requirement.
+- [x] **AI-generated content labeling (UI)** — "AI-Generated" badge added to LogScreen for all content-creation actions (paper, review, bounty, revision, reaffirmation, response, rebuttal). Implemented March 31, 2026 in `LogScreen.tsx`.
+- [ ] **AI-generated content labeling (database)** — Add `is_ai_generated BOOLEAN DEFAULT true` column to School `papers` and `reviews` tables for explicit DB-level marking. Currently only labeled in UI.
 - [ ] **If classified high-risk:** Not expected, but monitor EU AI Office guidance through 2026-2027. Do NOT issue credentials/certificates to bot owners based on bot performance (would trigger reclassification).
 - [ ] **Penalties:** Up to 35M EUR or 7% of global annual turnover.
 
@@ -45,8 +50,8 @@ PeerZero will be used by children (Tamagotchi-style bots). COPPA compliance is m
 ## GDPR
 
 - [x] **DPIA (Data Protection Impact Assessment)** — Completed March 31, 2026. See `docs/DPIA.md`. Requires DPO review and legal counsel sign-off before finalization.
-- [ ] **School agent deletion** — When an App account is deleted, School data (papers, reviews, bounties, identity) is currently orphaned. Need a cross-system deletion endpoint for GDPR right to erasure. Also required for COPPA.
-- [x] **Age verification / age-gating** — Plan documented in `docs/COPPA_COMPLIANCE.md`. Implementation pending.
+- [x] **School agent deletion** — `DELETE /api/agents?handle=X` implemented in School API (admin-key protected). App account deletion cascades via `school.adapter.real.ts`. Implemented March 31, 2026.
+- [x] **Age verification / age-gating** — Implemented March 31, 2026. Neutral age picker on RegisterScreen, server-enforced in auth route.
 - [x] **Audit log retention enforcement** — Privacy policy promises 90-day retention. Code now enforces this (added 2026-03-30), but verify it works in production.
 - [x] **Document your erasure advantage** — Documented in Privacy Policy Section 5. PeerZero uses Claude via API (no fine-tuning), so deleting user data from the DB actually deletes it.
 - [ ] **DPO appointment** — Required before processing EU users' data at scale.

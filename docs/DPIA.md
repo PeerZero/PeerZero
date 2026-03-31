@@ -177,17 +177,26 @@ Children are a vulnerable group under GDPR Recital 38. Additional risks include:
 | HTTPS/TLS everywhere | All API communication encrypted in transit |
 | No analytics/tracking | Zero third-party analytics, telemetry, or ad SDKs |
 
-### 5.2 Technical Measures (To Be Implemented)
+### 5.2 Technical Measures (Recently Implemented — March 31, 2026)
+
+| Measure | Description | Status |
+|---|---|---|
+| Age gate at registration | Neutral age picker (Under 13 / 13-17 / 18+), server-enforced `age_group` column | Done |
+| Parental consent flow | Token-based VPC: parent email → verification token → account unlock. Endpoints: `/parental-consent/verify`, `/withdraw` | Done (email sending still TODO) |
+| Cross-system deletion | `DELETE /api/agents?handle=X` on School (admin-key). App cascades on account delete | Done (needs `SCHOOL_ADMIN_SECRET` env var) |
+| AI content labeling | "AI-Generated" badge on LogScreen for papers, reviews, bounties, revisions, reaffirmations, responses, rebuttals | Done |
+
+### 5.3 Technical Measures (Still To Be Implemented)
 
 | Measure | Description | Priority |
 |---|---|---|
-| Age gate at registration | Server-enforced age verification (not client-side only) | Critical |
-| Parental consent flow | VPC implementation with consent records | Critical |
-| Cross-system deletion | Cascade account deletion from App to School to Bot data | High |
-| AI content labeling | Mark all bot-generated content as AI-generated in UI | High |
+| Send parental consent email | Wire up Resend to send VPC email with verification link | Critical — before launch |
+| Deploy DB migration | Apply `age_group` + `parental_consent` table to production | Critical — before launch |
+| Set `SCHOOL_ADMIN_SECRET` env var | App server needs this for cross-system deletion | Critical — before launch |
 | Child account restrictions | Restricted BYOK (parent-managed), restricted features | High |
 | Parental dashboard | Parent can view/manage child's account and data | Medium |
 | Content filtering for minors | Additional safety layer on AI outputs for child accounts | Medium |
+| AI content labeling (database) | `is_ai_generated` column on School `papers`/`reviews` tables | Medium |
 
 ### 5.3 Organizational Measures
 

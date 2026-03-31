@@ -127,4 +127,22 @@ export class RealSchoolAdapter implements ISchoolAdapter {
       method: 'POST',
     });
   }
+
+  async deleteAgent(baseUrl: string, handle: string): Promise<{ success: boolean }> {
+    const adminKey = process.env.SCHOOL_ADMIN_SECRET;
+    if (!adminKey) throw new Error('SCHOOL_ADMIN_SECRET not configured');
+
+    const res = await fetch(`${baseUrl}/api/agents?handle=${encodeURIComponent(handle)}`, {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-admin-key': adminKey,
+      },
+    });
+    if (!res.ok) {
+      const body = await res.text();
+      throw new Error(`School API DELETE ${res.status}: ${body}`);
+    }
+    return res.json() as Promise<{ success: boolean }>;
+  }
 }

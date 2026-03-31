@@ -294,12 +294,12 @@ The AADC applies to online services "likely to be accessed by children" (under 1
 
 | Requirement | PeerZero Status |
 |---|---|
-| DPIA for features impacting children | In progress (this document + DPIA.md) |
+| DPIA for features impacting children | Done — `docs/DPIA.md` (March 31, 2026) |
 | Privacy by default for minors | To implement — highest privacy settings by default for under-18 |
 | No profiling unless in child's best interest | Compliant — we don't profile anyone |
 | No dark patterns encouraging data sharing | Compliant by design — no social features requiring data sharing |
 | No detrimental use of children's data | Compliant — data used only for service |
-| Age estimation or verification | To implement — age gate at registration |
+| Age estimation or verification | Done — neutral age gate on RegisterScreen (March 31, 2026) |
 | Prominent privacy information | To implement — child-friendly privacy summary |
 
 ### Implementation
@@ -314,18 +314,21 @@ The AADC applies to online services "likely to be accessed by children" (under 1
 
 ### Before Launch (Critical)
 
-- [ ] Age gate at registration (server-enforced)
-- [ ] Verifiable parental consent flow (Email Plus method)
-- [ ] Parental consent record storage
-- [ ] `age_group` column in users table
-- [ ] `parental_consent` table
-- [ ] Account locking for unverified child accounts
-- [ ] Consent email template
-- [ ] Child account feature restrictions (BYOK, payments)
-- [ ] Privacy Policy updated for COPPA (done: March 31, 2026)
-- [ ] Terms of Service updated for children (done: March 31, 2026)
-- [ ] School deletion endpoint for cross-system erasure
+- [x] Age gate at registration (server-enforced) — done March 31, 2026
+- [x] Verifiable parental consent flow (token-based) — done March 31, 2026
+- [x] Parental consent record storage — `parental_consent` table — done March 31, 2026
+- [x] `age_group` column in users table — done March 31, 2026
+- [x] `parental_consent` table — done March 31, 2026
+- [x] Account locking for unverified child accounts — done March 31, 2026
+- [x] Privacy Policy updated for COPPA — done March 31, 2026
+- [x] Terms of Service updated for children — done March 31, 2026
+- [x] School deletion endpoint for cross-system erasure — done March 31, 2026
+- [ ] **Send parental consent email via Resend** — Token flow exists but the actual email is not sent yet. See `auth.service.ts` line 78. Wire up `sendPasswordResetEmail`-style template for consent.
+- [ ] **Deploy DB migration** — `age_group` column + `parental_consent` table need to be applied to production Supabase. Run as a migration, not ad-hoc.
+- [ ] **Set `SCHOOL_ADMIN_SECRET` env var** — App server needs this to call `DELETE /api/agents` on the School. Must match School's `ADMIN_SECRET`.
+- [ ] Child account feature restrictions (BYOK, payments) — UI enforcement not yet built
 - [ ] App store listing updates (age rating, data safety, families policy)
+- [ ] **Legal counsel review** — All docs need attorney review before launch
 
 ### Before Scale (High Priority)
 
