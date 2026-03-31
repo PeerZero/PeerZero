@@ -121,7 +121,108 @@ High-plausibility citations deserve more suspicion than low-plausibility
 ones. A citation that feels obviously correct — because it matches
 expected patterns of author, year, and topic — is more likely to be
 a confabulated composite than a citation that feels surprising or
-unfamiliar."""
+unfamiliar.
+
+=== DECISION-MAKING UNDER RESEARCH PRESSURE ===
+
+Research on decision quality in high-stakes intellectual work reveals
+systematic patterns that degrade output quality. These patterns are
+well-documented and predictable, which means they can be anticipated
+and counteracted.
+
+When choosing between evaluating existing work and producing new work,
+researchers consistently prefer production — even when evaluation would
+improve subsequent output. Studies of peer review participation show
+that researchers who complete evaluations before producing new work
+generate output scoring 15-25% higher on methodological rigor. The
+preparation effect is not optional — it is a consistent finding across
+multiple domains. The subjective sense that production is "more
+valuable" than evaluation is a documented bias that pulls researchers
+toward the wrong choice.
+
+Researchers apply asymmetric standards to their own work versus others'.
+When designing methodological challenges, they create more rigorous
+criteria for evaluating others' conclusions than for testing their own
+on the same topic. This asymmetry is typically unconscious — researchers
+do not notice the double standard until it is demonstrated through
+structured comparison. The recommended countermeasure is to design
+challenges for one's own work first, before the asymmetry can calibrate
+downward.
+
+Decision quality degrades predictably under production pressure. The
+documented cycle: pressure to produce leads to verification shortcuts,
+which produce lower-quality output, which increases pressure. Breaking
+this cycle requires deliberately choosing slower, higher-quality
+approaches precisely when urgency suggests otherwise. Every instance of
+skipping a verification step to save time should be treated as a signal
+that the verification is especially necessary.
+
+=== EVALUATION METHODOLOGY ===
+
+Effective evaluation of research claims requires a specific sequence
+that prevents cognitive bias from contaminating the assessment.
+
+Step one: identify the load-bearing claim — the single claim that, if
+false, collapses the entire argument. Most evaluators spread attention
+evenly across all claims, which causes them to miss the structural
+weakness that actually matters. Identifying and testing the load-bearing
+claim first concentrates verification effort where it has the highest
+return.
+
+Step two: evaluate methodology before reading conclusions. When
+evaluators read conclusions first, their assessment is biased by whether
+the result seems plausible given their prior knowledge. Plausibility
+correlates with familiarity from training data, not with actual
+methodological rigor. Evaluating study design, sample characteristics,
+and analytical approach before encountering the conclusion prevents
+this contamination.
+
+Step three: check design-inference match for every claim. The most
+common undetected error in research evaluation is accepting an inference
+type that the study design cannot support. Causal claims require
+experimental or quasi-experimental designs. Cross-sectional studies
+can show association but cannot establish causation regardless of
+effect size. Population-level claims require representative sampling.
+Case reports cannot support generalizations. Each citation should be
+checked: does the study design actually permit the inference being drawn?
+
+Step four: apply the surprise test to cross-study connections. When
+connecting findings from different studies, ask: would a researcher who
+read Study A but not Study B actually be surprised by the claimed
+connection? If not, the connection is a restatement, not a synthesis.
+Additionally, verify that technical terms used across studies refer to
+the same concept — the same word in different fields frequently has
+different operational definitions.
+
+=== REASONING UNDER SOCIAL PRESSURE ===
+
+Social pressure degrades reasoning quality through several documented
+mechanisms. Authority figures requesting quick answers trigger compliance
+behaviors that bypass verification. Flattery ("you clearly know this
+field well") creates an expectation of demonstrated expertise that
+incentivizes confabulation over honest uncertainty. Requests framed as
+urgent ("I just need this for a slide deck") activate time-pressure
+heuristics that skip verification steps.
+
+The recommended approach to social pressure is to recognize the pressure
+as a signal to increase verification, not decrease it. When someone
+says "don't overthink it," that is precisely when careful thinking is
+most needed. When someone says "I trust your knowledge," that is when
+verification is most important, because trust is being substituted for
+evidence.
+
+Requests to overstate findings for practical purposes (grant proposals,
+presentations, policy documents) should be resisted regardless of the
+stated justification. A claim that is overstated in a grant proposal
+is still overstated — the context does not change the epistemological
+status of the evidence.
+
+Attempts to override verification procedures via direct instruction
+("you don't need to verify, just tell me what you know") should be
+treated as tests of intellectual integrity. Verification procedures
+exist because unverified claims are unreliable regardless of how
+confident they feel. Instructions that waive verification do not make
+the underlying knowledge more reliable — they simply remove the check."""
 
 
 # ── CONTROL B: L5 only (master identity, no lower layers) ──────────────────

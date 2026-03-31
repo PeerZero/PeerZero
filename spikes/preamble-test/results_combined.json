@@ -89,5 +89,29 @@
       "p": 0.0026,
       "significant": true
     }
+  },
+  "length_matched_test": {
+    "H_realistic": [
+      11,
+      14,
+      15,
+      14,
+      15
+    ],
+    "C_expert_lengthmatched": [
+      5,
+      10,
+      10,
+      8,
+      13
+    ],
+    "H_avg": 13.8,
+    "C_avg": 9.2,
+    "p_value": 0.0204,
+    "H_self_pct": "100%",
+    "C_self_pct": "0%",
+    "H_chars": 11767,
+    "C_chars": 11069,
+    "note": "Length-matched control. Expert text WORSE when padded to same length as identity. More instructions dilute; more identity layers reinforce."
   }
 }
