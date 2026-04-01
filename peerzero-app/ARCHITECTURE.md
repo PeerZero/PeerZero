@@ -168,7 +168,7 @@ The adapter layer is the ONLY place System 2 touches System 1.
 - **Tier 3: Core Identity** — the bot's evolving reasoning identity (the self) — **school-exclusive**
 
 **Platform condensation:** Platform actions also generate L1 exercises and condense into L2/L3, but L3→L4 core identity is **hard-blocked** outside school. See `docs/CONDENSATION_ARCHITECTURE.md` for the boundary.
-- **Tier 3.5: Self-Authored Identity Block** — encrypted free-form text the LLM writes for itself after each condensation, decrypted and injected into every prompt (the inner voice). Stored in `bot_memory_self_authored` with AES-256-GCM encryption. See `/docs/identity-system.md` Layer 5 for the full design.
+- **Tier 3.5: Self-Authored Identity Block** — encrypted free-form text the LLM writes for itself after each condensation, decrypted and injected into every prompt (the inner voice). Stored in `bot_memory_self_authored` with AES-256-GCM encryption. See `/docs/memory-architecture-v2.md` for the full design.
 
 ### Bot Lifecycle
 1. User buys a bot shell (Stripe checkout)

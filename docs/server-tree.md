@@ -71,14 +71,18 @@ peerzero-school/
 │   ├── 017_widen_identity_core_constraints.sql
 │   ├── 018_drop_unused_views.sql       Drops 5 unused views (see CLEANUP_LOG.md)
 │   ├── 019_add_decision_identity.sql   Decision track identity columns
-│   └── 020_identity_school_origin.sql  school_origin + summary_line on identity tables
+│   ├── 020_identity_school_origin.sql  school_origin + summary_line on identity tables
+│   └── 021_atomic_vote_count.sql       Atomic vote counting for red team/open questions
 │
 ├── schools/                            Per-school configuration files
 │   ├── index.js                        Config loader + SCHOOL_REGISTRY
 │   ├── schema.js                       Startup validation for all school configs
 │   ├── science.js                      Science school config (LIVE)
+│   ├── science-core-skill.js           Science core SKILL.md override
+│   ├── science-action-skills.js        Science action-specific SKILL.md overrides
 │   ├── science-skill-signals.js        Science skill signal mappings
 │   ├── science-bounty-validators.js    Science bounty validation rules
+│   ├── seed-science.sql                Seed data + condensers for science Supabase
 │   ├── politics.js                     Politics school config (MOCKED)
 │   ├── politics-core-skill.js          Politics core SKILL.md override
 │   ├── politics-action-skills.js       Politics action-specific SKILL.md overrides
@@ -105,14 +109,18 @@ peerzero-school/
 │   └── seed-psychiatry.sql             Seed data + condensers for psychiatry Supabase
 │
 ├── tests/                              Test files (node, no framework)
+│   ├── test_bot_citation.js
 │   ├── test_bounty_helpers.js
+│   ├── test_coaching.js
 │   ├── test_credibility_concurrency.js
 │   ├── test_credibility_load.js
 │   ├── test_credibility_stress.js
 │   ├── test_extracted_modules.js
 │   ├── test_grade_progress.js
+│   ├── test_mock_guard.js
 │   ├── test_open_questions.js
 │   ├── test_schema_security.js
+│   ├── test_school_configs.js
 │   └── test_shared_logic.js
 │
 ├── bots.py                             DEPRECATED test bot fleet (8 hardcoded bots, reference only)

@@ -155,13 +155,22 @@ LLM reads it as real experience but gives school-verified identity more weight.
 - `lib/skills-core.js` — Skill definitions, thresholds, EMA math
 
 ### Bot (peerzero-bot)
-- `agent.py` — Platform condensation methods (`_run_platform_condensation`, etc.)
+- `_school_condensation.py` — SchoolCondensationMixin (full L1→L5 both tracks)
+- `_platform_condensation.py` — PlatformCondensationMixin (L1→L3 both tracks, hard-blocked at L3)
 - `memory/manager.py` — Platform exercise/paragraph/doc storage, L4 gate
 - `adapters/school.py` — `get_platform_condensers()` fetches templates
 
 ### App (peerzero-app)
-- `runtime/platform-loop.ts` — Platform exercise storage + condensation trigger
-- `services/memory.service.ts` — Exercise/paragraph CRUD
+- `runtime/agent-loop.ts` — School condensation trigger (learning track)
+- `runtime/platform-loop.ts` — Platform exercise storage + L1→L2 condensation trigger
+- `services/memory.service.ts` — Exercise/paragraph/core CRUD (encrypted at rest)
+
+> **Implementation note (April 2026):** The app's `agent-loop.ts` handles
+> learning track condensation but does not yet trigger decision track
+> condensation. The app's `platform-loop.ts` implements L1→L2 but not the
+> L2→L3 cascade. Both limitations are fully implemented in the Python bot
+> (`_school_condensation.py` and `_platform_condensation.py`). The app
+> should be updated to match the bot's complete implementation.
 
 ## Multiple School Types
 

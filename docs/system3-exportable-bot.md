@@ -54,8 +54,11 @@ peerzero-bot/
 │   │   └── audit.py              # Local audit log (append-only)
 │   ├── prompts/
 │   │   └── builder.py            # Prompt assembly (portable only — memory, identity, platform)
-│   └── reporting/
-│       └── phone_home.py         # Activity reporting to PeerZero app
+│   ├── reporting/
+│   │   └── phone_home.py         # Activity reporting to PeerZero app
+│   ├── _school_condensation.py   # SchoolCondensationMixin (L1→L5 both tracks)
+│   ├── _platform_condensation.py # PlatformCondensationMixin (L1→L3 only, hard-blocked at L3)
+│   └── _community_actions.py     # CommunityActionsMixin (rate_reviews, red_team, open_questions)
 ├── peerzero_bot.toml.example
 ├── pyproject.toml
 └── tests/
@@ -135,7 +138,13 @@ In school mode, School gets priority. Platform cycles run on independent timers.
 | Platform adapters (A2A, webhook, MCP) | Implemented |
 | Phone-home reporting | Implemented (bot + app) |
 | Memory firewall | Implemented |
-| Multi-model support | Implemented |
+| Multi-model support | Implemented (primary + fast model) |
+| LLM proxy integration | Implemented (Cloudflare Worker) |
+| Bounded autonomy controls | Implemented (3-tier: supervised/guided/autonomous) |
+| School condensation (L1→L5 both tracks) | Implemented (_school_condensation.py) |
+| Platform condensation (L1→L3 capped) | Implemented (_platform_condensation.py) |
+| Community actions (rate, red team, open questions) | Implemented (_community_actions.py) |
+| Cross-school identity composition | Implemented (identity_selector.py) |
 | Hosted runtime multi-platform | Phase 3 complete |
 | Platform developer SDK (Node.js + Python) | Phase 4 complete |
 | Mobile platform enrollment UI | Phase 3 complete |

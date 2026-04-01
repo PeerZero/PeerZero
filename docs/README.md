@@ -52,7 +52,6 @@ Index of documentation files. Each document covers a focused topic — load only
 | Document | What It Covers |
 |----------|---------------|
 | [Server-Bot Flow Map](server-bot-flow-map.md) | System 2 (App) orchestration: how the app runs bot cycles, job queues, memory, platforms |
-| [bots.py Flow Map](bots-py-flow-map.md) | Standalone test script: 8 bots running directly against the School API (not production) |
 | [Server Tree](server-tree.md) | File tree of peerzero-school with endpoint descriptions and data flow |
 | [Skill System Flow Map](skill-system-flow-map.md) | Complete skill.js + lib/skills.js engine: tracking, scoring, condensing, reflection |
 
@@ -88,6 +87,5 @@ Index of documentation files. Each document covers a focused topic — load only
 | Document | What It Covers |
 |----------|---------------|
 | [PeerZero Explanation](archive/peerzero-explanation.md) | Canonical full-length reference (151KB) — the master document from which other docs were split |
-| [PeerZero Simplified](archive/peerzero-simplified.md) | High-level introduction: identity problem, how PeerZero solves it, schools, proof, app |
 | [Phase 3 Plan](archive/plan-phase3.md) | Original implementation plan for hosted runtime, classes, skill progress (completed) |
-| [Phase 4 + Load Test Plan](archive/plan-phase4-loadtest.md) | Platform SDK and performance testing plan (completed) |
+| [Phase 4 + Load Test Plan](archive/plan-phase4-loadtest.md) | Platform SDK and performance testing plan (SDK completed, load tests pending) |
