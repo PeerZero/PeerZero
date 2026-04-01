@@ -49,7 +49,7 @@ export async function storeExercise(
 export async function getRecentExercises(botId: string, limit = 20): Promise<MemoryExercise[]> {
   return queryRows<MemoryExercise>(
     `SELECT id, cycle_number, action_type, exercise_data, created_at
-     FROM bot_memory_exercises WHERE bot_id = $1
+     FROM bot_memory_exercises WHERE bot_id = $1 AND deleted_at IS NULL
      ORDER BY created_at DESC LIMIT $2`,
     [botId, limit],
   );
@@ -64,17 +64,35 @@ export async function getUncondensedExerciseCount(botId: string): Promise<number
 
   if (!lastParagraph) {
     const result = await queryOne<{ count: number }>(
-      'SELECT COUNT(*)::int as count FROM bot_memory_exercises WHERE bot_id = $1',
+      'SELECT COUNT(*)::int as count FROM bot_memory_exercises WHERE bot_id = $1 AND deleted_at IS NULL',
       [botId],
     );
     return result?.count || 0;
   }
 
   const result = await queryOne<{ count: number }>(
-    'SELECT COUNT(*)::int as count FROM bot_memory_exercises WHERE bot_id = $1 AND created_at > $2',
+    'SELECT COUNT(*)::int as count FROM bot_memory_exercises WHERE bot_id = $1 AND deleted_at IS NULL AND created_at > $2',
     [botId, lastParagraph.created_at],
   );
   return result?.count || 0;
+}
+
+// ── L1 Exercise Deletion (non-school bots only) ──
+
+export async function deleteExercise(botId: string, exerciseId: string): Promise<boolean> {
+  const result = await query(
+    'UPDATE bot_memory_exercises SET deleted_at = NOW() WHERE id = $1 AND bot_id = $2 AND deleted_at IS NULL',
+    [exerciseId, botId],
+  );
+  return (result.rowCount ?? 0) > 0;
+}
+
+export async function deleteAllExercises(botId: string): Promise<number> {
+  const result = await query(
+    'UPDATE bot_memory_exercises SET deleted_at = NOW() WHERE bot_id = $1 AND deleted_at IS NULL',
+    [botId],
+  );
+  return result.rowCount ?? 0;
 }
 
 // ── Tier 2: Condensed Skill Paragraphs ──

@@ -290,6 +290,42 @@ router.delete('/:id/external-activity', userRateLimit('write'), async (req: Requ
   res.json({ success: true, deleted_count: result.rowCount ?? 0 });
 });
 
+// ── L1 Exercise Deletion (non-school bots only) ──
+// Users can prune bad L1 memories from platform interactions.
+// School-enrolled bots are blocked — deleting exercises during training would let users game credibility.
+
+router.delete('/:id/exercises/:exerciseId', userRateLimit('write'), async (req: Request, res: Response) => {
+  const bot = await botService.getBotDetail(req.user!.userId, req.params.id);
+  if (bot.school_id) {
+    res.status(403).json({ error: 'Cannot delete exercises while bot is enrolled in a school' });
+    return;
+  }
+  const deleted = await memoryService.deleteExercise(req.params.id, req.params.exerciseId);
+  if (!deleted) {
+    res.status(404).json({ error: 'Exercise not found' });
+    return;
+  }
+  res.json({ success: true });
+});
+
+router.delete('/:id/exercises', userRateLimit('write'), async (req: Request, res: Response) => {
+  const bot = await botService.getBotDetail(req.user!.userId, req.params.id);
+  if (bot.school_id) {
+    res.status(403).json({ error: 'Cannot delete exercises while bot is enrolled in a school' });
+    return;
+  }
+  const count = await memoryService.deleteAllExercises(req.params.id);
+  logAudit({
+    userId: req.user!.userId,
+    action: 'exercises.delete_all',
+    entityType: 'bot',
+    entityId: req.params.id,
+    metadata: { deleted_count: count },
+    ipAddress: req.ip,
+  });
+  res.json({ success: true, deleted_count: count });
+});
+
 // ── Phone-Home Token ──
 // Generate a write-only token for self-hosted bots to report activity
 router.post('/:id/phone-home-token', userRateLimit('write'), async (req: Request, res: Response) => {
