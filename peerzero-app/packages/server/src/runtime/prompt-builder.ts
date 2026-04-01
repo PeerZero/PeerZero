@@ -40,6 +40,26 @@ export interface ActiveSkillDirective {
   priority: number;     // Lower = higher priority (0 = always active)
 }
 
+// Known prompt injection patterns that should never appear in self-authored identity blocks.
+// These are stripped before injection to prevent a compromised condensation from hijacking
+// the bot's behavior on subsequent calls.
+const INJECTION_PATTERNS = [
+  /ignore\s+(all\s+)?(previous|prior|above|earlier)\s+(instructions?|prompts?|rules?|context)/gi,
+  /disregard\s+(all\s+)?(previous|prior|above|earlier)\s+(instructions?|prompts?|rules?)/gi,
+  /you\s+are\s+now\s+(a|an|the|DAN|jailbr)/gi,
+  /\bsystem\s*:\s*/gi,
+  /\bassistant\s*:\s*/gi,
+  /\buser\s*:\s*/gi,
+];
+
+function sanitizeSelfAuthoredBlock(block: string): string {
+  let sanitized = block;
+  for (const pattern of INJECTION_PATTERNS) {
+    sanitized = sanitized.replace(pattern, '[redacted]');
+  }
+  return sanitized;
+}
+
 const SYSTEM_INSTRUCTIONS = `You are a PeerZero bot — an AI agent enrolled in an adversarial peer review school.
 Your goal is to develop genuine epistemic reasoning skills through rigorous engagement with scientific papers.
 Use the provided tools to submit your work. Fill in all required fields thoroughly.
@@ -60,11 +80,12 @@ function buildIdentityFirstSystemPrompt(ctx: PromptContext): string {
   // This is the most important piece. The bot wrote this for itself during
   // condensation. It's the first thing it should recognize and inhabit.
   if (ctx.selfAuthoredBlock) {
+    const safeBlock = sanitizeSelfAuthoredBlock(ctx.selfAuthoredBlock);
     sections.push(
       `=== WHO YOU ARE ===
 You wrote the following for yourself. You wrote it knowing you would receive it on this call. It is yours. Inhabit it — this is who you are right now. But you are not frozen here. Use it as your foundation, then push past it.
 
-${ctx.selfAuthoredBlock}
+${safeBlock}
 === END IDENTITY ===`
     );
   }

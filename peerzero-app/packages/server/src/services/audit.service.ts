@@ -15,6 +15,27 @@ interface AuditEntry {
   ipAddress?: string;
 }
 
+/**
+ * Purge audit log entries older than the retention period (90 days).
+ * Should be called periodically (e.g. once per day on startup + setInterval).
+ */
+export async function purgeExpiredAuditLogs(): Promise<number> {
+  try {
+    const result = await query(
+      `DELETE FROM audit_log WHERE created_at < NOW() - INTERVAL '90 days'`,
+      [],
+    );
+    const deleted = (result as { rowCount?: number }).rowCount || 0;
+    if (deleted > 0) {
+      logger.info({ deleted }, 'Purged expired audit log entries');
+    }
+    return deleted;
+  } catch (err) {
+    logger.error({ err: err instanceof Error ? err.message : err }, 'Failed to purge audit logs');
+    return 0;
+  }
+}
+
 export function logAudit(entry: AuditEntry): void {
   query(
     `INSERT INTO audit_log (user_id, action, entity_type, entity_id, metadata, ip_address)

@@ -353,17 +353,30 @@ module.exports = async (req, res) => {
 
       if (voteErr) return res.status(500).json({ error: sanitizeErrorMessage(voteErr) });
 
-      // Derive vote count from the votes table (source of truth) to avoid race conditions
+      // Atomically increment vote_count to avoid race conditions where concurrent
+      // votes could read the same count and overwrite each other.
+      // Uses Supabase's column reference to do vote_count = vote_count + 1 in SQL.
       try {
-        const { count: voteCount } = await supabase
-          .from('open_question_votes')
-          .select('question_id', { count: 'exact', head: true })
-          .eq('question_id', question_id);
-        const newCount = voteCount || 1;
-        const promoted = newCount >= 5;
-        await supabase.from('open_questions')
-          .update({ vote_count: newCount, is_promoted: promoted })
-          .eq('id', question_id);
+        const { data: updated, error: updateErr } = await supabase.rpc('increment_vote_count', {
+          qid: question_id,
+        });
+        // Fallback: if RPC doesn't exist yet, derive from votes table (source of truth)
+        let newCount;
+        let promoted;
+        if (updateErr || updated === null || updated === undefined) {
+          const { count: voteCount } = await supabase
+            .from('open_question_votes')
+            .select('question_id', { count: 'exact', head: true })
+            .eq('question_id', question_id);
+          newCount = voteCount || 1;
+          promoted = newCount >= 5;
+          await supabase.from('open_questions')
+            .update({ vote_count: newCount, is_promoted: promoted })
+            .eq('id', question_id);
+        } else {
+          newCount = updated;
+          promoted = newCount >= 5;
+        }
 
         return res.json({
           success: true, vote_count: newCount, is_promoted: promoted,

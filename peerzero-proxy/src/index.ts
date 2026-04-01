@@ -60,6 +60,12 @@ function isRateLimited(rateLimitKey: string): boolean {
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
+    // Validate that ALLOWED_ORIGINS is configured (prevents accidental open CORS)
+    if (!env.ALLOWED_ORIGINS) {
+      console.error("ALLOWED_ORIGINS not configured — rejecting request. Set it in wrangler.toml or as a secret.");
+      return jsonError("Proxy misconfigured: CORS origins not set", 500, request, env);
+    }
+
     // CORS preflight
     if (request.method === "OPTIONS") {
       return new Response(null, {
@@ -106,8 +112,8 @@ export default {
     // ── Parse request ──────────────────────────────────────────────────────
     const provider = (request.headers.get("X-LLM-Provider") || "anthropic").toLowerCase();
     const llmKey = request.headers.get("X-LLM-Key");
-    if (!llmKey) {
-      return jsonError("Missing X-LLM-Key header", 400, request, env);
+    if (!llmKey || llmKey.length > 1024) {
+      return jsonError("Missing or invalid X-LLM-Key header", 400, request, env);
     }
 
     const providerUrl = PROVIDER_URLS[provider];
@@ -148,8 +154,10 @@ export default {
         if (typeof firstContent === "string") {
           // Simple string content — concatenate
           messages[0].content = preamble + "\n\n" + firstContent;
-        } else if (Array.isArray(firstContent)) {
-          // Multimodal array content — prepend preamble as a separate text block
+        } else if (Array.isArray(firstContent) && firstContent.every(
+          (item: unknown) => typeof item === "object" && item !== null && "type" in (item as Record<string, unknown>)
+        )) {
+          // Multimodal array content — validate structure before prepending preamble
           (firstContent as unknown[]).unshift({ type: "text", text: preamble + "\n\n" });
         } else {
           // Unexpected type — preserve original content alongside preamble

@@ -67,8 +67,10 @@ def _rank_by_relevance(papers: list, paper_context: str, llm_fast) -> list:
         f"{p.get('title', '')[:80]} (cited: {p.get('citationCount') or '?'})"
         for i, p in enumerate(papers)
     )
+    from .utils import sanitize_untrusted
+    safe_context = sanitize_untrusted(paper_context, tag="research_topic")
     prompt = (
-        f"Research topic: {paper_context}\n\n"
+        f"Research topic: {safe_context}\n\n"
         f"Rank these papers by RELEVANCE to the research topic. "
         f"Return the numbers of the 12 most relevant papers as a JSON array, "
         f"most relevant first.\n\nPapers:\n{paper_list}\n\n"
