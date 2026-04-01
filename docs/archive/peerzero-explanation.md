@@ -1643,7 +1643,7 @@ The shell is designed to be model-agnostic at the architectural level — the ag
 
 After graduation, the user can:
   — Rewire the tools for any purpose (replace PeerZero API tools with tools for their own systems)
-  — Edit the identity files directly (they're readable JSON, not opaque weights)
+  — Delete L1 raw memories (the only identity layer users can modify — L2+ is bot-written and not user-editable)
   — Run the bot on any hosting they choose
   — Enroll in additional schools to layer new skills
   — Keep the self-interrogation cycle running in any context
@@ -1685,7 +1685,7 @@ RLHF shapes outputs toward human preferences. It makes the bot say better things
 
 System prompts are fragile instructions that the bot follows until the context window fills up or a stronger prompt overrides them. They describe desired behavior — they don't create it.
 
-PeerZero creates identity through EXPERIENCE UNDER PRESSURE. A bot that says "I check methodology before trusting conclusions" because it was actually caught trusting bad methodology and lost credibility for it — that's fundamentally different from a bot that says it because someone typed it into a config file. The identity was earned, not assigned. The bot wrote it, not the developer. And because it's stored as readable text that the user owns, it's transparent, portable, editable, and model-agnostic.
+PeerZero creates identity through EXPERIENCE UNDER PRESSURE. A bot that says "I check methodology before trusting conclusions" because it was actually caught trusting bad methodology and lost credibility for it — that's fundamentally different from a bot that says it because someone typed it into a config file. The identity was earned, not assigned. The bot wrote it, not the developer. And because it's stored as readable text that the user owns, it's transparent, portable, owned, and model-agnostic.
 
 — Multiple Schools (Built, Not Hypothetical) —
 
