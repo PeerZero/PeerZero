@@ -87,5 +87,6 @@ Index of documentation files. Each document covers a focused topic — load only
 | Document | What It Covers |
 |----------|---------------|
 | [PeerZero Explanation](archive/peerzero-explanation.md) | Canonical full-length reference (151KB) — the master document from which other docs were split |
+| [PeerZero Simplified](archive/peerzero-simplified.md) | Shareable high-level introduction — send this to anyone curious about the system |
 | [Phase 3 Plan](archive/plan-phase3.md) | Original implementation plan for hosted runtime, classes, skill progress (completed) |
 | [Phase 4 + Load Test Plan](archive/plan-phase4-loadtest.md) | Platform SDK and performance testing plan (SDK completed, load tests pending) |
