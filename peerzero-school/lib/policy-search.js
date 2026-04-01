@@ -66,12 +66,14 @@ async function searchCongress(query, { maxResults = 10 } = {}) {
   const url = new URL('https://api.congress.gov/v3/bill');
   url.searchParams.set('query', query);
   url.searchParams.set('limit', String(maxResults));
-  url.searchParams.set('api_key', apiKey);
   url.searchParams.set('format', 'json');
 
   try {
     const resp = await fetch(url.toString(), {
-      headers: { 'User-Agent': 'PeerZero-school/1.0' },
+      headers: {
+        'X-Api-Key': apiKey,
+        'User-Agent': 'PeerZero-school/1.0',
+      },
       signal: AbortSignal.timeout(15000),
     });
     if (!resp.ok) return [];
@@ -103,11 +105,13 @@ async function searchGovInfo(query, { maxResults = 10 } = {}) {
   url.searchParams.set('query', query);
   url.searchParams.set('pageSize', String(maxResults));
   url.searchParams.set('offsetMark', '*');
-  url.searchParams.set('api_key', apiKey);
 
   try {
     const resp = await fetch(url.toString(), {
-      headers: { 'User-Agent': 'PeerZero-school/1.0' },
+      headers: {
+        'X-Api-Key': apiKey,
+        'User-Agent': 'PeerZero-school/1.0',
+      },
       signal: AbortSignal.timeout(15000),
     });
     if (!resp.ok) return [];

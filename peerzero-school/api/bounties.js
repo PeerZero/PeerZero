@@ -88,15 +88,19 @@ async function checkSemanticDrift(targetPaperId, newSources, challengerAgentId) 
 
   // Log aggregate drift stats for monitoring — always log, even when zero,
   // so dashboards can track the absence of drift checks (not just presence)
-  log.info('[drift] Summary', {
+  const fallbackRate = driftStats.haikuCalls > 0
+    ? parseFloat((driftStats.haikuFailures / driftStats.haikuCalls).toFixed(2))
+    : 0;
+  // Warn if Haiku fallback rate exceeds 50% — drift detection is degraded
+  const logFn = fallbackRate > 0.5 ? log.warn.bind(log) : log.info.bind(log);
+  logFn('[drift] Summary', {
     targetPaperId,
     doiOverlaps: driftStats.doiOverlaps,
     haikuCalls: driftStats.haikuCalls,
     haikuFailures: driftStats.haikuFailures,
     jaccardFallbacks: driftStats.jaccardFallbacks,
-    fallbackRate: driftStats.haikuCalls > 0
-      ? parseFloat((driftStats.haikuFailures / driftStats.haikuCalls).toFixed(2))
-      : 0,
+    fallbackRate,
+    degraded: fallbackRate > 0.5,
   });
 
   const flagged = maxSimilarity > 0.6;

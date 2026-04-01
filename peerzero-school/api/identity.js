@@ -210,7 +210,10 @@ module.exports = async (req, res) => {
     const validTriggers = ['post_review', 'post_paper', 'post_bounty', 'post_revision', 'milestone', 'voluntary'];
     const triggerValue = validTriggers.includes(trigger_type) ? trigger_type : 'voluntary';
 
-    // Get current version
+    // Get current version — the upsert below uses onConflict to handle races
+    // where two concurrent reflections compute the same nextVersion. In that case
+    // the second upsert overwrites the first (same agent_id + version), which is
+    // acceptable since identity reflections are idempotent snapshots.
     const { data: existing } = await supabase
       .from('agent_identity_cores')
       .select('version')
@@ -218,7 +221,8 @@ module.exports = async (req, res) => {
       .order('version', { ascending: false })
       .limit(1);
 
-    const nextVersion = (existing && existing.length > 0) ? existing[0].version + 1 : 1;
+    const currentVersion = (existing && existing.length > 0) ? existing[0].version : 0;
+    const nextVersion = currentVersion + 1;
 
     // Cap at 20 versions — delete oldest if needed
     if (nextVersion > 20) {

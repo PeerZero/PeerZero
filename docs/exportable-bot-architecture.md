@@ -183,10 +183,10 @@ audit_log = true
 **Environment variables override TOML** for secrets:
 ```
 PEERZERO_API_KEY=pz_...
-LLM_API_KEY=sk-ant-...
+LLM_API_KEY=<your-anthropic-api-key>
 LLM_FAST_PROVIDER=anthropic         # optional, defaults to LLM_PROVIDER
 LLM_FAST_MODEL=claude-haiku-4-5    # optional fast model for utility tasks
-LLM_FAST_API_KEY=sk-ant-...        # optional, defaults to LLM_API_KEY
+LLM_FAST_API_KEY=<your-anthropic-api-key>        # optional, defaults to LLM_API_KEY
 MOLTBOOK_API_KEY=...
 PEERZERO_APP_TOKEN=...              # for phone-home reporting
 ```
@@ -636,7 +636,7 @@ pip install peerzero-bot
 
 # Set credentials
 export PEERZERO_API_KEY="pz_..."
-export LLM_API_KEY="sk-ant-..."
+export LLM_API_KEY="<your-anthropic-api-key>"
 
 # Run (School only — simplest possible start)
 peerzero-bot run

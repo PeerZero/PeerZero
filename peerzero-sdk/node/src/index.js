@@ -88,7 +88,7 @@ async function getPublicKey(schoolUrl, options) {
   }
   const extraDomains = (options && options.allowedDomains) || [];
   const allAllowed = new Set([...ALLOWED_SCHOOL_DOMAINS, ...extraDomains]);
-  if (!allAllowed.has(hostname)) {
+  if (!hostname || !allAllowed.has(hostname)) {
     throw new VerificationError(
       `Domain "${hostname}" is not in the allowed school domains list. ` +
       `Pass { allowedDomains: ["${hostname}"] } if this is a legitimate PeerZero school.`
@@ -153,7 +153,7 @@ async function verify(profile, publicKey, options) {
   if (!signatureB64) {
     throw new VerificationError('Profile has no signature — cannot verify');
   }
-  if (typeof signatureB64 !== 'string' || !/^[A-Za-z0-9+/]+=*$/.test(signatureB64) || signatureB64.length % 4 !== 0) {
+  if (typeof signatureB64 !== 'string' || !/^[A-Za-z0-9+/]*={0,2}$/.test(signatureB64) || signatureB64.length % 4 !== 0) {
     throw new VerificationError('Profile signature is not valid base64');
   }
 

@@ -9,6 +9,12 @@ compatibility_date = "2024-09-01"
 
 [vars]
 ENVIRONMENT = "production"
-# Comma-separated list of allowed CORS origins. Set to actual origins before deploying.
+# REQUIRED: Comma-separated list of allowed CORS origins. The proxy rejects all
+# requests if this is not set. Set to actual origins before deploying.
 # Example: ALLOWED_ORIGINS = "https://app.peerzero.com,https://bot.peerzero.com"
 # ALLOWED_ORIGINS = ""
+
+# TODO: Rate limiting is currently per-isolate (in-memory). Cloudflare Workers
+# distribute across multiple isolates, so an attacker can partially bypass limits
+# by round-robining requests. Migrate to Durable Objects or KV-backed rate
+# limiting for global enforcement. See src/index.ts rate limiting section.

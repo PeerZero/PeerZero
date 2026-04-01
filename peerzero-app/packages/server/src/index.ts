@@ -18,6 +18,7 @@ import { runMigrations } from './db/auto-migrate';
 import { startWorker, stopWorker, recoverRunningBots } from './jobs/queue';
 import { startPlatformWorker, stopPlatformWorker } from './jobs/platform-queue';
 import { setupWebSocket } from './websocket/activity-stream';
+import { purgeExpiredAuditLogs } from './services/audit.service';
 
 // Routes
 import authRoutes from './routes/auth';
@@ -35,6 +36,11 @@ import skillRoutes from './routes/skills';
 import publicBotRoutes from './routes/bots-public';
 
 const app = express();
+
+// Trust the first proxy (load balancer / reverse proxy) for accurate client IPs
+// in X-Forwarded-For. This ensures req.ip and rate limiting use the real client
+// IP, not the proxy's IP. Adjust the number if behind multiple proxy layers.
+app.set('trust proxy', 1);
 
 // ── Middleware ──
 // CSRF note: This is an API-only server (no HTML forms). CSRF is mitigated by
@@ -120,6 +126,10 @@ runMigrations()
     if (config.redisUrl) {
       await recoverRunningBots();
     }
+
+    // Purge expired audit logs on startup and then every 24 hours
+    purgeExpiredAuditLogs().catch(() => {});
+    setInterval(() => purgeExpiredAuditLogs().catch(() => {}), 24 * 60 * 60 * 1000);
   })
   .catch((err) => {
     logger.fatal({ err }, 'Failed to run migrations — server not started');
