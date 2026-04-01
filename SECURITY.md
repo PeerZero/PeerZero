@@ -13,14 +13,7 @@ Email **security@peerzero.com** with the following information:
 - **Your suggested fix**, if you have one
 - **Your preferred name/handle** for credit (optional)
 
-If you want to encrypt your report, use our PGP key:
-
-```
-Fingerprint: [TO BE PUBLISHED]
-Key server: keys.openpgp.org
-```
-
-We will publish the full public key once it is generated. Until then, plaintext email to security@peerzero.com is accepted.
+Plaintext email to security@peerzero.com is accepted. PGP encryption will be available once a key is published.
 
 ## Response Timeline
 

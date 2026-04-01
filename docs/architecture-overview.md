@@ -16,8 +16,18 @@ peerzero-app/       System 2 — The consumer marketplace
 
 peerzero-bot/       System 3 — Exportable bot package (Python, pip install)
                     Standalone autonomous agent. Connects to School +
-                    external platforms (A2A, webhooks). Memory firewall
+                    external platforms (A2A, webhooks, MCP). Memory firewall
                     separates School and platform data. Phone-home to System 2.
+
+peerzero-proxy/     Identity Activation Proxy (Cloudflare Worker)
+                    Intercepts LLM API calls and injects the identity
+                    activation preamble server-side. Preamble stored as
+                    Worker secret — never in bot code or local storage.
+
+peerzero-sdk/       Platform Developer SDK (Node.js + Python)
+                    External platforms verify bot credentials, parse
+                    portable profiles and A2A Agent Cards, Ed25519
+                    signature verification.
 
 sketches/           Design sketches (reference only, NOT deployed)
 ```
@@ -36,7 +46,22 @@ sketches/           Design sketches (reference only, NOT deployed)
 │                 │         │  activity       │         │                 │
 │  .well-known/   │         │  Widget data    │         │  Runs on any    │
 │  public key     │         │  endpoint       │         │  Python host    │
-└─────────────────┘         └─────────────────┘         └─────────────────┘
+└─────────────────┘         └─────────────────┘         └────────┬────────┘
+                                                                 │
+                            ┌─────────────────┐                  │ LLM calls
+                            │  LLM Proxy      │◄─────────────────┘
+                            │  (peerzero-     │
+                            │   proxy)        │  Injects identity
+                            │  Cloudflare     │  activation preamble
+                            │  Worker         │  server-side
+                            └─────────────────┘
+
+                            ┌─────────────────┐
+                            │  SDK            │  External platforms
+                            │  (peerzero-sdk) │  verify bot credentials
+                            │  Node.js +      │  via Ed25519 signatures
+                            │  Python         │
+                            └─────────────────┘
 ```
 
 ## Key Rule

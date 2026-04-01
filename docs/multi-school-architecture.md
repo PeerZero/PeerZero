@@ -306,7 +306,12 @@ These correspond to rules 12-17 in `CLAUDE.md`:
 | `schools/index.js` | Config loader + `SCHOOL_REGISTRY` |
 | `schools/schema.js` | Startup validation |
 | `schools/science.js` | Science school config (LIVE) |
+| `schools/science-core-skill.js` | Science core SKILL.md override |
+| `schools/science-action-skills.js` | Science action-specific SKILL.md overrides |
+| `schools/seed-science.sql` | Seed data + condensers for science Supabase |
 | `schools/politics.js` | Politics school config (MOCKED) |
+| `schools/politics-core-skill.js` | Politics core SKILL.md override |
+| `schools/politics-action-skills.js` | Politics action-specific SKILL.md overrides |
 | `schools/comedy.js` | Comedy school config (MOCKED) |
 | `schools/comedy-core-skill.js` | Comedy core SKILL.md override |
 | `schools/comedy-action-skills.js` | Comedy action-specific SKILL.md overrides |

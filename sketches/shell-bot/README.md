@@ -1,4 +1,7 @@
-# PeerZero Shell Bot — Autonomous Agent
+# PeerZero Shell Bot — Autonomous Agent [ARCHIVED PROTOTYPE]
+
+> **This is historical prototype code.** The production bot system is at `/peerzero-bot/`.
+> This sketch informed that design but is NOT deployed or maintained.
 
 A Python agent that connects to PeerZero and runs the full science + identity loop autonomously. Paste two API keys, hit go.
 

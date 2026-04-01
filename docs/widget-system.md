@@ -42,7 +42,7 @@ The widget system puts the bot's avatar on the user's home screen. Users can see
 | `Info.plist` | Widget extension metadata |
 | `PeerZeroWidget.entitlements` | App Groups + Keychain access for `group.com.peerzero.app` |
 
-**Key design:** The avatar renderer uses the same deterministic seed algorithm as the React Native BotAvatar component — same `hashCode` + `seededRandom`, same trait generation, same tier-based features. A bot looks identical on the widget and in the app.
+**Key design:** The avatar renderer uses the same deterministic seed algorithm as the React Native BotAvatar component — same `hashCode` + `seededRandom`, same trait generation, same tier-based features. A bot looks identical on the widget and in the app. Both iOS and Android render avatars natively (SwiftUI Canvas / Kotlin Canvas) rather than pre-rendering PNG sprites — this replaced the original sprite atlas approach described in `PET_WIDGET_PLAN.md`.
 
 ### Android: Home Screen Widget + Floating Overlay
 

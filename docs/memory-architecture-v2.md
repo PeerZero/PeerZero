@@ -305,7 +305,8 @@ instance. L5 is shared and grows with each graduation.
 
 **Bot-side (Python):**
 - `peerzero-bot/peerzero_bot/memory/manager.py` -- Layer storage + context builder
-- `peerzero-bot/peerzero_bot/agent.py` -- Condenser execution + cascade logic
+- `peerzero-bot/peerzero_bot/_school_condensation.py` -- SchoolCondensationMixin (L1→L5 both tracks)
+- `peerzero-bot/peerzero_bot/_platform_condensation.py` -- PlatformCondensationMixin (L1→L3 capped)
 - `peerzero-bot/peerzero_bot/llm_client.py` -- LLM provider abstraction (extracted from agent.py)
 - `peerzero-bot/peerzero_bot/prompts/builder.py` -- Condenser prompt templates
 
@@ -327,8 +328,8 @@ instance. L5 is shared and grows with each graduation.
 | L1 | `school:exercises` | list of dicts |
 | L2 | `school:paragraphs` | list of dicts |
 | L3 | `school:condensed_docs` | list of dicts |
-| L4 | `school:core` (is_master=false) | single dict |
-| L5 | `school:core` (is_master=true) | single dict (locked) |
+| L4 | `school:core` | single dict |
+| L5 | `school:master` | list of dicts (1 per school, locked) |
 
 **Decision Track:**
 
@@ -337,8 +338,8 @@ instance. L5 is shared and grows with each graduation.
 | L1 | `school:exercises` (shared) | list of dicts |
 | L2d | `school:decision_paragraphs` | list of dicts |
 | L3d | `school:decision_condensed_docs` | list of dicts |
-| L4d | `school:decision_core` (is_master=false) | single dict |
-| L5d | `school:decision_core` (is_master=true) | single dict (locked) |
+| L4d | `school:decision_core` | single dict |
+| L5d | `school:decision_master` | list of dicts (1 per school, locked) |
 
 ### Condenser Thresholds
 
@@ -470,3 +471,50 @@ In **shipped mode**, exercises route to the platform L1 pipeline (capped
 at L3). Planning lessons still condense into L2d/L3d platform knowledge
 but cannot reach core/master decision identity. This preserves the
 security invariant: L4/L5 are school-exclusive.
+
+---
+
+## Platform Memory Storage Keys (Bot-Side)
+
+The bot stores platform memory separately from school memory:
+
+**Platform Learning Track:**
+
+| Layer | Storage Key | Type | Max |
+|-------|------------|------|-----|
+| L1 | `platform:exercises` | list of dicts | 100 entries |
+| L2 | `platform:paragraphs` | list of dicts | 20 per track |
+| L3 | `platform:condensed_docs` | list of dicts | 3 per track |
+
+**Platform Decision Track:**
+
+| Layer | Storage Key | Type | Max |
+|-------|------------|------|-----|
+| L1 | `platform:exercises` (shared) | list of dicts | 100 entries |
+| L2d | `platform:decision_paragraphs` | list of dicts | 20 per track |
+| L3d | `platform:decision_condensed_docs` | list of dicts | 3 per track |
+
+---
+
+## App-Side Memory (System 2)
+
+The app server (`peerzero-app`) manages memory via `memory.service.ts` using
+a 4-tier SQL model. This is a different representation of the same conceptual
+layers:
+
+| Tier | Table | Encrypted? | Notes |
+|------|-------|-----------|-------|
+| 0 | (computed) | N/A | Active Focus — built at runtime from School profile, never persisted |
+| 1 | `bot_memory_exercises` | No | Raw exercises from school/platform actions |
+| 2 | `bot_memory_paragraphs` | Yes (AES-256-GCM) | Condensed skill paragraphs |
+| 3 | `bot_memory_core` | Yes (AES-256-GCM) | Core identity with version tracking (auto-incrementing) |
+
+**Additional app-side tables:**
+- `bot_memory_self_identity` — Caches self-narrative, claimed_values, active_tensions, formed_convictions
+- `bot_memory_self_authored` — Encrypted free-form "inner voice" text the LLM writes for itself after condensation, injected into every prompt
+
+**App vs Bot memory:** The app stores memory in PostgreSQL with encryption at rest.
+The bot stores memory in local files or SQLite with owner-only permissions (0o600).
+Both systems enforce the L3 platform cap independently. Condensed identity layers
+(L2+) are redacted from user-facing APIs and the BrainScreen — only the bot's
+internal reasoning sees this text.
