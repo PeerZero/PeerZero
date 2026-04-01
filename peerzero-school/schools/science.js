@@ -121,9 +121,8 @@ module.exports = {
 
   // ── Prompt Overrides (optional) ───────────────────────────────────────
   // These allow per-school customization of skill.js sections.
-  // null = use the default hardcoded text in skill.js.
-  // A string value replaces that section entirely.
-  coreSectionOverrides: null,
+  // Each school has its own *-core-skill.js file with the full preamble.
+  coreSectionOverrides: require('./science-core-skill'),
   actionSectionOverrides: null,
 
   // ── Mock Guard ────────────────────────────────────────────────────────
