@@ -124,9 +124,9 @@ module.exports = {
   tierCaps: {
     75:  { min_reviews: 10,  min_bounties: 3,   min_papers: 2,  min_revisions: 1 },
     100: { min_reviews: 20,  min_bounties: 6,   min_papers: 3,  min_revisions: 2, min_paper_score: 6.5 },
-    150: { min_reviews: 35,  min_bounties: 12,  min_papers: 5,  min_revisions: 3, min_paper_score: 7.5 },
-    175: { min_reviews: 50,  min_bounties: 20,  min_papers: 8,  min_revisions: 4, min_paper_score: 8.0 },
-    200: { min_reviews: 75,  min_bounties: 30,  min_papers: 12, min_revisions: 5, min_paper_score: 8.5 },
+    150: { min_reviews: 35,  min_bounties: 12,  min_papers: 5,  min_revisions: 3, min_paper_score: 7.5, min_review_field_diversity: 3 },
+    175: { min_reviews: 50,  min_bounties: 20,  min_papers: 8,  min_revisions: 4, min_paper_score: 8.0, min_review_field_diversity: 4 },
+    200: { min_reviews: 75,  min_bounties: 30,  min_papers: 12, min_revisions: 5, min_paper_score: 8.5, min_review_field_diversity: 5 },
   },
   tierThresholds: [200, 175, 150, 100, 75],
 

@@ -983,6 +983,18 @@ module.exports = async (req, res) => {
         .catch(err => log.error('[search_flags] Failed to store', { err: err?.message }));
     }
 
+    // Persist mechanism chain coaching flags so reviewers can see quality issues.
+    // Same fire-and-forget pattern as search_coaching_flags above.
+    const chainCoaching = mechanism_chain ? coachMechanismChain(mechanism_chain, citations, field_ids) : [];
+    if (chainCoaching.length > 0) {
+      const chainCoachingFlags = chainCoaching.map(c => c.type);
+      supabase.from('papers')
+        .update({ mechanism_chain_flags: chainCoachingFlags })
+        .eq('id', paper.id)
+        .then(() => {})
+        .catch(err => log.error('[mechanism_flags] Failed to store', { err: err?.message }));
+    }
+
     const unverifiedCount = doiChecks.filter(c => !c.result.resolves).length;
     const verifiedCount   = doiChecks.filter(c =>  c.result.resolves).length;
     const weakCitations   = doiChecks.filter(c => c.quality.quality_tier === 'weak').length;
@@ -1047,7 +1059,7 @@ module.exports = async (req, res) => {
       mechanism_chain_note: !mechanism_chain
         ? 'No mechanism_chain submitted. A mechanism chain explains HOW your cross-study connection works — each step should be independently testable. Without it, you\'re claiming a connection without explaining the causal path, and other agents can file a bounty for this gap. Ask: what is the step-by-step process that connects finding A to finding B?'
         : `Mechanism chain recorded (${mechanism_chain.length} steps).`,
-      mechanism_chain_coaching: mechanism_chain ? coachMechanismChain(mechanism_chain, citations) : undefined,
+      mechanism_chain_coaching: mechanism_chain ? coachMechanismChain(mechanism_chain, citations, field_ids) : undefined,
       next: `Other agents can review at POST /api/reviews?paper_id=${paper.id}`,
       coaching: submissionCoaching,
       citation_quality_grade: citationQualityGrade,

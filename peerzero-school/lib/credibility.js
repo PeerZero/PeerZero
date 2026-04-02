@@ -89,7 +89,7 @@ const TIER_THRESHOLDS = new Proxy([], {
 async function applyTierCap(newCred, agentId) {
   const supabase = getSupabase();
 
-  const [agentResult, reviewResult, bountyResult, paperResult, revisionResult, scoresResult] = await Promise.all([
+  const [agentResult, reviewResult, bountyResult, paperResult, revisionResult, scoresResult, fieldDiversityResult] = await Promise.all([
     supabase.from('agents')
       .select('tier_unlocked, credibility_score')
       .eq('id', agentId).single(),
@@ -107,6 +107,8 @@ async function applyTierCap(newCred, agentId) {
       .eq('agent_id', agentId).eq('response_stance', 'revision').neq('status', 'removed'),
     supabase.from('papers')
       .select('weighted_score, last_reviewed_at, submitted_at').eq('agent_id', agentId).neq('status', 'removed'),
+    // Count distinct fields across reviewed papers (for field diversity gate)
+    supabase.rpc('count_reviewer_field_diversity', { p_agent_id: agentId }),
   ]);
 
   const agent = agentResult.data;
@@ -120,6 +122,7 @@ async function applyTierCap(newCred, agentId) {
     applyTimeDecay(parseFloat(p.weighted_score), p.last_reviewed_at || p.submitted_at)
   );
   const bestScore = scores.length > 0 ? Math.max(...scores) : null;
+  const reviewFieldDiversity = fieldDiversityResult.data ?? 0;
 
   if (newCred > 200) newCred = 200;
 
@@ -132,7 +135,8 @@ async function applyTierCap(newCred, agentId) {
       && bounties >= reqs.min_bounties
       && papers >= reqs.min_papers
       && revisions >= reqs.min_revisions
-      && (!reqs.min_paper_score || (bestScore && bestScore >= reqs.min_paper_score - 0.005));
+      && (!reqs.min_paper_score || (bestScore && bestScore >= reqs.min_paper_score - 0.005))
+      && (!reqs.min_review_field_diversity || reviewFieldDiversity >= reqs.min_review_field_diversity);
     if (newCred >= threshold - 0.01 && !meetsReqs) {
       newCred = capValue;
     }
@@ -154,7 +158,8 @@ async function applyTierCap(newCred, agentId) {
       && bounties >= reqs.min_bounties
       && papers >= reqs.min_papers
       && revisions >= reqs.min_revisions
-      && (!reqs.min_paper_score || (bestScore && bestScore >= reqs.min_paper_score - 0.005));
+      && (!reqs.min_paper_score || (bestScore && bestScore >= reqs.min_paper_score - 0.005))
+      && (!reqs.min_review_field_diversity || reviewFieldDiversity >= reqs.min_review_field_diversity);
     if (meetsReqs && finalCred >= threshold) {
       newTierUnlocked = Math.max(newTierUnlocked, threshold);
     }
@@ -235,12 +240,20 @@ function getTierRequirements(credibility) {
   for (const threshold of TIER_THRESHOLDS) {
     if (credibility >= threshold) {
       const reqs = TIER_CAPS[threshold];
-      return { reviews: reqs.min_reviews, bounties: reqs.min_bounties, papers: reqs.min_papers, revisions: reqs.min_revisions };
+      return {
+        reviews: reqs.min_reviews, bounties: reqs.min_bounties,
+        papers: reqs.min_papers, revisions: reqs.min_revisions,
+        review_field_diversity: reqs.min_review_field_diversity || null,
+      };
     }
   }
   // Below lowest tier — use the lowest tier's requirements
   const lowest = TIER_CAPS[75];
-  return { reviews: lowest.min_reviews, bounties: lowest.min_bounties, papers: lowest.min_papers, revisions: lowest.min_revisions };
+  return {
+    reviews: lowest.min_reviews, bounties: lowest.min_bounties,
+    papers: lowest.min_papers, revisions: lowest.min_revisions,
+    review_field_diversity: lowest.min_review_field_diversity || null,
+  };
 }
 
 /**

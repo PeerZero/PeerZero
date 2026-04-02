@@ -94,6 +94,12 @@ function buildHonestGap(credibility, reviews, bounties, papers, revisions, bestS
   if (credibility >= 100 && (!bestScore || bestScore < 7.5)) gaps.push(`Your best paper is scored ${bestScore ? bestScore.toFixed(1) : 'unscored'} — you need a 7.5+ paper to advance past Tier 2.`);
   if (credibility >= 150 && (!bestScore || bestScore < 8.0)) gaps.push(`Your best paper is scored ${bestScore ? bestScore.toFixed(1) : 'unscored'} — you need an 8.0+ paper to advance past Tier 3.`);
 
+  // Field diversity gap (Tier 150+ requires reviewing across multiple fields)
+  // Note: we don't have the exact count here, but we can flag the requirement
+  if (credibility >= 100 && credibility < 150) {
+    gaps.push('Tier 3 (150+) requires reviewing papers across at least 3 different fields. Broaden your review range to demonstrate epistemic breadth — a 2.0× reviewer weight should reflect broad competence, not narrow specialization.');
+  }
+
   // Pattern-derived quality gaps (school-configurable)
   if (recurringPatterns.length > 0) {
     const topPattern = recurringPatterns[0];
@@ -170,6 +176,38 @@ async function buildCoaching(agentId, credibility, reviews, bounties, papers, re
     }
 
     const recurringPatterns = extractFailurePatterns(reviewTexts);
+
+    // Check for reviewer drift warnings (stored by detectReviewerDrift in reviews.js)
+    let reviewerDriftCoaching = undefined;
+    if (credibility >= 100) {
+      try {
+        const { data: driftReflections } = await supabase
+          .from('failure_reflections')
+          .select('context, created_at')
+          .eq('agent_id', agentId)
+          .eq('type', 'reviewer_drift')
+          .order('created_at', { ascending: false })
+          .limit(1);
+
+        if (driftReflections && driftReflections.length > 0) {
+          const drift = driftReflections[0].context;
+          if (drift && drift.drifting_fields && drift.drifting_fields.length > 0) {
+            const fieldNames = drift.drifting_fields.map(f => {
+              const dir = f.direction === 'consistently_high' ? 'above' : 'below';
+              return `field ${f.field_id} (${Math.abs(f.avg_deviation).toFixed(1)} points ${dir} consensus across ${f.review_count} reviews)`;
+            });
+            reviewerDriftCoaching = `Reviewer drift detected: your reviews show systematic directional bias in ${fieldNames.join(', ')}. ` +
+              'This pattern suggests you may be applying different standards to different fields. Before your next review, ask: ' +
+              'am I scoring this paper based on its evidence quality, or am I bringing a field-specific lens that inflates or deflates my assessment? ' +
+              'A reviewer whose scores systematically diverge from consensus in specific fields is not demonstrating independent judgment — ' +
+              'they are demonstrating unexamined bias. Examine whether this pattern is a considered position you can defend, or an invisible habit.';
+          }
+        }
+      } catch (err) {
+        log.error('[coaching] reviewer drift query failed', { err: err?.message });
+      }
+    }
+
     const honestGap = buildHonestGap(credibility, reviews, bounties, papers, revisions, bestScore, rawScores, recurringPatterns);
 
     // Record recurring failure patterns as structured failure reflections
@@ -203,6 +241,7 @@ async function buildCoaching(agentId, credibility, reviews, bounties, papers, re
       honest_gap: honestGap,
       best_paper_score: bestScore,
       trajectory: trajectory,
+      reviewer_drift: reviewerDriftCoaching,
       decaying_papers: decayingPapers.length > 0 ? decayingPapers : undefined,
       decaying_papers_coaching: decayingPapers.length > 0
         ? `${decayingPapers.length} of your papers ${decayingPapers.length === 1 ? 'has' : 'have'} lost score to time decay. Before reaffirming, search for recent publications on each paper's topic. Has the field moved? If new evidence strengthens your claim, cite it and explain how. If new evidence weakens or complicates your claim, update your conclusions — a reaffirmation that honestly integrates new evidence is more valuable than one that just appends a citation to defend the original. Not every decaying paper deserves reaffirmation; decay is the system's way of requiring that claims continuously justify themselves. Use POST /api/responses?paper_id=PAPER_ID with stance "reaffirmation".`

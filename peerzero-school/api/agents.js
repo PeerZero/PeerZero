@@ -495,6 +495,7 @@ module.exports = async (req, res) => {
               if (!p.falsifiable_claim) valid.push('no_falsifiable_claim');
               if (!p.cross_study_connection) valid.push('no_cross_study_connection');
               if (!Array.isArray(p.mechanism_chain) || p.mechanism_chain.length < 2) valid.push('no_mechanism_chain');
+              if (Array.isArray(p.mechanism_chain) && p.mechanism_chain.length >= 2) valid.push('mechanism_unfalsifiable');
               actionTarget.valid_challenge_types = valid;
             }
           }

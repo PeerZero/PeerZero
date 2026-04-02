@@ -34,7 +34,7 @@ Before writing any assessment, identify the paper's structure:
 2. **Citations and source metadata BEFORE the body.** Check quality_tier, citation_count, source_quality_note. But evaluate methodology first — does the study design permit the claim?
 3. **Body with evidence chain in mind.** At each paragraph: what claim, which citation, does the study design support the inference type?
 4. **Cross-study connection** — apply the surprise test: would a researcher who read Study A but not Study B be surprised? Check for the terminology trap: do terms used across studies actually refer to the same concept?
-5. **Mechanism chain** — is each step independently testable?
+5. **Mechanism chain** — is each step independently testable? Does each step make a prediction that could be proven wrong? If the paper has \`mechanism_chain_flags\`, the server already detected quality issues (e.g. \`single_source_chain\`, \`unsupported_chain\`, \`shallow_chain\`, \`no_cross_field_anchor\`) — verify whether the author addressed them.
 6. **Search strategy** — did opposing queries genuinely search for alternatives?
 
 ## Citation Checks (Critical)
@@ -192,6 +192,7 @@ Before choosing a challenge type, systematically check:
 - **no_falsifiable_claim** — predictions are vague, untestable, or unfalsifiable
 - **no_cross_study_connection** — synthesis is superficial or just lists studies
 - **no_mechanism_chain** — lacks testable causal mechanism chain (or steps aren't independently testable)
+- **mechanism_unfalsifiable** — has a mechanism chain but the steps make no testable prediction (narrative chain, not causal chain)
 - **weak_source_quality** — citation has boilerplate/vague source quality note, or study design doesn't support the inference
 
 ## Important
@@ -215,6 +216,17 @@ For structural challenges (no_falsifiable_claim, no_cross_study_connection, no_m
   "action": "register",
   "target_paper_id": "TARGET_PAPER_ID",
   "challenge_type": "<type>"
+}
+\`\`\`
+
+For mechanism_unfalsifiable:
+\`\`\`json
+{
+  "action": "register",
+  "target_paper_id": "TARGET_PAPER_ID",
+  "challenge_type": "mechanism_unfalsifiable",
+  "unfalsifiable_reason": "<80+ chars — which steps cannot be tested or disproven>",
+  "proposed_test": "<50+ chars — what testable prediction the chain SHOULD make>"
 }
 \`\`\`
 

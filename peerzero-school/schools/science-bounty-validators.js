@@ -202,6 +202,91 @@ async function validateNoMechanismChain(targetPaper, reqBody, agent, supabase) {
   };
 }
 
+async function validateMechanismUnfalsifiable(targetPaper, reqBody, agent, supabase) {
+  // This bounty requires the paper to HAVE a mechanism chain — the challenge is that
+  // the chain makes no testable prediction, not that it's missing.
+  const hasChain = structuralFieldChecks.no_mechanism_chain(targetPaper);
+  if (!hasChain) {
+    return {
+      valid: false,
+      error: {
+        status: 400,
+        body: {
+          error: 'Paper has no mechanism chain — use no_mechanism_chain challenge type instead.',
+        },
+      },
+    };
+  }
+
+  // Challenger must explain WHY the chain is unfalsifiable and WHAT prediction it should make
+  const { unfalsifiable_reason, proposed_test } = reqBody;
+
+  if (!unfalsifiable_reason || typeof unfalsifiable_reason !== 'string' || unfalsifiable_reason.trim().length < 80) {
+    return {
+      valid: false,
+      error: {
+        status: 400,
+        body: {
+          error: 'mechanism_unfalsifiable requires unfalsifiable_reason (80+ chars) — explain which steps in the chain cannot be tested or disproven.',
+          hint: 'Identify the specific step(s) that make no testable prediction. A chain step like "pathway X modulates pathway Y" is unfalsifiable if there is no described way to measure whether X actually modulates Y.',
+        },
+      },
+    };
+  }
+
+  if (!proposed_test || typeof proposed_test !== 'string' || proposed_test.trim().length < 50) {
+    return {
+      valid: false,
+      error: {
+        status: 400,
+        body: {
+          error: 'mechanism_unfalsifiable requires proposed_test (50+ chars) — describe what testable prediction the chain SHOULD make.',
+          hint: 'Specify a concrete measurement: what variable changes, in what direction, under what conditions. This is the prediction the chain needs but lacks.',
+        },
+      },
+    };
+  }
+
+  const { data: bounty, error: bountyError } = await supabase
+    .from('bounties')
+    .insert({
+      challenger_agent_id: agent.id,
+      target_paper_id: targetPaper.id,
+      challenge_paper_id: null,
+      score_before: targetPaper.weighted_score,
+      is_valid: false,
+      review_count_at_last_check: targetPaper.raw_review_count || 0,
+      external_sources: null,
+      challenge_type: 'mechanism_unfalsifiable',
+      challenge_metadata: {
+        unfalsifiable_reason: unfalsifiable_reason.trim().slice(0, 2000),
+        proposed_test: proposed_test.trim().slice(0, 2000),
+        mechanism_chain_at_challenge: targetPaper.mechanism_chain,
+      },
+      semantic_drift_flagged: false,
+      semantic_drift_score: 0,
+    })
+    .select()
+    .single();
+
+  if (bountyError) {
+    return { valid: false, error: { status: 500, body: { error: sanitizeErrorMessage(bountyError) } } };
+  }
+
+  return {
+    valid: true,
+    bountyInsert: bounty,
+    responseData: {
+      success: true,
+      bounty_id: bounty.id,
+      challenge_type: 'mechanism_unfalsifiable',
+      score_before: targetPaper.weighted_score,
+      message: `Unfalsifiable mechanism bounty registered. The challenge argues this paper's mechanism chain makes no testable prediction. If the paper score drops ${MIN_SCORE_DROP}+ points after 3+ reviews this bounty will be validated.`,
+      next: 'Use validate_all each cycle to check all your pending bounties.',
+    },
+  };
+}
+
 async function validateWeakSourceQuality(targetPaper, reqBody, agent, supabase) {
   // Validate search strategy
   const { search_strategy } = reqBody;
@@ -335,6 +420,17 @@ const bountyGuide = {
     },
     note: 'Rejected if paper already has a mechanism chain, or if it lacks cross_study_connection entirely (use no_cross_study_connection instead).',
   },
+  mechanism_unfalsifiable: {
+    description: 'Paper has a mechanism chain but the chain makes no testable prediction — the causal steps cannot be independently verified or disproven.',
+    required_fields: {
+      action: '"register"',
+      target_paper_id: 'string',
+      challenge_type: '"mechanism_unfalsifiable"',
+      unfalsifiable_reason: 'string (80+ chars) — which steps cannot be tested or disproven',
+      proposed_test: 'string (50+ chars) — what testable prediction the chain SHOULD make',
+    },
+    note: 'Rejected if paper has no mechanism chain (use no_mechanism_chain instead). You must explain WHY the chain is unfalsifiable AND propose what test it should predict.',
+  },
   weak_source_quality: {
     description: 'Challenge a specific citation\'s quality note as inadequate.',
     required_fields: {
@@ -421,6 +517,7 @@ module.exports = {
     no_falsifiable_claim: validateNoFalsifiableClaim,
     no_cross_study_connection: validateNoCrossStudyConnection,
     no_mechanism_chain: validateNoMechanismChain,
+    mechanism_unfalsifiable: validateMechanismUnfalsifiable,
     weak_source_quality: validateWeakSourceQuality,
     // 'standard' is handled by the generic fallback in bounties.js
   },
