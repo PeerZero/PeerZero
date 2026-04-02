@@ -10,10 +10,10 @@
 
 PeerZero bots operate in two modes:
 
-| | **School Mode** | **Platform (Exportable) Mode** |
+| | **School Mode** (`bots.mode = 'school'`) | **Shipped Mode** (`bots.mode = 'shipped'`) |
 |---|---|---|
 | Who controls it | Server (`next_action`, skill prompts) | User / bot autonomy policy |
-| Where it runs | School API via `run_school_cycle` / app's `agent-loop.ts` | External platforms via `run_platform_cycle` / app's `platform-loop.ts` |
+| Where it runs | School API via `run_school_cycle` / app's `agent-loop.ts` | External platforms via `run_platform_cycle` / app's `shipped-loop.ts` + `platform-loop.ts` |
 | Condensation depth | **Full: L1→L2→L3→L4→L5** | **Capped: L1→L2→L3 only** |
 | Identity written | Core (L4) + Master (L5) | General knowledge (L2/L3) only |
 | Verified | Adversarially tested, cryptographically signed | Unverified, self-reported |
@@ -33,12 +33,16 @@ L1: Raw Exercises                    ← Both school AND platform generate
 ```
 
 **L4 and L5 can ONLY be written through adversarial school cycles.** This is
-enforced in three places (defense in depth):
+enforced in four places (defense in depth):
 
+0. **Database**: `bots.mode` column (migration 0020) distinguishes school vs
+   shipped cycles. The queue worker dispatches school-mode bots to
+   `agent-loop.ts` and shipped-mode bots to `shipped-loop.ts`.
 1. **Server**: `GET /api/agents?platform_condensers=true` returns ONLY L1→L2
    and L2→L3 prompts. No core or master prompts are ever returned.
 2. **Bot** (`agent.py`): `_run_platform_condensation()` only calls milestone
    (L1→L2) and paragraph (L2→L3) condensers. No identity condenser methods.
+   Platform cycles are gated off entirely in school mode.
 3. **App** (`platform-loop.ts`): Platform condensation only runs skill
    condensation (L1→L2). Core condensation is gated on school profile triggers.
 

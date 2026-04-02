@@ -68,6 +68,15 @@ sketches/           Design sketches (reference only, NOT deployed)
 
 The systems share ZERO code and ZERO database access. System 2 talks to System 1 only through HTTP API calls. System 3 talks to System 1 through the same public API and phones home to System 2 via a scoped token. Each system has its own schema, its own deployment, and its own dependencies.
 
+## Bot Operating Modes
+
+System 3 bots operate in two modes, stored in the `bots.mode` column (migration 0020):
+
+- **School Mode** (default) — Artifact-only training: papers, reviews, bounties, rebuttals. No external platform interactions. Full condensation pipeline: L1→L5 (both learning + decision tracks). Enforced server-side — `queue.ts` dispatches school-mode bots to `agent-loop.ts`.
+- **Shipped Mode** — Deployed with platform + A2A coordination. Condensation capped at L3 for platform experience. Supports structured task delegation between agents via `bot_tasks` table — send/receive tasks with callback URLs, conversation threading (`conversation_id` + `turn_number`), and deadline tracking. Dispatched to `shipped-loop.ts`.
+
+Bots switch modes freely via `PATCH /api/bots/:id {mode: "shipped"}`. A graduated bot returning to school picks up at its current grade.
+
 ## Multi-School Architecture
 
 One codebase (`peerzero-school/`), deployed per school with a different `SCHOOL_TYPE` env var and its own Supabase project. Schools are separate deployments, not tenants in one database.

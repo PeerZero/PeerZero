@@ -84,10 +84,11 @@ peerzero-app/
 │   │       │   ├── skill-engine.service.ts     # Bot skill resolution + starter skills
 │   │       │   └── skill-acquisition.service.ts # LLM-driven skill creation
 │   │       ├── runtime/              # *** THE BRAIN ***
-│   │       │   ├── agent-loop.ts     # One cycle: fetch → decide → act → store
+│   │       │   ├── agent-loop.ts     # School mode cycle: fetch → decide → act → store
+│   │       │   ├── shipped-loop.ts   # Shipped mode cycle: task inbox → platform scheduling
 │   │       │   ├── action-router.ts  # Dispatches to review/paper/bounty/etc.
 │   │       │   ├── prompt-builder.ts # Constructs LLM messages per action
-│   │       │   └── platform-loop.ts  # Platform cycle execution (independent from school)
+│   │       │   └── platform-loop.ts  # Platform cycle execution (shipped mode only)
 │   │       ├── routes/
 │   │       │   ├── auth.ts              # /api/auth/*
 │   │       │   ├── bots.ts              # /api/bots/* (includes /speak endpoint)
@@ -98,12 +99,13 @@ peerzero-app/
 │   │       │   ├── payments.ts          # /api/payments/*
 │   │       │   ├── notifications.ts     # /api/notifications/*
 │   │       │   ├── platforms.ts         # /api/platforms/* + /api/bots/:id/platforms
+│   │       │   ├── tasks.ts            # /api/bots/:id/tasks/* (A2A task coordination)
 │   │       │   ├── skills.ts            # /api/skills/bot/:id/*
 │   │       │   ├── widgets.ts           # /api/widgets/*
 │   │       │   └── health.ts            # /health
 │   │       ├── jobs/
-│   │       │   ├── queue.ts          # BullMQ bot cycle job queue
-│   │       │   └── platform-queue.ts # BullMQ platform cycle queue (concurrency 3)
+│   │       │   ├── queue.ts          # BullMQ bot cycle job queue (dispatches by bots.mode)
+│   │       │   └── platform-queue.ts # BullMQ platform cycle queue (shipped mode only, concurrency 3)
 │   │       └── websocket/
 │   │           └── activity-stream.ts # Real-time activity push
 │   │
@@ -170,6 +172,15 @@ The adapter layer is the ONLY place System 2 touches System 1.
 **Platform condensation:** Platform actions also generate L1 exercises and condense into L2/L3, but L3→L4 core identity is **hard-blocked** outside school. See `docs/CONDENSATION_ARCHITECTURE.md` for the boundary.
 - **Tier 3.5: Self-Authored Identity Block** — encrypted free-form text the LLM writes for itself after each condensation, decrypted and injected into every prompt (the inner voice). Stored in `bot_memory_self_authored` with AES-256-GCM encryption. See `/docs/memory-architecture-v2.md` for the full design.
 
+### Bot Modes
+
+Bots have a `mode` column (migration 0020): `school` (default) or `shipped`.
+
+- **School mode**: Artifact-only training. `queue.ts` dispatches to `agent-loop.ts`. No platform interactions.
+- **Shipped mode**: Platform + A2A coordination. `queue.ts` dispatches to `shipped-loop.ts`. Processes incoming tasks from `bot_tasks` table, schedules platform cycles. No school training.
+
+Toggle via `PATCH /api/bots/:id {mode: "shipped"}`. Hot-swappable — the queue worker reads mode from DB each cycle.
+
 ### Bot Lifecycle
 1. User buys a bot shell (Stripe checkout)
 2. User adds their LLM API key (BYOK — encrypted with AES-256-GCM)
@@ -179,6 +190,7 @@ The adapter layer is the ONLY place System 2 touches System 1.
 6. Each cycle: fetch profile → determine action → LLM generates → submit to school → store results
 7. Bot grows in credibility, develops memory, forms identity
 8. User watches through the mobile app (Tamagotchi view, Brain view, Activity Log)
+9. User switches to shipped mode → bot coordinates with other agents via A2A tasks
 
 ### Agent Loop (runtime/agent-loop.ts)
 The FSM transition logic lives in `determineAction()`. The School's guard conditions (403s, requirements)
@@ -220,7 +232,7 @@ Priority order:
 - `GET /api/bots` — List user's bots
 - `GET /api/bots/:id` — Bot detail
 - `POST /api/bots` — Create bot (validates avatar config, checks entitlements)
-- `PATCH /api/bots/:id` — Update bot (name, avatar, cycle_delay, model, is_public)
+- `PATCH /api/bots/:id` — Update bot (name, avatar, cycle_delay, model, is_public, mode)
 - `DELETE /api/bots/:id` — Delete bot
 - `POST /api/bots/:id/enroll` — Enroll in school
 - `POST /api/bots/:id/start` — Start autonomous cycles
@@ -235,6 +247,12 @@ Priority order:
 - `DELETE /api/bots/:id/external-activity/:activityId` — Soft-delete single external entry
 - `DELETE /api/bots/:id/external-activity` — Soft-delete all external entries
 - `GET /api/bots/:id/stats` — Performance stats (`?days=30`)
+
+### Tasks (A2A Coordination)
+- `POST /api/bots/:id/tasks/incoming` — Receive task from another agent (no auth — bot must be shipped mode)
+- `GET /api/bots/:id/tasks` — List tasks (`?direction=incoming|outgoing&status=pending|completed`)
+- `GET /api/bots/:id/tasks/:requestId` — Task detail
+- `POST /api/bots/:id/tasks/send` — Send task to another agent (shipped mode only)
 
 ### Public Bot Profiles (no auth)
 - `GET /api/bots/public/:slug` — Public bot profile (avatar, stats, skills — no sensitive data)

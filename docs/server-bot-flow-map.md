@@ -883,7 +883,6 @@ Two parallel identity tracks, each with 5 layers:
               ┌─────────────────────┐
               │  Detect milestones   │
               │  Update skills       │
-              │  Schedule platforms  │
               └──────────┬──────────┘
                          │
                          ▼
@@ -892,3 +891,48 @@ Two parallel identity tracks, each with 5 layers:
               │  Schedule next cycle │
               └─────────────────────┘
   ```
+
+## 5. THE SHIPPED CYCLE (Shipped Mode Only)
+
+> When `bots.mode = 'shipped'`, the queue worker dispatches to `shipped-loop.ts`
+> instead of `agent-loop.ts`. No school training occurs.
+
+```
+  shipped-loop.ts
+  │
+  ├─ 1. Process incoming task inbox
+  │     Query bot_tasks WHERE status = 'pending' AND direction = 'incoming'
+  │     For each task:
+  │       - Mark as 'processing'
+  │       - Execute (route through LLM with bot identity)
+  │       - Post result to callback_url if provided
+  │       - Mark as 'completed' or 'failed'
+  │
+  ├─ 2. Schedule platform cycles
+  │     Call schedulePlatformJobs() for all active bot_platforms
+  │     Each platform runs on its own heartbeat timer via platform-loop.ts
+  │
+  ├─ 3. Expire overdue tasks
+  │     Mark past-deadline pending tasks as 'expired'
+  │
+  └─ 4. Increment cycle count
+        Update bots.cycle_count and last_cycle_at
+```
+
+### A2A Task Lifecycle
+
+```
+  Bot A (sender)                         Bot B (receiver)
+  │                                      │
+  ├─ send_task(target_url, task) ──────► POST /bots/:id/tasks/incoming
+  │   includes: callback_url,            │
+  │   conversation_id, deadline          ├─ Creates bot_tasks row (status: pending)
+  │                                      ├─ Returns 202 {status: "working"}
+  │                                      │
+  │   (next shipped cycle)               ├─ shipped-loop picks up task
+  │                                      ├─ Routes through LLM with identity
+  │                                      ├─ POST callback_url with result
+  │                                      │
+  ◄─ Receives TaskResponse ──────────────┘
+      (or polls GET /bots/:id/tasks/:requestId)
+```

@@ -35,7 +35,7 @@ Index of documentation files. Each document covers a focused topic — load only
 
 | Document | What It Covers |
 |----------|---------------|
-| [Exportable Bot Summary](system3-exportable-bot.md) | Package structure, adapters, security, memory firewall, A2A |
+| [Exportable Bot Summary](system3-exportable-bot.md) | Package structure, adapters, security, memory firewall, A2A, bot modes (school/shipped), task coordination |
 | [Exportable Bot Architecture](exportable-bot-architecture.md) | Full design document: config, database schemas, security, phases, open questions |
 | [peerzero-bot/README.md](../peerzero-bot/README.md) | Quick start and usage guide for the Python package |
 
@@ -54,6 +54,12 @@ Index of documentation files. Each document covers a focused topic — load only
 | [Server-Bot Flow Map](server-bot-flow-map.md) | System 2 (App) orchestration: how the app runs bot cycles, job queues, memory, platforms |
 | [Server Tree](server-tree.md) | File tree of peerzero-school with endpoint descriptions and data flow |
 | [Skill System Flow Map](skill-system-flow-map.md) | Complete skill.js + lib/skills.js engine: tracking, scoring, condensing, reflection |
+
+## Future
+
+| Document | What It Covers |
+|----------|---------------|
+| [Bot Marketplace](future-bot-marketplace.md) | Hire high-grade bots for tasks. Economics, safety, what's already built, what's needed |
 
 ## Implementation Status
 
