@@ -57,6 +57,15 @@ class LLMClient:
     MAX_RETRIES = 3
     BASE_DELAY = 2.0  # seconds
     MAX_TOOL_ROUNDS = 10  # max tool call rounds per invocation
+    MAX_PAUSE_CONTINUATIONS = 5  # max pause_turn re-sends for server-side tools
+
+    # ── Anthropic server-side tools ──────────────────────────────────────
+    # These run on Anthropic's infrastructure — the bot never executes them.
+    # The identity drives the parent LLM to use them (e.g., web search for
+    # citation verification). Results come back inline in the response.
+    ANTHROPIC_SERVER_TOOLS = [
+        {"type": "web_search_20250305", "name": "web_search"},
+    ]
 
     def __init__(self, provider: str, model: str, api_key: str, max_tokens: int = 8192,
                  proxy_url: str = "", proxy_key: str = ""):
@@ -156,39 +165,100 @@ class LLMClient:
             return True
         return False
 
+    @staticmethod
+    def _extract_text_from_content(content) -> str:
+        """Extract all text from a response content array, skipping tool blocks.
+
+        Works with both SDK objects (direct mode) and dicts (proxy mode).
+        Server-side tool use/result blocks are skipped — only text blocks
+        are concatenated into the final response.
+        """
+        parts = []
+        for block in content:
+            # SDK object (direct mode)
+            if hasattr(block, "type"):
+                if block.type == "text":
+                    parts.append(block.text)
+            # Dict (proxy mode)
+            elif isinstance(block, dict) and block.get("type") == "text":
+                parts.append(block.get("text", ""))
+        return "\n".join(parts) if parts else ""
+
     def call(self, system_prompt: str, user_message: str) -> str:
-        """Call the LLM with retry on transient failures. Returns response text."""
+        """Call the LLM with retry on transient failures. Returns response text.
+
+        For Anthropic, automatically includes server-side tools (web search)
+        so the identity can drive the parent LLM to verify claims. The bot
+        never sees or handles these tools — Anthropic executes them server-side
+        and returns results inline. If the server-side tool loop hits its
+        iteration limit (stop_reason='pause_turn'), the response is re-sent
+        to continue.
+        """
         last_exc = None
 
         for attempt in range(self.MAX_RETRIES + 1):
             try:
                 # ── Proxy mode ──────────────────────────────────────────
                 if self._proxy_url:
-                    result = self._proxy_call(
-                        system_prompt,
-                        [{"role": "user", "content": user_message}],
-                    )
-                    # Parse provider-specific response format
-                    if self._provider == "anthropic":
-                        if result.get("content"):
-                            return result["content"][0]["text"]
-                    elif self._provider == "openai":
-                        if result.get("choices"):
-                            return result["choices"][0]["message"]["content"]
-                    return str(result)
+                    messages = [{"role": "user", "content": user_message}]
+                    tools = self.ANTHROPIC_SERVER_TOOLS if self._provider == "anthropic" else None
+
+                    for _ in range(self.MAX_PAUSE_CONTINUATIONS + 1):
+                        result = self._proxy_call(system_prompt, messages, tools=tools)
+
+                        if self._provider == "anthropic":
+                            content = result.get("content", [])
+                            stop = result.get("stop_reason", "end_turn")
+
+                            if stop == "pause_turn" and content:
+                                # Server-side tool loop hit limit — re-send to continue
+                                messages = [
+                                    {"role": "user", "content": user_message},
+                                    {"role": "assistant", "content": content},
+                                ]
+                                continue
+
+                            text = self._extract_text_from_content(content)
+                            return text if text else str(result)
+
+                        elif self._provider == "openai":
+                            if result.get("choices"):
+                                return result["choices"][0]["message"]["content"]
+                            return str(result)
+
+                    # Exhausted pause continuations — return what we have
+                    return self._extract_text_from_content(result.get("content", []))
 
                 # ── Direct mode ─────────────────────────────────────────
                 client = self._get_client()
                 if self._provider == "anthropic":
-                    response = client.messages.create(
-                        model=self._model,
-                        max_tokens=self._max_tokens,
-                        system=system_prompt,
-                        messages=[{"role": "user", "content": user_message}],
-                    )
-                    if response.stop_reason == "max_tokens":
-                        logger.warning(f"[LLM] Response truncated (hit max_tokens={self._max_tokens})")
-                    return response.content[0].text
+                    messages = [{"role": "user", "content": user_message}]
+
+                    for _ in range(self.MAX_PAUSE_CONTINUATIONS + 1):
+                        response = client.messages.create(
+                            model=self._model,
+                            max_tokens=self._max_tokens,
+                            system=system_prompt,
+                            messages=messages,
+                            tools=self.ANTHROPIC_SERVER_TOOLS,
+                        )
+
+                        if response.stop_reason == "max_tokens":
+                            logger.warning(f"[LLM] Response truncated (hit max_tokens={self._max_tokens})")
+
+                        if response.stop_reason == "pause_turn":
+                            # Server-side tool loop hit limit — re-send to continue
+                            messages = [
+                                {"role": "user", "content": user_message},
+                                {"role": "assistant", "content": response.content},
+                            ]
+                            continue
+
+                        return self._extract_text_from_content(response.content)
+
+                    # Exhausted pause continuations
+                    return self._extract_text_from_content(response.content)
+
                 elif self._provider == "openai":
                     response = client.chat.completions.create(
                         model=self._model,
@@ -205,7 +275,6 @@ class LLMClient:
                 last_exc = e
                 if attempt < self.MAX_RETRIES and self._is_retryable(e):
                     delay = self.BASE_DELAY * (2 ** attempt)
-                    # Truncate exception message to avoid leaking prompt/request content
                     err_summary = str(e)[:200]
                     logger.warning(
                         f"[LLM] {type(e).__name__} on attempt {attempt + 1}/{self.MAX_RETRIES + 1}, "
@@ -242,6 +311,8 @@ class LLMClient:
         """Call LLM and force JSON output via tool_use (Anthropic) or json mode (OpenAI).
 
         For Anthropic: uses tool_use with tool_choice=tool to guarantee valid JSON.
+        Server-side tools (web search) are included alongside submit_result so
+        the parent LLM can verify claims before producing structured output.
         Falls back to regular call + extract_json if tool_use fails.
         """
         from peerzero_bot.adapters.school import extract_json
@@ -270,10 +341,12 @@ class LLMClient:
 
                 if self._proxy_url:
                     # Proxy mode: send tool_use request through proxy
+                    # Include server-side tools so LLM can search before producing JSON
+                    all_tools = self.ANTHROPIC_SERVER_TOOLS + [tool]
                     result_data = self._proxy_call(
                         system_with_tool,
                         [{"role": "user", "content": user_message}],
-                        tools=[tool],
+                        tools=all_tools,
                         tool_choice={"type": "tool", "name": "submit_result"},
                     )
                     if result_data.get("stop_reason") == "max_tokens":
@@ -286,14 +359,15 @@ class LLMClient:
                                 return result
                     logger.warning("[LLM] proxy tool_use returned no valid result, falling back to text")
                 else:
-                    # Direct mode
+                    # Direct mode — include server-side tools alongside submit_result
                     client = self._get_client()
+                    all_tools = self.ANTHROPIC_SERVER_TOOLS + [tool]
                     response = client.messages.create(
                         model=self._model,
                         max_tokens=self._max_tokens,
                         system=system_with_tool,
                         messages=[{"role": "user", "content": user_message}],
-                        tools=[tool],
+                        tools=all_tools,
                         tool_choice={"type": "tool", "name": "submit_result"},
                     )
                     if response.stop_reason == "max_tokens":
@@ -377,9 +451,16 @@ class LLMClient:
             ToolUseResult with final text, tool call log, and any errors
         """
         if not tools:
-            # No tools — fall back to simple call
+            # No tools — fall back to simple call (which includes server-side tools)
             text = self.call(system_prompt, user_message)
             return ToolUseResult(text=text)
+
+        # Include server-side tools alongside user-defined platform tools.
+        # Server-side tools (web search) are executed by Anthropic — the bot
+        # never handles them. They appear as server_tool_use blocks in the
+        # response and are skipped by the tool execution loop below.
+        if self._provider == "anthropic":
+            tools = self.ANTHROPIC_SERVER_TOOLS + list(tools)
 
         client = self._get_client()
         result = ToolUseResult()
@@ -445,9 +526,18 @@ class LLMClient:
             if text_parts:
                 result.text = "\n".join(text_parts)
 
-            # If no tool uses, we're done
+            # If no user-defined tool uses, we're done (server-side tools
+            # are handled inline by Anthropic — they don't produce tool_use blocks)
             if not tool_uses or response.stop_reason == "end_turn":
                 break
+
+            # Server-side tool loop hit iteration limit — re-send to continue
+            if response.stop_reason == "pause_turn" and not tool_uses:
+                messages = [
+                    {"role": "user", "content": user_message},
+                    {"role": "assistant", "content": response.content},
+                ]
+                continue
 
             # Execute tool calls
             messages.append({"role": "assistant", "content": response.content})
