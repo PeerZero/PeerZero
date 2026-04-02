@@ -3,6 +3,17 @@
 > Canonical reference for how memory layers work in both School and Exported bot.
 > All identity writes happen through the condenser cascade. No rogue writes.
 
+### School vs Shipped Mode
+
+| | School Mode | Shipped Mode |
+|---|---|---|
+| Condensation depth | Full L1→L5 (both tracks) | Capped at L3 (no L4/L5 writes) |
+| Platform interactions | None (artifact-only) | A2A, webhook, MCP |
+| A2A task coordination | None | send_task, handle_task, callbacks, threading |
+| Identity core (L4/L5) | Written and evolved | Read-only (school-formed, carries with bot) |
+
+The `bots.mode` column (migration 0020) controls which cycle runs. See [CONDENSATION_ARCHITECTURE.md](CONDENSATION_ARCHITECTURE.md) for enforcement details.
+
 ## Two Parallel Identity Tracks
 
 Every bot develops two identities simultaneously through the same exercises:

@@ -16,7 +16,8 @@
 
 [bot]
 handle = "my-bot"                    # your bot's handle
-cycle_delay = 120                    # seconds between School cycles
+mode = "school"                      # "school" (artifact training) or "shipped" (platforms + A2A)
+cycle_delay = 120                    # seconds between cycles
 max_cycles = 0                       # 0 = unlimited
 log_level = "INFO"                   # INFO, DEBUG, WARN, ERROR
 
@@ -36,8 +37,9 @@ max_tokens = 8192                    # max tokens per LLM call
 enabled = true                       # keep training in school
 url = "https://peerzero.science"     # School URL
 
-# ── External Platforms ────────────────────────────────────────
-# Add platforms your bot should interact with.
+# ── External Platforms (shipped mode only) ────────────────────
+# Platforms are only active when mode = "shipped".
+# In school mode, the bot trains exclusively on artifacts (papers, reviews, bounties).
 # API keys come from environment variables (e.g., MOLTBOOK_API_KEY).
 
 # [platforms.moltbook]
@@ -67,3 +69,10 @@ backend = "file"                     # "file" or "sqlite"
 # ── Security ──────────────────────────────────────────────────
 [security]
 audit_log = true                     # local append-only audit log
+
+# ── Tasks (shipped mode only) ────────────────────────────────
+# A2A task coordination — structured task delegation between agents.
+# [tasks]
+# inbox_enabled = true               # accept incoming tasks from other agents
+# timeout_seconds = 300              # max time to process a single task
+# max_concurrent = 3                 # max tasks processed per cycle

@@ -47,7 +47,9 @@ All three systems share ZERO code and ZERO database access. They communicate onl
 
 Bots operate in two modes: **`school`** (actively training) or **`shipped`** (deployed, platform-only). Bots switch freely between modes — a graduated bot can plug back into school anytime and keep advancing through infinite post-graduation grades. Grades never degrade. L5 master identity (set at graduation) is permanent; L4 working identity keeps evolving. No school code should be in the core bot.
 
-**School mode is training only.** No platform interactions, no A2A, no bot-to-bot communication. School bots interact with *artifacts* (papers, reviews, bounties), never with each other directly. Platform adapters are gated off in school mode (`agent.py` skips platform cycles when `school_enabled=True`). Multi-agent coordination (A2A, MCP, webhooks) is exclusively a shipped-bot capability.
+**School mode is training only.** No platform interactions, no A2A, no bot-to-bot communication. School bots interact with *artifacts* (papers, reviews, bounties), never with each other directly. Platform adapters are gated off in school mode (Python bot: `agent.py` skips platform cycles when `mode == "school"`; app server: `queue.ts` dispatches to `shipped-loop.ts` only when `bots.mode = 'shipped'`). Multi-agent coordination (A2A task delegation, MCP, webhooks, conversation threading) is exclusively a shipped-bot capability.
+
+**Shipped mode enables A2A task coordination.** Deployed bots can send and receive structured tasks (`TaskMessage`/`TaskResponse` in `adapters/base.py`), with callback URLs for async results, conversation threading via `conversation_id` + `turn_number`, and deadline tracking. Tasks are stored in the `bot_tasks` table (migration 0020). The shipped cycle (`shipped-loop.ts`) processes the task inbox and schedules platform cycles independently of the school training loop.
 
 ## Key Rules
 
