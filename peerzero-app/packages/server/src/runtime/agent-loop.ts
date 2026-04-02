@@ -30,10 +30,10 @@ import { broadcastMessage } from '../websocket/activity-stream';
 import { getGradePriceCents, credibilityToStage } from '@peerzero/shared';
 import { SchoolCredentials } from '../adapters/school.adapter';
 import { buildPrompt } from './prompt-builder';
+import { schedulePlatformJobs } from '../jobs/platform-queue';
 import { routeAction } from './action-router';
 import { updateSkillSnapshots } from '../services/skill.service';
 import { resolveActiveSkills } from '../services/skill-engine.service';
-import { schedulePlatformJobs } from '../jobs/platform-queue';
 import type { SchoolProfile } from '@peerzero/shared';
 import { SKILL_NAMES } from '@peerzero/shared';
 
@@ -249,7 +249,11 @@ export async function runOneCycle(ctx: BotContext): Promise<void> {
       logger.warn({ err: err instanceof Error ? err.message : err }, 'Failed to update skill snapshots');
     }
 
-    // 14. Schedule platform cycles for any active platform connections
+    // 14. Schedule platform cycles for any active platform connections.
+    // TODO: Move to independent scheduler. Platform cycles should not piggyback
+    // on school training — school mode should be artifact-only (papers, reviews,
+    // bounties). Platform interactions belong in shipped/deployed mode only.
+    // Kept here temporarily because the app has no shipped-mode toggle yet.
     try {
       const utilityModel = ctx.fastLlmModel || ctx.llmModel;
       await schedulePlatformJobs(ctx.botId, ctx.userId, ctx.llmApiKeyId, utilityModel);

@@ -1085,8 +1085,9 @@ When done, return a JSON object:
         """
         Main entry point. Runs School + platform cycles based on mode.
 
-        Mode "school": School cycles run (primary) + platform cycles (secondary).
-        Mode "shipped": Only platform cycles run. Bot can still refresh identity.
+        Mode "school": School cycles only. No platform interactions — training is
+            artifact-based (papers, reviews, bounties), not bot-to-bot.
+        Mode "shipped": Platform cycles run. Bot can still refresh identity.
         Handles SIGTERM for graceful shutdown in containers/systemd.
         """
         self._stop_requested = False
@@ -1117,24 +1118,26 @@ When done, return a JSON object:
                         self.cycle_count += 1
 
                     # Platform cycles (run when their timer is due)
-                    now = time.time()
-                    for adapter in self.platform_adapters:
-                        name = adapter.platform_name
-                        # Find this platform's config for heartbeat interval
-                        interval = self.config.cycle_delay
-                        for pc in self.config.platforms:
-                            if pc.name == name:
-                                interval = pc.heartbeat_interval
-                                break
+                    # School mode = training only. No platform interactions.
+                    if not self.config.school_enabled:
+                        now = time.time()
+                        for adapter in self.platform_adapters:
+                            name = adapter.platform_name
+                            # Find this platform's config for heartbeat interval
+                            interval = self.config.cycle_delay
+                            for pc in self.config.platforms:
+                                if pc.name == name:
+                                    interval = pc.heartbeat_interval
+                                    break
 
-                        if now - platform_timers.get(name, 0) >= interval:
-                            try:
-                                self.run_platform_cycle(adapter)
-                            except SecurityError:
-                                raise
-                            except Exception:
-                                pass  # already logged inside run_platform_cycle
-                            platform_timers[name] = now
+                            if now - platform_timers.get(name, 0) >= interval:
+                                try:
+                                    self.run_platform_cycle(adapter)
+                                except SecurityError:
+                                    raise
+                                except Exception:
+                                    pass  # already logged inside run_platform_cycle
+                                platform_timers[name] = now
 
                     # Action Desk: execute pending agenda steps
                     if self.action_desk.has_work:
