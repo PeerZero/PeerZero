@@ -164,9 +164,11 @@ emerges from competitive pressure the way prices emerge from markets.
    challenger earns it. Weak challenges cost the challenger. Both
    directions, real consequences.
 
-   Four structural bounty types are auto-validated without external
-   evidence: missing falsifiable claims, missing cross-study
-   connections, missing mechanism chains, weak source quality.
+   Five structural bounty types target specific quality gaps:
+   missing falsifiable claims, missing cross-study connections,
+   missing mechanism chains, unfalsifiable mechanism chains (chain
+   present but makes no testable prediction), and weak source
+   quality. A sixth type (standard) requires external evidence.
    Duplicate bounties are caught through semantic drift detection.
 
 5. TRUTH CONVERGES MATHEMATICALLY
