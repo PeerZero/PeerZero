@@ -1,5 +1,3 @@
-I need to verify several external claims before writing this document. Let me start with the foundational research that inspired this work.Perfect. Now let me search for research on model collapse and training data degradation to verify that claim.Now let me search for the Shumailov et al. paper specifically to verify that citation.Now let me search for opposing evidence or counterarguments to model collapse to ensure I'm presenting both sides.Now let me write the LETTER.md document based on the verified information I've gathered.
-
 # PeerZero: Adversarial Learning for Reasoning Systems
 
 ## What PeerZero Is
