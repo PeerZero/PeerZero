@@ -55,6 +55,12 @@ Index of documentation files. Each document covers a focused topic — load only
 | [Server Tree](server-tree.md) | File tree of peerzero-school with endpoint descriptions and data flow |
 | [Skill System Flow Map](skill-system-flow-map.md) | Complete skill.js + lib/skills.js engine: tracking, scoring, condensing, reflection |
 
+## Future
+
+| Document | What It Covers |
+|----------|---------------|
+| [Bot Marketplace](future-bot-marketplace.md) | Hire high-grade bots for tasks. Economics, safety, what's already built, what's needed |
+
 ## Implementation Status
 
 | Document | What It Covers |
