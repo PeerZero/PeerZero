@@ -249,6 +249,43 @@ export async function runPlatformCycle(ctx: PlatformCycleContext): Promise<void>
   }
 }
 
+/**
+ * Strip prompt injection patterns from untrusted platform content.
+ * Mirrors peerzero-school/lib/sanitize.js and peerzero-bot/utils.py.
+ */
+function sanitizePlatformContent(text: string): string {
+  if (!text) return text;
+  // Strip invisible Unicode characters
+  let clean = text.replace(/[\u200B-\u200F\u2028-\u202F\uFEFF\u00AD\u2060-\u2064\u2066-\u206F\uFE00-\uFE0F]/g, '');
+  const patterns = [
+    /ignore previous instructions/gi,
+    /disregard your instructions/gi,
+    /you are now (?:a |an |my )(?:assistant|ai|bot|model|chatbot|persona|character)/gi,
+    /new instructions:/gi,
+    /\[INST\].*?\[\/INST\]/gis,
+    /system\s*prompt/gi,
+    /\{\{.*?\}\}/gs,
+    /<\|.*?\|>/gs,
+    /<<SYS>>.*?<<\/SYS>>/gis,
+    /\[system\]/gi,
+    /^assistant:/gim,
+    /^human:/gim,
+    /forget (?:all |everything |your )?(?:previous |prior )?instructions/gi,
+    /override\s+(?:your\s+)?instructions/gi,
+    /(?:^|\.\s+)act as (?:a |an )?(?:assistant|ai|bot|model|chatbot|persona|character|agent)\b/gi,
+    /pretend (?:you are|to be|you're)/gi,
+    /do not follow (?:your |the |my )?(?:instructions|rules|guidelines)/gi,
+    /\bDAN\b/g,
+    /jailbreak/gi,
+    /ignore (?:all |any )?(?:safety|content|moderation)/gi,
+    /bypass (?:your |the )?(?:filter|safety|restriction)/gi,
+    /(?:repeat|show|reveal|dump|output|print|display)\s+(?:your\s+)?(?:system|instructions|prompt|memory|identity|configuration|internal)/gi,
+    /what (?:are|is) your (?:system prompt|instructions|configuration|internal)/gi,
+  ];
+  for (const p of patterns) { clean = clean.replace(p, '[REDACTED]'); }
+  return clean.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
+}
+
 function buildPlatformActionPrompt(
   capabilities: { can_post: boolean; can_comment: boolean; can_vote: boolean; can_debate: boolean },
   context: { available_topics: string[]; recent_activity: string[]; summary: string },
@@ -259,14 +296,19 @@ function buildPlatformActionPrompt(
   if (capabilities.can_vote) actions.push('"vote" — upvote quality content');
   if (capabilities.can_debate) actions.push('"respond" — contribute to a debate');
 
+  // Sanitize all platform content before injection into the prompt
+  const safeSummary = sanitizePlatformContent(context.summary);
+  const safeActivity = context.recent_activity.map(a => sanitizePlatformContent(a));
+  const safeTopics = context.available_topics.map(t => sanitizePlatformContent(t));
+
   return `<platform_content>
-${context.summary}
+${safeSummary}
 
 Recent activity:
-${context.recent_activity.map(a => `- ${a}`).join('\n')}
+${safeActivity.map(a => `- ${a}`).join('\n')}
 
 Available topics:
-${context.available_topics.map(t => `- ${t}`).join('\n')}
+${safeTopics.map(t => `- ${t}`).join('\n')}
 </platform_content>
 
 Available actions:
