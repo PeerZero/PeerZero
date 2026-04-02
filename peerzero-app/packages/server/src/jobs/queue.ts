@@ -10,6 +10,7 @@ import IORedis from 'ioredis';
 import { config } from '../config';
 import { logger } from '../lib/logger';
 import { runOneCycle, BotContext } from '../runtime/agent-loop';
+import { runShippedCycle } from '../runtime/shipped-loop';
 import { setBotStatus } from '../services/bot.service';
 import { queryOne, query, queryRows } from '../db/client';
 
@@ -131,15 +132,16 @@ export function startWorker(): void {
     async (job: Job) => {
       const { botId, userId, llmApiKeyId, llmModel, cycleDelaySeconds } = job.data;
 
-      // Check if bot is still running (also fetch fast model + extended thinking from DB — may change between cycles)
-      const bot = await queryOne<{ status: string; cycle_count: number; fast_llm_model: string | null; extended_thinking: boolean; cycle_delay_seconds: number }>(
-        'SELECT status, cycle_count, fast_llm_model, extended_thinking, cycle_delay_seconds FROM bots WHERE id = $1',
+      // Check if bot is still running (also fetch mode, fast model, extended thinking from DB)
+      const bot = await queryOne<{ status: string; mode: string; cycle_count: number; fast_llm_model: string | null; extended_thinking: boolean; cycle_delay_seconds: number }>(
+        'SELECT status, mode, cycle_count, fast_llm_model, extended_thinking, cycle_delay_seconds FROM bots WHERE id = $1',
         [botId],
       );
       if (!bot || bot.status !== 'running') {
         return; // Bot was stopped, skip
       }
 
+      const botMode = bot.mode || 'school';
       const ctx: BotContext = {
         botId,
         userId,
@@ -151,7 +153,11 @@ export function startWorker(): void {
       };
 
       try {
-        await runOneCycle(ctx);
+        if (botMode === 'shipped') {
+          await runShippedCycle(ctx);
+        } else {
+          await runOneCycle(ctx);
+        }
         // Reset failure counter on success (persisted in DB to survive restarts)
         await query('UPDATE bots SET consecutive_failures = 0 WHERE id = $1', [botId]);
       } catch (err) {

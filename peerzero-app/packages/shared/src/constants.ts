@@ -40,6 +40,10 @@ export const TIER_NAMES: Record<number, string> = {
 export const BOT_STATUSES = ['stopped', 'running', 'paused', 'error'] as const;
 export type BotStatus = typeof BOT_STATUSES[number];
 
+// Bot modes (orthogonal to status)
+export const BOT_MODES = ['school', 'shipped'] as const;
+export type BotMode = typeof BOT_MODES[number];
+
 // Enrollment statuses
 export const ENROLLMENT_STATUSES = ['pending', 'registered', 'intake_passed', 'active', 'suspended'] as const;
 export type EnrollmentStatus = typeof ENROLLMENT_STATUSES[number];

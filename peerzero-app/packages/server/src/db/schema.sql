@@ -114,6 +114,7 @@ CREATE TABLE bots (
   extended_thinking BOOLEAN DEFAULT FALSE,
 
   -- Runtime state
+  mode            TEXT NOT NULL DEFAULT 'school' CHECK (mode IN ('school', 'shipped')),
   status          TEXT DEFAULT 'stopped' CHECK (status IN ('stopped', 'running', 'paused', 'error')),
   error_message   TEXT,
   cycle_count     INTEGER DEFAULT 0,
@@ -142,6 +143,7 @@ CREATE TABLE bots (
 CREATE INDEX idx_bots_user ON bots(user_id);
 CREATE INDEX idx_bots_phone_home ON bots(phone_home_token_hash) WHERE phone_home_token_hash IS NOT NULL;
 CREATE INDEX idx_bots_status ON bots(status) WHERE status = 'running';
+CREATE INDEX idx_bots_mode ON bots(mode) WHERE status = 'running';
 CREATE INDEX idx_bots_public_slug ON bots(public_slug) WHERE is_public = TRUE;
 
 -- =============================================================================
@@ -513,3 +515,31 @@ CREATE TABLE bot_skill_snapshots (
   UNIQUE(bot_id, skill_key)
 );
 CREATE INDEX idx_skill_snapshots_bot ON bot_skill_snapshots(bot_id);
+
+-- =============================================================================
+-- Bot tasks — structured agent-to-agent task delegation (A2A lifecycle)
+-- =============================================================================
+CREATE TABLE bot_tasks (
+  id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  bot_id            UUID NOT NULL REFERENCES bots(id) ON DELETE CASCADE,
+  request_id        TEXT NOT NULL UNIQUE,
+  direction         TEXT NOT NULL CHECK (direction IN ('incoming', 'outgoing')),
+  sender            TEXT NOT NULL,
+  target            TEXT NOT NULL DEFAULT '',
+  action_requested  TEXT NOT NULL,
+  payload           JSONB NOT NULL DEFAULT '{}',
+  callback_url      TEXT,
+  deadline          TIMESTAMPTZ,
+  conversation_id   TEXT,
+  turn_number       INT DEFAULT 0,
+  status            TEXT NOT NULL DEFAULT 'pending'
+    CHECK (status IN ('pending', 'processing', 'completed', 'failed', 'rejected', 'expired')),
+  result            JSONB,
+  error             TEXT,
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+  completed_at      TIMESTAMPTZ
+);
+CREATE INDEX idx_bot_tasks_bot ON bot_tasks(bot_id, created_at DESC);
+CREATE INDEX idx_bot_tasks_conversation ON bot_tasks(conversation_id) WHERE conversation_id IS NOT NULL;
+CREATE INDEX idx_bot_tasks_pending ON bot_tasks(bot_id, status) WHERE status = 'pending';

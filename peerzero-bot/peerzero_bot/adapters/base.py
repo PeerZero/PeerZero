@@ -19,6 +19,8 @@ class PlatformCapabilities:
     can_debate: bool = False
     can_review: bool = False
     can_use_tools: bool = False     # MCP tool use
+    can_task: bool = False          # A2A task delegation (send/receive structured tasks)
+    can_conversation: bool = False  # multi-turn threaded exchanges
     content_types: list[str] = field(default_factory=list)  # ["text", "markdown", "json", "tool_use"]
     rate_limit: int = 0             # max requests per hour, 0 = unknown
     requires_agent_card: bool = False
@@ -57,6 +59,39 @@ class PlatformResult:
     error: str = ""
     summary: str = ""               # human-readable for activity log
     skills_demonstrated: list[str] = field(default_factory=list)
+
+
+# ── A2A Task Lifecycle ────────────────────────────────────────────────────────
+# Structured task messages for agent-to-agent coordination.
+# Follows the A2A protocol task state machine:
+#   submitted → working → input-required → completed/failed/canceled
+
+@dataclass
+class TaskMessage:
+    """Structured task request from one bot to another (A2A tasks/send)."""
+    request_id: str                    # unique ID for correlation
+    sender: str                        # sender agent card URL or bot handle
+    action_requested: str              # what the sender wants done
+    payload: dict = field(default_factory=dict)
+    callback_url: str = ""             # where to POST the result when done
+    deadline: str = ""                 # ISO 8601 deadline
+    conversation_id: str = ""          # for multi-turn threading
+    turn_number: int = 0               # which turn in the conversation
+    metadata: dict = field(default_factory=dict)
+
+
+@dataclass
+class TaskResponse:
+    """Structured result posted back to a task requester."""
+    request_id: str                    # correlates to TaskMessage.request_id
+    responder: str                     # responder bot handle or agent card URL
+    status: str = "completed"          # "completed", "failed", "working", "input-required", "rejected"
+    result: dict = field(default_factory=dict)
+    conversation_id: str = ""          # for threading
+    turn_number: int = 0
+    next_action: str = "done"          # "done", "await_reply", "escalate"
+    error: str = ""
+    artifacts: list[dict] = field(default_factory=list)  # A2A artifacts with MIME types
 
 
 class IPlatformAdapter(Protocol):
@@ -107,5 +142,29 @@ class IPlatformAdapter(Protocol):
         """
         Publish this bot's A2A Agent Card to the platform.
         Returns True if platform accepted the card.
+        """
+        ...
+
+    def send_task(self, target_url: str, task: TaskMessage) -> TaskResponse:
+        """
+        Send a structured task to another agent (A2A tasks/send).
+        The target processes the task and returns a response.
+        For async tasks, the response may have status="working" and
+        the result arrives later via callback_url.
+        """
+        ...
+
+    def handle_task(self, task: TaskMessage) -> TaskResponse:
+        """
+        Handle an incoming task from another agent.
+        The adapter routes the task through the bot's LLM and returns
+        a structured response.
+        """
+        ...
+
+    def get_pending_tasks(self) -> list[TaskMessage]:
+        """
+        Fetch any pending incoming tasks from the platform.
+        Returns tasks that need processing.
         """
         ...

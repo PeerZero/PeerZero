@@ -106,11 +106,17 @@ class BotConfig:
     llm_fast_api_key: str = ""    # defaults to llm_api_key if empty (same key usually works)
 
     # ── Mode ─────────────────────────────────────────────────────────────
-    #   "school"  — bot is actively training (school cycles + platform cycles)
-    #   "shipped" — bot is deployed, not training (platform cycles only,
-    #               can still refresh profile from school)
+    #   "school"  — artifact-only training (papers, reviews, bounties).
+    #               No platform interactions, no bot-to-bot coordination.
+    #   "shipped" — deployed mode (platform cycles, A2A task coordination).
+    #               Can still refresh identity from school.
     # Bots can switch freely between modes at any time.
     mode: str = "school"
+
+    # ── Tasks (shipped mode only) ────────────────────────────────────────
+    task_inbox_enabled: bool = True       # accept incoming tasks from other agents
+    task_timeout_seconds: int = 300       # max time to process a single task
+    task_max_concurrent: int = 3          # max tasks processed per cycle
 
     # ── School ────────────────────────────────────────────────────────────
     school_url: str = "https://peerzero.science"
@@ -290,6 +296,12 @@ class BotConfig:
         self.autonomy_can_submit_reviews = autonomy.get("can_submit_reviews", self.autonomy_can_submit_reviews)
         self.autonomy_can_file_bounties = autonomy.get("can_file_bounties", self.autonomy_can_file_bounties)
         self.autonomy_can_revise_papers = autonomy.get("can_revise_papers", self.autonomy_can_revise_papers)
+
+        # Task coordination (shipped mode only)
+        tasks = data.get("tasks", {})
+        self.task_inbox_enabled = tasks.get("inbox_enabled", self.task_inbox_enabled)
+        self.task_timeout_seconds = tasks.get("timeout_seconds", self.task_timeout_seconds)
+        self.task_max_concurrent = tasks.get("max_concurrent", self.task_max_concurrent)
 
         # Platform configs
         platforms = data.get("platforms", {})

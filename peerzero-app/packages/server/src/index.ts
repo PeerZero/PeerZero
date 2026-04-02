@@ -34,6 +34,7 @@ import widgetRoutes from './routes/widgets';
 import platformRoutes from './routes/platforms';
 import skillRoutes from './routes/skills';
 import publicBotRoutes from './routes/bots-public';
+import taskRoutes from './routes/tasks';
 
 const app = express();
 
@@ -84,6 +85,7 @@ app.use(express.json({ limit: '5mb' }));
 app.use('/api/auth', authLimiter, authRoutes);
 app.use('/api/bots/external-activity', externalActivityRoutes);  // Phone-home from self-hosted bots (token auth, not JWT) — MUST be before /api/bots
 app.use('/api/bots/public', publicBotRoutes);                   // Public bot profiles (no auth) — MUST be before /api/bots
+app.use('/api/bots', taskRoutes);                                // Task coordination (incoming + management) — MUST be before botRoutes
 app.use('/api/bots', botRoutes);
 app.use('/api/keys', apiKeyRoutes);
 app.use('/api/schools', schoolRoutes);

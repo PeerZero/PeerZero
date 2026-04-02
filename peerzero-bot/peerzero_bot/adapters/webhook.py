@@ -21,6 +21,7 @@ import httpx
 from .base import (
     PlatformCapabilities, PlatformContext,
     PlatformAction, PlatformResult,
+    TaskMessage, TaskResponse,
 )
 from ..security import SecurityGateway, CredentialStore
 from ..utils import safe_error_msg
@@ -175,6 +176,63 @@ class WebhookAdapter:
         except (httpx.HTTPError, json.JSONDecodeError, OSError) as e:
             logger.warning(f"[{self._name}] Agent Card publish failed: {e}")
             return False
+
+    # ── Task Support ─────────────────────────────────────────────────────
+
+    def send_task(self, target_url: str, task: TaskMessage) -> TaskResponse:
+        """Send a task via REST POST to a target endpoint."""
+        try:
+            self._gateway.validate_platform_request(self._name, target_url)
+            payload = {
+                "request_id": task.request_id,
+                "sender": task.sender,
+                "action_requested": task.action_requested,
+                "payload": task.payload,
+                "callback_url": task.callback_url,
+                "deadline": task.deadline,
+                "conversation_id": task.conversation_id,
+                "turn_number": task.turn_number,
+            }
+            headers = {}
+            api_key = self._get_api_key()
+            if api_key:
+                headers["Authorization"] = f"Bearer {api_key}"
+            headers["Content-Type"] = "application/json"
+            response = self._http.post(target_url, json=payload, headers=headers, timeout=30.0)
+            response.raise_for_status()
+            result = response.json() if response.content else {}
+            return TaskResponse(
+                request_id=task.request_id,
+                responder=result.get("responder", self._name),
+                status=result.get("status", "completed"),
+                result=result.get("result", {}),
+                conversation_id=task.conversation_id,
+                turn_number=task.turn_number,
+                next_action=result.get("next_action", "done"),
+            )
+        except Exception as e:
+            logger.warning(f"[{self._name}] send_task failed: {safe_error_msg(e)}")
+            return TaskResponse(
+                request_id=task.request_id,
+                responder=self._name,
+                status="failed",
+                error=safe_error_msg(e),
+            )
+
+    def handle_task(self, task: TaskMessage) -> TaskResponse:
+        """Accept an incoming task (from webhook). Returns working status."""
+        return TaskResponse(
+            request_id=task.request_id,
+            responder=self._name,
+            status="working",
+            conversation_id=task.conversation_id,
+            turn_number=task.turn_number,
+            next_action="await_reply",
+        )
+
+    def get_pending_tasks(self) -> list[TaskMessage]:
+        """Webhook adapter doesn't poll — tasks arrive via webhooks."""
+        return []
 
     def verify_webhook_signature(
         self, payload: bytes, signature_header: str

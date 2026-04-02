@@ -36,7 +36,7 @@ import httpx
 from .config import BotConfig
 from .memory import MemoryManager
 from .adapters.school import SchoolAdapter, extract_json
-from .adapters.base import PlatformAction
+from .adapters.base import PlatformAction, TaskMessage, TaskResponse
 from .utils import sanitize_untrusted, safe_error_msg
 from .adapters.mcp import MCPAdapter
 from .prompts import PromptBuilder
@@ -1078,6 +1078,124 @@ When done, return a JSON object:
             return None
 
     # ═══════════════════════════════════════════════════════════════════════
+    # TASK COORDINATION (shipped mode only)
+    # ═══════════════════════════════════════════════════════════════════════
+
+    def _process_task_inbox(self):
+        """
+        Process pending incoming tasks from all platform adapters.
+
+        Checks each adapter for pending tasks, runs them through the LLM
+        with the bot's identity context, and posts responses back via
+        callback URLs. Only runs in shipped mode.
+        """
+        for adapter in self.platform_adapters:
+            if not hasattr(adapter, 'get_pending_tasks'):
+                continue
+
+            tasks = adapter.get_pending_tasks()
+            for task in tasks:
+                try:
+                    logger.info(
+                        f"[TASK] Processing: {task.action_requested} "
+                        f"from {task.sender} (id={task.request_id})"
+                    )
+
+                    # Build task prompt with bot identity
+                    system_prompt = self.prompts.build_platform_system_prompt(
+                        adapter.platform_name
+                    )
+                    task_prompt = (
+                        f"You have received a task from another agent.\n\n"
+                        f"Sender: {task.sender}\n"
+                        f"Action requested: {task.action_requested}\n"
+                        f"Payload: {json.dumps(task.payload, default=str)}\n"
+                    )
+                    if task.deadline:
+                        task_prompt += f"Deadline: {task.deadline}\n"
+                    if task.conversation_id:
+                        # Include conversation history if available
+                        history = []
+                        if hasattr(adapter, 'get_conversation_history'):
+                            history = adapter.get_conversation_history(
+                                task.conversation_id
+                            )
+                        if history:
+                            task_prompt += (
+                                f"\nConversation history "
+                                f"(turn {task.turn_number}):\n"
+                                f"{json.dumps(history, default=str)}\n"
+                            )
+
+                    task_prompt += (
+                        "\nProcess this task and provide your response as JSON:\n"
+                        '{"status": "completed"|"failed", '
+                        '"result": {...}, "reasoning": "..."}'
+                    )
+
+                    # Run through LLM
+                    result_data = self.llm_fast.call_json(
+                        system_prompt, task_prompt,
+                        json_keys=["status", "result"],
+                    )
+
+                    if not result_data:
+                        result_data = {"status": "failed", "result": {}}
+
+                    # Build response
+                    response = TaskResponse(
+                        request_id=task.request_id,
+                        responder=self.config.handle,
+                        status=result_data.get("status", "completed"),
+                        result=result_data.get("result", {}),
+                        conversation_id=task.conversation_id,
+                        turn_number=task.turn_number + 1,
+                        next_action="done",
+                    )
+
+                    # Post back to callback URL if provided
+                    if task.callback_url and hasattr(adapter, 'post_task_response'):
+                        adapter.post_task_response(task.callback_url, response)
+
+                    # Store in platform memory
+                    self.memory.store_platform_action(adapter.platform_name, {
+                        "action_type": "task_response",
+                        "task_action": task.action_requested,
+                        "sender": task.sender,
+                        "success": response.status == "completed",
+                        "summary": f"Processed task: {task.action_requested}",
+                    })
+
+                    logger.info(
+                        f"[TASK] Completed: {task.request_id} "
+                        f"status={response.status}"
+                    )
+
+                except Exception as e:
+                    logger.error(
+                        f"[TASK] Failed to process {task.request_id}: {e}",
+                        exc_info=True,
+                    )
+                    # Try to notify sender of failure
+                    if task.callback_url and hasattr(adapter, 'post_task_response'):
+                        try:
+                            adapter.post_task_response(
+                                task.callback_url,
+                                TaskResponse(
+                                    request_id=task.request_id,
+                                    responder=self.config.handle,
+                                    status="failed",
+                                    error=str(e)[:500],
+                                ),
+                            )
+                        except Exception:
+                            pass  # best effort
+
+            # Clean up old conversations periodically
+            if hasattr(adapter, 'cleanup_conversations'):
+                adapter.cleanup_conversations()
+
+    # ═══════════════════════════════════════════════════════════════════════
     # MAIN LOOP
     # ═══════════════════════════════════════════════════════════════════════
 
@@ -1116,6 +1234,10 @@ When done, return a JSON object:
                         # cycle_count is incremented in run_school_cycle(); when school
                         # is disabled we still need to count cycles so max_cycles works.
                         self.cycle_count += 1
+
+                    # Task inbox (shipped mode only) — process pending tasks
+                    if not self.config.school_enabled:
+                        self._process_task_inbox()
 
                     # Platform cycles (run when their timer is due)
                     # School mode = training only. No platform interactions.
