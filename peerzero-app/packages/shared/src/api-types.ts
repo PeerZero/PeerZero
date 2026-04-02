@@ -3,7 +3,7 @@
 // These define the contract between the mobile app and the app server.
 // =============================================================================
 
-import { BotStatus, EnrollmentStatus, ActionType, MoodType, LLMProvider, ActivityCategory, SkillName, SkillTrigger, SkillCategory, SkillSource } from './constants';
+import { BotStatus, BotMode, EnrollmentStatus, ActionType, MoodType, LLMProvider, ActivityCategory, SkillName, SkillTrigger, SkillCategory, SkillSource } from './constants';
 
 // ── Auth ──
 export interface RegisterRequest {
@@ -61,6 +61,7 @@ export interface BotSummary {
   id: string;
   name: string;
   avatar_config: AvatarConfig;
+  mode: BotMode;
   status: BotStatus;
   cached_credibility: number | null;
   cached_grade: number | null;

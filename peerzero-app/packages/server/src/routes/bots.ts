@@ -15,6 +15,7 @@ import * as messageService from '../services/message.service';
 import { broadcastMessage } from '../websocket/activity-stream';
 import { addBotCycleJob, removeBotJobs, isQueueAvailable } from '../jobs/queue';
 import { logAudit } from '../services/audit.service';
+import * as platformService from '../services/platform.service';
 import type { ActivityCategory, FocusChunk } from '@peerzero/shared';
 import { ACTIVITY_CATEGORIES, SUPPORTED_MODEL_IDS, validateBotName } from '@peerzero/shared';
 
@@ -91,10 +92,23 @@ router.post('/:id/enroll', userRateLimit('write'), async (req: Request, res: Res
 // Start bot (begin autonomous cycles)
 router.post('/:id/start', userRateLimit('bot_control'), async (req: Request, res: Response) => {
   const bot = await botService.getBotDetail(req.user!.userId, req.params.id);
-  if (!bot.school_id) {
-    res.status(400).json({ error: 'Bot must be enrolled in a school first' });
-    return;
+  const botMode = bot.mode || 'school';
+
+  // Mode-specific validation
+  if (botMode === 'school') {
+    if (!bot.school_id) {
+      res.status(400).json({ error: 'School mode requires enrollment first' });
+      return;
+    }
+  } else {
+    // Shipped mode requires at least one active platform
+    const platforms = await platformService.getActivePlatforms(req.params.id);
+    if (platforms.length === 0) {
+      res.status(400).json({ error: 'Shipped mode requires at least one platform connection' });
+      return;
+    }
   }
+
   if (!bot.llm_api_key_id) {
     res.status(400).json({ error: 'Bot needs an LLM API key' });
     return;
@@ -113,7 +127,7 @@ router.post('/:id/start', userRateLimit('bot_control'), async (req: Request, res
   await botService.setBotStatus(req.params.id, 'running');
   await addBotCycleJob(req.params.id, req.user!.userId, bot.llm_api_key_id, bot.llm_model, bot.cycle_delay_seconds);
   logAudit({ userId: req.user!.userId, action: 'bot.start', entityType: 'bot', entityId: req.params.id, ipAddress: req.ip });
-  res.json({ status: 'running' });
+  res.json({ status: 'running', mode: botMode });
 });
 
 // Stop bot

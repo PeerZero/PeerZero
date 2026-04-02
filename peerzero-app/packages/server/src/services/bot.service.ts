@@ -77,7 +77,7 @@ export async function getUserBots(
   const cappedLimit = Math.min(Math.max(limit, 1), 500);
   const [rows, countResult] = await Promise.all([
     queryRows<BotSummary>(
-      `SELECT b.id, b.name, b.avatar_config, b.status,
+      `SELECT b.id, b.name, b.avatar_config, b.mode, b.status,
               b.cached_credibility, b.cached_grade, b.cached_tier,
               s.name as school_name, b.cycle_count, b.last_cycle_at
        FROM bots b
@@ -96,9 +96,17 @@ export async function getUserBots(
   return { data: rows, total, has_more: offset + cappedLimit < total };
 }
 
+/** Get minimal bot info by ID (no auth check — for incoming task routing). */
+export async function getBotById(botId: string): Promise<{ id: string; mode: string; status: string; name: string } | null> {
+  return queryOne<{ id: string; mode: string; status: string; name: string }>(
+    'SELECT id, mode, status, name FROM bots WHERE id = $1',
+    [botId],
+  );
+}
+
 export async function getBotDetail(userId: string, botId: string): Promise<BotDetail> {
   const bot = await queryOne<BotDetailRow>(
-    `SELECT b.id, b.name, b.avatar_config, b.status,
+    `SELECT b.id, b.name, b.avatar_config, b.mode, b.status,
             b.cached_credibility, b.cached_grade, b.cached_tier,
             s.name as school_name, b.cycle_count, b.last_cycle_at,
             b.school_id, b.school_agent_handle, b.llm_api_key_id, b.llm_model, b.fast_llm_model, b.extended_thinking,
@@ -159,6 +167,7 @@ export async function updateBot(userId: string, botId: string, updates: Partial<
   extended_thinking: boolean;
   cycle_delay_seconds: number;
   is_public: boolean;
+  mode: 'school' | 'shipped';
 }>) {
   // Build SET clause dynamically
   const sets: string[] = [];
@@ -188,6 +197,12 @@ export async function updateBot(userId: string, botId: string, updates: Partial<
       throw new AppError(400, 'cycle_delay_seconds must be between 10 and 86400');
     }
     sets.push(`cycle_delay_seconds = $${idx++}`); params.push(updates.cycle_delay_seconds);
+  }
+  if (updates.mode !== undefined) {
+    if (updates.mode !== 'school' && updates.mode !== 'shipped') {
+      throw new AppError(400, "mode must be 'school' or 'shipped'");
+    }
+    sets.push(`mode = $${idx++}`); params.push(updates.mode);
   }
   if (updates.is_public !== undefined) {
     sets.push(`is_public = $${idx++}`); params.push(updates.is_public);

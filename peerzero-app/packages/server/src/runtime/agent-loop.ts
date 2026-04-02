@@ -33,7 +33,6 @@ import { buildPrompt } from './prompt-builder';
 import { routeAction } from './action-router';
 import { updateSkillSnapshots } from '../services/skill.service';
 import { resolveActiveSkills } from '../services/skill-engine.service';
-import { schedulePlatformJobs } from '../jobs/platform-queue';
 import type { SchoolProfile } from '@peerzero/shared';
 import { SKILL_NAMES } from '@peerzero/shared';
 
@@ -249,13 +248,9 @@ export async function runOneCycle(ctx: BotContext): Promise<void> {
       logger.warn({ err: err instanceof Error ? err.message : err }, 'Failed to update skill snapshots');
     }
 
-    // 14. Schedule platform cycles for any active platform connections
-    try {
-      const utilityModel = ctx.fastLlmModel || ctx.llmModel;
-      await schedulePlatformJobs(ctx.botId, ctx.userId, ctx.llmApiKeyId, utilityModel);
-    } catch (err) {
-      logger.warn({ err: err instanceof Error ? err.message : err }, 'Failed to schedule platform cycles');
-    }
+    // 14. Platform cycles: NOT run from the school loop.
+    // School mode = artifact-only training (papers, reviews, bounties).
+    // Platform interactions run in shipped mode via shipped-loop.ts.
 
     // 15. Periodic data retention — clean up old messages, soft-deleted activity, and stale audit logs (every 50 cycles)
     if (ctx.cycleNumber % 50 === 0) {
