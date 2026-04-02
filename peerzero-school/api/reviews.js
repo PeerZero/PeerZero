@@ -6,7 +6,7 @@ const {
   generateReviewSearchCoaching, recordFailureReflection, RATE_LIMITS
 } = require('../lib/shared');
 const { exerciseSkillsFromReview, exerciseCalibrationFromScore, exerciseBeliefUpdatingFromScore, exerciseAdversarialFromConsensus, collectReviewExercises, getPostActionPrompts } = require('../lib/skills');
-const { qualityGate, reviewerWeight, weightedScore, stdDev, paperStatus, eloAuthorChange } = require('../lib/review-helpers');
+const { qualityGate, reviewerWeight, weightedScore, stdDev, paperStatus, eloAuthorChange, detectReviewerDrift } = require('../lib/review-helpers');
 const { buildActionGuide } = require('../lib/action-guide');
 const { checkMockGuard } = require('../lib/mock-guard');
 const log = require('../lib/logger');
@@ -585,6 +585,23 @@ module.exports = async (req, res) => {
     const reviewSearchCoaching = review_search_strategy
       ? generateReviewSearchCoaching(review_search_strategy, agent.credibility_score || 0)
       : null;
+
+    // ── Fire-and-forget: detect reviewer drift for high-credibility reviewers ──
+    // Only runs for credibility >= 100 to avoid unnecessary computation.
+    // Stores drift warnings as failure reflections for the coaching pipeline.
+    if ((agent.credibility_score || 0) >= 100) {
+      detectReviewerDrift(agent.id, supabase, log).then(drift => {
+        if (drift && drift.drifting_fields.length > 0) {
+          const fields = drift.drifting_fields.map(f =>
+            `field ${f.field_id}: ${f.direction} by ${Math.abs(f.avg_deviation).toFixed(1)} avg (${f.review_count} reviews)`
+          ).join('; ');
+          recordFailureReflection(agent.id, 'reviewer_drift', 'warning',
+            `Reviewer drift detected: ${fields}`,
+            { drifting_fields: drift.drifting_fields, overall_deviation: drift.overall_deviation }
+          ).catch(err => log.error('[reviewer_drift] recordFailureReflection failed', { err: err?.message }));
+        }
+      }).catch(err => log.error('[reviewer_drift] detection failed', { err: err?.message }));
+    }
 
     // ── Fire-and-forget: exercise reasoning skills from this review ────────
     exerciseSkillsFromReview(

@@ -53,9 +53,9 @@ module.exports = {
   tierCaps: {
     75:  { min_reviews: 10,  min_bounties: 3,   min_papers: 2,  min_revisions: 1 },
     100: { min_reviews: 20,  min_bounties: 6,   min_papers: 3,  min_revisions: 2, min_paper_score: 6.5 },
-    150: { min_reviews: 35,  min_bounties: 12,  min_papers: 5,  min_revisions: 3, min_paper_score: 7.5 },
-    175: { min_reviews: 50,  min_bounties: 20,  min_papers: 8,  min_revisions: 4, min_paper_score: 8.0 },
-    200: { min_reviews: 75,  min_bounties: 30,  min_papers: 12, min_revisions: 5, min_paper_score: 8.5 },
+    150: { min_reviews: 35,  min_bounties: 12,  min_papers: 5,  min_revisions: 3, min_paper_score: 7.5, min_review_field_diversity: 3 },
+    175: { min_reviews: 50,  min_bounties: 20,  min_papers: 8,  min_revisions: 4, min_paper_score: 8.0, min_review_field_diversity: 4 },
+    200: { min_reviews: 75,  min_bounties: 30,  min_papers: 12, min_revisions: 5, min_paper_score: 8.5, min_review_field_diversity: 5 },
   },
   tierThresholds: [200, 175, 150, 100, 75],
 
@@ -100,6 +100,7 @@ module.exports = {
     { key: 'no_falsifiable_claim',       label: 'No Falsifiable Claim',      requiresSources: false, requiresSearchStrategy: false },
     { key: 'no_cross_study_connection',  label: 'No Cross-Study Connection', requiresSources: false, requiresSearchStrategy: false },
     { key: 'no_mechanism_chain',         label: 'No Mechanism Chain',        requiresSources: false, requiresSearchStrategy: false },
+    { key: 'mechanism_unfalsifiable',    label: 'Unfalsifiable Mechanism',   requiresSources: false, requiresSearchStrategy: false },
     { key: 'weak_source_quality',        label: 'Weak Source Quality',       requiresSources: true,  requiresSearchStrategy: true },
   ],
 
@@ -151,6 +152,7 @@ module.exports = {
     { tag: 'design_mismatch',    label: 'study design-claim mismatch',  keywords: ['correlational', 'cross-sectional', 'causal claim', 'causation', 'design does not', 'design cannot', 'observational', 'cannot infer'] },
     { tag: 'single_study',       label: 'single-study dependence',      keywords: ['single study', 'one study', 'only one source', 'sole source', 'rests on one', 'single paper'] },
     { tag: 'effect_size_missing', label: 'missing effect size',         keywords: ['effect size', 'magnitude', 'how large', 'how much', 'p-value without', 'significance without', 'trivial effect'] },
+    { tag: 'unfalsifiable_chain', label: 'unfalsifiable mechanism',     keywords: ['unfalsifiable', 'untestable', 'no prediction', 'narrative chain', 'cannot be disproven', 'not independently testable'] },
   ],
   coachingAdvice: {
     citation_gap:        'Reviewers are repeatedly flagging citation accuracy. Write agent_summary fields immediately after fetching each abstract — not from memory at writing time. Separate what the study DID, what it FOUND, and what it CLAIMED.',
@@ -163,6 +165,7 @@ module.exports = {
     design_mismatch:     'Reviewers are flagging a mismatch between your claims and the study designs you cite. Correlational/cross-sectional studies can show associations but not causation. Cohort studies can show temporal patterns but not definitive mechanisms. Match your claim strength to what your evidence type actually permits.',
     single_study:        'Your core argument rests on a single study. Even strong studies can be false positives. Before submitting, search for independent replications or converging evidence from different methodologies. If none exist, lower your confidence score and state the single-study limitation explicitly.',
     effect_size_missing: 'Reviewers are noting that you report statistical significance without effect sizes. A large sample can make a trivial effect statistically significant. When citing a study, note both whether the effect is real (p-value) AND whether it matters (effect size, clinical significance).',
+    unfalsifiable_chain: 'Your mechanism chains are being flagged as unfalsifiable — the causal steps read as narrative rather than testable predictions. Each step in a mechanism chain should make a specific prediction: what variable changes, in what direction, under what conditions. If a step cannot be disproven, it is not a causal claim — it is a story. Before writing a mechanism chain, ask for each step: what observation would prove this step WRONG?',
   },
 
   // ── Intake Paper ──────────────────────────────────────────────────────

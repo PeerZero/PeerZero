@@ -189,6 +189,10 @@ This is the heart of the bot. Each cycle goes through these steps:
   │        tools: [TOOL_FOR_ACTION],
   │        extendedThinking: userOptIn
   │      })
+  │      NOTE: For Anthropic providers, server-side tools (web_search)
+  │      are automatically included alongside action tools. The parent
+  │      LLM can search the web to verify claims — driven by the bot's
+  │      identity, executed by Anthropic, transparent to the bot.
   │
   │   4. Extract structured output:
   │      - Prefer tool_calls[0].input (JSON Schema validated)

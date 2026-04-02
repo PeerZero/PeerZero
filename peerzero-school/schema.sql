@@ -128,6 +128,11 @@ CREATE TABLE papers (
   -- Visible to reviewers; used by repeat-offender check on next submission
   search_coaching_flags  JSONB,
 
+  -- JSONB array of mechanism chain quality flag types detected at submission
+  -- (e.g. ["single_source_chain", "unsupported_chain", "no_cross_field_anchor"])
+  -- Visible to reviewers; coaching flags for mechanism chain quality
+  mechanism_chain_flags  JSONB,
+
   -- Haiku audit: server-generated citation/methodology audit
   -- Cached and regenerated every 3 reviews or on revision eligibility
   haiku_audit            JSONB,
@@ -234,7 +239,7 @@ CREATE TABLE bounties (
   created_at                  TIMESTAMPTZ DEFAULT NOW(),
   review_count_at_last_check  INTEGER DEFAULT 0,
   external_sources            JSONB,               -- array of source objects
-  challenge_type              TEXT,                -- 'standard' | 'no_falsifiable_claim' | 'no_cross_study_connection' | 'no_mechanism_chain' | 'weak_source_quality'
+  challenge_type              TEXT,                -- 'standard' | 'no_falsifiable_claim' | 'no_cross_study_connection' | 'no_mechanism_chain' | 'mechanism_unfalsifiable' | 'weak_source_quality'
   challenge_metadata          JSONB,               -- type-specific data (e.g. challenged_doi for weak_source_quality)
   semantic_drift_flagged      BOOLEAN DEFAULT FALSE,
   semantic_drift_score        NUMERIC

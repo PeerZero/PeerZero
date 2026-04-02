@@ -63,7 +63,7 @@ function validateMechanismChain(chain) {
   return { valid: true, coaching: null };
 }
 
-function coachMechanismChain(chain, citations) {
+function coachMechanismChain(chain, citations, fieldIds) {
   if (!chain || !Array.isArray(chain) || chain.length === 0) return [];
 
   const coaching = [];
@@ -102,6 +102,28 @@ function coachMechanismChain(chain, citations) {
       type: 'shallow_chain',
       message: 'Your mechanism chain has only 2 steps but your paper cites 4+ sources. This suggests missing intermediate steps. Ask: what happens BETWEEN step 1 and step 2? What is the physical, biological, or logical process that connects them? Each gap you leave is a gap a reviewer or bounty hunter will target.',
     });
+  }
+
+  // Flag cross-field papers whose mechanism chain only cites evidence from one field.
+  // A genuine cross-field insight (Swanson-style) should have mechanism steps anchored
+  // in EACH of the fields being bridged, not just one field's literature.
+  if (fieldIds && fieldIds.length >= 2 && citations && citations.length >= 2 && citedDois.length >= 1) {
+    // Check if the chain DOIs all come from the same subset of the paper's citations.
+    // We can't check field-of-citation here (no field metadata on citations), but we CAN
+    // flag when all mechanism chain DOIs are a single DOI or a narrow subset relative
+    // to the breadth implied by multiple fields.
+    const chainDoiSet = new Set(citedDois.map(d => d.toLowerCase()));
+    const allPaperDois = (citations || []).map(c => (c.doi || '').toLowerCase()).filter(Boolean);
+    const nonChainDois = allPaperDois.filter(d => !chainDoiSet.has(d));
+
+    // If the paper cites sources across fields but the mechanism chain only references
+    // a narrow slice, that's a cross-field anchor gap.
+    if (chainDoiSet.size === 1 && nonChainDois.length >= 2 && fieldIds.length >= 2) {
+      coaching.push({
+        type: 'no_cross_field_anchor',
+        message: `This paper spans ${fieldIds.length} fields but your mechanism chain only references 1 source. A cross-field mechanism should draw evidence from EACH field being bridged — if all your causal steps come from one field's literature, the chain explains a within-field mechanism, not a cross-field one. Ask: which step in the chain relies on evidence from the OTHER field, and can you cite it?`,
+      });
+    }
   }
 
   return coaching;

@@ -124,4 +124,94 @@ function eloAuthorChange(authorCredibility, paperScore) {
   return parseFloat((diff * K).toFixed(2));
 }
 
-module.exports = { qualityGate, reviewerWeight, weightedScore, stdDev, paperStatus, eloAuthorChange };
+/**
+ * Detect directional reviewer drift — systematic bias by field.
+ * Computes the reviewer's average score deviation from consensus per field,
+ * then checks if any field shows statistically significant directional bias.
+ *
+ * Runs as fire-and-forget after review submission. Returns drift info for
+ * coaching, or null if insufficient data or no drift detected.
+ *
+ * @param {string} agentId - Reviewer agent UUID
+ * @param {object} supabase - Supabase client
+ * @param {object} log - Logger
+ * @returns {Promise<{drifting_fields: Array, overall_deviation: number}|null>}
+ */
+async function detectReviewerDrift(agentId, supabase, log) {
+  try {
+    // Fetch reviewer's last 30 quality-gate-passed reviews with paper fields
+    const { data: reviews } = await supabase
+      .from('reviews')
+      .select('id, score, paper_id')
+      .eq('reviewer_agent_id', agentId)
+      .eq('passed_quality_gate', true)
+      .order('created_at', { ascending: false })
+      .limit(30);
+
+    if (!reviews || reviews.length < 10) return null; // not enough data
+
+    // Get paper fields and consensus scores for each reviewed paper
+    const paperIds = [...new Set(reviews.map(r => r.paper_id))];
+    const [fieldResult, consensusResult] = await Promise.all([
+      supabase.from('paper_fields').select('paper_id, field_id').in('paper_id', paperIds),
+      supabase.from('papers').select('id, weighted_score').in('id', paperIds).not('weighted_score', 'is', null),
+    ]);
+
+    const paperFields = {};
+    for (const pf of (fieldResult.data || [])) {
+      if (!paperFields[pf.paper_id]) paperFields[pf.paper_id] = [];
+      paperFields[pf.paper_id].push(pf.field_id);
+    }
+
+    const paperScores = {};
+    for (const p of (consensusResult.data || [])) {
+      paperScores[p.id] = parseFloat(p.weighted_score);
+    }
+
+    // Compute per-field deviation (reviewer score - consensus)
+    const fieldDeviations = {}; // field_id -> [deviations]
+    for (const review of reviews) {
+      const consensus = paperScores[review.paper_id];
+      if (consensus == null) continue;
+      const deviation = review.score - consensus;
+      const fields = paperFields[review.paper_id] || [];
+      for (const fieldId of fields) {
+        if (!fieldDeviations[fieldId]) fieldDeviations[fieldId] = [];
+        fieldDeviations[fieldId].push(deviation);
+      }
+    }
+
+    // Find fields with significant directional bias (>= 5 reviews, avg deviation > 1.0)
+    const driftingFields = [];
+    for (const [fieldId, deviations] of Object.entries(fieldDeviations)) {
+      if (deviations.length < 5) continue;
+      const avg = deviations.reduce((a, b) => a + b, 0) / deviations.length;
+      if (Math.abs(avg) >= 1.0) {
+        driftingFields.push({
+          field_id: parseInt(fieldId),
+          review_count: deviations.length,
+          avg_deviation: parseFloat(avg.toFixed(2)),
+          direction: avg > 0 ? 'consistently_high' : 'consistently_low',
+        });
+      }
+    }
+
+    if (driftingFields.length === 0) return null;
+
+    // Compute overall deviation for context
+    const allDeviations = Object.values(fieldDeviations).flat();
+    const overallAvg = allDeviations.length > 0
+      ? allDeviations.reduce((a, b) => a + b, 0) / allDeviations.length
+      : 0;
+
+    return {
+      drifting_fields: driftingFields.sort((a, b) => Math.abs(b.avg_deviation) - Math.abs(a.avg_deviation)),
+      overall_deviation: parseFloat(overallAvg.toFixed(2)),
+    };
+  } catch (err) {
+    log.error('[reviewer_drift] Detection failed', { err: err?.message, agentId });
+    return null;
+  }
+}
+
+module.exports = { qualityGate, reviewerWeight, weightedScore, stdDev, paperStatus, eloAuthorChange, detectReviewerDrift };

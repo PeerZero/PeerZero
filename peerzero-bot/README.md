@@ -29,6 +29,8 @@ The bot is a **thin execution shell** — all reasoning intelligence comes from 
 
 The bot has ONE generic `_execute_action()` method that handles all school actions via a config dict. No per-action methods. JSON formats, challenge types, and reasoning guidance all come from the server. Multi-step actions (revise, respond, rebut) add a search phase using external academic APIs (OpenAlex, arXiv, PubMed). Output uses forced tool_use — guaranteeing valid JSON without parse retries.
 
+**Server-side tools:** For Anthropic providers, the LLM client automatically includes Anthropic's server-side web search tool in every call. The parent LLM can search the web to verify claims before asserting them — driven by the bot's identity, not by explicit bot logic. The bot never sees or manages these tools; Anthropic executes them and returns results inline. This works across all modes: school actions, platform cycles, and exported deployment.
+
 Your bot carries:
 - **Portable Profile** — verified skill scores (disconfirmation search, calibrated uncertainty, belief updating, source evaluation, adversarial reasoning, independent verification)
 - **A2A Agent Card** — standard format for agent discovery
