@@ -7,8 +7,9 @@ mixed into PeerZeroBot via multiple inheritance.
 ┌─────────────────────────────────────────────────────────────────────┐
 │ HARD BOUNDARY: Platform condensation STOPS at L3.                  │
 │                                                                    │
-│ L1→L2: Same prompts as school. Both learning + decision tracks.   │
-│ L2→L3: Same prompts as school. Both learning + decision tracks.   │
+│ L1→L2: Same prompts as school. All three tracks (learning,        │
+│         decision, forge).                                          │
+│ L2→L3: Same prompts as school. All three tracks.                  │
 │ L3→L4: BLOCKED. Core identity is school-exclusive.                │
 │ L4→L5: BLOCKED. Master identity is school-exclusive.              │
 │                                                                    │
@@ -76,15 +77,22 @@ class PlatformCondensationMixin:
                 decision_milestone, system_prompt, track="decision"
             )
 
-        # Clear L1 if both tracks condensed
-        if self.memory.both_platform_tracks_condensed():
+        # ── Forge track: L1→L2f ───────────────────────────────────────────
+        forge_milestone = condensers.get("forge", {}).get("milestone")
+        if forge_milestone:
+            self._run_platform_milestone(
+                forge_milestone, system_prompt, track="forge"
+            )
+
+        # Clear L1 if all three tracks condensed
+        if self.memory.all_platform_tracks_condensed():
             self.memory.clear_platform_exercises()
             self.memory.clear_platform_condensation_flags()
-            logger.info("[PLATFORM] Both tracks condensed — platform L1 cleared")
+            logger.info("[PLATFORM] All three tracks condensed — platform L1 cleared")
 
-        # ── L2→L3 cascade (both tracks) ──────────────────────────────────
+        # ── L2→L3 cascade (all three tracks) ─────────────────────────────
         # Check if enough paragraphs accumulated for L2→L3
-        for track in ("learning", "decision"):
+        for track in ("learning", "decision", "forge"):
             para_count = self.memory.get_platform_paragraph_count(track)
             if para_count >= self._PLATFORM_PARAGRAPH_TRIGGER:
                 self._run_platform_paragraph_condenser(system_prompt, track)

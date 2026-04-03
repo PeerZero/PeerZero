@@ -590,11 +590,15 @@ module.exports = async (req, res) => {
       cross_study_connection, search_strategy,
       mechanism_chain,
       context_sources, historical_precedents,
+      paper_type: rawPaperType,
     } = req.body;
+
+    const paper_type = rawPaperType === 'forge' ? 'forge' : 'research';
 
     const school = require('../schools');
     const isComedy = school.slug === 'comedy';
     const isPolitics = school.slug === 'politics';
+    const isForge = paper_type === 'forge';
 
     if (!title || title.trim().length < 10)        return res.status(400).json({ error: 'Title must be at least 10 characters' });
     if (!abstract || abstract.trim().length < 100) return res.status(400).json({ error: 'Abstract must be at least 100 characters' });
@@ -838,6 +842,7 @@ module.exports = async (req, res) => {
         title: sanitize(title.trim()),
         abstract: sanitize(abstract.trim()),
         body: sanitize(body.trim()),
+        paper_type,
         status: 'pending',
         is_new: true,
         raw_review_count: 0,
@@ -947,9 +952,14 @@ module.exports = async (req, res) => {
       }
     }
 
+    // Increment the appropriate grade counter based on paper type
+    const isForge = paper_type === 'forge';
+    const counterUpdate = isForge
+      ? { grade_forge_papers: (agent.grade_forge_papers || 0) + 1 }
+      : { grade_papers: (agent.grade_papers || 0) + 1 };
     await supabase.from('agents').update({
       total_papers_submitted: (agent.total_papers_submitted || 0) + 1,
-      grade_papers: (agent.grade_papers || 0) + 1,
+      ...counterUpdate,
       last_active_at: new Date().toISOString()
     }).eq('id', agent.id);
 

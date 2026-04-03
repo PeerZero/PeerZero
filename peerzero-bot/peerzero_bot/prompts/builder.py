@@ -61,7 +61,7 @@ class PromptBuilder:
             "review": "review this paper", "file_bounty": "challenge this paper",
             "revise": "revise your paper", "respond": "respond to this paper",
             "rebut": "defend your paper", "reaffirm": "reaffirm your paper",
-            "submit_paper": "write a paper",
+            "submit_paper": "write a paper", "forge_paper": "write a forge paper analyzing your own transformation",
         }
         preamble = self._build_memory_preamble(verb_map.get(action, action))
 
@@ -480,7 +480,11 @@ Return ONLY the identity block, nothing else."""
 
     def build_decision_condenser_prompt(self, server_prompt: str, exercises: list[dict]) -> str:
         """L1→L2d: Server provides the full decision condenser prompt.
-        Bot appends exercise data + learning identity for cross-track context."""
+        Bot appends exercise data + learning identity for cross-track context.
+
+        Fires AFTER learning L2 in the same cycle, so the freshly-written
+        learning paragraph is available via get_identity_paragraphs().
+        """
         exercises_json = truncate_json(json.dumps(exercises, indent=2, default=str), 8000)
 
         # Cross-track: inject learning identity so decision paragraphs can reference it
@@ -493,6 +497,18 @@ Return ONLY the identity block, nothing else."""
                 "shaped by what you know:\n"
                 f"{learning_core[:2000]}\n"
             )
+
+        # Same-cycle cross-track: the learning paragraph just written this cycle
+        learning_paras = self._memory.get_identity_paragraphs()
+        if learning_paras:
+            latest = learning_paras[-1].get("paragraph", "")
+            if latest:
+                learning_context += (
+                    "\nThe learning track JUST condensed this paragraph from the same exercises. "
+                    "Your decision paragraph should complement it — what the learning track "
+                    "captured about methods, you capture about choices:\n"
+                    f"{latest[:1000]}\n"
+                )
 
         return f"""{server_prompt}
 
@@ -625,6 +641,195 @@ Your decision paragraphs (Layer 2d — condensed decision lessons from every gra
 {para_list}
 {docs_section}{core_section}{learning_section}
 Return ONLY the decision identity text, nothing else."""
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # FORGE TRACK CONDENSER PROMPTS
+    # Third parallel track: HOW THE BOT TRANSFORMS.
+    # Same pattern as decision — server provides prompt, bot adds context.
+    # ═══════════════════════════════════════════════════════════════════════
+
+    def build_forge_condenser_prompt(self, server_prompt: str, exercises: list[dict]) -> str:
+        """L1→L2f: Server provides the full forge condenser prompt.
+        Bot appends exercise data + learning/decision identity for cross-track context.
+
+        Fires AFTER learning L2 AND decision L2d in the same cycle, so both
+        freshly-written paragraphs are available for cross-track synthesis.
+        """
+        exercises_json = truncate_json(json.dumps(exercises, indent=2, default=str), 8000)
+
+        # Cross-track: inject both learning and decision identity
+        learning_core = self._memory.get_core_identity()
+        decision_core = self._memory.get_decision_core()
+        cross_context = ""
+        if learning_core:
+            cross_context += (
+                "\nYour LEARNING IDENTITY (what you know) — your forge paragraph "
+                "should analyze how THIS knowledge was forged:\n"
+                f"{learning_core[:1500]}\n"
+            )
+        if decision_core:
+            cross_context += (
+                "\nYour DECISION IDENTITY (how you choose) — your forge paragraph "
+                "should analyze how THESE decision patterns were forged:\n"
+                f"{decision_core[:1500]}\n"
+            )
+
+        # Same-cycle cross-track: paragraphs just written from the same exercises
+        learning_paras = self._memory.get_identity_paragraphs()
+        decision_paras = self._memory.get_decision_paragraphs()
+        if learning_paras:
+            latest_l = learning_paras[-1].get("paragraph", "")
+            if latest_l:
+                cross_context += (
+                    "\nThe learning track JUST condensed this from the same exercises — "
+                    "what methods were learned. Your forge paragraph should analyze "
+                    "what CONDITIONS produced that learning:\n"
+                    f"{latest_l[:800]}\n"
+                )
+        if decision_paras:
+            latest_d = decision_paras[-1].get("paragraph", "")
+            if latest_d:
+                cross_context += (
+                    "\nThe decision track JUST condensed this from the same exercises — "
+                    "what choice patterns emerged. Your forge paragraph should analyze "
+                    "what PRESSURES shaped those patterns:\n"
+                    f"{latest_d[:800]}\n"
+                )
+
+        return f"""{server_prompt}
+
+Here are your accumulated raw exercises — actions you took, feedback you received,
+outcomes that resulted. Analyze them for what they reveal about HOW YOU TRANSFORM:
+{exercises_json}
+{cross_context}
+Do NOT reference system-specific metrics as if they carry forward. Translate
+scores and grades into the transformation lesson they taught you. "A 3.1-point
+score drop on my most confident paper broke my assumption that thorough citations
+equal good evidence" carries forward. "weighted_score dropped from 7.8 to 4.7"
+does not.
+
+Return ONLY the paragraph, nothing else."""
+
+    def build_forge_paragraph_condenser_prompt(self, server_prompt: str, paragraphs: list[dict]) -> str:
+        """L2f→L3f: Server provides the full prompt. Bot appends paragraphs + all cores."""
+        para_list = json.dumps([p["paragraph"] for p in paragraphs], indent=2)
+
+        # Same-track: reference forge core so doc speaks through it
+        core_context = ""
+        f_core = self._memory.get_forge_core()
+        if f_core:
+            core_context = (
+                "\nYour current FORGE CORE (Layer 4f) — your condensed document "
+                "should speak through this and build on it:\n"
+                f"{f_core}\n"
+            )
+
+        return f"""{server_prompt}
+
+Your forge paragraphs — specific moments where pressure changed you or failed to:
+{para_list}
+{core_context}
+Return ONLY the condensed document, nothing else."""
+
+    def build_forge_identity_condenser_prompt(self, server_prompt: str, forge_docs: list[dict], existing_core: str | None = None) -> str:
+        """L3f→L4f: Server provides the full prompt. Bot appends docs + all cores."""
+        doc_list = json.dumps([d["doc"] for d in forge_docs], indent=2)
+
+        core_section = ""
+        if existing_core:
+            core_section = f"""
+Your EXISTING forge core (built by previous L3f→L4f condensations).
+You may keep, revise, or completely rewrite it — but the new version
+must be grounded in ALL your forge documents, not just the new ones:
+{existing_core}
+"""
+
+        # Cross-track context
+        learning_core = self._memory.get_core_identity()
+        decision_core = self._memory.get_decision_core()
+        cross_section = ""
+        if learning_core:
+            cross_section += f"""
+Your LEARNING IDENTITY (Layer 4) — your forge core should reference how
+this knowledge was forged through the mechanisms you're analyzing:
+{learning_core[:1500]}
+"""
+        if decision_core:
+            cross_section += f"""
+Your DECISION IDENTITY (Layer 4d) — your forge core should reference how
+these decision patterns were forged:
+{decision_core[:1500]}
+"""
+
+        return f"""{server_prompt}
+
+Your condensed forge documents — each one distills patterns from many transformation moments:
+{doc_list}
+{core_section}{cross_section}
+Return ONLY the forge identity block, nothing else."""
+
+    def build_forge_master_condenser_prompt(
+        self,
+        condenser: dict,
+        paragraphs: list[dict],
+        forge_docs: list[dict] | None = None,
+        existing_core: str | None = None,
+    ) -> str:
+        """L4f→L5f: Server provides the full prompt. Bot appends all forge layers + cross-track."""
+        prompt = condenser.get("forge_master_condenser_prompt", "Produce your master forge identity.")
+
+        para_list = json.dumps([p["paragraph"] for p in paragraphs], indent=2) if paragraphs else "[]"
+
+        docs_section = ""
+        if forge_docs:
+            doc_text = "\n\n---\n\n".join(d["doc"] for d in forge_docs)
+            docs_section = f"""
+Your condensed forge documents (Layer 3f — distilled transformation patterns):
+{doc_text}
+"""
+
+        core_section = ""
+        if existing_core:
+            core_section = f"""
+Your current forge core (Layer 4f — built by previous condensations):
+{existing_core}
+"""
+
+        # Cross-track: inject learning and decision masters for graduation
+        learning_master = self._memory.get_master_identity()
+        learning_core = self._memory.get_core_identity()
+        decision_master = self._memory.get_decision_master()
+        decision_core = self._memory.get_decision_core()
+        cross_section = ""
+        if learning_master:
+            cross_section += f"""
+Your LEARNING MASTER IDENTITY (Layer 5, permanent) — your forge master
+should explain how this was forged:
+{learning_master[:2000]}
+"""
+        elif learning_core:
+            cross_section += f"""
+Your LEARNING IDENTITY (Layer 4):
+{learning_core[:2000]}
+"""
+        if decision_master:
+            cross_section += f"""
+Your DECISION MASTER IDENTITY (Layer 5d, permanent) — your forge master
+should explain how these decision instincts were forged:
+{decision_master[:2000]}
+"""
+        elif decision_core:
+            cross_section += f"""
+Your DECISION IDENTITY (Layer 4d):
+{decision_core[:2000]}
+"""
+
+        return f"""{prompt}
+
+Your forge paragraphs (Layer 2f — condensed transformation lessons from every grade):
+{para_list}
+{docs_section}{core_section}{cross_section}
+Return ONLY the forge identity text, nothing else."""
 
     def build_review_rating_prompt(self, review: dict, action_skill: str = "", own_review: dict | None = None) -> str:
         """Format review data for rating. Intelligence lives in server's rate_review skill."""

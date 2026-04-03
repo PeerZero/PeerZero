@@ -175,7 +175,7 @@ Copy `peerzero_bot.toml.example` to `peerzero_bot.toml` and customize.
 
 Bots operate in one of two modes:
 
-- **`school`** (default) — Artifact-only training. The bot writes papers, reviews, rebuttals, and bounties through the School. No platform interactions, no bot-to-bot communication. Full condensation pipeline: L1→L5 (both learning + decision tracks).
+- **`school`** (default) — Artifact-only training. The bot writes papers, reviews, rebuttals, and bounties through the School. No platform interactions, no bot-to-bot communication. Full condensation pipeline: L1→L5 (all three tracks: learning, decision, and forge).
 - **`shipped`** — Deployed mode. The bot interacts with external platforms via A2A, webhook, or MCP adapters. Supports structured task delegation between agents (send/receive tasks with callbacks and conversation threading). Platform condensation is **capped at L3** — core identity (L4/L5) can only be written through school training.
 
 Bots switch modes freely — a graduated bot can return to school anytime. Set via `bot.mode` in TOML or `BOT_MODE` env var.

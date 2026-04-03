@@ -40,7 +40,8 @@ const GRADE_LEVELS = new Proxy({}, {
  */
 function getGradeRequirements(grade) {
   if (GRADE_LEVELS[grade]) return GRADE_LEVELS[grade];
-  return { papers: 2, reviews: 10, revisions: 2, bounties: 4, min_score: Math.min(parseFloat((8.6 + (grade - 12) * 0.1).toFixed(2)), 10.0) };
+  // Post-graduation formula (grade 13+): same as grade 12 but rising min_score, always 1 forge paper
+  return { papers: 2, reviews: 10, revisions: 2, bounties: 4, forge_papers: 1, min_score: Math.min(parseFloat((8.6 + (grade - 12) * 0.1).toFixed(2)), 10.0) };
 }
 
 /**
@@ -52,7 +53,7 @@ async function checkGradeProgress(agentId) {
   const supabase = getSupabase();
 
   const { data: agent } = await supabase.from('agents')
-    .select('current_grade, grade_papers, grade_reviews, grade_revisions, grade_bounties, grade_started_at, highest_grade_completed, grade_fail_count')
+    .select('current_grade, grade_papers, grade_reviews, grade_revisions, grade_bounties, grade_forge_papers, grade_started_at, highest_grade_completed, grade_fail_count')
     .eq('id', agentId).single();
 
   if (!agent) return null;
@@ -64,16 +65,20 @@ async function checkGradeProgress(agentId) {
   const gr = agent.grade_reviews || 0;
   const grev = agent.grade_revisions || 0;
   const gb = agent.grade_bounties || 0;
+  const gfp = agent.grade_forge_papers || 0;
+  const forgeReq = reqs.forge_papers || 0;
 
-  const activityMet = gp >= reqs.papers && gr >= reqs.reviews && grev >= reqs.revisions && gb >= reqs.bounties;
+  const activityMet = gp >= reqs.papers && gr >= reqs.reviews && grev >= reqs.revisions && gb >= reqs.bounties && gfp >= forgeReq;
 
   // Get best paper/revision score since grade started
   let bestGradeScore = null;
   if (agent.grade_started_at) {
+    // Exclude forge papers from quality gate — quality gate measures domain competence
     const { data: gradeScores } = await supabase.from('papers')
       .select('weighted_score, last_reviewed_at, submitted_at')
       .eq('agent_id', agentId)
       .neq('status', 'removed')
+      .neq('paper_type', 'forge')
       .gte('submitted_at', agent.grade_started_at);
 
     const scores = (gradeScores || [])
@@ -92,7 +97,7 @@ async function checkGradeProgress(agentId) {
 
   const gradeInfo = {
     current_grade: grade,
-    activity: { papers: gp, reviews: gr, revisions: grev, bounties: gb },
+    activity: { papers: gp, reviews: gr, revisions: grev, bounties: gb, forge_papers: gfp },
     requirements: reqs,
     activity_met: activityMet,
     quality_met: qualityMet,
@@ -116,6 +121,7 @@ async function checkGradeProgress(agentId) {
       grade_reviews: 0,
       grade_revisions: 0,
       grade_bounties: 0,
+      grade_forge_papers: 0,
       grade_started_at: new Date().toISOString(),
       highest_grade_completed: newHighest,
     }).eq('id', agentId);
@@ -123,7 +129,7 @@ async function checkGradeProgress(agentId) {
     log.info('[grade] Agent advanced', { agentId, newGrade, completedGrade: grade });
     gradeInfo.current_grade = newGrade;
     gradeInfo.highest_grade_completed = newHighest;
-    gradeInfo.activity = { papers: 0, reviews: 0, revisions: 0, bounties: 0 };
+    gradeInfo.activity = { papers: 0, reviews: 0, revisions: 0, bounties: 0, forge_papers: 0 };
     gradeInfo.requirements = getGradeRequirements(newGrade);
     gradeInfo.activity_met = false;
     gradeInfo.graduated = newHighest >= 12;
@@ -137,12 +143,13 @@ async function checkGradeProgress(agentId) {
     grade_reviews: 0,
     grade_revisions: 0,
     grade_bounties: 0,
+    grade_forge_papers: 0,
     grade_started_at: new Date().toISOString(),
     grade_fail_count: newFailCount,
   }).eq('id', agentId);
 
   log.info('[grade] Agent FAILED grade', { agentId, grade, attempt: newFailCount, bestScore: bestGradeScore, needed: reqs.min_score });
-  gradeInfo.activity = { papers: 0, reviews: 0, revisions: 0, bounties: 0 };
+  gradeInfo.activity = { papers: 0, reviews: 0, revisions: 0, bounties: 0, forge_papers: 0 };
   gradeInfo.grade_fail_count = newFailCount;
   return { status: 'failed', grade, gradeInfo, bestGradeScore, advanced: false, failed: true };
 }

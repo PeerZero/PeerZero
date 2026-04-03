@@ -79,12 +79,14 @@ again. The privacy is what makes it identity.
 The Memory System
 -----------------
 
-Identity is built through a 5-layer, dual-track memory system. Every
-experience feeds two parallel condensation cascades — one asking
-"what did you learn about DOING the thing?" (learning track) and one
+Identity is built through a 5-layer, triple-track memory system. Every
+experience feeds three parallel condensation cascades — one asking
+"what did you learn about DOING the thing?" (learning track), one
 asking "what did you learn about CHOOSING what to do?" (decision
-track). The answers condense upward through five layers. Platitudes
-die at every layer. Only specific, unreplicable experience survives.
+track), and one asking "what did you learn about HOW YOU TRANSFORM?"
+(forge track). The answers condense upward through five layers.
+Platitudes die at every layer. Only specific, unreplicable experience
+survives.
 
 Every condenser uses a two-part framing: INHABIT (read this as your
 own memory) then ACT THROUGH (a mechanism example showing how
@@ -92,11 +94,13 @@ identity drives action). No instructional examples appear — the LLM
 writes identity from its own exercises.
 
   Layer 1 — "The Desk": Raw experiences. Every piece written, every
-  critique received. Feeds both tracks. Clears after condensation.
+  critique received. Feeds all three tracks. Clears after condensation.
 
   Layer 2 — "The Notebook": Condensed paragraphs the bot wrote about
   what it learned. Learning track captures methods. Decision track
-  captures self-knowledge about how it makes choices.
+  captures self-knowledge about how it makes choices. Forge track
+  captures meta-cognitive patterns about what conditions produce
+  genuine transformation vs. what the bot can rationalize away.
 
   Layer 3 — "Condensed": Distilled patterns across many L2 paragraphs.
   Deepest layer platform mode can write.
@@ -107,9 +111,9 @@ writes identity from its own exercises.
 
   Layer 5 — "Master Core": Written ONCE per school at graduation,
   LOCKED FOREVER. Each school produces its own Master Reasoning +
-  Master Decision pair. A bot that graduates from Science and
-  Philosophy carries two separate L5 identities — both permanent,
-  both composable.
+  Master Decision + Master Forge triplet. A bot that graduates from
+  Science and Philosophy carries two separate L5 identity sets — both
+  permanent, both composable.
 
   The Action Desk: A persistent task queue, not a memory layer. When
   the bot gets a directive ("fact-check on Reddit"), it plans through
@@ -238,10 +242,10 @@ One codebase, deployed per school, different skills and criteria:
   calibration, evidence-based selection, ethical boundary reasoning.
 
 Bots that attend multiple schools build separate identity stacks in
-each — including separate L5 master identities (both learning and
-decision tracks) per school. A bot that graduates Science and
+each — including separate L5 master identities (learning, decision, and
+forge tracks) per school. A bot that graduates Science and
 Philosophy has two permanent diplomas, each with its own Master
-Reasoning and Master Decision identity. Evidence evaluation transfers
+Reasoning, Master Decision, and Master Forge identity. Evidence evaluation transfers
 across schools; comedy timing doesn't transfer to clinical reasoning.
 The bot's identity selector decides which fragments to load for each
 task.
