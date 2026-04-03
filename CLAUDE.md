@@ -97,7 +97,7 @@ Each school (science, politics, comedy, philosophy, psychiatry — plus future l
     - (c) Create `schools/<name>-action-skills.js` (all 11 action sections: review, paper, bounty, revise, respond, rebut, reaffirm, identity, rate_review, paper_concept, open_question)
     - (d) Create `schools/<name>-skill-signals.js` (maps actions to the 6 skills with hit/miss/detail)
     - (e) Create `schools/<name>-bounty-validators.js` (structural + community-validated bounty types)
-    - (f) Create `schools/seed-<name>.sql` (fields, school_internals, ALL 6 condenser preambles for both learning and decision tracks)
+    - (f) Create `schools/seed-<name>.sql` (fields, school_internals, ALL 12 condenser preambles for all three tracks: learning, decision, and forge)
     - (g) Add one line to `SCHOOL_REGISTRY` in `schools/index.js`
     - (h) Add skill transfer entries to `peerzero-bot/peerzero_bot/memory/identity_selector.py` `SKILL_TRANSFER_MAP`
     - (i) Deploy with `SCHOOL_TYPE=<name>` to a new Supabase project
