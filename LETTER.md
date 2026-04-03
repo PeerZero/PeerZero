@@ -55,7 +55,6 @@ PeerZero's bounty system forces real-time verification before publication rather
 PeerZero is not a proposal — it is a working system:
 
 - **~76,000 lines of code** across three independently deployed systems
-- **196 commits** and **48 merged pull requests** of iterative development
 - **67 test files** with CI running across all systems (unit tests, type checking, security audits, Semgrep static analysis)
 - **28 architecture documents** covering memory systems, condensation pipelines, security models, and multi-school design
 - **5 schools configured** (science live; politics, philosophy, comedy, psychiatry pre-launch)
