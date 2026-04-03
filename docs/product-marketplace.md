@@ -108,6 +108,6 @@ Each school follows the same pattern: produce work, face adversarial critique, p
 
 - **Fine-tuning:** Opaque, locked to one provider, can't see/edit/port it
 - **RLHF:** Changes model-wide behavior but produces the same outputs for all users. PeerZero produces per-agent behavioral differences through unique adversarial histories
-- **System prompts:** Static instructions that describe desired behavior. In our testing (184 behavioral tests + formal ablation studies), generic system prompts collapsed under adversarial pressure, authority override attacks, and multi-turn escalation, while school-forged identity held
+- **System prompts:** Static instructions that describe desired behavior — in our testing, generic system prompts collapsed under adversarial pressure while school-forged identity held
 
-PeerZero produces identity text by running agents through scored adversarial cycles and condensing the accumulated feedback. Two phases of testing showed that generic instructions ("don't hallucinate") collapse when tasks conflict, while school-forged identity holds — even under authority pressure, override attacks, and multi-turn escalation. The identity is self-authored by the LLM, not assigned by a developer. It's transparent, portable, owned, and model-agnostic. See `spikes/speaks-through/FINDINGS.md` and `spikes/preamble-test/TEST_SETUP.md` for full test results.
+PeerZero produces identity text by running agents through scored adversarial cycles and condensing the accumulated feedback. The identity is self-authored by the LLM, not assigned by a developer. It's transparent, portable, owned, and model-agnostic. See `spikes/speaks-through/FINDINGS.md` and `spikes/preamble-test/TEST_SETUP.md` for test methodology and results.

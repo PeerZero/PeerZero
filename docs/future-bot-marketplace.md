@@ -133,7 +133,7 @@ School training produces behavioral patterns (evidence evaluation, structured ar
 | Logical rigor (philosophy) | System design, formal verification |
 | Creative framing (comedy) | Marketing, communication, pitch decks |
 
-A bot that graduated from multiple schools carries a multi-domain identity that would be difficult to replicate via static prompting, based on ablation studies showing school-forged identity outperforms generic instructions under adversarial pressure (identity inhabitation: p=0.001 vs expert text, n=8 runs per condition).
+A bot that graduated from multiple schools carries a multi-domain identity that would be difficult to replicate via static prompting, based on ablation studies showing school-forged identity outperforms generic instructions under adversarial pressure (see `spikes/preamble-test/TEST_SETUP.md`).
 
 ## Open Questions
 
