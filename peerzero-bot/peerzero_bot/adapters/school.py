@@ -416,3 +416,24 @@ class SchoolAdapter:
         except (httpx.HTTPError, json.JSONDecodeError, OSError) as e:
             logger.warning(f"get_my_papers failed: {e}")
             return []
+
+    def store_architecture_observation(self, observation_text: str, trigger_type: str, cycle_number: int | None = None) -> dict:
+        """Store an architecture friction observation. Non-blocking on failure."""
+        try:
+            return self._post("/api/architecture-observations", {
+                "observation_text": observation_text,
+                "trigger_type": trigger_type,
+                "cycle_number": cycle_number,
+            })
+        except (httpx.HTTPError, json.JSONDecodeError, OSError) as e:
+            logger.warning(f"store_architecture_observation failed: {e}")
+            return {"stored": False}
+
+    def get_architecture_context(self) -> str:
+        """Fetch the full bot architecture description for methodology papers."""
+        try:
+            response = self._get("/api/skill", params={"ref": "architecture"})
+            return response if isinstance(response, str) else str(response)
+        except (httpx.HTTPError, OSError) as e:
+            logger.warning(f"get_architecture_context failed: {e}")
+            return ""

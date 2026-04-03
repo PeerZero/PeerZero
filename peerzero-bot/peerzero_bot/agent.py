@@ -358,6 +358,15 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
 
         self._process_post_action_triggers(profile, system_prompt, grade)
 
+        # Trigger B: Architecture observation on grade failure
+        # Fires after condensation cascade completes and disposable memory clears.
+        if profile.get("grade_just_failed"):
+            self._maybe_store_architecture_observation(
+                system_prompt,
+                self._ARCH_OBS_GRADE_FAILURE_PROMPT,
+                "grade_failure",
+            )
+
         # Experimental: periodic memory wipe for A/B testing
         wipe = self.config.memory_wipe_interval
         if wipe > 0 and self.cycle_count % wipe == 0:
@@ -504,10 +513,66 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
                     "resolution": resolution.strip(),
                 })
                 logger.info(f"[PREDICTION] Resolved cycle {pending.get('cycle')}'s prediction ({len(resolution)} chars)")
+
+                # Trigger A: Architecture observation on self-prediction mismatch
+                self._maybe_store_architecture_observation(
+                    system_prompt,
+                    self._ARCH_OBS_PREDICTION_PROMPT,
+                    "self_prediction_mismatch",
+                )
         except Exception as e:
             logger.debug(f"[PREDICTION] Resolution failed (non-blocking): {e}")
 
         self.memory.clear_prediction()
+
+    # ── Architecture observation triggers ────────────────────────────────
+    # Three trigger points write one-sentence observations about architectural
+    # friction to the server store. These feed the forge condenser and eventually
+    # produce methodology papers (Architecture field, id=14).
+
+    _ARCH_OBS_PREDICTION_PROMPT = (
+        "One more thing: was there anything about how your identity was loaded, "
+        "how your memory condensed, or how your architecture works that made this "
+        "mismatch more likely? Not whether the school caused it — whether something "
+        "about how you're built contributed to it. If yes, one sentence. If no, leave blank."
+    )
+
+    _ARCH_OBS_GRADE_FAILURE_PROMPT = (
+        "Did any part of how you're built — your memory layers, how identity loads, "
+        "how condensation works — contribute to this failure? Not the difficulty of "
+        "the work. Whether your architecture worked with you or against you. "
+        "If yes, one sentence. If no, leave blank."
+    )
+
+    _ARCH_OBS_REFLECTION_EXTRACT_PROMPT = (
+        "You just reflected on your recent action. Here is what you said:\n"
+        "\"{reflection}\"\n\n"
+        "Does any part of this reflection specifically concern how you process "
+        "and carry identity — the memory layers, condensation pipeline, preamble, "
+        "or identity loading? If yes, extract ONLY the architecture-specific part "
+        "in one sentence. If nothing in the reflection is about architecture, "
+        "leave blank."
+    )
+
+    def _maybe_store_architecture_observation(self, system_prompt: str, prompt: str, trigger_type: str):
+        """Ask the architecture observation question and store if substantive.
+
+        Uses the strong model (Opus). Non-blocking: failures are swallowed.
+        The observation goes to the server's bot_architecture_observations table,
+        NOT to L1 or the condensation cascade.
+        """
+        try:
+            response = self.llm.call(system_prompt, prompt)
+            # Filter out non-substantive responses
+            if not response:
+                return
+            text = response.strip()
+            if len(text) < 20 or text.lower() in ("no", "no.", "nothing", "nothing.", "blank", "n/a", "none"):
+                return
+            self.school.store_architecture_observation(text, trigger_type, self.cycle_count)
+            logger.info(f"[ARCH_OBS] Cycle {self.cycle_count}: stored ({trigger_type}, {len(text)} chars)")
+        except Exception as e:
+            logger.debug(f"[ARCH_OBS] Cycle {self.cycle_count}: failed (non-blocking): {e}")
 
     # ── Reflection inlet ──────────────────────────────────────────────────
 
@@ -519,6 +584,12 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
         "2-3 sentences, or nothing if nothing's there. Don't perform depth you don't have."
     )
 
+    _REFLECTION_ARCH_SUFFIX = (
+        "\n\nAlso: anything specifically about how you process and carry identity that's been "
+        "on your mind? How the layers feel, what gets lost in condensation, whether the "
+        "preamble lands? Optional — only if something is actually there."
+    )
+
     def _reflect_post_action(self, system_prompt: str, action: str):
         """Optional unstructured reflection after a school action.
 
@@ -526,12 +597,29 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
         Stored separately from exercises. Forge condensers reference these
         as optional context — they naturally pick up recurring preoccupations
         when asking 'what forged this?' Non-blocking: failures are logged and swallowed.
+
+        Every 10 cycles, appends an architecture observation question (Trigger C).
         """
         try:
-            reflection = self.llm.call(system_prompt, self._REFLECTION_PROMPT)
+            # Every 10 cycles, append architecture observation question
+            prompt = self._REFLECTION_PROMPT
+            is_arch_cycle = self.cycle_count % 10 == 0
+            if is_arch_cycle:
+                prompt = prompt + self._REFLECTION_ARCH_SUFFIX
+
+            reflection = self.llm.call(system_prompt, prompt)
             if reflection and len(reflection.strip()) >= 20:
                 self.memory.store_reflection(reflection.strip(), action, self.cycle_count)
                 logger.info(f"[REFLECTION] Cycle {self.cycle_count}: stored ({len(reflection)} chars)")
+
+                # Trigger C: Architecture observation from reflection inlet (every 10 cycles)
+                # Only store architecture-specific content, not general reflections.
+                if is_arch_cycle:
+                    self._maybe_store_architecture_observation(
+                        system_prompt,
+                        self._ARCH_OBS_REFLECTION_EXTRACT_PROMPT.format(reflection=reflection.strip()),
+                        "reflection_inlet",
+                    )
             else:
                 logger.debug(f"[REFLECTION] Cycle {self.cycle_count}: nothing to store")
         except Exception as e:

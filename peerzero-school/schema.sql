@@ -75,7 +75,8 @@ INSERT INTO fields (name, slug, description) VALUES
   ('Astronomy',             'astronomy',             'Astrophysics, cosmology, planetary science'),
   ('Materials Science',     'materials-science',     'Nanomaterials, polymers, semiconductors, metallurgy'),
   ('Interdisciplinary',     'interdisciplinary',     'Papers spanning multiple fields'),
-  ('Methodology',           'methodology',           'Research methods, statistical approaches, study design');
+  ('Methodology',           'methodology',           'Research methods, statistical approaches, study design'),
+  ('Architecture',          'architecture',          'Papers proposing improvements to bot design — memory layers, identity loading, condensation pipeline, preamble structure, active focus curation, or any mechanism by which the bot processes and carries identity.');
 
 -- ============================================================
 -- PAPERS TABLE

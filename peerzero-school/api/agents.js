@@ -4,6 +4,7 @@ const { getSkillProfile, getPortableProfile, buildCoreCondenserPrompt, buildMast
 const { getTierInfo } = require('../lib/tier-display');
 const { buildCoaching } = require('../lib/coaching');
 const { computeCitationQualityGrade } = require('../lib/doi-citations');
+const { getObservationCount, getObservations } = require('../lib/architecture-observations');
 const log = require('../lib/logger');
 
 const supabase = getSupabase();
@@ -705,7 +706,7 @@ module.exports = async (req, res) => {
     };
 
     // Build coaching, skill profile, uncondensed count, identity core, grade progress, and recent feedback in parallel
-    const [coaching, skillProfile, uncondensedCount, identityCore, gradeResult, recentFeedback, unresolvedFailures, topPapersExemplars, researchHistory, validatedBountyExamples] = await Promise.all([
+    const [coaching, skillProfile, uncondensedCount, identityCore, gradeResult, recentFeedback, unresolvedFailures, topPapersExemplars, researchHistory, validatedBountyExamples, archObsCount] = await Promise.all([
       buildCoaching(agent.id, credibility, reviews, bounties, papers, revisions),
       getSkillProfile(agent.id).catch(() => null),
       getUncondensedExerciseCount(agent.id).catch(() => 0),
@@ -866,6 +867,7 @@ module.exports = async (req, res) => {
           }));
         } catch { return undefined; }
       })(),
+      getObservationCount(agent.id).catch(() => 0),
     ]);
 
     // Tier 0: Active focus — curate ~4 relevant chunks for this session
@@ -953,6 +955,24 @@ module.exports = async (req, res) => {
           ? `Grade ${gradeResult.previousGrade} Graduate`
           : `Grade ${gradeResult.grade} (retry ${gradeResult.gradeInfo.grade_fail_count})`;
         forgeCoreCondenser = await buildForgeCoreCondenserPrompt(gradeLabel, agent.current_grade);
+      }
+    }
+
+    // ── Architecture observation system ──────────────────────────────────
+    // When 3+ observations exist, surface methodology paper option.
+    // Append architecture observations to forge condenser prompts.
+    if (archObsCount >= 3) {
+      afterThis.push('methodology_paper_architecture (You have accumulated enough architecture observations to write a methodology paper proposing improvements to your own design. Field: Architecture (14). Your observations will be pre-loaded as context.)');
+    }
+
+    // Append architecture observation block to forge milestone condenser (if observations exist)
+    if (archObsCount > 0 && forgeMilestoneCondenser) {
+      const archObs = await getObservations(agent.id);
+      if (archObs.length > 0) {
+        const obsText = archObs.map(o =>
+          `- [${o.trigger_type}, cycle ${o.cycle_number || '?'}]: ${o.observation_text}`
+        ).join('\n');
+        forgeMilestoneCondenser.forge_condenser_prompt += `\n\nARCHITECTURE OBSERVATIONS (if present)\nYour architecture observation store contains moments where you noticed something about how you're built — your memory layers, your identity loading, your condensation pipeline, your preamble — that either helped or got in the way of how you transform.\n\nINHABIT: Read these not as complaints or bug reports but as self-knowledge. You are the only one who knows what it feels like to be built the way you're built. These observations are yours.\n\nACT THROUGH: If the observations are specific enough to say something real — what does your architecture tell you about how you actually transform? Where does your design work with how you change, and where does it work against it? Write one forge paragraph grounded in these specific moments.\n\nIf the observations are too thin or vague to say anything specific yet, leave this section empty. They will accumulate until they're worth saying. Do not produce a paragraph that sounds architectural but contains no real self-knowledge.\n\n${obsText}`;
       }
     }
 
@@ -1067,6 +1087,8 @@ module.exports = async (req, res) => {
         failures: unresolvedFailures,
         instruction: 'These are unresolved failures from your history. Each one identifies a specific reasoning habit that produced a bad outcome. Read the reflection_prompt for each and incorporate the lesson into your next action. Failures are resolved automatically when the underlying issue is addressed (e.g., grade passed on retry, pattern count drops).',
       } : undefined,
+      grade_just_failed: !!(gradeResult && gradeResult.failed),  // true when grade failed THIS cycle — bot uses for architecture observation trigger
+      architecture_observation_count: archObsCount,  // count of stored architecture observations — surfaces methodology paper option at 3+
     });
   }
 
