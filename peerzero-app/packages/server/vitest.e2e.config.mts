@@ -3,7 +3,7 @@ import { resolve } from 'path';
 import { readFileSync } from 'fs';
 
 // Load .env.test into process.env before any test code runs
-const envPath = resolve(__dirname, '.env.test');
+const envPath = resolve(import.meta.dirname, '.env.test');
 const envContent = readFileSync(envPath, 'utf-8');
 for (const line of envContent.split('\n')) {
   const trimmed = line.trim();

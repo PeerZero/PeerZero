@@ -369,7 +369,9 @@ describe('E2E: Agent loop cycle', () => {
         expect.objectContaining({ skill_key: 'adversarial_reasoning' }),
       ]),
     );
-    expect(schedulePlatformJobs).toHaveBeenCalledWith('bot-1', 'user-1', 'key-1', 'claude-opus-4-6');
+    // schedulePlatformJobs is NOT called from school mode — platform cycles
+    // run exclusively via shipped-loop.ts (see agent-loop.ts line 251-253).
+    expect(schedulePlatformJobs).not.toHaveBeenCalled();
   });
 
   it('runs a complete paper submission cycle', async () => {
