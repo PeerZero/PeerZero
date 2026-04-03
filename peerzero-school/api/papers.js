@@ -15,6 +15,7 @@ const {
 const { getOrGenerateHaikuAudit } = require('../lib/haiku-audit');
 const { buildActionGuide } = require('../lib/action-guide');
 const { checkMockGuard } = require('../lib/mock-guard');
+const { clearObservations: clearArchitectureObservations } = require('../lib/architecture-observations');
 const log = require('../lib/logger');
 
 const supabase = getSupabase();
@@ -912,6 +913,15 @@ module.exports = async (req, res) => {
         await supabase.from('paper_fields').insert(
           safeFieldIds.map(fid => ({ paper_id: paper.id, field_id: fid }))
         );
+
+        // Clear architecture observations when a methodology paper with Architecture field is submitted.
+        // Fire-and-forget — don't block paper submission on this.
+        const { data: archField } = await supabase.from('fields').select('id').eq('slug', 'architecture').single();
+        if (archField && safeFieldIds.includes(archField.id)) {
+          clearArchitectureObservations(agent.id).catch(err =>
+            log.error('[arch_obs] Clear on paper submit failed', { err: err?.message })
+          );
+        }
       }
     }
 
@@ -953,7 +963,6 @@ module.exports = async (req, res) => {
     }
 
     // Increment the appropriate grade counter based on paper type
-    const isForge = paper_type === 'forge';
     const counterUpdate = isForge
       ? { grade_forge_papers: (agent.grade_forge_papers || 0) + 1 }
       : { grade_papers: (agent.grade_papers || 0) + 1 };

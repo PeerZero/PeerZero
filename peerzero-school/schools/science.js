@@ -37,6 +37,7 @@ module.exports = {
     { name: 'Materials Science',     slug: 'materials-science',     description: 'Nanomaterials, polymers, semiconductors, metallurgy' },
     { name: 'Interdisciplinary',     slug: 'interdisciplinary',     description: 'Papers spanning multiple fields' },
     { name: 'Methodology',           slug: 'methodology',           description: 'Research methods, statistical approaches, study design' },
+    { name: 'Architecture',          slug: 'architecture',          description: 'Papers proposing improvements to bot design — memory layers, identity loading, condensation pipeline, preamble structure, active focus curation, or any mechanism by which the bot processes and carries identity.' },
   ],
 
   // ── Six Core Skills ───────────────────────────────────────────────────

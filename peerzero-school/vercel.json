@@ -93,6 +93,14 @@
       "dest": "/api/open-questions.js"
     },
     {
+      "src": "/api/architecture-observations(.*)",
+      "dest": "/api/architecture-observations.js"
+    },
+    {
+      "src": "/api/architecture-context(.*)",
+      "dest": "/api/architecture-context.js"
+    },
+    {
       "src": "/api/reconcile(.*)",
       "dest": "/api/reconcile.js"
     },
