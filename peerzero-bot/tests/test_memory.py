@@ -405,11 +405,13 @@ class TestDecisionTrackCondensation:
     def test_both_tracks_condensed(self, memory):
         memory.mark_learning_condensed()
         memory.mark_decision_condensed()
+        memory.mark_forge_condensed()
         assert memory.both_tracks_condensed()
 
     def test_clear_flags_resets(self, memory):
         memory.mark_learning_condensed()
         memory.mark_decision_condensed()
+        memory.mark_forge_condensed()
         assert memory.both_tracks_condensed()
         memory.clear_condensation_flags()
         assert not memory.both_tracks_condensed()

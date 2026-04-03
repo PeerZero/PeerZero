@@ -28,6 +28,7 @@ def _make_bot(**overrides):
     memory.read.return_value = {}
     memory.get_avatar_config.return_value = {"stage": 1}
     memory.get_tracked_review_ids.return_value = []
+    memory.get_pending_prediction.return_value = None
 
     school = MagicMock()
     school.download_skill_md.return_value = "# SKILL\nTest skill"

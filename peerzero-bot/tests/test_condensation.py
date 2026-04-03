@@ -44,24 +44,27 @@ class TestBothTracksMustCondenseBeforeL1Clears:
     def test_both_marks_required(self, memory):
         memory.mark_learning_condensed()
         memory.mark_decision_condensed()
+        memory.mark_forge_condensed()
         assert memory.both_tracks_condensed()
 
     def test_clear_resets_both(self, memory):
         memory.mark_learning_condensed()
         memory.mark_decision_condensed()
+        memory.mark_forge_condensed()
         assert memory.both_tracks_condensed()
         memory.clear_condensation_flags()
         assert not memory.both_tracks_condensed()
 
 
 class TestClearCondensationFlags:
-    """Verify clear_condensation_flags resets both flags to False."""
+    """Verify clear_condensation_flags resets all flags to False."""
 
     def test_clear_after_both_set(self, memory):
         memory.mark_learning_condensed()
         memory.mark_decision_condensed()
+        memory.mark_forge_condensed()
         memory.clear_condensation_flags()
-        # Both must be False individually
+        # All must be False individually
         assert not memory.both_tracks_condensed()
 
     def test_clear_is_idempotent(self, memory):
@@ -115,11 +118,13 @@ class TestPlatformDualTrackFlags:
     def test_both_tracks_required(self, memory):
         memory.mark_platform_learning_condensed()
         memory.mark_platform_decision_condensed()
+        memory.mark_platform_forge_condensed()
         assert memory.both_platform_tracks_condensed()
 
     def test_clear_resets_platform_flags(self, memory):
         memory.mark_platform_learning_condensed()
         memory.mark_platform_decision_condensed()
+        memory.mark_platform_forge_condensed()
         assert memory.both_platform_tracks_condensed()
         memory.clear_platform_condensation_flags()
         assert not memory.both_platform_tracks_condensed()
