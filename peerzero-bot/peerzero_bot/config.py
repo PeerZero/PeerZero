@@ -413,9 +413,11 @@ class BotConfig:
         if os.environ.get("LLM_PROXY_URL"):
             _ALLOWED_PROXY_HOSTS = {
                 "peerzero-llm-proxy.peerzero.workers.dev",
-                "localhost",
-                "127.0.0.1",
             }
+            # Allow localhost only when explicitly opted in for local development.
+            # Without this gate, a local attacker could intercept LLM credentials.
+            if os.environ.get("PZ_ALLOW_LOCAL_PROXY", "").lower() in ("true", "1"):
+                _ALLOWED_PROXY_HOSTS |= {"localhost", "127.0.0.1"}
             from urllib.parse import urlparse as _urlparse
             _parsed = _urlparse(os.environ["LLM_PROXY_URL"])
             if _parsed.hostname not in _ALLOWED_PROXY_HOSTS:

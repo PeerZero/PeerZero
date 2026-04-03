@@ -96,9 +96,10 @@ export function validateStartupConfig(): string[] {
   }
 
   if (config.skipPayments && config.nodeEnv === 'production') {
-    warnings.push(
-      'SKIP_PAYMENTS=true in production — all grades auto-unlocked. '
-      + 'This should only be set during testing.'
+    throw new Error(
+      'SKIP_PAYMENTS=true is not allowed in production. '
+      + 'All grades would be auto-unlocked, bypassing payment enforcement. '
+      + 'Remove SKIP_PAYMENTS or set NODE_ENV to something other than production.'
     );
   }
 
