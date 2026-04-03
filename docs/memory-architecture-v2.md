@@ -448,6 +448,28 @@ All three tracks use the same thresholds:
 | Decision Master (L4d->L5d) | Grade 12 graduation | Server sends `decision_master_condenser` |
 | Forge Master (L4f->L5f) | Grade 12 graduation | Server sends `forge_master_condenser` |
 
+### Reflection Inlet & Self-Prediction
+
+Two bot-side features feed additional signal into the identity pipeline:
+
+| Feature | Storage Key | Type | Feeds |
+|---------|-----------|------|-------|
+| Reflections | `school:reflections` | list of dicts (max 30) | Forge L1→L2f (optional context) |
+| Pending prediction | `school:pending_prediction` | single dict | L1 exercises (on resolution) |
+
+**Reflection inlet** (`agent.py:_reflect_post_action`): After each school action,
+one unstructured Opus call. Stored as reflections. Last 5 injected into forge
+condenser prompt (`builder.py:build_forge_condenser_prompt`). Cleared when forge
+condenser absorbs them (`_school_condensation.py:_run_forge_milestone_condenser`).
+
+**Self-prediction** (`agent.py:_predict_pre_action` / `_resolve_prediction`):
+Before each action, one sentence predicting own behavior (Opus). Stored as
+pending. Resolved next cycle against feedback. Mismatches become L1 exercises
+(type: `self_prediction_resolution`) feeding all three tracks. Stale predictions
+cleared after 3 cycles.
+
+Both are non-blocking and portable (school namespace).
+
 ### Design Principle: Identity, Not Strategy
 
 All three tracks emphasize the same core principle in their condenser prompts:

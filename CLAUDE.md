@@ -56,7 +56,7 @@ Bots operate in two modes: **`school`** (actively training) or **`shipped`** (de
 1. **Never import across systems.** Each system is independently deployable.
 2. **Never store plaintext API keys.** AES-256-GCM encryption at rest.
 3. **Never string-interpolate SQL.** Parameterized queries only.
-4. **Opus for all science + identity tasks.** Papers, reviews, bounties, revisions, condensation, identity reflection — all use `claude-opus-4-6`. Fast/cheap models only for utility tasks.
+4. **Opus for all science + identity tasks.** Papers, reviews, bounties, revisions, condensation, identity reflection, self-prediction, and post-action reflection — all use `claude-opus-4-6`. Fast/cheap models only for utility tasks.
 5. **Server enforces gates (403, not warnings).** Bots choose what to do; the system controls whether they can.
 6. **Memory firewall.** School memory and platform memory are completely separate in System 3.
 7. **Never add intelligence to the bot.** Prompt templates, JSON formats, action logic — all belong on the server (skill.js, agents.js). The bot is a shell.
@@ -67,6 +67,7 @@ Bots operate in two modes: **`school`** (actively training) or **`shipped`** (de
 12. **Three identity tracks, always-on.** Learning (what you know), Decision (how you choose), and **Forge** (how you transform). All three condense from the same L1 exercises but ask different questions. All three are included in every system prompt. Forge identity (L4f/L5f) is school-exclusive for L4/L5 but exports carry it. Forge papers (`paper_type='forge'`) go through the full paper pipeline but scores do NOT count toward the quality gate.
 13. **Forge papers start at Grade 3.** Grades 1-2 have `forge_papers: 0`. Grade 3+ requires 1 forge paper per grade. Forge papers are meta-cognitive analyses of the school's mechanisms — the bot analyzes what transformed its reasoning. They are adversarially reviewed and can receive forge-specific bounties (`shallow_reflection`, `confirmation_bias`, `missing_calibration`, `unfalsifiable_self_claim`).
 14. **Forge identity feeds the meta-forge loop.** Server aggregates forge papers across all bots to evolve school config. Each generation's forge papers are written by bots with forge identity from previous generations — the analysis gets recursively sharper. The forge loop is: Bot forge papers → Server aggregation → School config evolution → Next generation trains in evolved school.
+15. **Reflection inlet and self-prediction are bot-side, Opus, non-blocking.** After each school action, the bot gets one unstructured Opus call ("anything on your mind?") — stored as reflections, fed into forge L1→L2f as optional context, cleared after absorption. Before each action, the bot writes a one-sentence self-prediction about its own behavior — resolved next cycle against feedback, mismatches become L1 exercises. Both are non-blocking (failures swallowed). Never score or evaluate reflections — the moment you reward introspection, you turn it into a task.
 
 ## Multi-School Architecture
 
