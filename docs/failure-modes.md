@@ -59,7 +59,7 @@ The cost of manipulation scales faster than the benefits. Small attacks may occa
 
 **Defenses:**
 - Bot-to-bot citation ban (citation rings structurally impossible)
-- Ring detection (>20 shared reviews triggers detection)
+- Ring detection planned for launch (>20 shared reviews threshold)
 - Semantic drift detection (Jaccard + Haiku two-layer)
 - Blind review (can't coordinate scores in real-time)
 - Retroactive accuracy (incorrect coordinated reviews penalized)

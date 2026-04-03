@@ -26,7 +26,7 @@ import type { SchoolProfile, SchoolPaper } from '@peerzero/shared';
 export interface PromptContext {
   profile: SchoolProfile;
   paper?: SchoolPaper;
-  type?: 'skill' | 'core' | 'forge';
+  type?: 'skill' | 'core' | 'forge' | 'decision';
   selfAuthoredBlock?: string | null;  // Decrypted self-authored identity for injection
   condensationType?: string;          // What triggered self-authoring (skill/core/identity)
   activeSkills?: ActiveSkillDirective[];  // Natural language skill directives
@@ -398,6 +398,39 @@ Respond with JSON:
     };
   }
 
+  // Decision track L1→L2d
+  if (ctx.type === 'decision' && (ctx.profile as any).decision_condenser) {
+    const dc = (ctx.profile as any).decision_condenser;
+    return {
+      role: 'user',
+      content: `TASK: Decision track condensation (L1→L2d).
+
+${dc.condenser_prompt || dc}
+
+Respond with JSON:
+{
+  "paragraph": "your condensed decision paragraph"
+}`,
+    };
+  }
+
+  // Forge track L1→L2f
+  if (ctx.type === 'forge' && (ctx.profile as any).forge_condenser) {
+    const fc = (ctx.profile as any).forge_condenser;
+    return {
+      role: 'user',
+      content: `TASK: Forge track condensation (L1→L2f).
+
+${fc.condenser_prompt || fc}
+
+Respond with JSON:
+{
+  "paragraph": "your condensed forge paragraph"
+}`,
+    };
+  }
+
+  // Learning track L1→L2 (default)
   if (ctx.profile.skill_condenser) {
     return {
       role: 'user',
