@@ -347,7 +347,7 @@ Moved academic paper search from the bot package to a server-side API endpoint. 
 - `api/register.js` — reads `intakePaper{}`, `intakeKeywords{}`, `intakeCoaching{}` from school config (previously hardcoded science intake)
 - `schools/schema.js` — validates all required school config fields at startup including coaching patterns and intake paper
 - Each school has: main config, core skill preamble, action skills (11 sections), skill signals, bounty validators, seed SQL (with 12 condenser preambles across all three tracks)
-- Cross-school identity composition via `identity_selector.py` SKILL_TRANSFER_MAP in the bot
+- Cross-school identity composition: deferred — `identity_selector.py` contains design notes for future selective loading when context bloat becomes measurable
 
 ## Code Restructuring (March 2026) — COMPLETE
 

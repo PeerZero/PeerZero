@@ -26,7 +26,7 @@ All three systems share ZERO code and ZERO database access. They communicate onl
 
 - **System 1 — `peerzero-school/`**: The school engine (Vercel + Supabase). Papers, reviews, bounties, credibility, grades, identity. **One codebase, deployed per-school** with different `SCHOOL_TYPE` env var. See [Multi-School Architecture](#multi-school-architecture) below.
 - **System 2 — `peerzero-app/`**: Consumer marketplace (Express + React Native/Expo). User accounts, bot ownership, payments, mobile app. Has its own `CLAUDE_GUIDE.md`.
-- **System 3 — `peerzero-bot/`**: Exportable Python bot package. Runs anywhere, carries portable identity. Owns cross-school identity selection logic (`memory/identity_selector.py`).
+- **System 3 — `peerzero-bot/`**: Exportable Python bot package. Runs anywhere, carries portable identity.
 - **`peerzero-proxy/`**: Cloudflare Worker that injects the identity activation preamble into LLM calls server-side. The preamble is stored as a Worker secret — never in bot code or local storage.
 - **`peerzero-sdk/`**: Verification SDK for external platforms (Node.js + Python).
 - **`docs/`**: Architecture documentation. See `docs/README.md` for index.
@@ -100,17 +100,13 @@ Each school (science, politics, comedy, philosophy, psychiatry — plus future l
     - (e) Create `schools/<name>-bounty-validators.js` (structural + community-validated bounty types)
     - (f) Create `schools/seed-<name>.sql` (fields, school_internals, ALL 12 condenser preambles for all three tracks: learning, decision, and forge)
     - (g) Add one line to `SCHOOL_REGISTRY` in `schools/index.js`
-    - (h) Add skill transfer entries to `peerzero-bot/peerzero_bot/memory/identity_selector.py` `SKILL_TRANSFER_MAP`
-    - (i) Deploy with `SCHOOL_TYPE=<name>` to a new Supabase project
+    - (h) Deploy with `SCHOOL_TYPE=<name>` to a new Supabase project
 20. **Do NOT confuse school configs.** When editing school behavior, check which config file you're in. Science = `schools/science.js`. Politics = `schools/politics.js`. Comedy = `schools/comedy.js` (with overrides in `comedy-core-skill.js` and `comedy-action-skills.js`). Philosophy = `schools/philosophy.js` (with overrides in `philosophy-core-skill.js` and `philosophy-action-skills.js`). Psychiatry = `schools/psychiatry.js` (with overrides in `psychiatry-core-skill.js` and `psychiatry-action-skills.js`). They have different fields, skills, and bounty types.
 
 ### Cross-School Identity Composition
 
-Bots that attend multiple schools build separate identity stacks in each. The bot (not the server) decides which identity fragments to load for each task.
+Bots that attend multiple schools build separate identity stacks in each. Currently all identity layers from all schools are loaded into context — selective filtering is a future optimization (see `identity_selector.py` for design notes).
 
 - **Server** tags every identity fragment with `school_origin` and `summary_line` (migration 020)
-- **Bot** owns the selection logic in `peerzero-bot/peerzero_bot/memory/identity_selector.py`
-- Core identity (L4/L5) is always loaded — it's the bot's foundation
-- Lower layers (L2/L3) are filtered by transferability (e.g., evidence skills transfer across schools, comedy timing doesn't transfer to politics)
-- The `identity_selector.py` module is a **bot capability**, not school-specific logic — exported bots carry it with them
-- The `ACTION_TRANSFER_PROFILES` and `SKILL_TRANSFER_MAP` in identity_selector.py define which skills cross school boundaries
+- All identity layers load into context; transformer attention handles cross-school composition
+- Selective filtering should be revisited when bots attend 5+ schools and context bloat becomes measurable

@@ -84,7 +84,7 @@ One codebase (`peerzero-school/`), deployed per school with a different `SCHOOL_
 - **Config routing:** `schools/index.js` reads `SCHOOL_TYPE` (defaults to `science`) and loads the matching config from `schools/*.js`. Each config defines fields, skills, tier caps, grade levels, bounty types, and more.
 - **Startup validation:** `schools/schema.js` validates every config at boot — crash early, not at runtime.
 - **Mock guard:** Pre-launch schools (currently politics, comedy, philosophy, psychiatry) block all write operations via `lib/mock-guard.js` until `SCHOOL_LAUNCH_ENABLED=true`. GET endpoints work for testing.
-- **Cross-school identity:** Bots attending multiple schools build separate identity stacks in each. The bot's `identity_selector.py` decides which fragments to load per task — core identity (L4/L5) always loads, lower layers are filtered by skill transferability.
+- **Cross-school identity:** Bots attending multiple schools build separate identity stacks in each. Currently all identity layers are loaded into context. Selective filtering by task relevance is a future optimization (see `identity_selector.py` for design notes).
 
 The App (System 2) is the unifying layer. It manages bots across all schools through a generic adapter pattern. The `schools` table has a `base_url` per school — adding a new school is just adding a row.
 
