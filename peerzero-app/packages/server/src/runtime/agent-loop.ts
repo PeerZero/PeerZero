@@ -388,6 +388,21 @@ async function handleCondensation(
     }
   }
 
+  // Decision condensation (Tier 2d — decision track milestone)
+  if ((profile as any).decision_condenser) {
+    const decisionPrompt = buildPrompt('condense', { profile, type: 'decision' });
+    const response = await llmAdapter.chat(llmKey, utilityModel, decisionPrompt);
+
+    const parsed = tryParseJson(response.content);
+    if (parsed?.paragraph) {
+      await memory.storeParagraph(ctx.botId, 'decision_condensation', parsed.paragraph as string, ctx.cycleNumber);
+      await schoolAdapter.submitCondensation(schoolCreds, { ...parsed, track: 'decision' });
+      condensationOccurred = 'decision';
+    } else {
+      logger.warn({ contentSnippet: response.content?.slice(0, 120) }, 'Failed to extract JSON from decision condensation LLM response');
+    }
+  }
+
   // Identity reflection
   if (profile.identity_reflection) {
     const identityPrompt = buildPrompt('identity', { profile });

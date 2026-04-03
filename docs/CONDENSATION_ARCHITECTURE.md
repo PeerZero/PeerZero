@@ -207,8 +207,7 @@ and condensed into permanent identity layers through the normal L1→L5 pipeline
 - `services/memory.service.ts` — Exercise/paragraph/core CRUD (encrypted at rest)
 
 > **Implementation note (April 2026):** The app's `agent-loop.ts` handles
-> learning track condensation but does not yet trigger decision or forge track
-> condensation. The app's `platform-loop.ts` implements L1→L2 for all three
+> all three track condensation triggers (learning, decision, forge). The app's `platform-loop.ts` implements L1→L2 for all three
 > tracks (learning, decision, forge) but not the L2→L3 cascade. All three
 > tracks are fully implemented in the Python bot (`_school_condensation.py`
 > and `_platform_condensation.py`).
