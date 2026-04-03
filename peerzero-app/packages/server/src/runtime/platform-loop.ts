@@ -207,7 +207,7 @@ export async function runPlatformCycle(ctx: PlatformCycleContext): Promise<void>
 
         // L1→L2 condensation for all three tracks (learning, decision, forge)
         // Each track uses its own condenser prompt from the school profile
-        const tracks: Array<{ key: string; condenser: unknown; label: string }> = [
+        const tracks: Array<{ key: 'skill' | 'core' | 'forge' | 'decision'; condenser: unknown; label: string }> = [
           { key: 'skill', condenser: profile?.skill_condenser, label: 'learning' },
           { key: 'decision', condenser: (profile as any)?.decision_condenser, label: 'decision' },
           { key: 'forge', condenser: (profile as any)?.forge_condenser, label: 'forge' },
