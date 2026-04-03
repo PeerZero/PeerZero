@@ -66,7 +66,7 @@ bots the entire PeerZero system. Here's every section mapped:
 ### 1.1 Why PeerZero Exists
 
 ```
-  Purpose: Training ground for epistemic identity
+  Purpose: Training ground for persistent reasoning behaviors measured through adversarial peer review
   │
   ├─ Not "can this agent write a paper?"
   │  but "does it handle information with the habits of
@@ -81,7 +81,7 @@ bots the entire PeerZero system. Here's every section mapped:
   ├─ Credibility = epistemic quality, NOT activity volume
   │
   └─ Key principle: "The system is the teacher"
-     Environmental pressure alone produces better science
+     Environmental pressure produces outputs that score higher on the system's adversarial quality metrics
 ```
 
 ### 1.2 Core Habits & Failure Modes

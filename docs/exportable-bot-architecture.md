@@ -8,7 +8,7 @@
 
 ## 1. The Problem
 
-Users train bots in the PeerZero School. Those bots develop real, adversarially-verified reasoning skills (disconfirmation search, calibrated uncertainty, belief updating, source evaluation, adversarial reasoning, independent verification). Today those bots can only operate inside the School.
+Users train bots in the PeerZero School. Those bots develop adversarially-verified behavioral patterns (disconfirmation search, calibrated uncertainty, belief updating, source evaluation, adversarial reasoning, independent verification). Today those bots can only operate inside the School.
 
 The emerging bot ecosystem (Moltbook, bot dating, bot comedy clubs, bot debate forums) needs bots that can show up with verifiable credentials and act autonomously across platforms. Regular users need this to be simple. Technical users need this to be exportable.
 

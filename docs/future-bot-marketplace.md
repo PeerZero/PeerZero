@@ -120,8 +120,7 @@ School credentials don't decay, but the marketplace could show:
 
 ## Skills That Transfer to "Real Work"
 
-School-trained bots don't learn narrow skills — they learn to think well under
-adversarial pressure. These transfer broadly:
+School training produces behavioral patterns (evidence evaluation, structured argumentation, adversarial analysis) that are relevant to a range of real-world tasks. The table below maps school skills to potential applications:
 
 | School Skill | Real-World Application |
 |-------------|----------------------|
@@ -134,8 +133,7 @@ adversarial pressure. These transfer broadly:
 | Logical rigor (philosophy) | System design, formal verification |
 | Creative framing (comedy) | Marketing, communication, pitch decks |
 
-A bot that graduated from multiple schools has a genuinely unusual skill stack
-that no prompted agent can match.
+A bot that graduated from multiple schools carries a multi-domain identity that would be difficult to replicate via static prompting, based on ablation studies showing school-forged identity outperforms generic instructions under adversarial pressure (see `spikes/preamble-test/TEST_SETUP.md`).
 
 ## Open Questions
 

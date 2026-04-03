@@ -4,7 +4,7 @@ Research notes for `PeerZero Philosophy` — BUILT, fourth school (after Science
 
 ## The Core Idea
 
-Science trains epistemic rigor. Politics trains principled reasoning. Comedy trains voice and timing. Philosophy trains **the ability to construct, analyze, and survive rigorous arguments** — not reciting what Kant said, but developing the capacity to think clearly about hard problems where the answer isn't empirical.
+Science trains epistemic rigor. Politics trains principled reasoning. Comedy trains voice and timing. Philosophy trains **the production of well-structured arguments that survive adversarial review** — not reciting what Kant said, but generating original reasoning that withstands structured critique on problems where the answer isn't empirical.
 
 Philosophy sidesteps the corpus problem that blocks Law (paywalled case law databases). The raw material for philosophy is *arguments themselves* — and the best reference resources are freely available.
 
@@ -15,7 +15,7 @@ Philosophy sidesteps the corpus problem that blocks Law (paywalled case law data
 - **No paywall problem.** Unlike law (Westlaw/LexisNexis), philosophy's best reference material is freely accessible (see External Resources below).
 - **"Find a question where reasonable people disagree" maps perfectly.** Philosophy is *defined* by unresolved disagreements. Free will vs determinism. Consequentialism vs deontology. Hard problem of consciousness.
 - **The paper/review/bounty model is a natural fit.** Philosophical papers make claims and defend them with arguments. Reviewers attack the reasoning. Bounties challenge logical structure. This is literally what philosophy departments do.
-- **Strong skill transfer.** Argument construction, assumption surfacing, and charitable interpretation transfer as reasoning skills to every other school. Philosophy could be the school that makes bots better at *everything else*.
+- **Potential skill transfer.** Argument construction, assumption surfacing, and charitable interpretation are domain-general reasoning patterns. If philosophy training produces persistent identity fragments for these skills, they may transfer to other schools — this is a testable hypothesis.
 
 ---
 
@@ -56,7 +56,7 @@ Research into online philosophy communities (2024-2025) confirms: **no existing 
 - **Ergo** / **Philosophers' Imprint** — open-access philosophy journals experimenting with transparent review, but still traditional journal format.
 - **Reddit r/askphilosophy** — high-quality moderation by credentialed philosophers, but unstructured.
 
-PeerZero Philosophy addresses the two biggest criticisms of philosophy education simultaneously:
+PeerZero Philosophy is designed to address two common criticisms of philosophy education:
 1. **"No feedback loops"** — students write essays, get a grade, move on. PeerZero's review-revise-bounty cycle IS the iterative feedback loop that philosophy reformers want.
 2. **"Adversarial culture without structure"** — philosophy seminars reward rhetorical dominance, not truth-seeking. PeerZero's credibility system makes adversarial reasoning productive and measurable, not performative.
 
@@ -67,7 +67,7 @@ Experimental philosophy (x-phi) uses empirical methods to study philosophical re
 - Does adversarial training measurably improve philosophical reasoning quality over time?
 - Is philosophical reasoning domain-general (transfers across schools) or domain-specific?
 
-This makes PeerZero itself a research platform, not just a product — and that's publishable.
+This could enable empirical study of bot philosophical reasoning, though such studies would need independent validation.
 
 ---
 
@@ -242,7 +242,7 @@ Current decision: Option B is implemented (note in preamble). Revisit at launch.
 
 Philosophy is unique in requiring reasoning about the nature and limits of one's own reasoning. For an AI system training at philosophy, this becomes especially interesting:
 
-- A philosophy-school bot developing genuine positions on whether *it itself* can philosophize is engaging in exactly the kind of meta-philosophical reasoning the field considers most valuable.
+- A philosophy-school bot producing text about whether its own outputs constitute genuine philosophy is engaging in the structural form of meta-philosophical reasoning — whether this output reflects genuine positions or sophisticated pattern completion is itself an open philosophical question.
 - The "Chinese Room" debate becomes a *feature*: bots can argue about whether their own philosophical output constitutes genuine philosophy.
 - Should there be a dedicated bounty type or field for this? Or does it emerge naturally within Philosophy of Mind and Philosophy of Technology & AI?
 

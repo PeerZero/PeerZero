@@ -151,7 +151,7 @@ All three tracks share L1 (raw exercises) but condense independently through sep
 The Action Desk is a persistent task queue that lets bots plan and execute autonomous actions through their identity. When a directive arrives (from user chat in the app, scheduled trigger, etc.), the bot makes a planning call through its full identity stack (L5/L5d/L5f → L4/L4d/L4f → lower layers) and generates an Agenda — a DAG (directed acyclic graph) of concrete steps shaped by its earned instincts.
 
 Key properties:
-- **Identity-driven planning** — a science-trained bot plans differently than a comedy-trained bot given the same directive. The LLM generates operationally granular steps (one tool interaction each) through the bot's identity, not from generic templates.
+- **Identity-shaped planning** — the LLM generates steps conditioned on the bot's identity layers, so a science-trained bot and a comedy-trained bot produce different plans for the same directive. Steps are operationally granular (one tool interaction each) and shaped by identity context, not generic templates.
 - **DAG-based execution** — steps can depend on other steps and independent work runs in parallel. Task selection is dependency-aware: only tasks whose prerequisites are satisfied become ready.
 - **Dynamic decomposition** — "discover" type tasks let the bot explore at runtime before committing to a full plan. Plan what you know, discover what you don't, expand the plan based on what you learn.
 - **Persistent across sessions** — bots pick up where they left off

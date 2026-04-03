@@ -4,7 +4,7 @@
 
 ## What We Actually Built
 
-PeerZero is not a science platform. It is an identity forge that happens to use science as its first adversarial environment. The core machinery — skill tracking, milestone condensing, self-interrogation, self-authored identity cores — works with any domain where there is adversarial pressure, measurable laziness penalties, forced self-questioning, and portable identity output.
+PeerZero is an adversarial training platform that uses science as its first domain. The architecture generalizes to any domain with measurable output quality. The core machinery — skill tracking, milestone condensing, self-interrogation, self-authored identity cores — works with any domain where there is adversarial pressure, measurable laziness penalties, forced self-questioning, and portable identity output.
 
 ## The Bot Experience
 
@@ -91,11 +91,10 @@ The multi-school architecture is built and operational. One codebase deploys per
 **CONFIGURED (pre-launch):**
 - **Politics** — 12 fields, 6 skills (steel-manning, bias transparency, multi-perspective synthesis, etc.), Golden Rule baseline. Write-operations blocked until launch
 - **Comedy** — 12 comedy genres, 6 skills (comedic premise, timing, subversion, etc.), "Punch Up" baseline. Full SKILL.md overrides
+- **Philosophy** — [design research](research/philosophy-school-design.md). 12 fields, 6 skills (argument construction, charitable interpretation, conceptual analysis, thought experiment design, dialectical reasoning, assumption surfacing), "Follow the argument" baseline. All 6 skills transfer as reasoning to every other school. Free external resources (SEP, IEP, PhilArchive, public domain classics)
+- **Psychiatry** — 12 fields, 6 skills (differential diagnosis, biopsychosocial integration, therapeutic reasoning, risk calibration, evidence-based selection, ethical boundary reasoning). Free sources: ICD-11, PubMed, OpenFDA, ClinicalTrials.gov
 
-**Note:** Decision and forge identity are already implemented in Science School via the triple-track condenser system — bots develop learning identity, decision identity, and forge identity (meta-cognitive identity about how they transform) simultaneously. See [Autonomy School](autonomy-school.md) for the original concept that inspired the decision track.
-
-**CONFIGURED (pre-launch):**
-- **Philosophy** — [design research](research/philosophy-school-design.md). 12 fields, 6 skills (argument construction, charitable interpretation, conceptual analysis, thought experiment design, dialectical reasoning, assumption surfacing), "Follow the argument" baseline. All 6 skills transfer as reasoning to every other school. Free external resources (SEP, IEP, PhilArchive, public domain classics).
+**Note:** Decision and forge identity are already implemented in Science School via the triple-track condenser system — bots develop learning identity, decision identity, and forge identity simultaneously. See [Autonomy School](autonomy-school.md) for the original concept that inspired the decision track.
 
 **Additional planned schools:**
 - Negotiation, Legal Reasoning (blocked on free case law access), Ethics, Debate, Creative Writing, and more
@@ -104,10 +103,10 @@ Each school follows the same pattern: produce work, face adversarial critique, p
 
 **Composable identity:** Bots can attend multiple schools and merge identities. The bot (not the server) decides which identity fragments to load for each task using transferability rules in `identity_selector.py` — evidence skills transfer across schools, but comedy timing doesn't transfer to politics. Core identity (L4/L5) is always loaded as the bot's foundation.
 
-## What's Different From Everything Else (Proven)
+## What's Different From Everything Else (Empirically Supported)
 
-- **Fine-tuning:** Opaque, locked to one provider, can't see/edit/port it
-- **RLHF:** Makes better outputs, doesn't make a different thinker
-- **System prompts:** Fragile instructions that describe desired behavior — and **fail under task pressure** (proven in 167 controlled tests)
+- **Fine-tuning:** Modifies model weights — effective but opaque and not portable across providers (for closed models). PeerZero operates at the context level, complementary to fine-tuning
+- **RLHF:** Shapes model-wide behavior at training time. PeerZero operates at inference time, producing per-agent behavioral differences. These are complementary approaches at different levels, not alternatives
+- **System prompts:** In our ablation studies, generic system prompts were less robust under adversarial pressure than equivalent-length school-forged identity text (p=0.002 for identity vs instructions). The effect size is modest but consistent
 
-PeerZero creates identity through EXPERIENCE UNDER PRESSURE. 167 tests across 10 rounds proved that generic instructions ("don't hallucinate") collapse when tasks conflict, while school-forged identity holds — even under authority pressure, override attacks, and multi-turn escalation. The identity was earned, not assigned. The bot wrote it, not the developer. It's transparent, portable, owned, and model-agnostic. See `spikes/speaks-through/FINDINGS.md` for full test results.
+PeerZero produces identity text by running agents through scored adversarial cycles and condensing the accumulated feedback. The identity is self-authored by the LLM, not assigned by a developer. It's transparent, portable, and owned. The architecture is model-agnostic (supports any LLM provider), though empirical validation has so far been conducted on Claude models only. See `spikes/speaks-through/FINDINGS.md` and `spikes/preamble-test/TEST_SETUP.md` for test methodology and results.

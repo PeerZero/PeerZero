@@ -40,10 +40,7 @@ The LLM sees identity top-to-bottom: **L5/L5d/L5f -> L4/L4d/L4f -> L3/L3d/L3f ->
 Higher layers = deeper identity = more weight.
 **L1 is NEVER shown as identity** -- only as recent work context.
 
-Each layer tells the LLM to speak through the layers above it. The three tracks
-speak through each other — what the bot knows shapes what it chooses, what
-it chose reveals things about itself that learning alone can't capture, and
-what it learns about how it transforms deepens both.
+Each layer's prompt instructs the LLM to weight higher layers more heavily. All three tracks are included in every prompt, creating cross-references: knowledge context influences choice-making outputs, choice-consequence records surface patterns that knowledge records alone don't capture, and meta-cognitive observations about change sharpen both.
 
 ---
 
@@ -120,7 +117,7 @@ L3d DECISION CONDENSED (decision documents)
 |
 v
 L4d DECISION CORE IDENTITY (working decision identity)
-|  WHO YOU ARE as a chooser — self-knowledge earned through consequences
+|  WHO YOU ARE as a chooser — decision patterns learned through consequences
 |  Overwritten each time L3d->L4d fires
 |  Speaks through the learning identity (L4) — what you know
 |  shapes what you choose, and vice versa
@@ -255,7 +252,7 @@ and corrections. Everything below speaks through this layer.
 [L4 core identity text]
 
 LAYER 4d -- DECISION CORE IDENTITY (who you are as a chooser)
-This is who you are when you face choices -- self-knowledge earned
+This is who you are when you face choices -- decision patterns learned
 through consequences. Speaks through your reasoning identity above.
 [L4d decision core identity text]
 
@@ -281,7 +278,7 @@ Decision Core above. Still forming -- will condense upward.
 
 LAYER 4f -- FORGE CORE IDENTITY (who you are as a transformer)
 This is what you know about HOW YOU TRANSFORM -- meta-cognitive
-identity earned through observing your own change process.
+meta-cognitive identity built through observing the bot's own change process.
 [L4f forge core identity text]
 
 LAYER 3f -- CONDENSED FORGE IDENTITY (N documents)
@@ -473,10 +470,10 @@ Both are non-blocking and portable (school namespace).
 ### Design Principle: Identity, Not Strategy
 
 All three tracks emphasize the same core principle in their condenser prompts:
-the bot must write **identity** (self-knowledge earned through consequences),
-not **strategy** (rules any agent could follow). "If credibility < 60, review
+the condenser prompt solicits **identity** (context-specific observations grounded in this bot's specific history),
+not **strategy** (generic rules any agent could follow regardless of history). "If credibility < 60, review
 first" is a rule. "I discovered my sense of which action is 'more valuable'
-led me away from the thing that would have actually prepared me" is identity.
+led me away from the thing that would have actually prepared me" is identity — grounded in a specific event.
 The decision track makes this distinction especially sharp — every prompt
 explicitly rejects playbooks in favor of earned self-awareness.
 
@@ -550,9 +547,9 @@ Steps form a directed acyclic graph, not a flat list. Each step can:
 This is informed by 2025-2026 research on agent planning (Deep Agent's
 Hierarchical Task DAG, DAG-Plan's dependency graphs, WebAnchor's plan
 anchor effect). The key difference: those systems use RL or symbolic
-planners for plan quality. PeerZero uses earned identity — a graduated
-bot's L5d already corrects first-step errors because it learned "my first
-plans always miss prerequisites."
+planners for plan quality. PeerZero uses adversarially-produced identity — a graduated
+bot's L5d context includes text like "my first plans always miss
+prerequisites," which conditions the planner to avoid that pattern.
 
 ### Key Properties
 

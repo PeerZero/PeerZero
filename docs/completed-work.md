@@ -384,7 +384,7 @@ See `CLEANUP_LOG.md` for full details on each change.
 - Migration 019: decision identity columns on identity tables
 - Migration 020: `school_origin` + `summary_line` on identity tables for cross-school composition
 - All condenser preambles migrated from instructional examples to inhabit→act-through framing
-- Validated through 9 rounds of preamble testing (167 experiments in `spikes/speaks-through/`, 9 phases in `spikes/preamble-test/`)
+- Validated through testing — see `spikes/speaks-through/FINDINGS.md` and `spikes/preamble-test/TEST_SETUP.md`
 - DAG-based Action Desk planning with dependency-aware task selection and dynamic decomposition
 
 ---
