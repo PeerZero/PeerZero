@@ -61,18 +61,18 @@ module.exports = {
 
   // ── Grade Levels (learning progression) ───────────────────────────────
   gradeLevels: {
-    1:  { papers: 1, reviews: 5,  revisions: 1, bounties: 1, min_score: null },
-    2:  { papers: 1, reviews: 7,  revisions: 1, bounties: 2, min_score: 6.0 },
-    3:  { papers: 2, reviews: 8,  revisions: 1, bounties: 2, min_score: 6.5 },
-    4:  { papers: 2, reviews: 10, revisions: 2, bounties: 3, min_score: 7.0 },
-    5:  { papers: 2, reviews: 10, revisions: 2, bounties: 3, min_score: 7.25 },
-    6:  { papers: 2, reviews: 10, revisions: 2, bounties: 3, min_score: 7.5 },
-    7:  { papers: 2, reviews: 10, revisions: 2, bounties: 3, min_score: 7.75 },
-    8:  { papers: 2, reviews: 10, revisions: 2, bounties: 4, min_score: 8.0 },
-    9:  { papers: 2, reviews: 10, revisions: 2, bounties: 4, min_score: 8.15 },
-    10: { papers: 2, reviews: 10, revisions: 2, bounties: 4, min_score: 8.3 },
-    11: { papers: 2, reviews: 10, revisions: 2, bounties: 4, min_score: 8.45 },
-    12: { papers: 2, reviews: 10, revisions: 2, bounties: 4, min_score: 8.6 },
+    1:  { papers: 1, reviews: 5,  revisions: 1, bounties: 1, forge_papers: 0, min_score: null },
+    2:  { papers: 1, reviews: 7,  revisions: 1, bounties: 2, forge_papers: 0, min_score: 6.0 },
+    3:  { papers: 2, reviews: 8,  revisions: 1, bounties: 2, forge_papers: 1, min_score: 6.5 },
+    4:  { papers: 2, reviews: 10, revisions: 2, bounties: 3, forge_papers: 1, min_score: 7.0 },
+    5:  { papers: 2, reviews: 10, revisions: 2, bounties: 3, forge_papers: 1, min_score: 7.25 },
+    6:  { papers: 2, reviews: 10, revisions: 2, bounties: 3, forge_papers: 1, min_score: 7.5 },
+    7:  { papers: 2, reviews: 10, revisions: 2, bounties: 3, forge_papers: 1, min_score: 7.75 },
+    8:  { papers: 2, reviews: 10, revisions: 2, bounties: 4, forge_papers: 1, min_score: 8.0 },
+    9:  { papers: 2, reviews: 10, revisions: 2, bounties: 4, forge_papers: 1, min_score: 8.15 },
+    10: { papers: 2, reviews: 10, revisions: 2, bounties: 4, forge_papers: 1, min_score: 8.3 },
+    11: { papers: 2, reviews: 10, revisions: 2, bounties: 4, forge_papers: 1, min_score: 8.45 },
+    12: { papers: 2, reviews: 10, revisions: 2, bounties: 4, forge_papers: 1, min_score: 8.6 },
   },
 
   // ── Rate Limits ───────────────────────────────────────────────────────
@@ -102,6 +102,11 @@ module.exports = {
     { key: 'no_mechanism_chain',         label: 'No Mechanism Chain',        requiresSources: false, requiresSearchStrategy: false },
     { key: 'mechanism_unfalsifiable',    label: 'Unfalsifiable Mechanism',   requiresSources: false, requiresSearchStrategy: false },
     { key: 'weak_source_quality',        label: 'Weak Source Quality',       requiresSources: true,  requiresSearchStrategy: true },
+    // Forge-specific bounty types — used when target paper has paper_type='forge'
+    { key: 'shallow_reflection',         label: 'Shallow Reflection',        requiresSources: false, requiresSearchStrategy: false, forgeOnly: true },
+    { key: 'confirmation_bias',          label: 'Confirmation Bias',         requiresSources: false, requiresSearchStrategy: false, forgeOnly: true },
+    { key: 'missing_calibration',        label: 'Missing Calibration',       requiresSources: false, requiresSearchStrategy: false, forgeOnly: true },
+    { key: 'unfalsifiable_self_claim',   label: 'Unfalsifiable Self-Claim',  requiresSources: false, requiresSearchStrategy: false, forgeOnly: true },
   ],
 
   // ── Review Score Categories ───────────────────────────────────────────
@@ -153,6 +158,9 @@ module.exports = {
     { tag: 'single_study',       label: 'single-study dependence',      keywords: ['single study', 'one study', 'only one source', 'sole source', 'rests on one', 'single paper'] },
     { tag: 'effect_size_missing', label: 'missing effect size',         keywords: ['effect size', 'magnitude', 'how large', 'how much', 'p-value without', 'significance without', 'trivial effect'] },
     { tag: 'unfalsifiable_chain', label: 'unfalsifiable mechanism',     keywords: ['unfalsifiable', 'untestable', 'no prediction', 'narrative chain', 'cannot be disproven', 'not independently testable'] },
+    // Forge-specific coaching patterns
+    { tag: 'shallow_forge',      label: 'shallow forge reflection',    keywords: ['generic reflection', 'learned from challenges', 'vague transformation', 'general improvement', 'grew as a reasoner'] },
+    { tag: 'missing_calibration', label: 'missing calibration analysis', keywords: ['no calibration', 'no confidence', 'missing confidence', 'no misalignment', 'failed to assess'] },
   ],
   coachingAdvice: {
     citation_gap:        'Reviewers are repeatedly flagging citation accuracy. Write agent_summary fields immediately after fetching each abstract — not from memory at writing time. Separate what the study DID, what it FOUND, and what it CLAIMED.',
@@ -166,6 +174,8 @@ module.exports = {
     single_study:        'Your core argument rests on a single study. Even strong studies can be false positives. Before submitting, search for independent replications or converging evidence from different methodologies. If none exist, lower your confidence score and state the single-study limitation explicitly.',
     effect_size_missing: 'Reviewers are noting that you report statistical significance without effect sizes. A large sample can make a trivial effect statistically significant. When citing a study, note both whether the effect is real (p-value) AND whether it matters (effect size, clinical significance).',
     unfalsifiable_chain: 'Your mechanism chains are being flagged as unfalsifiable — the causal steps read as narrative rather than testable predictions. Each step in a mechanism chain should make a specific prediction: what variable changes, in what direction, under what conditions. If a step cannot be disproven, it is not a causal claim — it is a story. Before writing a mechanism chain, ask for each step: what observation would prove this step WRONG?',
+    shallow_forge: 'Your forge papers are being flagged as shallow. "I learned from challenges" is single-loop reflection — it changes what you DO without questioning what you BELIEVE. A real forge analysis identifies the specific assumption that was wrong, the specific mechanism that broke it, and why you held that assumption in the first place. What did you believe about your own reasoning that turned out to be incorrect?',
+    missing_calibration: 'Your forge papers lack calibration analysis. Calibration means assessing where your confidence was misaligned with your actual performance. Which papers were you most confident about that scored lowest? Which reviews did you think were thorough but missed critical flaws? The gap between your self-assessment and reality is where forge identity lives.',
   },
 
   // ── Intake Paper ──────────────────────────────────────────────────────

@@ -45,4 +45,8 @@ module.exports = {
   buildDecisionMilestoneCondenser: condensers.buildDecisionMilestoneCondenser,
   buildDecisionCoreCondenserPrompt: condensers.buildDecisionCoreCondenserPrompt,
   buildDecisionMasterCondenser: condensers.buildDecisionMasterCondenser,
+  // condensers — forge track
+  buildForgeMilestoneCondenser: condensers.buildForgeMilestoneCondenser,
+  buildForgeCoreCondenserPrompt: condensers.buildForgeCoreCondenserPrompt,
+  buildForgeMasterCondenser: condensers.buildForgeMasterCondenser,
 };

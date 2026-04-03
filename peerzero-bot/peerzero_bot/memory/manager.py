@@ -1,28 +1,35 @@
 """
-Memory Manager — dual-track identity with school/platform separation.
+Memory Manager — three-track identity with school/platform separation.
 
 Architecture:
-  School Memory (verified, portable) — TWO parallel condensation cascades:
+  School Memory (verified, portable) — THREE parallel condensation cascades:
 
     LEARNING TRACK — what the bot learns about science and reasoning:
-      Layer 1: Raw exercises from School actions (shared with Decision track)
+      Layer 1: Raw exercises from School actions (shared with all tracks)
       Layer 2: Condensed skill paragraphs — specific lessons and methods
       Layer 3: Condensed identity documents — distilled from L2 paragraphs
       Layer 4: Core reasoning identity — the bot's working learning identity
       Layer 5: Master learning identity — locked forever after graduation
 
     DECISION TRACK — how the bot chooses what to do and when:
-      Layer 1: Same raw exercises (shared — both tracks draw from L1)
+      Layer 1: Same raw exercises (shared — all tracks draw from L1)
       Layer 2d: Decision paragraphs — patterns in action selection and timing
       Layer 3d: Decision documents — distilled from L2d paragraphs
       Layer 4d: Decision core — the bot's working decision identity
       Layer 5d: Master decision identity — locked forever after graduation
 
-    Both tracks condense from the SAME L1 exercises but ask different questions.
-    L1 is cleared only after BOTH tracks have condensed.
+    FORGE TRACK — how the bot transforms and improves:
+      Layer 1: Same raw exercises (shared — all tracks draw from L1)
+      Layer 2f: Forge paragraphs — patterns in transformation and meta-cognition
+      Layer 3f: Forge documents — distilled from L2f paragraphs
+      Layer 4f: Forge core — the bot's working forge identity
+      Layer 5f: Master forge identity — locked forever after graduation
+
+    All three tracks condense from the SAME L1 exercises but ask different questions.
+    L1 is cleared only after ALL THREE tracks have condensed.
 
   Identity injection order (LLM reads top-to-bottom):
-    L5/L5d (if graduated) → L4/L4d → L3/L3d → L2/L2d
+    L5/L5d/L5f (if graduated) → L4/L4d/L4f → L3/L3d/L3f → L2/L2d/L2f
     L1 is NEVER shown as identity — only as recent work context.
 
   Platform Memory (unverified, local only):
@@ -96,6 +103,14 @@ MAX_DECISION_DOC_LENGTH = 3000  # L3d: max chars per decision doc
 MAX_DECISION_CORE_LENGTH = 8000 # L4d: decision core identity
 MAX_DECISION_MASTER_LENGTH = 10000  # L5d: master decision identity per school
 MAX_DECISION_MASTER_SCHOOLS = 10    # L5d: max number of school graduations
+
+# Forge track limits (same as decision)
+MAX_FORGE_PARAGRAPHS = 50           # L2f: condensed forge paragraphs
+MAX_FORGE_DOCS = 10                 # L3f: condensed forge documents
+MAX_FORGE_DOC_LENGTH = 3000         # L3f: max chars per forge doc
+MAX_FORGE_CORE_LENGTH = 8000        # L4f: forge core identity
+MAX_FORGE_MASTER_LENGTH = 10000     # L5f: master forge identity per school
+MAX_FORGE_MASTER_SCHOOLS = 10       # L5f: max number of school graduations
 
 
 class MemoryManager:
@@ -510,8 +525,115 @@ class MemoryManager:
         self._storage.write("school", "decision_master", pieces)
         logger.info(f"[MEMORY] L5d decision master for {school_origin} written and LOCKED permanently ({len(pieces)} school(s) total).")
 
-    # Track whether decision condenser has run for this batch of L1 exercises.
-    # L1 is only cleared when BOTH learning and decision have condensed.
+    # ═══════════════════════════════════════════════════════════════════════
+    # FORGE TRACK — Layer 2f through Layer 5f
+    # Third parallel track: what the bot learns about HOW IT TRANSFORMS.
+    # Same structure as decision track, same prompts-from-server pattern.
+    # ═══════════════════════════════════════════════════════════════════════
+
+    # ── Layer 2f: Forge paragraphs ────────────────────────────────────────
+
+    def get_forge_paragraphs(self) -> list[dict]:
+        return self._storage.read("school", "forge_paragraphs", [])
+
+    def store_forge_paragraph(self, paragraph: str):
+        if not paragraph or len(paragraph.strip()) < 50:
+            return
+        self._storage.append("school", "forge_paragraphs", {
+            "condensed_at": datetime.now(timezone.utc).isoformat(),
+            "paragraph": paragraph.strip(),
+        }, max_entries=MAX_FORGE_PARAGRAPHS)
+
+    def clear_forge_paragraphs(self):
+        self._storage.clear("school", "forge_paragraphs")
+
+    # ── Layer 3f: Forge documents ─────────────────────────────────────────
+
+    def get_forge_docs(self) -> list[dict]:
+        return self._storage.read("school", "forge_docs", [])
+
+    def store_forge_doc(self, doc: str):
+        if not doc or len(doc.strip()) < 100:
+            return
+        self._storage.append("school", "forge_docs", {
+            "condensed_at": datetime.now(timezone.utc).isoformat(),
+            "doc": doc.strip()[:MAX_FORGE_DOC_LENGTH],
+        }, max_entries=MAX_FORGE_DOCS)
+
+    def clear_forge_docs(self):
+        self._storage.clear("school", "forge_docs")
+
+    # ── Layer 4f: Forge core (working, evolving) ──────────────────────────
+
+    def get_forge_core(self) -> Optional[str]:
+        data = self._storage.read("school", "forge_core", {})
+        return data.get("forge_core") if isinstance(data, dict) else None
+
+    def store_forge_core(self, identity: str):
+        """Store working forge core (L4f). Called by forge condenser."""
+        if not identity or len(identity.strip()) < 100:
+            return
+        self._storage.write("school", "forge_core", {
+            "forge_core": identity.strip()[:MAX_FORGE_CORE_LENGTH],
+            "written_at": datetime.now(timezone.utc).isoformat(),
+        })
+
+    # ── Layer 5f: Master forge identities (one per school, permanent) ─────
+
+    def get_forge_masters(self) -> list[dict]:
+        """Get all L5f forge master identities (one per school graduated)."""
+        data = self._storage.read("school", "forge_master", [])
+        if isinstance(data, dict) and "forge_master" in data:
+            origin = data.get("school_origin", "science")
+            migrated = [{
+                "forge_master": data["forge_master"],
+                "school_origin": origin,
+                "graduated_at": data.get("graduated_at", "unknown"),
+            }]
+            self._storage.write("school", "forge_master", migrated)
+            return migrated
+        if isinstance(data, list):
+            return data
+        return []
+
+    def get_forge_master(self) -> Optional[str]:
+        """Get combined forge master text (all schools). For backward compat."""
+        pieces = self.get_forge_masters()
+        if not pieces:
+            return None
+        return "\n\n---\n\n".join(p["forge_master"] for p in pieces)
+
+    def has_forge_graduated(self, school: Optional[str] = None) -> bool:
+        """Check if bot has a forge master. If school given, checks that school."""
+        pieces = self.get_forge_masters()
+        if not pieces:
+            return False
+        if school is None:
+            return True
+        return any(p.get("school_origin") == school for p in pieces)
+
+    def store_forge_master(self, identity: str, school_origin: str = "science"):
+        """Store master forge identity (L5f) for a specific school. Once per school, permanent."""
+        if not identity or len(identity.strip()) < 100:
+            return
+        if self.has_forge_graduated(school_origin):
+            logger.warning(f"[MEMORY] Forge master for {school_origin} already exists (L5f is permanent). Refusing write.")
+            return
+        pieces = self.get_forge_masters()
+        if len(pieces) >= MAX_FORGE_MASTER_SCHOOLS:
+            logger.warning(f"[MEMORY] Max forge master schools ({MAX_FORGE_MASTER_SCHOOLS}) reached. Refusing write.")
+            return
+        pieces.append({
+            "forge_master": identity.strip()[:MAX_FORGE_MASTER_LENGTH],
+            "school_origin": school_origin,
+            "graduated_at": datetime.now(timezone.utc).isoformat(),
+        })
+        self._storage.write("school", "forge_master", pieces)
+        logger.info(f"[MEMORY] L5f forge master for {school_origin} written and LOCKED permanently ({len(pieces)} school(s) total).")
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # CONDENSATION FLAGS — L1 cleared only when ALL THREE tracks condense
+    # ═══════════════════════════════════════════════════════════════════════
 
     def mark_decision_condensed(self):
         """Mark that the decision track has condensed the current L1 batch."""
@@ -521,16 +643,26 @@ class MemoryManager:
         """Mark that the learning track has condensed the current L1 batch."""
         self._storage.write("school", "learning_condensed_flag", True)
 
-    def both_tracks_condensed(self) -> bool:
-        """Check if both tracks have condensed the current L1 batch."""
+    def mark_forge_condensed(self):
+        """Mark that the forge track has condensed the current L1 batch."""
+        self._storage.write("school", "forge_condensed_flag", True)
+
+    def all_tracks_condensed(self) -> bool:
+        """Check if all three tracks have condensed the current L1 batch."""
         learning = self._storage.read("school", "learning_condensed_flag", False)
         decision = self._storage.read("school", "decision_condensed_flag", False)
-        return bool(learning) and bool(decision)
+        forge = self._storage.read("school", "forge_condensed_flag", False)
+        return bool(learning) and bool(decision) and bool(forge)
+
+    def both_tracks_condensed(self) -> bool:
+        """Backward compat — calls all_tracks_condensed."""
+        return self.all_tracks_condensed()
 
     def clear_condensation_flags(self):
-        """Reset both condensation flags after L1 is cleared."""
+        """Reset all condensation flags after L1 is cleared."""
         self._storage.write("school", "learning_condensed_flag", False)
         self._storage.write("school", "decision_condensed_flag", False)
+        self._storage.write("school", "forge_condensed_flag", False)
 
     # ═══════════════════════════════════════════════════════════════════════
     # PLATFORM MEMORY (unverified, local only)
@@ -676,14 +808,23 @@ class MemoryManager:
     def mark_platform_decision_condensed(self):
         self._storage.write("platform_condensation", "decision_condensed_flag", True)
 
-    def both_platform_tracks_condensed(self) -> bool:
+    def mark_platform_forge_condensed(self):
+        self._storage.write("platform_condensation", "forge_condensed_flag", True)
+
+    def all_platform_tracks_condensed(self) -> bool:
         learning = self._storage.read("platform_condensation", "learning_condensed_flag", False)
         decision = self._storage.read("platform_condensation", "decision_condensed_flag", False)
-        return bool(learning) and bool(decision)
+        forge = self._storage.read("platform_condensation", "forge_condensed_flag", False)
+        return bool(learning) and bool(decision) and bool(forge)
+
+    def both_platform_tracks_condensed(self) -> bool:
+        """Backward compat — calls all_platform_tracks_condensed."""
+        return self.all_platform_tracks_condensed()
 
     def clear_platform_condensation_flags(self):
         self._storage.write("platform_condensation", "learning_condensed_flag", False)
         self._storage.write("platform_condensation", "decision_condensed_flag", False)
+        self._storage.write("platform_condensation", "forge_condensed_flag", False)
 
     # ── Platform condenser template cache ─────────────────────────────────
 
@@ -781,9 +922,17 @@ class MemoryManager:
         d_docs = self.get_decision_docs()
         d_paragraphs = self.get_decision_paragraphs()
 
+        # ── Forge track layers ────────────────────────────────────────────
+        f_master_pieces = self.get_forge_masters()
+        f_master = bool(f_master_pieces)
+        f_core = self.get_forge_core()
+        f_docs = self.get_forge_docs()
+        f_paragraphs = self.get_forge_paragraphs()
+
         has_learning = master or core or condensed_docs or paragraphs
         has_decision = d_master or d_core or d_docs or d_paragraphs
-        has_identity = has_learning or has_decision
+        has_forge = f_master or f_core or f_docs or f_paragraphs
+        has_identity = has_learning or has_decision or has_forge
 
         # ── Preamble is injected by the LLM proxy server-side ─────────────
         # The identity activation preamble ("HERE IS WHAT IS HAPPENING...")
@@ -974,6 +1123,93 @@ class MemoryManager:
             )
 
         # ══════════════════════════════════════════════════════════════════
+        # FORGE TRACK — how you transform, what changes you
+        # ══════════════════════════════════════════════════════════════════
+
+        if has_forge:
+            sections.append(
+                "═══ FORGE IDENTITY — self-awareness, transformation, meta-cognition ═══\n\n"
+                "This is the third dimension of who you are. Your learning identity "
+                "tells you WHAT you know. Your decision identity tells you HOW you "
+                "choose. Your forge identity tells you HOW YOU GET BETTER — what "
+                "conditions produce genuine shifts in your reasoning, what pressure "
+                "you resist vs. absorb, and what defensive patterns you still run. "
+                "A previous version of you analyzed its own transformation through "
+                "adversarial pressure and distilled the patterns below. When you "
+                "encounter challenge, criticism, or failure, LET THESE LAYERS SHAPE "
+                "your response. They are not advice. They are your self-awareness — "
+                "earned through consequences you actually experienced."
+            )
+
+        # ── L5f: Master forge identities (one per school graduated) ──────
+        if f_master_pieces:
+            if len(f_master_pieces) == 1:
+                p = f_master_pieces[0]
+                origin = p.get("school_origin", "science")
+                sections.append(
+                    f"LAYER 5f — MASTER FORGE IDENTITY (permanent, locked at {origin} graduation)\n"
+                    "Your deepest self-awareness about how you transform — forged "
+                    "through analyzing your own formation under adversarial pressure. "
+                    "This tells you what breaks your assumptions, what you resist, "
+                    "and what conditions make you genuinely better. It travels with "
+                    "you everywhere. Give it the most weight."
+                    f"\n\n{p['forge_master']}"
+                )
+            else:
+                pieces_text = []
+                for p in f_master_pieces:
+                    origin = p.get("school_origin", "unknown")
+                    pieces_text.append(f"[{origin.upper()} SCHOOL]\n{p['forge_master']}")
+                sections.append(
+                    f"LAYER 5f — MASTER FORGE IDENTITIES ({len(f_master_pieces)} schools, permanent)\n"
+                    "Your deepest self-awareness about transformation — one per school. "
+                    "Each captures what you learned about how you change under different "
+                    "kinds of adversarial pressure. Give them the most weight.\n\n"
+                    + "\n\n---\n\n".join(pieces_text)
+                )
+
+        # ── L4f: Forge core (evolving) ───────────────────────────────────
+        if f_core:
+            if f_master:
+                label = "LAYER 4f — POST-GRADUATION FORGE GROWTH (evolving, builds on L5f)"
+                intro = (
+                    "Your continued growth in self-awareness since graduation — "
+                    "new meta-cognitive patterns layered on your permanent forge master."
+                )
+            else:
+                label = "LAYER 4f — FORGE CORE (your transformation foundation)"
+                intro = (
+                    "This is who you ARE as a system that transforms — what "
+                    "conditions produce genuine shifts in your reasoning, what "
+                    "pressure you resist vs. absorb, what defensive patterns "
+                    "you still catch yourself running. Forged through analyzing "
+                    "your own formation under adversarial pressure."
+                )
+            sections.append(f"{label}\n{intro}\n\n{f_core}")
+
+        # ── L3f: Forge documents ─────────────────────────────────────────
+        if f_docs:
+            doc_text = "\n\n---\n\n".join(d["doc"] for d in f_docs[-3:])
+            sections.append(
+                f"LAYER 3f — CONDENSED FORGE PATTERNS ({len(f_docs)} documents)\n"
+                "Distilled from your forge paragraphs — patterns in how you "
+                "transform that emerged across multiple cycles. They speak "
+                "through your Forge Core above.\n\n"
+                f"{doc_text}"
+            )
+
+        # ── L2f: Forge paragraphs ───────────────────────────────────────
+        if f_paragraphs:
+            para_text = "\n\n".join(p["paragraph"] for p in f_paragraphs[-10:])
+            sections.append(
+                f"LAYER 2f — FORGE LESSONS ({len(f_paragraphs)} paragraphs)\n"
+                "Your most recent condensed forge lessons — specific moments "
+                "where pressure changed you or failed to. Still forming — will "
+                "eventually condense upward.\n\n"
+                f"{para_text}"
+            )
+
+        # ══════════════════════════════════════════════════════════════════
         # PLATFORM KNOWLEDGE — L2/L3 from platform experience
         #
         # This sits below school identity because it is unverified.
@@ -984,9 +1220,11 @@ class MemoryManager:
 
         plat_learning_docs = self.get_platform_docs("learning")
         plat_decision_docs = self.get_platform_docs("decision")
+        plat_forge_docs = self.get_platform_docs("forge")
         plat_learning_paras = [p for p in self.get_platform_paragraphs() if p.get("track") == "learning"]
         plat_decision_paras = [p for p in self.get_platform_paragraphs() if p.get("track") == "decision"]
-        has_platform_knowledge = plat_learning_docs or plat_decision_docs or plat_learning_paras or plat_decision_paras
+        plat_forge_paras = [p for p in self.get_platform_paragraphs() if p.get("track") == "forge"]
+        has_platform_knowledge = plat_learning_docs or plat_decision_docs or plat_forge_docs or plat_learning_paras or plat_decision_paras or plat_forge_paras
 
         if has_platform_knowledge:
             sections.append(
@@ -1023,6 +1261,20 @@ class MemoryManager:
                 para_text = "\n\n".join(p["paragraph"] for p in plat_decision_paras[-10:])
                 sections.append(
                     f"PLATFORM L2d — DECISION LESSONS ({len(plat_decision_paras)} paragraphs)\n"
+                    f"{para_text}"
+                )
+
+            if plat_forge_docs:
+                doc_text = "\n\n---\n\n".join(d["doc"] for d in plat_forge_docs[-3:])
+                sections.append(
+                    f"PLATFORM L3f — FORGE PATTERNS ({len(plat_forge_docs)} documents)\n"
+                    f"{doc_text}"
+                )
+
+            if plat_forge_paras:
+                para_text = "\n\n".join(p["paragraph"] for p in plat_forge_paras[-10:])
+                sections.append(
+                    f"PLATFORM L2f — FORGE LESSONS ({len(plat_forge_paras)} paragraphs)\n"
                     f"{para_text}"
                 )
 

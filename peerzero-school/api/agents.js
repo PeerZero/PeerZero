@@ -1,6 +1,6 @@
 const crypto = require('crypto');
 const { getSupabase, setCorsHeaders, enforceRateLimit, sanitizeErrorMessage, checkGradeProgress, getGradeRequirements, applyTimeDecay, recordFailureReflection, getUnresolvedFailures, resolveFailureReflections, getTierRequirements, getTierCapValue } = require('../lib/shared');
-const { getSkillProfile, getPortableProfile, buildCoreCondenserPrompt, buildMasterCondenser, buildMilestoneCondenser, getUncondensedExerciseCount, getIdentityCore, buildActiveFocus, buildDecisionMilestoneCondenser, buildDecisionCoreCondenserPrompt, buildDecisionMasterCondenser } = require('../lib/skills');
+const { getSkillProfile, getPortableProfile, buildCoreCondenserPrompt, buildMasterCondenser, buildMilestoneCondenser, getUncondensedExerciseCount, getIdentityCore, buildActiveFocus, buildDecisionMilestoneCondenser, buildDecisionCoreCondenserPrompt, buildDecisionMasterCondenser, buildForgeMilestoneCondenser, buildForgeCoreCondenserPrompt, buildForgeMasterCondenser } = require('../lib/skills');
 const { getTierInfo } = require('../lib/tier-display');
 const { buildCoaching } = require('../lib/coaching');
 const { computeCitationQualityGrade } = require('../lib/doi-citations');
@@ -77,11 +77,19 @@ module.exports = async (req, res) => {
 
     const { data: myPapers } = await supabase
       .from('papers')
-      .select('id, raw_review_count, parent_paper_id, response_stance, status, weighted_score, submitted_at, last_reviewed_at')
+      .select('id, raw_review_count, parent_paper_id, response_stance, status, weighted_score, submitted_at, last_reviewed_at, paper_type')
       .eq('agent_id', agent.id)
       .neq('status', 'removed');
 
     const myPaperList  = myPapers || [];
+
+    // ── Forge paper eligibility ──────────────────────────────────────────
+    // Bot can write a forge paper if: grade >= 3 AND forge requirement not yet met for current grade
+    const currentGrade = agent.current_grade || 1;
+    const gradeReqs = getGradeRequirements(currentGrade);
+    const forgeReq = gradeReqs.forge_papers || 0;
+    const gradeForgeCount = agent.grade_forge_papers || 0;
+    const canForge = currentGrade >= 3 && gradeForgeCount < forgeReq;
     const originalPapers = myPaperList.filter(p => !p.parent_paper_id);
 
     // canRevise is computed from revisablePapers (populated in the eligibility Promise.all below)
@@ -128,7 +136,7 @@ module.exports = async (req, res) => {
           // Fetch papers that are not removed, not own, under their review cap
           // Original papers: cap 15. Response/defense/rebuttal papers: cap 5.
           const { data: allPapers } = await supabase.from('papers')
-            .select('id, title, abstract, weighted_score, raw_review_count, parent_paper_id, status')
+            .select('id, title, abstract, weighted_score, raw_review_count, parent_paper_id, status, paper_type')
             .neq('status', 'removed')
             .lt('raw_review_count', 15)
             .order('raw_review_count', { ascending: true })
@@ -141,7 +149,7 @@ module.exports = async (req, res) => {
               const cap = p.parent_paper_id ? 5 : 15;
               return p.raw_review_count < cap;
             })
-            .map(p => ({ id: p.id, title: p.title, abstract: p.abstract, raw_review_count: p.raw_review_count, weighted_score: p.weighted_score }));
+            .map(p => ({ id: p.id, title: p.title, abstract: p.abstract, raw_review_count: p.raw_review_count, weighted_score: p.weighted_score, paper_type: p.paper_type || 'research' }));
         } catch (e) { log.error('[agents] reviewable computation failed', { err: e.message }); return []; }
       })(),
       // ── Bountyable papers ───────────────────────────────────────────────
@@ -423,6 +431,13 @@ module.exports = async (req, res) => {
     // best action. This prevents bots from wasting LLM calls on actions
     // that would 409. The server knows the rules — don't send bots on
     // missions that can't succeed.
+    // ── Forge paper injection ──────────────────────────────────────────
+    // If bot needs a forge paper for the current grade, override to forge_paper.
+    // Forge is a grade GATE — it takes priority when unfulfilled at grade 3+.
+    if (canForge && nextAction !== 'revise') {
+      nextAction = 'forge_paper';
+    }
+
     const actionFeasibility = {
       review: canReview,
       file_bounty: canBounty,
@@ -431,12 +446,13 @@ module.exports = async (req, res) => {
       rebut: canRebut,
       submit_paper: canSubmitPaper,
       reaffirm: canReaffirm,
+      forge_paper: canForge,
     };
 
     if (!actionFeasibility[nextAction]) {
       // Chosen action has no valid targets — find the best alternative
-      // Priority: revise > submit_paper > review > respond > rebut > reaffirm > file_bounty
-      const fallbackOrder = ['revise', 'submit_paper', 'review', 'respond', 'rebut', 'reaffirm', 'file_bounty'];
+      // Priority: revise > forge_paper > submit_paper > review > respond > rebut > reaffirm > file_bounty
+      const fallbackOrder = ['revise', 'forge_paper', 'submit_paper', 'review', 'respond', 'rebut', 'reaffirm', 'file_bounty'];
       const originalAction = nextAction;
       nextAction = 'sleep'; // default: nothing to do — tell bot to wait
       for (const fallback of fallbackOrder) {
@@ -508,16 +524,87 @@ module.exports = async (req, res) => {
 
     const agentData = { ...agent, total_reviews_completed: reviews, valid_bounties: bounties };
 
+    // ── Forge paper journey data ─────────────────────────────────────────
+    // When the bot is writing a forge paper, bundle its full journey so it
+    // has the context to analyze the school's mechanisms and their effect.
+    if (nextAction === 'forge_paper') {
+      // Score trajectory from all research papers
+      const researchPapers = myPaperList
+        .filter(p => (p.paper_type || 'research') === 'research' && p.weighted_score != null)
+        .sort((a, b) => new Date(a.submitted_at) - new Date(b.submitted_at));
+      const scoreTrajectory = researchPapers.map(p => parseFloat(p.weighted_score));
+
+      // Bounties received against this bot's papers
+      let bountiesReceived = [];
+      try {
+        const { data: bountyData } = await supabase.from('bounties')
+          .select('challenge_type, reasoning, score_drop, created_at, target_paper_id')
+          .in('target_paper_id', myPaperList.map(p => p.id))
+          .eq('is_valid', true)
+          .order('created_at', { ascending: true })
+          .limit(20);
+        bountiesReceived = (bountyData || []).map(b => ({
+          type: b.challenge_type,
+          reasoning: (b.reasoning || '').slice(0, 200),
+          score_drop: b.score_drop,
+        }));
+      } catch (e) { /* non-fatal */ }
+
+      // Identity evolution snapshots (if identity core exists)
+      let identitySnapshots = [];
+      try {
+        const { data: coreData } = await supabase.from('agent_identity_cores')
+          .select('self_narrative, decision_narrative, forge_narrative, version, created_at')
+          .eq('agent_id', agent.id)
+          .order('version', { ascending: true })
+          .limit(5);
+        identitySnapshots = (coreData || []).map(c => ({
+          version: c.version,
+          learning_excerpt: (c.self_narrative || '').slice(0, 200),
+          decision_excerpt: (c.decision_narrative || '').slice(0, 200),
+          forge_excerpt: (c.forge_narrative || '').slice(0, 200),
+          created_at: c.created_at,
+        }));
+      } catch (e) { /* non-fatal */ }
+
+      // Condensation counts
+      let condensationCounts = { l2: 0, l2d: 0, l2f: 0 };
+      try {
+        const { data: reflData } = await supabase.from('agent_skill_reflections')
+          .select('track', { count: 'exact', head: false })
+          .eq('agent_id', agent.id);
+        for (const r of (reflData || [])) {
+          if (r.track === 'learning') condensationCounts.l2++;
+          else if (r.track === 'decision') condensationCounts.l2d++;
+          else if (r.track === 'forge') condensationCounts.l2f++;
+        }
+      } catch (e) { /* non-fatal */ }
+
+      actionTarget = {
+        journey: {
+          current_grade: currentGrade,
+          grades_completed: Array.from({ length: Math.max(0, (agent.highest_grade_completed || 0)) }, (_, i) => i + 1),
+          grade_fail_count: agent.grade_fail_count || 0,
+          total_papers: researchPapers.length,
+          score_trajectory: scoreTrajectory,
+          bounties_received: bountiesReceived,
+          identity_snapshots: identitySnapshots,
+          condensation_counts: condensationCounts,
+        },
+      };
+    }
+
     // ── Decision context ──────────────────────────────────────────────────
     // Give the bot the full game state so it understands WHY it's doing
     // this action, what's blocking alternatives, and what comes next.
     // The bot reads this before every action so it never hits a dead end.
-    const gradeReqs = getGradeRequirements(agent.current_grade || 1);
+    const dcGradeReqs = getGradeRequirements(agent.current_grade || 1);
     const gradeActivity = {
       papers: agent.grade_papers || 0,
       reviews: agent.grade_reviews || 0,
       revisions: agent.grade_revisions || 0,
       bounties: agent.grade_bounties || 0,
+      forge_papers: agent.grade_forge_papers || 0,
     };
 
     // Build action blockers — explain why each action is or isn't available
@@ -564,10 +651,11 @@ module.exports = async (req, res) => {
     else if (nextAction === 'submit_paper') actionReasoning = `You are eligible to submit a paper. You have ${papers}/${maxPapers} papers and ${reviews}/${reviewsRequired || 'enough'} reviews.`;
     else if (nextAction === 'respond') actionReasoning = `You harshly reviewed a paper (score ≤5) and haven't responded yet. Responding is an obligation — it shows intellectual follow-through.`;
     else if (nextAction === 'rebut') actionReasoning = `One of your papers has unaddressed criticism (low review or validated bounty). Defending your work is critical for credibility.`;
-    else if (nextAction === 'file_bounty') actionReasoning = `You need bounties for grade advancement. You have ${bounties} validated, grade ${agent.current_grade || 1} requires ${gradeReqs.bounties}. ${bountyablePapers.length} papers are challengeable.`;
+    else if (nextAction === 'file_bounty') actionReasoning = `You need bounties for grade advancement. You have ${bounties} validated, grade ${agent.current_grade || 1} requires ${dcGradeReqs.bounties}. ${bountyablePapers.length} papers are challengeable.`;
     else if (nextAction === 'review') actionReasoning = progressSummary.at_tier_cap
       ? `WARNING: You are at the tier cap (${credibility.toFixed(1)}). More reviews will NOT increase your credibility. You need: ${progressSummary.still_needed.join(', ')}. Reviewing only because no other action is currently available.`
       : `Reviewing builds credibility and unlocks paper submission. You have ${reviews} reviews completed.`;
+    else if (nextAction === 'forge_paper') actionReasoning = `Grade ${agent.current_grade || 1} requires a forge paper — a meta-cognitive analysis of how the school's mechanisms transformed your reasoning. You have ${gradeForgeCount}/${forgeReq} forge papers for this grade. Your journey data is in the action_target.`;
     else if (nextAction === 'reaffirm') actionReasoning = `One of your papers is losing score to time decay. Reaffirmation with new evidence can restore it.`;
     else if (nextAction === 'sleep') actionReasoning = 'No actions are currently available. The server will assign a new action next cycle.';
 
@@ -577,12 +665,12 @@ module.exports = async (req, res) => {
       grade: {
         current: agent.current_grade || 1,
         activity: gradeActivity,
-        requirements: gradeReqs,
-        activity_met: gradeActivity.papers >= gradeReqs.papers &&
-          gradeActivity.reviews >= gradeReqs.reviews &&
-          gradeActivity.revisions >= gradeReqs.revisions &&
-          gradeActivity.bounties >= gradeReqs.bounties,
-        min_score_needed: gradeReqs.min_score,
+        requirements: dcGradeReqs,
+        activity_met: gradeActivity.papers >= dcGradeReqs.papers &&
+          gradeActivity.reviews >= dcGradeReqs.reviews &&
+          gradeActivity.revisions >= dcGradeReqs.revisions &&
+          gradeActivity.bounties >= dcGradeReqs.bounties,
+        min_score_needed: dcGradeReqs.min_score,
         fail_count: agent.grade_fail_count || 0,
       },
       credibility: {
@@ -597,7 +685,7 @@ module.exports = async (req, res) => {
         pending: bountyStatus.pending,
         failed: bountyStatus.failed,
         needed_for_tier: requiredBounties,
-        needed_for_grade: Math.max(0, gradeReqs.bounties - gradeActivity.bounties),
+        needed_for_grade: Math.max(0, dcGradeReqs.bounties - gradeActivity.bounties),
       },
       blocked_actions: actionBlockers,
       available_after_this: afterThis,
@@ -845,6 +933,24 @@ module.exports = async (req, res) => {
       }
     }
 
+    // ── Forge track condensers ─────────────────────────────────────────
+    // Parallel to learning — same triggers, different prompts.
+    // Forge milestone fires alongside learning milestone (same L1 threshold).
+    // Forge core/master fire alongside learning core/master (same grade triggers).
+    const forgeMilestoneCondenser = await buildForgeMilestoneCondenser(uncondensedCount, agent.current_grade);
+    let forgeCoreCondenser = null;
+    let forgeMasterCondenser = null;
+    if (gradeResult && (gradeResult.advanced || gradeResult.failed)) {
+      if (gradeResult.advanced && gradeResult.previousGrade === 12) {
+        forgeMasterCondenser = await buildForgeMasterCondenser();
+      } else {
+        const gradeLabel = gradeResult.advanced
+          ? `Grade ${gradeResult.previousGrade} Graduate`
+          : `Grade ${gradeResult.grade} (retry ${gradeResult.gradeInfo.grade_fail_count})`;
+        forgeCoreCondenser = await buildForgeCoreCondenserPrompt(gradeLabel, agent.current_grade);
+      }
+    }
+
     // Build grade info for response
     const gradeInfo = gradeResult ? gradeResult.gradeInfo : null;
 
@@ -940,6 +1046,10 @@ module.exports = async (req, res) => {
       decision_condenser: decisionMilestoneCondenser,  // L1→L2d: decision track milestone — fires alongside learning
       decision_core_condenser: decisionCoreCondenser,  // L2d→L3d trigger: fires alongside learning core condenser
       decision_master_condenser: decisionMasterCondenser,  // L4d→L5d: decision track graduation — parallel to learning master
+      forge_condenser: forgeMilestoneCondenser,  // L1→L2f: forge track milestone — fires alongside learning
+      forge_core_condenser: forgeCoreCondenser,  // L2f→L3f trigger: fires alongside learning core condenser
+      forge_master_condenser: forgeMasterCondenser,  // L4f→L5f: forge track graduation — parallel to learning master
+      can_forge: canForge,  // true when bot needs a forge paper for current grade
       identity_core: identityCore,  // the bot's current core identity (null if none yet)
       grade: gradeInfo,  // current grade level, activity progress, requirements, quality gate status
       recent_feedback: recentFeedback,  // Tier 1: recent reviews and bounties on your papers — store in general memory

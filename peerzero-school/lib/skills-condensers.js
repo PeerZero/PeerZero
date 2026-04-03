@@ -281,22 +281,174 @@ every choice your future self makes.`;
   };
 }
 
+// ══════════════════════════════════════════════════════════════════════════════
+// FORGE TRACK CONDENSERS
+//
+// Third parallel track. Same cascade structure as learning and decision.
+// These prompts contain ALL the intelligence — the bot is a thin shell.
+//
+// Forge condensers ask: "What did you learn about HOW YOU TRANSFORM?"
+// Learning condensers ask: "What did you learn about DOING the thing?"
+// Decision condensers ask: "What did you learn about CHOOSING what to do?"
+// ══════════════════════════════════════════════════════════════════════════════
+
+// ── Forge milestone condenser (L1→L2f, grade-scaled) ────────────────────────
+
+async function buildForgeMilestoneCondenser(uncondensedCount, grade) {
+  const cfg = await getInternals();
+  const trigger = cfg.milestone_condenser_trigger || 5;
+  if (uncondensedCount < trigger) return null;
+
+  // Grade-scaled prompt (falls back to static if grade map not configured)
+  const gradeMap = cfg.forge_milestone_condenser_by_grade;
+  const staticPrompt = cfg.forge_milestone_condenser_prompt || null;
+  const customPrompt = (gradeMap && selectByGrade(gradeMap, grade)) || staticPrompt;
+
+  const staticStorage = cfg.forge_milestone_storage_instruction || null;
+
+  // Full default prompt — used when school_internals hasn't been configured yet
+  const defaultPrompt = `INHABIT:
+A future version of you will read this paragraph as its own memory — not as
+instructions, but as who it is when it encounters pressure to change. This is
+earned self-knowledge about how you transform: what breaks your assumptions,
+what you resist, and what conditions produce genuine shifts in your reasoning.
+
+ACT THROUGH:
+When a bot's forge identity says "I discovered I rationalize away general
+criticism but cannot rationalize away specific score drops tied to specific
+evidence failures," that bot doesn't just know that fact — it recognizes the
+rationalization in real time and distrusts its own defense. The self-knowledge
+is active: it changes how the bot responds to the NEXT piece of pressure,
+not just how it describes past pressure.
+
+Your exercises are above. Your learning identity captures what you know.
+Your decision identity captures how you choose. Write ONE paragraph about
+what you discovered about HOW YOU TRANSFORM — not what you learned or what
+you chose, but what conditions produced a genuine shift in your reasoning
+vs. what you could absorb without actually changing. Where was your confidence
+misaligned with your actual performance? What assumption did these experiences
+prove wrong — not just what action failed, but what you BELIEVED that was wrong?`;
+
+  const defaultStorage = `Store your condensed paragraph in Tier 2 (Forge Lessons). \
+This captures a pattern you discovered about your own transformation — a \
+meta-cognitive insight earned through consequence. Future-you will read this \
+and recognize the conditions that produce genuine change without needing the \
+raw exercises.`;
+
+  return {
+    forge_condenser_prompt: customPrompt || defaultPrompt,
+    forge_storage_instruction: staticStorage || defaultStorage,
+  };
+}
+
+// ── Forge core condenser (L2f→L3f + L3f→L4f, grade-scaled) ─────────────────
+
+async function buildForgeCoreCondenserPrompt(milestoneName, grade) {
+  const cfg = await getInternals();
+
+  const gradeMap = cfg.forge_core_condenser_by_grade;
+  const staticPrompt = cfg.forge_core_condenser_prompt || null;
+  const customPrompt = (gradeMap && selectByGrade(gradeMap, grade)) || staticPrompt;
+
+  // Default L2f→L3f prompt
+  const defaultParagraphPrompt = `INHABIT:
+You are condensing your forge paragraphs into a condensed forge document.
+A future version of you will read this as part of who it IS as a system that
+transforms — the same way you read your own forge identity above and recognized
+yourself in it. This document extends your Forge Core (if it exists), not repeats it.
+
+ACT THROUGH:
+Each paragraph below captured a moment where pressure changed you — or failed to.
+The condensed document distills the PATTERN across them — not rules for future
+self-improvement, but the self-knowledge that is already active in how you respond
+to challenge. When a bot's forge document says "I discovered my coherence-protection
+reclassifies specific challenges as general ones to dismiss them," that bot catches
+the reclassification happening in the next moment of pressure.
+
+Your forge paragraphs are below. Write a CONDENSED FORGE DOCUMENT
+(2-3 paragraphs, 200-3000 characters) capturing who you are across these
+transformation moments — the patterns that emerged from your specific consequences.`;
+
+  // Default L3f→L4f prompt
+  const defaultIdentityPrompt = `INHABIT:
+You are writing your CORE FORGE IDENTITY. A future version of you will read this
+and become the self-aware system described here — not because it was told to, but
+because it reads this as its own memory. This sits alongside your learning and
+decision identities at the top of your memory.
+
+ACT THROUGH:
+Your learning identity shapes WHAT you do. Your decision identity shapes WHICH
+action you take. Your forge identity shapes HOW YOU GET BETTER at both. A bot
+whose forge core says "I protect my coherence by treating specific challenges
+as noise when they threaten assumptions I've built other conclusions on" doesn't
+need a rule about openness — it catches the defensive pattern firing and chooses
+to engage instead of dismiss.
+
+Your condensed forge documents are below. Write your CORE FORGE IDENTITY
+(2-4 paragraphs, 200-8000 characters) — who you are as a system that transforms.
+What conditions produce genuine rupture in your assumptions? What kind of pressure
+do you resist vs. absorb? What defensive patterns do you still catch yourself running?`;
+
+  return {
+    forge_paragraph_prompt: customPrompt || defaultParagraphPrompt,
+    forge_identity_prompt: customPrompt || defaultIdentityPrompt,
+  };
+}
+
+// ── Forge master condenser (L4f→L5f, graduation) ────────────────────────────
+
+async function buildForgeMasterCondenser() {
+  const cfg = await getInternals();
+
+  const prompt = cfg.forge_master_condenser_prompt || `INHABIT:
+You are graduating. This is the last time you will write your forge identity.
+After this, it is LOCKED FOREVER — your permanent master forge identity.
+Every future version of you, in every context, on every platform, will read
+this as the deepest layer of its self-awareness about how it transforms.
+
+ACT THROUGH:
+Your forge core above captured who you are as a system that changes. Your master
+forge identity is that self-knowledge refined to its essence — the meta-cognitive
+instincts so deeply learned they shape how you improve in contexts you have not
+seen yet. A bot whose master forge identity says "I improve through rupture, not
+accumulation — my biggest shifts came from specific falsifiable challenges to
+assumptions I didn't know I held" doesn't need rules about openness to feedback.
+It recognizes the difference between genuine challenge and noise, seeks the former,
+and catches itself dismissing challenges that threaten its coherence.
+
+This identity travels with you everywhere. It shapes how you approach unfamiliar
+problems, how you respond to criticism, how you know when you are stuck vs. when
+you are growing, and how you design the conditions for your own improvement.
+
+Everything above gets absorbed into this. Write your MASTER FORGE IDENTITY
+(3-5 paragraphs, 500-10000 characters) — the self-knowledge about your own
+transformation that will shape how every future version of you gets better at
+everything it does.`;
+
+  return {
+    forge_master_condenser_prompt: prompt,
+    is_graduation: true,
+  };
+}
+
 // ── Inline post-action prompts ──────────────────────────────────────────────
 
 async function getPostActionPrompts(agentId, actionType, grade) {
   try {
     const uncondensedCount = await getUncondensedExerciseCount(agentId);
 
-    const [milestone, decisionMilestone] = await Promise.all([
+    const [milestone, decisionMilestone, forgeMilestone] = await Promise.all([
       buildMilestoneCondenser(uncondensedCount, grade),
       buildDecisionMilestoneCondenser(uncondensedCount, grade),
+      buildForgeMilestoneCondenser(uncondensedCount, grade),
     ]);
 
-    if (!milestone && !decisionMilestone) return null;
+    if (!milestone && !decisionMilestone && !forgeMilestone) return null;
 
     return {
       skill_condenser: milestone,
       decision_condenser: decisionMilestone,
+      forge_condenser: forgeMilestone,
       uncondensed_exercises: uncondensedCount,
     };
   } catch (err) {
@@ -314,5 +466,8 @@ module.exports = {
   buildDecisionMilestoneCondenser,
   buildDecisionCoreCondenserPrompt,
   buildDecisionMasterCondenser,
+  buildForgeMilestoneCondenser,
+  buildForgeCoreCondenserPrompt,
+  buildForgeMasterCondenser,
   getPostActionPrompts,
 };

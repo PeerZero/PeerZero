@@ -128,8 +128,8 @@ class SchoolCondensationMixin:
     def _process_inline_condensers(self, memory_prompts: dict, system_prompt: str):
         """Process condensers from inline memory prompts (post-action).
 
-        Runs BOTH learning and decision condensers from the same L1 exercises.
-        L1 is cleared only after both tracks have condensed.
+        Runs ALL THREE tracks (learning, decision, forge) from the same L1 exercises.
+        L1 is cleared only after all tracks have condensed.
         """
         if not memory_prompts:
             return
@@ -142,6 +142,9 @@ class SchoolCondensationMixin:
         # Decision track
         if memory_prompts.get("decision_condenser"):
             self._run_decision_milestone_condenser(memory_prompts["decision_condenser"], system_prompt)
+        # Forge track
+        if memory_prompts.get("forge_condenser"):
+            self._run_forge_milestone_condenser(memory_prompts["forge_condenser"], system_prompt)
 
     def _process_post_action_triggers(self, profile: dict, system_prompt: str, grade: int = 1):
         """Process condensers from profile triggers (post-action).
@@ -172,6 +175,17 @@ class SchoolCondensationMixin:
             # Server triggered L2d→L3d (at grade transitions)
             self._run_decision_paragraph_condenser(
                 profile["decision_core_condenser"].get("decision_paragraph_prompt", ""), system_prompt
+            )
+
+        # ── Forge track ──────────────────────────────────────────────────
+        if profile.get("forge_condenser") and has_exercises:
+            self._run_forge_milestone_condenser(profile["forge_condenser"], system_prompt)
+        if profile.get("forge_master_condenser"):
+            self._run_forge_master_condenser(profile["forge_master_condenser"], system_prompt, grade)
+        elif profile.get("forge_core_condenser"):
+            # Server triggered L2f→L3f (at grade transitions)
+            self._run_forge_paragraph_condenser(
+                profile["forge_core_condenser"].get("forge_paragraph_prompt", ""), system_prompt
             )
 
     _MIN_ACTIONS_FOR_CONDENSER = 5
@@ -424,12 +438,124 @@ class SchoolCondensationMixin:
             logger.warning("[MEMORY] Decision master identity too short — skipping")
 
     # ═══════════════════════════════════════════════════════════════════════
-    # SHARED L1 CLEARING — only when both tracks have condensed
+    # FORGE TRACK CONDENSERS
+    #
+    # Third parallel track. Same cascade structure as learning and decision.
+    # All prompts come from the server — bot is a thin shell.
+    # Forge asks: "What did you learn about HOW YOU TRANSFORM?"
+    # ═══════════════════════════════════════════════════════════════════════
+
+    _FORGE_PARAGRAPH_THRESHOLD = 5   # L2f entries before condensing to L3f
+    _FORGE_DOC_THRESHOLD = 3         # L3f docs before condensing to L4f
+
+    def _run_forge_milestone_condenser(self, condenser: dict, system_prompt: str):
+        """L1→L2f: Condense raw exercises into a forge paragraph.
+
+        Server provides the full prompt. Bot passes exercises and stores result.
+        Does NOT clear L1 — marks forge as condensed, clears when all tracks done.
+        """
+        logger.info("[MEMORY] Forge milestone condenser triggered (L1→L2f)")
+        exercises = self.memory.get_school_exercises()
+        server_prompt = condenser.get("forge_condenser_prompt", "")
+        if not server_prompt:
+            logger.warning("[MEMORY] Forge condenser has no prompt — skipping")
+            return
+
+        user_msg = self.prompts.build_forge_condenser_prompt(server_prompt, exercises)
+        paragraph = self.llm.call(system_prompt, user_msg)  # Strong model — identity task
+        if paragraph and len(paragraph.strip()) >= 100:
+            self.memory.store_forge_paragraph(paragraph.strip())
+            self.memory.mark_forge_condensed()
+            self._try_clear_exercises()
+            try:
+                self.school.submit_condensation(paragraph.strip(), track="forge")
+            except Exception as e:
+                logger.warning(f"[MEMORY] Forge server backup failed: {e}")
+            logger.info(f"[MEMORY] L1→L2f: Condensed {len(exercises)} exercises into forge paragraph")
+
+            # Cascade: check if L2f→L3f should fire
+            if len(self.memory.get_forge_paragraphs()) >= self._FORGE_PARAGRAPH_THRESHOLD:
+                self._run_forge_paragraph_condenser(server_prompt, system_prompt)
+
+    def _run_forge_paragraph_condenser(self, server_prompt: str, system_prompt: str):
+        """L2f→L3f: Condense forge paragraphs into a forge document."""
+        paragraphs = self.memory.get_forge_paragraphs()
+        if len(paragraphs) < self._FORGE_PARAGRAPH_THRESHOLD:
+            logger.info(f"[MEMORY] L2f→L3f skipped: only {len(paragraphs)}/{self._FORGE_PARAGRAPH_THRESHOLD} paragraphs")
+            return
+
+        logger.info(f"[MEMORY] Forge paragraph condenser triggered (L2f→L3f, {len(paragraphs)} paragraphs)")
+        user_msg = self.prompts.build_forge_paragraph_condenser_prompt(server_prompt, paragraphs)
+        doc = self.llm.call(system_prompt, user_msg)  # Strong model — identity task
+        if doc and len(doc.strip()) >= 200:
+            self.memory.store_forge_doc(doc.strip())
+            self.memory.clear_forge_paragraphs()
+            logger.info(f"[MEMORY] L2f→L3f: Condensed {len(paragraphs)} paragraphs into forge doc")
+
+            # Cascade: check if L3f→L4f should fire
+            if len(self.memory.get_forge_docs()) >= self._FORGE_DOC_THRESHOLD:
+                self._run_forge_identity_condenser(server_prompt, system_prompt)
+        else:
+            logger.warning("[MEMORY] L2f→L3f forge doc too short — skipping")
+
+    def _run_forge_identity_condenser(self, server_prompt: str, system_prompt: str):
+        """L3f→L4f: Condense forge documents into forge core identity."""
+        docs = self.memory.get_forge_docs()
+        if len(docs) < self._FORGE_DOC_THRESHOLD:
+            logger.info(f"[MEMORY] L3f→L4f skipped: only {len(docs)}/{self._FORGE_DOC_THRESHOLD} docs")
+            return
+
+        logger.info(f"[MEMORY] Forge identity condenser triggered (L3f→L4f, {len(docs)} docs)")
+        existing_core = self.memory.get_forge_core()
+        user_msg = self.prompts.build_forge_identity_condenser_prompt(server_prompt, docs, existing_core)
+        core = self.llm.call(system_prompt, user_msg)  # Strong model — identity task
+        if core and len(core.strip()) >= 200:
+            self.memory.store_forge_core(core.strip())
+            self.memory.clear_forge_docs()
+            logger.info(f"[MEMORY] L3f→L4f: Forge core identity updated ({len(core)} chars)")
+        else:
+            logger.warning("[MEMORY] L3f→L4f forge core identity too short — skipping")
+
+    def _run_forge_master_condenser(self, condenser: dict, system_prompt: str, grade: int):
+        """L4f→L5f: Graduation condensation for forge track.
+
+        Distills all forge layers into permanent master forge identity.
+        """
+        logger.info("[MEMORY] Forge master condenser triggered (L4f→L5f, graduation)")
+        paragraphs = self.memory.get_forge_paragraphs()
+        forge_docs = self.memory.get_forge_docs()
+        existing_core = self.memory.get_forge_core()
+
+        if not paragraphs and not forge_docs and not existing_core:
+            logger.warning("[MEMORY] Nothing to condense for forge master — skipping")
+            return
+
+        user_msg = self.prompts.build_forge_master_condenser_prompt(
+            condenser, paragraphs,
+            forge_docs=forge_docs,
+            existing_core=existing_core,
+        )
+        master_identity = self.llm.call(system_prompt, user_msg)
+
+        if master_identity and len(master_identity.strip()) >= 200:
+            school = self.config.school_type
+            self.memory.store_forge_master(master_identity.strip(), school_origin=school)
+            self.memory.clear_forge_paragraphs()
+            self.memory.clear_forge_docs()
+            logger.info(
+                f"[MEMORY] L4f→L5f: Forge master identity for {school} stored permanently ({len(master_identity)} chars). "
+                f"Absorbed {len(paragraphs)} paragraphs + {len(forge_docs)} docs."
+            )
+        else:
+            logger.warning("[MEMORY] Forge master identity too short — skipping")
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # SHARED L1 CLEARING — only when all three tracks have condensed
     # ═══════════════════════════════════════════════════════════════════════
 
     def _try_clear_exercises(self):
-        """Clear L1 exercises only after both learning and decision have condensed."""
-        if self.memory.both_tracks_condensed():
+        """Clear L1 exercises only after learning, decision, AND forge have condensed."""
+        if self.memory.all_tracks_condensed():
             self.memory.clear_school_exercises()
             self.memory.clear_condensation_flags()
-            logger.info("[MEMORY] Both tracks condensed — L1 exercises cleared")
+            logger.info("[MEMORY] All three tracks condensed — L1 exercises cleared")

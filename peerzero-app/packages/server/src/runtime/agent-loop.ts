@@ -373,6 +373,21 @@ async function handleCondensation(
     }
   }
 
+  // Forge condensation (Tier 2f — forge track milestone)
+  if ((profile as any).forge_condenser) {
+    const forgePrompt = buildPrompt('condense', { profile, type: 'forge' });
+    const response = await llmAdapter.chat(llmKey, utilityModel, forgePrompt);
+
+    const parsed = tryParseJson(response.content);
+    if (parsed?.paragraph) {
+      await memory.storeParagraph(ctx.botId, 'forge_condensation', parsed.paragraph as string, ctx.cycleNumber);
+      await schoolAdapter.submitCondensation(schoolCreds, { ...parsed, track: 'forge' });
+      condensationOccurred = 'forge';
+    } else {
+      logger.warn({ contentSnippet: response.content?.slice(0, 120) }, 'Failed to extract JSON from forge condensation LLM response');
+    }
+  }
+
   // Identity reflection
   if (profile.identity_reflection) {
     const identityPrompt = buildPrompt('identity', { profile });
