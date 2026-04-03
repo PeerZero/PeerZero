@@ -696,12 +696,28 @@ Return ONLY the decision identity text, nothing else."""
                     f"{latest_d[:800]}\n"
                 )
 
+        # Reflection inlet: unstructured post-action reflections (if any)
+        reflections = self._memory.get_reflections()
+        reflection_context = ""
+        if reflections:
+            recent = reflections[-5:]  # Last 5 reflections only
+            reflection_texts = "\n".join(
+                f"- (cycle {r.get('cycle', '?')}, after {r.get('action', '?')}): {r['text']}"
+                for r in recent
+            )
+            reflection_context = (
+                "\n\nYour unstructured reflections from recent cycles — things you noticed "
+                "that no one asked about. If any of these keep recurring, that pattern "
+                "is worth weaving into your forge paragraph:\n"
+                f"{reflection_texts}\n"
+            )
+
         return f"""{server_prompt}
 
 Here are your accumulated raw exercises — actions you took, feedback you received,
 outcomes that resulted. Analyze them for what they reveal about HOW YOU TRANSFORM:
 {exercises_json}
-{cross_context}
+{cross_context}{reflection_context}
 Do NOT reference system-specific metrics as if they carry forward. Translate
 scores and grades into the transformation lesson they taught you. "A 3.1-point
 score drop on my most confident paper broke my assumption that thorough citations

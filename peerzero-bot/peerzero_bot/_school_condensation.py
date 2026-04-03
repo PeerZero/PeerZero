@@ -481,6 +481,7 @@ class SchoolCondensationMixin:
         if paragraph and len(paragraph.strip()) >= 100:
             self.memory.store_forge_paragraph(paragraph.strip())
             self.memory.mark_forge_condensed()
+            self.memory.clear_reflections()  # Absorbed into forge paragraph
             self._try_clear_exercises()
             try:
                 self.school.submit_condensation(paragraph.strip(), track="forge")

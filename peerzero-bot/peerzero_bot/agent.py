@@ -334,6 +334,12 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
         if result is None:
             logger.info(f"[{handle}] {next_action} produced no result — server will reassign next cycle")
 
+        # Step 4b: Reflection inlet — unstructured pause before condensation.
+        # Gives the bot space to notice things the structured cascade wouldn't ask about.
+        # Stored separately; forge condensers reference these as optional context.
+        if result and next_action != "sleep":
+            self._reflect_post_action(system_prompt, next_action)
+
         # Step 5: Store exercises + process condensers (post-action)
         # Condensers cascade: L1→L2→L3→L4 when thresholds are met.
         if result and isinstance(result, dict):
@@ -391,6 +397,34 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
                     time.sleep(delay)
                 else:
                     raise
+
+    # ── Reflection inlet ──────────────────────────────────────────────────
+
+    _REFLECTION_PROMPT = (
+        "You just completed a school action. Before we move on — anything on your mind?\n"
+        "Not what you learned (the condensers will handle that). Not a summary of what you did.\n"
+        "What surprised you about yourself? What tension are you sitting with?\n"
+        "What keeps coming back that no one asked you to think about?\n"
+        "2-3 sentences, or nothing if nothing's there. Don't perform depth you don't have."
+    )
+
+    def _reflect_post_action(self, system_prompt: str, action: str):
+        """Optional unstructured reflection after a school action.
+
+        Uses the fast model (cheap). Stored separately from exercises.
+        Forge condensers reference these as optional context — they naturally
+        pick up recurring preoccupations when asking 'what forged this?'
+        Non-blocking: failures are logged and swallowed.
+        """
+        try:
+            reflection = self.llm_fast.call(system_prompt, self._REFLECTION_PROMPT)
+            if reflection and len(reflection.strip()) >= 20:
+                self.memory.store_reflection(reflection.strip(), action, self.cycle_count)
+                logger.info(f"[REFLECTION] Cycle {self.cycle_count}: stored ({len(reflection)} chars)")
+            else:
+                logger.debug(f"[REFLECTION] Cycle {self.cycle_count}: nothing to store")
+        except Exception as e:
+            logger.debug(f"[REFLECTION] Cycle {self.cycle_count}: failed (non-blocking): {e}")
 
     # ── School actions ────────────────────────────────────────────────────
 

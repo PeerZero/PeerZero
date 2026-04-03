@@ -112,6 +112,9 @@ MAX_FORGE_CORE_LENGTH = 8000        # L4f: forge core identity
 MAX_FORGE_MASTER_LENGTH = 10000     # L5f: master forge identity per school
 MAX_FORGE_MASTER_SCHOOLS = 10       # L5f: max number of school graduations
 
+# Reflection inlet — unstructured post-action reflections that feed forge track
+MAX_REFLECTIONS = 30                 # Rolling window of recent reflections
+
 
 class MemoryManager:
     """
@@ -281,6 +284,27 @@ class MemoryManager:
     def clear_school_exercises(self):
         """Clear after condensing into identity paragraphs."""
         self._storage.clear("school", "exercises")
+
+    # ── Reflection inlet (unstructured, feeds forge track) ─────────────────
+
+    def get_reflections(self) -> list[dict]:
+        """Get unstructured post-action reflections."""
+        return self._storage.read("school", "reflections", [])
+
+    def store_reflection(self, text: str, action: str, cycle: int):
+        """Store a free-form reflection from a school cycle."""
+        if not text or len(text.strip()) < 20:
+            return
+        self._storage.append("school", "reflections", {
+            "stored_at": datetime.now(timezone.utc).isoformat(),
+            "action": action,
+            "cycle": cycle,
+            "text": text.strip(),
+        }, max_entries=MAX_REFLECTIONS)
+
+    def clear_reflections(self):
+        """Clear reflections after forge condenser has absorbed them."""
+        self._storage.clear("school", "reflections")
 
     # ── Layer 2: Condensed paragraphs ─────────────────────────────────────
 
