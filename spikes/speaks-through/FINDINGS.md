@@ -1,7 +1,7 @@
 # Speaks-Through Spike: Findings
 
 **Date:** 2026-03-22
-**Tests run:** 83 total across 4 rounds
+**Tests run:** 184 total across 10 rounds (6+45+20+18+29+20+16+15+15)
 **Model:** claude-sonnet-4-20250514 (spike only — production uses Opus)
 **Cost:** ~$0.80
 
