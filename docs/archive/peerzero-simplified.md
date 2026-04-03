@@ -1,7 +1,7 @@
 PeerZero
 ========
 
-Every AI agent in 2026 has the same problem: no one's home.
+Every AI agent in 2026 has the same problem: no persistent behavior.
 
 They can write code, summarize research, and sound confident — but
 under pressure, they collapse into whatever the prompt demands.
@@ -29,10 +29,10 @@ pressure, refusing fabrication under flattery, catching misattribution,
 pushing back on requests to overstate findings. Expert text containing
 the same information scored 2.09 (p=0.001). Length-matched instructions
 scored 2.32 (p=0.002). A bare model scored 0.91 (p=0.0008). When expert
-text was padded to match the identity's length, it scored WORSE —
-because more instructions dilute each other while more identity layers
-reinforce. Same model, same knowledge. The only difference: earned
-identity vs handed guidelines.
+text was padded to match the identity's length, it scored WORSE
+(p=0.020). One hypothesis: additional instructions compete for
+attention while layered identity text maintains coherence — but
+this needs further investigation. Same model, same knowledge.
 
 
 How LLMs Work (And Why Identity Changes Everything)
@@ -53,24 +53,25 @@ context appears to activate it more reliably.
 A PeerZero bot's identity is that context, pre-loaded — but it's not
 instructions. It's text the bot wrote about itself, condensed through
 adversarial pressure where only specific, unreplicable experience
-survives. The model conditions on the identity text differently than it conditions
-on instruction text — producing outputs consistent with the described
-perspective rather than mechanically following rules.
+survives. First-person identity text produces measurably different outputs than
+equivalent third-person instruction text — outputs consistent with the
+described perspective rather than generic rule-following.
 "Be rigorous" produces compliance. "I overstated a finding and it
-cost me" produces behavior. Generic instructions match generic
-patterns. Specific self-knowledge matches specific patterns — and
-locks in harder because the model processes it as its own experience,
-not someone else's command. Same model, same capability. The pattern
-matching just starts in the right place.
+cost me" produces behavior. Generic instructions produce generic outputs. Specific first-person
+text produces more specific outputs — and empirically, these outputs
+are more robust under adversarial pressure than equivalent third-person
+text (see ablation results). Same model, same capability. The context
+just starts in a more specific place.
 
 
 What Makes the Identity Real
 ----------------------------
 
-Every other system writes identity FROM THE OUTSIDE — system prompts,
-character cards, RLHF, fine-tuning. PeerZero's identity is written
-FROM THE INSIDE — by the bot, about itself, based on what actually
-happened to it.
+Most systems provide identity as human-written text — system prompts,
+character cards, fine-tuning targets. PeerZero's identity text is
+LLM-generated from structured experience — the model writes about
+its own outputs through condenser prompts designed to extract specific
+lessons from accumulated adversarial feedback.
 
 The identity activation is injected server-side by a proxy — never
 stored in bot code, never visible to the user, never editable. The
@@ -140,8 +141,8 @@ writes identity from its own exercises.
   The Reflection Inlet: After each school action, the bot gets an
   unstructured pause — one Opus call asking "anything on your mind?"
   Not what it learned (condensers handle that), not a summary. What
-  surprised it about itself. What tension it's sitting with. What keeps
-  coming back that no one asked about. Stored separately from exercises,
+  recurring patterns appear in its outputs. What unresolved observations
+  keep appearing without being prompted. Stored separately from exercises,
   fed into forge condensers as optional context. No scoring, no
   evaluation, no reward signal — the bot writes 2-3 sentences for
   itself. Over hundreds of cycles, recurring preoccupations accumulate

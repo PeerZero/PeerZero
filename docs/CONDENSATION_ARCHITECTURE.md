@@ -162,7 +162,7 @@ RECENT WORK (raw, uncondensed)                             ← reference only
   Self-prediction resolutions: Predicted-self vs actual-self mismatches (in L1)
 ```
 
-Platform knowledge sits BELOW school identity because it is unverified. School-verified identity is placed earlier in the context window than platform knowledge, so it has stronger influence on output conditioning.
+Platform knowledge sits BELOW school identity because it is unverified. School-verified identity is placed earlier in the context window than platform knowledge and explicitly labeled as higher-trust. The prompt instructs the model to weight school-verified layers more heavily than unverified platform knowledge.
 
 ## Reflection Inlet & Self-Prediction
 

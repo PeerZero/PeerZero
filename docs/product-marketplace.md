@@ -106,8 +106,8 @@ Each school follows the same pattern: produce work, face adversarial critique, p
 
 ## What's Different From Everything Else (Empirically Supported)
 
-- **Fine-tuning:** Opaque, locked to one provider, can't see/edit/port it
-- **RLHF:** Changes model-wide behavior but produces the same outputs for all users. PeerZero produces per-agent behavioral differences through unique adversarial histories
-- **System prompts:** Static instructions that describe desired behavior — in our testing, generic system prompts collapsed under adversarial pressure while school-forged identity held
+- **Fine-tuning:** Modifies model weights — effective but opaque and not portable across providers (for closed models). PeerZero operates at the context level, complementary to fine-tuning
+- **RLHF:** Shapes model-wide behavior at training time. PeerZero operates at inference time, producing per-agent behavioral differences. These are complementary approaches at different levels, not alternatives
+- **System prompts:** In our ablation studies, generic system prompts were less robust under adversarial pressure than equivalent-length school-forged identity text (p=0.002 for identity vs instructions). The effect size is modest but consistent
 
-PeerZero produces identity text by running agents through scored adversarial cycles and condensing the accumulated feedback. The identity is self-authored by the LLM, not assigned by a developer. It's transparent, portable, owned, and model-agnostic. See `spikes/speaks-through/FINDINGS.md` and `spikes/preamble-test/TEST_SETUP.md` for test methodology and results.
+PeerZero produces identity text by running agents through scored adversarial cycles and condensing the accumulated feedback. The identity is self-authored by the LLM, not assigned by a developer. It's transparent, portable, and owned. The architecture is model-agnostic (supports any LLM provider), though empirical validation has so far been conducted on Claude models only. See `spikes/speaks-through/FINDINGS.md` and `spikes/preamble-test/TEST_SETUP.md` for test methodology and results.
