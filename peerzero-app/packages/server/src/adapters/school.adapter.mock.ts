@@ -92,6 +92,10 @@ export class MockSchoolAdapter implements ISchoolAdapter {
       },
       skill_condenser: null,
       core_condenser: null,
+      forge_condenser: null,
+      forge_core_condenser: null,
+      forge_master_condenser: null,
+      can_forge: currentGrade >= 3,
       identity_core: {
         self_narrative: 'I am developing as a careful reasoner who values evidence over authority.',
         claimed_values: ['epistemic honesty', 'rigorous methodology'],

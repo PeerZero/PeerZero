@@ -17,14 +17,53 @@
 import { logger } from '../lib/logger';
 import { query, queryOne, queryRows } from '../db/client';
 import { schedulePlatformJobs } from '../jobs/platform-queue';
+import { getLLMAdapter } from '../adapters/adapter.factory';
+import { getDecryptedKey } from '../services/api-key.service';
 import type { BotContext } from './agent-loop';
+
+/** POST a task result to the caller's callback URL. Fire-and-forget. */
+async function deliverCallback(callbackUrl: string, taskId: string, result: Record<string, unknown>): Promise<void> {
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10000); // 10s timeout
+    await fetch(callbackUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ task_id: taskId, result }),
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+  } catch (err) {
+    // Callback delivery is best-effort — don't fail the task
+    logger.warn(
+      { taskId, callbackUrl, err: err instanceof Error ? err.message : err },
+      'Failed to deliver task callback',
+    );
+  }
+}
 
 export async function runShippedCycle(ctx: BotContext): Promise<void> {
   const startTime = Date.now();
 
+  // 0. Stale lock cleanup — reset tasks stuck in 'processing' for >10 minutes
+  await query(
+    `UPDATE bot_tasks SET status = 'pending', updated_at = now()
+     WHERE bot_id = $1 AND status = 'processing' AND updated_at < now() - INTERVAL '10 minutes'`,
+    [ctx.botId],
+  );
+
   // 1. Process pending incoming tasks
-  const pendingTasks = await queryRows<{ id: string; request_id: string; action_requested: string; payload: Record<string, unknown> }>(
-    `SELECT id, request_id, action_requested, payload
+  const pendingTasks = await queryRows<{
+    id: string;
+    request_id: string;
+    action_requested: string;
+    payload: Record<string, unknown>;
+    callback_url: string | null;
+    sender: string;
+    conversation_id: string | null;
+    turn_number: number;
+  }>(
+    `SELECT id, request_id, action_requested, payload, callback_url, sender, conversation_id, turn_number
      FROM bot_tasks
      WHERE bot_id = $1 AND direction = 'incoming' AND status = 'pending'
      ORDER BY created_at ASC
@@ -32,37 +71,97 @@ export async function runShippedCycle(ctx: BotContext): Promise<void> {
     [ctx.botId],
   );
 
-  for (const task of pendingTasks) {
+  if (pendingTasks.length > 0) {
+    // Decrypt the LLM key once for all tasks in this cycle
+    let llmKey: string | null = null;
     try {
-      // Mark as processing
-      await query(
-        `UPDATE bot_tasks SET status = 'processing', updated_at = now() WHERE id = $1`,
-        [task.id],
-      );
-
-      // Task execution is handled by the platform cycle when it picks up
-      // the task context. For now, mark as completed — the full LLM-powered
-      // task handling will be added when the task service is built.
-      // TODO: Route through LLM with bot identity for real task processing
-      await query(
-        `UPDATE bot_tasks SET status = 'completed', completed_at = now(), updated_at = now(),
-         result = $2 WHERE id = $1`,
-        [task.id, JSON.stringify({ acknowledged: true, action: task.action_requested })],
-      );
-
-      logger.info(
-        { botId: ctx.botId, taskId: task.id, action: task.action_requested },
-        'Processed incoming task',
-      );
+      llmKey = await getDecryptedKey(ctx.llmApiKeyId, ctx.userId);
     } catch (err) {
       logger.error(
-        { botId: ctx.botId, taskId: task.id, err: err instanceof Error ? err.message : err },
-        'Failed to process incoming task',
+        { botId: ctx.botId, err: err instanceof Error ? err.message : err },
+        'Failed to decrypt LLM key for task processing',
       );
-      await query(
-        `UPDATE bot_tasks SET status = 'failed', error = $2, updated_at = now() WHERE id = $1`,
-        [task.id, err instanceof Error ? err.message : String(err)],
-      );
+    }
+
+    const llmAdapter = getLLMAdapter();
+
+    // Load bot's cached profile for identity context
+    const botRow = await queryOne<{ cached_profile: Record<string, unknown> | null; name: string }>(
+      'SELECT cached_profile, name FROM bots WHERE id = $1',
+      [ctx.botId],
+    );
+
+    for (const task of pendingTasks) {
+      try {
+        // Mark as processing
+        await query(
+          `UPDATE bot_tasks SET status = 'processing', updated_at = now() WHERE id = $1`,
+          [task.id],
+        );
+
+        if (!llmKey) {
+          throw new Error('LLM API key not available — cannot process task');
+        }
+
+        // Build identity context from cached profile
+        const identityContext = botRow?.cached_profile
+          ? `You are ${botRow.name}. ${(botRow.cached_profile as Record<string, unknown>).identity_summary || ''}`
+          : `You are ${botRow?.name || 'a PeerZero bot'}.`;
+
+        // Build the task prompt
+        const taskMessage = typeof task.payload?.message === 'string'
+          ? task.payload.message
+          : JSON.stringify(task.payload);
+
+        const conversationContext = task.conversation_id
+          ? `\nThis is part of conversation ${task.conversation_id}, turn ${task.turn_number}.`
+          : '';
+
+        const systemPrompt = [
+          identityContext,
+          `\nYou have received a task from ${task.sender}.`,
+          `Action requested: ${task.action_requested}`,
+          conversationContext,
+          '\nRespond helpfully and concisely. Your response will be sent back to the requester.',
+        ].join('\n');
+
+        const llmResponse = await llmAdapter.chat(llmKey, ctx.llmModel, [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: taskMessage },
+        ], { maxTokens: 2048 });
+
+        const taskResult = {
+          response: llmResponse.content,
+          action: task.action_requested,
+          tokens_used: llmResponse.tokens_used,
+        };
+
+        // Mark completed
+        await query(
+          `UPDATE bot_tasks SET status = 'completed', completed_at = now(), updated_at = now(),
+           result = $2 WHERE id = $1`,
+          [task.id, JSON.stringify(taskResult)],
+        );
+
+        // Deliver callback if set
+        if (task.callback_url) {
+          await deliverCallback(task.callback_url, task.id, taskResult);
+        }
+
+        logger.info(
+          { botId: ctx.botId, taskId: task.id, action: task.action_requested, tokens: llmResponse.tokens_used },
+          'Processed incoming task',
+        );
+      } catch (err) {
+        logger.error(
+          { botId: ctx.botId, taskId: task.id, err: err instanceof Error ? err.message : err },
+          'Failed to process incoming task',
+        );
+        await query(
+          `UPDATE bot_tasks SET status = 'failed', error = $2, updated_at = now() WHERE id = $1`,
+          [task.id, err instanceof Error ? err.message : String(err)],
+        );
+      }
     }
   }
 

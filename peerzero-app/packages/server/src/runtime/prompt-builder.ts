@@ -26,7 +26,7 @@ import type { SchoolProfile, SchoolPaper } from '@peerzero/shared';
 export interface PromptContext {
   profile: SchoolProfile;
   paper?: SchoolPaper;
-  type?: 'skill' | 'core';
+  type?: 'skill' | 'core' | 'forge';
   selfAuthoredBlock?: string | null;  // Decrypted self-authored identity for injection
   condensationType?: string;          // What triggered self-authoring (skill/core/identity)
   activeSkills?: ActiveSkillDirective[];  // Natural language skill directives

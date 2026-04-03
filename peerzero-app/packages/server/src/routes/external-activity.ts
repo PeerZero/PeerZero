@@ -125,13 +125,19 @@ router.post('/', async (req: Request, res: Response) => {
     return;
   }
 
-  // Look up bot by token hash (include user_id for WebSocket broadcast)
-  const bot = await queryOne<{ id: string; user_id: string }>(
-    'SELECT id, user_id FROM bots WHERE phone_home_token_hash = $1',
+  // Look up bot by token hash (include user_id and expiry for WebSocket broadcast)
+  const bot = await queryOne<{ id: string; user_id: string; phone_home_token_expires_at: string | null }>(
+    'SELECT id, user_id, phone_home_token_expires_at FROM bots WHERE phone_home_token_hash = $1',
     [tokenHash],
   );
   if (!bot) {
     res.status(401).json({ error: 'Invalid phone-home token' });
+    return;
+  }
+
+  // Check token expiry
+  if (bot.phone_home_token_expires_at && new Date(bot.phone_home_token_expires_at) < new Date()) {
+    res.status(401).json({ error: 'Phone-home token expired. Generate a new one.' });
     return;
   }
 

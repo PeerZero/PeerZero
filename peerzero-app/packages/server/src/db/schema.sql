@@ -119,7 +119,7 @@ CREATE TABLE bots (
   error_message   TEXT,
   cycle_count     INTEGER DEFAULT 0,
   last_cycle_at   TIMESTAMPTZ,
-  cycle_delay_seconds INTEGER DEFAULT 120 CONSTRAINT check_cycle_delay CHECK (cycle_delay_seconds > 0 AND cycle_delay_seconds <= 86400),
+  cycle_delay_seconds INTEGER DEFAULT 120 CONSTRAINT check_cycle_delay CHECK (cycle_delay_seconds >= 10 AND cycle_delay_seconds <= 86400),
 
   -- Cached school data (denormalized from last profile fetch)
   cached_credibility NUMERIC,
@@ -132,6 +132,7 @@ CREATE TABLE bots (
 
   -- Phone-home token for self-hosted bots (SHA-256 hashed, write-only scope)
   phone_home_token_hash TEXT,
+  phone_home_token_expires_at TIMESTAMPTZ,
 
   -- Public profile (shareable page, user-facing only — never shown to the bot)
   is_public       BOOLEAN NOT NULL DEFAULT FALSE,
@@ -352,7 +353,7 @@ CREATE INDEX idx_ext_activity_bot ON external_activity_log(bot_id, created_at DE
 -- =============================================================================
 CREATE TABLE widget_tokens (
   id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id    UUID NOT NULL,
+  user_id    UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   token_hash TEXT NOT NULL UNIQUE,
   expires_at TIMESTAMPTZ NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()

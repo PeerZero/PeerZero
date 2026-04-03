@@ -581,6 +581,11 @@ module.exports = async (req, res) => {
       } catch (e) { /* non-fatal */ }
 
       actionTarget = {
+        paper: null,
+        citations: [],
+        reviews: [],
+        fields: [],
+        bounties: [],
         journey: {
           current_grade: currentGrade,
           grades_completed: Array.from({ length: Math.max(0, (agent.highest_grade_completed || 0)) }, (_, i) => i + 1),
