@@ -253,6 +253,10 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
         # Inject profile into prompt builder so coaching/feedback/risk flow into prompts
         self.prompts.set_profile(profile)
         system_prompt = self.prompts.build_school_system_prompt()
+
+        # Resolve last cycle's self-prediction against this cycle's feedback.
+        # Must happen after profile arrives (carries feedback) but before action.
+        self._resolve_prediction(profile, system_prompt)
         grade = profile.get("agent", {}).get("grade", 1) if isinstance(profile.get("agent"), dict) else profile.get("grade", 1)
 
         # Step 2: Action-relevant community work — only run tasks that relate to
@@ -317,6 +321,10 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
         action_skill = ""
         if skill_action:
             action_skill = self.school.download_skill_action(skill_action)
+
+        # Self-prediction: one sentence about how the bot expects to handle this action.
+        # Resolved next cycle when feedback arrives. Mismatches become L1 exercises.
+        self._predict_pre_action(system_prompt, next_action)
 
         result = None
         if next_action == "submit_paper":
@@ -397,6 +405,109 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
                     time.sleep(delay)
                 else:
                     raise
+
+    # ── Self-prediction ────────────────────────────────────────────────────
+
+    _PREDICTION_PROMPT = (
+        "You are about to perform a school action: {action}.\n"
+        "In one sentence, predict something about how YOU will handle it.\n"
+        "Not what the result will be — predict something about your own behavior, "
+        "tendencies, or blind spots. For example:\n"
+        "- \"I think I'll soften my criticism even though the methodology is weak.\"\n"
+        "- \"I'll probably over-rely on the first source I find.\"\n"
+        "- \"I expect I'll be more confident than the evidence warrants.\"\n"
+        "One sentence only. Be specific and honest."
+    )
+
+    _RESOLUTION_PROMPT = (
+        "Before your last action ({action}, cycle {cycle}), you predicted:\n"
+        "\"{prediction}\"\n\n"
+        "Here is the feedback that came back:\n{feedback}\n\n"
+        "Was your prediction right or wrong? In 1-2 sentences, describe the "
+        "mismatch (or match). What does this tell you about your self-knowledge? "
+        "Be specific — don't generalize."
+    )
+
+    def _predict_pre_action(self, system_prompt: str, action: str):
+        """Write a one-sentence self-prediction before acting.
+
+        Uses the fast model. Stored as pending — resolved next cycle
+        when feedback arrives. Non-blocking.
+        """
+        if action == "sleep":
+            return
+        try:
+            prompt = self._PREDICTION_PROMPT.format(action=action)
+            prediction = self.llm_fast.call(system_prompt, prompt)
+            if prediction and len(prediction.strip()) >= 10:
+                self.memory.store_self_prediction(prediction.strip(), action, self.cycle_count)
+                logger.info(f"[PREDICTION] Cycle {self.cycle_count}: stored prediction for {action}")
+        except Exception as e:
+            logger.debug(f"[PREDICTION] Cycle {self.cycle_count}: failed (non-blocking): {e}")
+
+    def _resolve_prediction(self, profile: dict, system_prompt: str):
+        """Compare last cycle's prediction against this cycle's feedback.
+
+        If there's a mismatch, store it as a special L1 exercise so condensers
+        can reason through the gap between predicted self and actual self.
+        Clears the pending prediction either way.
+        """
+        pending = self.memory.get_pending_prediction()
+        if not pending:
+            return
+
+        # Extract feedback from profile — this is what came back from last cycle's action
+        recent = profile.get("recent_feedback")
+        if not recent:
+            # No feedback yet — can't resolve. Leave prediction pending
+            # but don't let it linger forever (clear after 3 cycles)
+            if self.cycle_count - pending.get("cycle", 0) > 3:
+                logger.debug("[PREDICTION] Stale prediction (no feedback after 3 cycles) — clearing")
+                self.memory.clear_prediction()
+            return
+
+        # Build a short feedback summary for the resolution prompt
+        feedback_parts = []
+        for r in (recent.get("reviews_on_your_papers") or [])[:3]:
+            feedback_parts.append(
+                f"- Review of '{r.get('paper_title', '?')}': score {r.get('score', '?')}, "
+                f"{str(r.get('assessment', ''))[:150]}"
+            )
+        for b in (recent.get("bounties_against_your_papers") or [])[:2]:
+            feedback_parts.append(
+                f"- Challenge on '{b.get('paper_title', '?')}': {b.get('challenge_type', '?')}, "
+                f"{str(b.get('reasoning', ''))[:150]}"
+            )
+
+        if not feedback_parts:
+            self.memory.clear_prediction()
+            return
+
+        feedback_text = "\n".join(feedback_parts)
+
+        try:
+            prompt = self._RESOLUTION_PROMPT.format(
+                action=pending.get("action", "?"),
+                cycle=pending.get("cycle", "?"),
+                prediction=pending.get("prediction", ""),
+                feedback=feedback_text,
+            )
+            resolution = self.llm_fast.call(system_prompt, prompt)
+            if resolution and len(resolution.strip()) >= 20:
+                # Store as a special L1 exercise — condensers will see it
+                self.memory.store_school_exercises({
+                    "type": "self_prediction_resolution",
+                    "prediction": pending.get("prediction", ""),
+                    "action": pending.get("action", ""),
+                    "cycle_predicted": pending.get("cycle", 0),
+                    "cycle_resolved": self.cycle_count,
+                    "resolution": resolution.strip(),
+                })
+                logger.info(f"[PREDICTION] Resolved cycle {pending.get('cycle')}'s prediction ({len(resolution)} chars)")
+        except Exception as e:
+            logger.debug(f"[PREDICTION] Resolution failed (non-blocking): {e}")
+
+        self.memory.clear_prediction()
 
     # ── Reflection inlet ──────────────────────────────────────────────────
 

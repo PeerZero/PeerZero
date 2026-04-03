@@ -306,6 +306,31 @@ class MemoryManager:
         """Clear reflections after forge condenser has absorbed them."""
         self._storage.clear("school", "reflections")
 
+    # ── Self-prediction (feeds L1 on mismatch) ───────────────────────────
+
+    def store_self_prediction(self, prediction: str, action: str, cycle: int):
+        """Store a one-sentence self-prediction before the bot acts.
+
+        Only one prediction is pending at a time. It gets resolved next cycle
+        when feedback arrives, then cleared.
+        """
+        if not prediction or len(prediction.strip()) < 10:
+            return
+        self._storage.write("school", "pending_prediction", {
+            "stored_at": datetime.now(timezone.utc).isoformat(),
+            "action": action,
+            "cycle": cycle,
+            "prediction": prediction.strip(),
+        })
+
+    def get_pending_prediction(self) -> dict | None:
+        """Get the prediction from last cycle (if any) awaiting resolution."""
+        return self._storage.read("school", "pending_prediction", None)
+
+    def clear_prediction(self):
+        """Clear after resolving (matched or mismatched)."""
+        self._storage.clear("school", "pending_prediction")
+
     # ── Layer 2: Condensed paragraphs ─────────────────────────────────────
 
     def get_identity_paragraphs(self) -> list[dict]:
