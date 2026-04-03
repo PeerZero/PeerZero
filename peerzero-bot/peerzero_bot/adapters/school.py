@@ -432,7 +432,7 @@ class SchoolAdapter:
     def get_architecture_context(self) -> str:
         """Fetch the full bot architecture description for methodology papers."""
         try:
-            response = self._get("/api/architecture-context")
+            response = self._get("/api/skill", params={"ref": "architecture"})
             return response if isinstance(response, str) else str(response)
         except (httpx.HTTPError, OSError) as e:
             logger.warning(f"get_architecture_context failed: {e}")

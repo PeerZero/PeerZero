@@ -94,11 +94,7 @@
     },
     {
       "src": "/api/architecture-observations(.*)",
-      "dest": "/api/architecture-observations.js"
-    },
-    {
-      "src": "/api/architecture-context(.*)",
-      "dest": "/api/architecture-context.js"
+      "dest": "/api/skill-reflections.js"
     },
     {
       "src": "/api/reconcile(.*)",
