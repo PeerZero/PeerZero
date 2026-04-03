@@ -102,15 +102,16 @@ Every condenser preamble uses a two-part structure:
 
 This framing was validated through ablation testing (see `spikes/preamble-test/`):
 
-- **Realistic graduated identity + inhabit→act preamble outperforms equivalent
-  expert text** (avg 14.1 vs 11.8 on adversarial hard probes, p=0.021, n=10,
-  Mann-Whitney U). Same information, different voice — self-authored first-person
+- **Graduated identity + inhabit→act preamble outperforms equivalent
+  expert text** on identity inhabitation (judge-scored: 2.64/3 vs 2.09/3, p=0.001,
+  n=8 runs per condition, Mann-Whitney U; keyword-scored: 14.0 vs 11.5, p=0.049).
+  Same information, different voice — self-authored first-person
   narrative produces measurably better judgment than third-person guidelines.
-- **Identity inhabitation is the mechanism**: realistic identity achieves 100%
-  self-inhabitation (model narrates from earned experience), expert text only 22%,
+- **Identity inhabitation is the mechanism**: graduated identity achieves 100%
+  self-inhabitation (model narrates from accumulated experience), expert text only 29%,
   bare model 0%. The layer framing (LAYER 5→4→3→2 with weight instructions) is
   critical — thin identity without layer framing performs no better than expert text.
-- **Identity vs bare model is highly significant** (14.1 vs 7.5, p=0.002).
+- **Identity vs bare model is highly significant** (judge-scored: 2.64/3 vs 0.91/3, p=0.0008).
 - **Old instructional preambles actively hurt minimal identity** (score 5 vs
   12 naked) and caused preamble parroting
 - **No Good:/Bad: examples in condenser prompts** — these leaked into bot

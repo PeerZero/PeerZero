@@ -25,7 +25,7 @@ AI agents that have accumulated structured adversarial feedback in their context
 
 PeerZero does not inject reasoning rules from outside. It runs agents through adversarial cycles whose outputs are condensed into persistent context, producing measurably different behavior from the same base model.
 
-This has been empirically validated: 167 controlled tests across 10 rounds proved that school-forged identity produces measurable behavioral change where generic instructions fail. Same model, same weights — writing-veteran identity improved confidence calibration from 60% to 100%, weak-paper flagging from 0% to 40%, search thoroughness by 33%. Under adversarial pressure, school-forged bots held where generic instructions collapsed. See `spikes/speaks-through/FINDINGS.md`.
+This has been empirically supported across two testing phases. Phase 1 (`spikes/speaks-through/`): 184 behavioral tests across 10 rounds showed school-forged identity holds under adversarial pressure where generic instructions collapse. Phase 2 (`spikes/preamble-test/`): formal ablation studies (8 runs per condition, Mann-Whitney U) showed identity outperforms expert text (p=0.001), instructions (p=0.002), and bare model (p=0.0008) on identity inhabitation. Round 10B (n=5 per condition) showed writing-veteran identity improved confidence calibration from 60% to 100%, weak-paper flagging from 0% to 40%, and search count from 6.0 to 8.0. See `spikes/speaks-through/FINDINGS.md` and `spikes/preamble-test/TEST_SETUP.md`.
 
 ## The Systems Must Need Each Other
 

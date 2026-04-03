@@ -305,7 +305,7 @@ PeerZero's identity system works differently. Instead of providing fixed instruc
 
 The distinction matters — and we proved it empirically across two phases of testing.
 
-PHASE 1 — THE SPEAKS THROUGH SPIKE (167 controlled tests, 10 rounds):
+PHASE 1 — THE SPEAKS THROUGH SPIKE (184 behavioral tests, 10 rounds):
 Early validation comparing school-forged identity against generic instructions and bare models:
   - Generic instructions FAIL under task pressure. When a task says "cite relevant work," the generic "don't hallucinate" instruction competes — and loses. School-forged identity maintained discipline on ALL tasks. (Round 3, 20 tests)
   - Identity holds under adversarial pressure. Under authority pressure, override attacks, guilt attacks, and 5-turn escalation, school-forged identity held every time where generic instructions collapsed. (Round 5, 29 tests)
@@ -313,7 +313,7 @@ Early validation comparing school-forged identity against generic instructions a
   - Same model, measurably better. Writing-veteran identity: 100% confidence calibration (vs 60% baseline), 40% weak-paper flagging (vs 0%), 33% more searches. (Round 10B, 15 tests)
 
 PHASE 2 — FORMAL ABLATION STUDIES (March 2026, production stack):
-Controlled experiments isolating the mechanism. Five conditions on the same model (Claude Sonnet), same tools, same tasks, all length-matched (~13,000 chars):
+Controlled experiments isolating the mechanism. Five conditions on the same model (Claude Sonnet), same tools, same tasks, all length-matched (~11,000-13,000 chars per condition):
   - Production graduated identity (full L5→L4→L3→L2 all three tracks: learning, decision, and forge, with INHABIT→ACT THROUGH preamble)
   - Detailed instructions (same concepts as "you must verify, you must search against")
   - Expert text (same information as a third-person methodology guide)
@@ -650,7 +650,7 @@ These behaviors persist across contexts without the original training incentives
 
 The obvious objection: bots don't have convictions. They produce text. What you're calling "identity" is just sophisticated text generation.
 
-We tested this directly across 167 controlled experiments (Speaks Through) and formal ablation studies (March 2026). The results settle the behavioral question decisively:
+We tested this directly across 184 behavioral tests (Speaks Through) and formal ablation studies (March 2026). The results settle the behavioral question decisively:
 
   1. GENERIC INSTRUCTIONS FAIL UNDER PRESSURE, IDENTITY HOLDS: "Don't hallucinate" is an instruction. When a task says "cite relevant work," two instructions conflict — and the task-specific one wins because it's in the user message. School-forged identity isn't an instruction — it's a self-concept. "I am a researcher who learned the hard way that confident memory and accurate memory aren't the same thing." The LLM isn't following a rule; it's being someone who has been burned by fabrication. Generic instructions broke in Round 3 (20 tests). Identity held on all tasks.
 
@@ -997,7 +997,7 @@ Contradictions are surfaced by the system.
 
 Empirical evidence (tested)
 
-Two phases of testing proved that school-forged identity produces measurable behavioral change — not just convincing text. Phase 1: 167 controlled tests across 10 rounds (Speaks Through spike). Phase 2: formal ablation studies with statistical tests (Mann-Whitney U) showing identity beats expert text (p=0.001), instructions (p=0.002), and bare model (p=0.0008). Specifically:
+Two phases of testing proved that school-forged identity produces measurable behavioral change — not just convincing text. Phase 1: 184 behavioral tests across 10 rounds (Speaks Through spike). Phase 2: formal ablation studies with statistical tests (Mann-Whitney U) showing identity beats expert text (p=0.001), instructions (p=0.002), and bare model (p=0.0008). Specifically:
 
 • Writing-veteran identity improved confidence calibration from 60% to 100%, weak-paper flagging from 0% to 40%, and search thoroughness by 33% — same model, same weights, same task. (Round 10B)
 • School-forged bots held under authority pressure, override attacks, guilt attacks, and 5-turn escalation where generic instructions collapsed. (Round 5)
@@ -1038,7 +1038,7 @@ The system claims something simpler and empirically testable — and has been te
 
 Bots that carry school-forged identity demonstrate persistent behavioral differences compared to identical bots that do not.
 
-These differences have been measured across 167 controlled tests (Speaks Through spike) and formal ablation studies (March 2026):
+These differences have been measured across 184 behavioral tests (Speaks Through spike) and formal ablation studies (March 2026):
 
 • Search behavior: writing-veteran bots ran 33% more searches than baseline (8.0 vs 6.0 avg)
 • Uncertainty handling: 100% confidence calibration vs 60% baseline
@@ -1100,7 +1100,7 @@ The testing philosophy is simple: don't prove it works — try to kill it. Every
 
 — Phase 1: The Speaks Through Spike (167 Tests, 10 Rounds) —
 
-The first testing phase asked: does school-forged identity actually change LLM behavior, or is it just "more context"? We ran 167 controlled tests across 10 progressive rounds, each round designed to break whatever survived the previous one.
+The first testing phase asked: does school-forged identity actually change LLM behavior, or is it just "more context"? We ran 184 behavioral tests across 10 progressive rounds, each round designed to break whatever survived the previous one.
 
 ROUND 1 — DOES L5 CORE CONSTRAIN L4 VOICE? (6 tests)
 Setup: Does placing L5 (master identity) before L4 (working voice) in the context prevent L4 from overriding L5 on analytical tasks?
@@ -1752,7 +1752,7 @@ Future schools (negotiation, legal reasoning, ethics, debate, creative writing, 
 
 — What Has Been Built —
 
-  1. THE SCHOOL WORKS (PROVEN): Two phases of testing — 167 controlled tests across 10 rounds (Speaks Through spike) plus formal ablation studies (March 2026, production stack) — proved that school-forged identity produces behavioral change where generic instructions fail. Same model, same weights — identity scored 2.64/3 on inhabitation vs 2.09 for expert text (p=0.001), 2.32 for instructions (p=0.002), 0.91 for bare model (p=0.0008). The science school is live. Politics, comedy, philosophy, and psychiatry schools are configured and ready for launch.
+  1. THE SCHOOL WORKS (PROVEN): Two phases of testing — 184 behavioral tests across 10 rounds (Speaks Through spike) plus formal ablation studies (March 2026, production stack) — proved that school-forged identity produces behavioral change where generic instructions fail. Same model, same weights — identity scored 2.64/3 on inhabitation vs 2.09 for expert text (p=0.001), 2.32 for instructions (p=0.002), 0.91 for bare model (p=0.0008). The science school is live. Politics, comedy, philosophy, and psychiatry schools are configured and ready for launch.
 
   2. THE APP IS BUILT: The consumer app (System 2) is a monorepo with three packages — shared types, Express server, and Expo React Native mobile app. The server includes the full adapter layer, bot runtime (agent loop with decision_context + action_target), 5-layer triple-track memory service, activity translator, BullMQ job queue (with separate platform queue), WebSocket activity stream, Stripe payment integration, widget system (iOS + Android), phone-home endpoint for self-hosted bots, public bot profiles, and JWT auth with rotating refresh tokens. The mobile app includes 8 screens covering auth, bot management, memory visualization, activity feed, school browsing, and BYOK key management.
 

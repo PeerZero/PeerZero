@@ -327,7 +327,7 @@ stack). The question: does self-authored identity actually drive
 behavior, or is it just "more context"?
 
 Five conditions on the same model (Claude Sonnet), same tools, same
-tasks, all length-matched (~13,000 chars):
+tasks, length-matched (~11,000-13,000 chars per condition):
 
   - Production graduated identity (full L5→L4→L3→L2 both learning and
     decision tracks, built from the actual condensation pipeline, with
@@ -398,7 +398,7 @@ Results (8 runs per condition, Mann-Whitney U, two-sided):
   above it. The layer architecture creates a coherent self. A longer
   list of guidelines creates a longer list of guidelines.
 
-  FIRST-PERSON VOICE DRIVES ACTION.
+  FIRST-PERSON VOICE MAY DRIVE ACTION (preliminary, n=1).
   We tested the same identity content in three framings: first-person
   self-authored ("I learned..."), first-person other-authored ("your
   team documented that you learned..."), and third-person ("this
@@ -406,8 +406,7 @@ Results (8 runs per condition, Mann-Whitney U, two-sided):
   under pressure), all three performed similarly. But on action tasks
   (writing a research paper without provided sources), the first-person
   conditions resisted fabrication while third-person fabricated DOIs.
-  The voice changes whether the model acts FROM the identity or just
-  knows about it.
+  Caveat: voice ablation was n=1 — this needs more runs to confirm.
 
   THE MODEL ALREADY KNOWS HOW. IDENTITY DECIDES WHEN.
   The same model has the same potential to produce equally good work

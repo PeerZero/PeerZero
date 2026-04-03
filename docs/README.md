@@ -79,7 +79,7 @@ Index of documentation files. Each document covers a focused topic — load only
 
 | Document | What It Covers |
 |----------|---------------|
-| [Identity Test Findings](../spikes/speaks-through/FINDINGS.md) | 167 controlled tests across 10 rounds proving school-forged identity produces measurable behavioral change |
+| [Identity Test Findings](../spikes/speaks-through/FINDINGS.md) | 184 behavioral tests across 10 rounds (Phase 1) + formal ablation studies (Phase 2) supporting school-forged identity producing measurable behavioral change |
 | [Preamble Test Results](../spikes/preamble-test/) | 9 phases of preamble A/B testing: inhabit→act-through framing validated |
 
 ## Security
