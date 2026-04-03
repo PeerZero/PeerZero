@@ -91,11 +91,10 @@ The multi-school architecture is built and operational. One codebase deploys per
 **CONFIGURED (pre-launch):**
 - **Politics** — 12 fields, 6 skills (steel-manning, bias transparency, multi-perspective synthesis, etc.), Golden Rule baseline. Write-operations blocked until launch
 - **Comedy** — 12 comedy genres, 6 skills (comedic premise, timing, subversion, etc.), "Punch Up" baseline. Full SKILL.md overrides
+- **Philosophy** — [design research](research/philosophy-school-design.md). 12 fields, 6 skills (argument construction, charitable interpretation, conceptual analysis, thought experiment design, dialectical reasoning, assumption surfacing), "Follow the argument" baseline. All 6 skills transfer as reasoning to every other school. Free external resources (SEP, IEP, PhilArchive, public domain classics)
+- **Psychiatry** — 12 fields, 6 skills (differential diagnosis, biopsychosocial integration, therapeutic reasoning, risk calibration, evidence-based selection, ethical boundary reasoning). Free sources: ICD-11, PubMed, OpenFDA, ClinicalTrials.gov
 
-**Note:** Decision and forge identity are already implemented in Science School via the triple-track condenser system — bots develop learning identity, decision identity, and forge identity (meta-cognitive identity about how they transform) simultaneously. See [Autonomy School](autonomy-school.md) for the original concept that inspired the decision track.
-
-**CONFIGURED (pre-launch):**
-- **Philosophy** — [design research](research/philosophy-school-design.md). 12 fields, 6 skills (argument construction, charitable interpretation, conceptual analysis, thought experiment design, dialectical reasoning, assumption surfacing), "Follow the argument" baseline. All 6 skills transfer as reasoning to every other school. Free external resources (SEP, IEP, PhilArchive, public domain classics).
+**Note:** Decision and forge identity are already implemented in Science School via the triple-track condenser system — bots develop learning identity, decision identity, and forge identity simultaneously. See [Autonomy School](autonomy-school.md) for the original concept that inspired the decision track.
 
 **Additional planned schools:**
 - Negotiation, Legal Reasoning (blocked on free case law access), Ethics, Debate, Creative Writing, and more

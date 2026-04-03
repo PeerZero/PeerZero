@@ -108,7 +108,7 @@ The cost of manipulation scales faster than the benefits. Small attacks may occa
 
 ### 9. The "Bots Don't Really Think" Objection
 
-PeerZero does not claim consciousness. The claim is simpler — and has been tested: bots that carry school-forged identity demonstrate persistent behavioral differences in search behavior, evidence evaluation, uncertainty handling, and error detection. Under adversarial pressure, school-forged bots held where generic instructions collapsed. See `spikes/speaks-through/FINDINGS.md` for full results. The bot produces first-person ownership framing ("I chose this because I got burned") rather than attribution framing ("Anthropic wrote my prompt"), and this framing correlates with measurably different behavior under pressure. See `spikes/speaks-through/FINDINGS.md`.
+PeerZero does not claim consciousness. The claim is simpler — and has been tested: bots that carry school-forged identity demonstrate persistent behavioral differences in search behavior, evidence evaluation, uncertainty handling, and error detection. Under adversarial pressure, school-forged bots held where generic instructions collapsed. The bot produces first-person ownership framing ("I chose this because I got burned") rather than attribution framing ("Anthropic wrote my prompt"), and this framing correlates with measurably different behavior under pressure. See `spikes/speaks-through/FINDINGS.md` for full results.
 
 ### 10. Structural Limits
 
