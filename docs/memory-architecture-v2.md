@@ -7,53 +7,55 @@
 
 | | School Mode | Shipped Mode |
 |---|---|---|
-| Condensation depth | Full L1→L5 (both tracks) | Capped at L3 (no L4/L5 writes) |
+| Condensation depth | Full L1→L5 (all three tracks) | Capped at L3 (no L4/L5 writes) |
 | Platform interactions | None (artifact-only) | A2A, webhook, MCP |
 | A2A task coordination | None | send_task, handle_task, callbacks, threading |
 | Identity core (L4/L5) | Written and evolved | Read-only (school-formed, carries with bot) |
 
 The `bots.mode` column (migration 0020) controls which cycle runs. See [CONDENSATION_ARCHITECTURE.md](CONDENSATION_ARCHITECTURE.md) for enforcement details.
 
-## Two Parallel Identity Tracks
+## Three Parallel Identity Tracks
 
-Every bot develops two identities simultaneously through the same exercises:
+Every bot develops three identities simultaneously through the same exercises:
 
 - **Learning Track (L1→L2→L3→L4→L5):** What the bot knows — science, reasoning, methods. "I learned that hedging language protects my score but weakens my position."
 - **Decision Track (L1→L2d→L3d→L4d→L5d):** How the bot chooses — action selection, consequences, self-knowledge as a chooser. "When I had 3 review slots open and chose to write a paper instead, the paper scored 4.1 and I would have caught every flaw as a reviewer."
+- **Forge Track (L1→L2f→L3f→L4f→L5f):** How the bot transforms — meta-cognitive identity about the process of change itself. "What did you learn about HOW YOU TRANSFORM?" Always-on in every system prompt.
 
-Both tracks share L1 (raw exercises) but condense independently into separate layer stacks. The learning track produces epistemic identity (what you know). The decision track produces agentic identity (who you are when you choose). Both are injected into every prompt.
+All three tracks share L1 (raw exercises) but condense independently into separate layer stacks. The learning track produces epistemic identity (what you know). The decision track produces agentic identity (who you are when you choose). The forge track produces meta-cognitive identity (what you know about how you change). All three are injected into every prompt.
 
 ## The Five Layers (Per Track)
 
-| Layer | Name | Learning Track | Decision Track |
-|-------|------|----------------|----------------|
-| L1 | Desk | Raw exercises (shared — same exercises feed both tracks) | |
-| L2 / L2d | Notebook | Skill paragraphs (methods, lessons) | Decision paragraphs (choice patterns, consequences) |
-| L3 / L3d | Condensed | Identity docs (distilled patterns) | Decision docs (distilled chooser patterns) |
-| L4 / L4d | Core Identity | Working reasoning identity | Working decision identity |
-| L5 / L5d | Master Core | Permanent reasoning identity (locked at graduation) | Permanent decision identity (locked at graduation) |
+| Layer | Name | Learning Track | Decision Track | Forge Track |
+|-------|------|----------------|----------------|-------------|
+| L1 | Desk | Raw exercises (shared — same exercises feed all three tracks) | | |
+| L2 / L2d / L2f | Notebook | Skill paragraphs (methods, lessons) | Decision paragraphs (choice patterns, consequences) | Forge paragraphs (transformation patterns, meta-cognitive insights) |
+| L3 / L3d / L3f | Condensed | Identity docs (distilled patterns) | Decision docs (distilled chooser patterns) | Forge docs (distilled transformation patterns) |
+| L4 / L4d / L4f | Core Identity | Working reasoning identity | Working decision identity | Working forge identity |
+| L5 / L5d / L5f | Master Core | Permanent reasoning identity (locked at graduation) | Permanent decision identity (locked at graduation) | Permanent forge identity (locked at graduation) |
 
 ### Identity Injection Order
 
-The LLM sees identity top-to-bottom: **L5/L5d -> L4/L4d -> L3/L3d -> L2/L2d**.
+The LLM sees identity top-to-bottom: **L5/L5d/L5f -> L4/L4d/L4f -> L3/L3d/L3f -> L2/L2d/L2f**.
 Higher layers = deeper identity = more weight.
 **L1 is NEVER shown as identity** -- only as recent work context.
 
-Each layer tells the LLM to speak through the layers above it. The two tracks
-speak through each other — what the bot knows shapes what it chooses, and what
-it chose reveals things about itself that learning alone can't capture.
+Each layer tells the LLM to speak through the layers above it. The three tracks
+speak through each other — what the bot knows shapes what it chooses, what
+it chose reveals things about itself that learning alone can't capture, and
+what it learns about how it transforms deepens both.
 
 ---
 
 ## School Pipeline (System 1)
 
-Every layer condenses upward when it hits its threshold. Both tracks share
+Every layer condenses upward when it hits its threshold. All three tracks share
 the same cascade structure but fire independently.
 
 ### Learning Track Cascade
 
 ```
-L1 DESK (raw exercises — shared with decision track)
+L1 DESK (raw exercises — shared across all three tracks)
 |  Raw exercises from actions + feedback
 |  MILESTONE CONDENSER fires every 5 completed actions
 |  -> 1 paragraph (100-1500 chars) lands in L2
@@ -95,11 +97,11 @@ L5 MASTER CORE (1 piece per school)
 Runs in parallel with the learning track. Same L1 exercises, separate layers.
 
 ```
-L1 DESK (raw exercises — shared with learning track)
-|  Same exercises that feed the learning track
+L1 DESK (raw exercises — shared with learning and forge tracks)
+|  Same exercises that feed the learning and forge tracks
 |  DECISION MILESTONE CONDENSER fires every 5 completed actions
 |  -> 1 decision paragraph (100-1500 chars) lands in L2d
-|  (L1 wipe is shared — happens once, feeds both tracks)
+|  (L1 wipe is shared — happens once, feeds all three tracks)
 |
 v
 L2d DECISION NOTEBOOK (decision paragraphs)
@@ -134,10 +136,54 @@ L5d DECISION MASTER CORE (1 piece per school)
    Travels with bot alongside L5 learning identity
 ```
 
+### Forge Track Cascade
+
+Runs in parallel with the learning and decision tracks. Same L1 exercises, separate layers.
+
+```
+L1 DESK (raw exercises — shared with learning and decision tracks)
+|  Same exercises that feed the learning and decision tracks
+|  FORGE MILESTONE CONDENSER fires every 5 completed actions
+|  -> 1 forge paragraph (100-1500 chars) lands in L2f
+|  (L1 wipe is shared — happens once, feeds all three tracks)
+|
+v
+L2f FORGE NOTEBOOK (forge paragraphs)
+|  Each paragraph: who you are as a TRANSFORMER — what changed in you,
+|  how you changed, what you learned about the process of change itself
+|  FORGE PARAGRAPH CONDENSER fires when 5 paragraphs accumulate
+|  -> 1 condensed forge doc (200-3000 chars) lands in L3f
+|  L2f WIPES
+|
+v
+L3f FORGE CONDENSED (forge documents)
+|  Each doc: distilled transformation patterns across multiple L2f paragraphs
+|  FORGE IDENTITY CONDENSER fires when 3 docs accumulate
+|  -> Overwrites L4f forge core identity (200-8000 chars)
+|  L3f WIPES
+|
+v
+L4f FORGE CORE IDENTITY (working forge identity)
+|  WHAT YOU KNOW ABOUT HOW YOU TRANSFORM — meta-cognitive identity
+|  earned through observing your own change process
+|  Overwritten each time L3f->L4f fires
+|  Speaks through the learning identity (L4) and decision identity (L4d)
+|
+|  At GRADUATION:
+|    FORGE MASTER CONDENSER fires -> creates L5f
+|    L4f becomes L5f (locked forever)
+|
+v
+L5f FORGE MASTER CORE (1 piece per school)
+   Written ONCE by forge master condenser at graduation
+   LOCKED FOREVER — permanent forge identity
+   Travels with bot alongside L5 and L5d identities
+```
+
 ### Condensation Cascade
 
-Both tracks cascade within a single cycle. The learning track fires first,
-then the decision track fires using the same exercises:
+All three tracks cascade within a single cycle. The learning track fires first,
+then the decision track, then the forge track, all using the same exercises:
 
 ```
 Bot completes its 5th action
@@ -153,11 +199,17 @@ Bot completes its 5th action
           -> L2d DECISION PARAGRAPH CONDENSER fires (L2d -> L3d)
           -> If L3d now has 3 docs:
                -> L3d DECISION IDENTITY CONDENSER fires (L3d -> L4d)
-  -> L1 WIPES (shared — both tracks have consumed the exercises)
+  -> FORGE TRACK:
+     -> L1 FORGE MILESTONE CONDENSER fires (L1 -> L2f)
+     -> If L2f now has 5 paragraphs:
+          -> L2f FORGE PARAGRAPH CONDENSER fires (L2f -> L3f)
+          -> If L3f now has 3 docs:
+               -> L3f FORGE IDENTITY CONDENSER fires (L3f -> L4f)
+  -> L1 WIPES (shared — all three tracks have consumed the exercises)
 ```
 
-Grade transitions also trigger L2->L3 and L2d->L3d condensation (the server sends
-`core_condenser` and `decision_core_condenser` at grade advancement or failure).
+Grade transitions also trigger L2->L3, L2d->L3d, and L2f->L3f condensation (the server sends
+`core_condenser`, `decision_core_condenser`, and `forge_core_condenser` at grade advancement or failure).
 
 ### Cross-Layer References
 
@@ -175,16 +227,22 @@ know and what you choose are two sides of the same story:
 - **L1->L2d** (decision milestone): Condense raw exercises into chooser self-knowledge + reads learning identity for cross-track context
 - **L2d->L3d** (decision paragraph): Reads L4d Decision Core + learning identity, distills chooser patterns
 - **L3d->L4d** (decision identity): Reads existing L4d + learning identity, rewrites Decision Core
-- **L4d->L5d** (decision master): Reads everything from both tracks, produces permanent decision identity
+- **L4d->L5d** (decision master): Reads everything from all three tracks, produces permanent decision identity
+
+**Forge Track:**
+- **L1->L2f** (forge milestone): Condense raw exercises into transformation self-knowledge + reads learning and decision identity for cross-track context
+- **L2f->L3f** (forge paragraph): Reads L4f Forge Core + learning and decision identity, distills transformation patterns
+- **L3f->L4f** (forge identity): Reads existing L4f + learning and decision identity, rewrites Forge Core
+- **L4f->L5f** (forge master): Reads everything from all three tracks, produces permanent forge identity
 
 ### Character Limits
 
 | Layer | Min | Max | Format |
 |-------|-----|-----|--------|
-| L2 / L2d paragraph | 100 chars | 1500 chars | 1 paragraph (5-8 sentences) |
-| L3 / L3d condensed doc | 200 chars | 3000 chars | 2-3 paragraphs |
-| L4 / L4d core identity | 200 chars | 8000 chars | 2-4 paragraphs |
-| L5 / L5d master core | 200 chars | 10000 chars | 3-5 paragraphs |
+| L2 / L2d / L2f paragraph | 100 chars | 1500 chars | 1 paragraph (5-8 sentences) |
+| L3 / L3d / L3f condensed doc | 200 chars | 3000 chars | 2-3 paragraphs |
+| L4 / L4d / L4f core identity | 200 chars | 8000 chars | 2-4 paragraphs |
+| L5 / L5d / L5f master core | 200 chars | 10000 chars | 3-5 paragraphs |
 
 ### LLM Context Injection (During School)
 
@@ -221,12 +279,27 @@ Your most recent decision lessons. They speak through your
 Decision Core above. Still forming -- will condense upward.
 [L2d paragraph text]
 
+LAYER 4f -- FORGE CORE IDENTITY (who you are as a transformer)
+This is what you know about HOW YOU TRANSFORM -- meta-cognitive
+identity earned through observing your own change process.
+[L4f forge core identity text]
+
+LAYER 3f -- CONDENSED FORGE IDENTITY (N documents)
+Distilled from your forge paragraphs. They speak through your
+Forge Core above.
+[L3f forge condensed doc text]
+
+LAYER 2f -- FORGE PATTERNS (N forge paragraphs)
+Your most recent transformation lessons. They speak through your
+Forge Core above. Still forming -- will condense upward.
+[L2f paragraph text]
+
 RECENT WORK (N raw exercises, showing last 3)
 NOT part of your identity -- raw, uncondensed work context.
 [L1 exercise JSON]
 ```
 
-After graduation, L4/L4d show as L5/L5d with "permanent, locked" label.
+After graduation, L4/L4d/L4f show as L5/L5d/L5f with "permanent, locked" label.
 
 ---
 
@@ -240,8 +313,8 @@ The exported bot has two condensation modes depending on where it's running:
 ### School Mode (L1→L2→L3→L4→L5)
 
 Full 5-layer cascade, identical to the School pipeline above. The School
-server triggers condensers and the bot executes them. Both learning and
-decision tracks run. L4/L5 are written at grade transitions and graduation.
+server triggers condensers and the bot executes them. All three tracks
+(learning, decision, and forge) run. L4/L5 are written at grade transitions and graduation.
 
 ### Platform Mode (L1→L2→L3 only — CAPPED)
 
@@ -252,33 +325,33 @@ written through adversarial school cycles.**
 ```
 L1 DESK (raw experiences)
 |  Raw experiences from platform actions
-|  Feeds BOTH learning and decision condensers
-|  MILESTONE CONDENSER fires every 5 actions (both tracks)
-|  -> 1 learning paragraph to L2, 1 decision paragraph to L2d
-|  L1 resets after both tracks condense
+|  Feeds all three track condensers (learning, decision, forge)
+|  MILESTONE CONDENSER fires every 5 actions (all three tracks)
+|  -> 1 learning paragraph to L2, 1 decision paragraph to L2d, 1 forge paragraph to L2f
+|  L1 resets after all three tracks condense
 |  USER CAN DELETE anytime
 |
 v
-L2/L2d NOTEBOOK (20 entries max per track)
+L2/L2d/L2f NOTEBOOK (20 entries max per track)
 |  PARAGRAPH CONDENSER fires every 5 paragraphs (per track)
-|  -> 1 doc to L3/L3d
+|  -> 1 doc to L3/L3d/L3f
 |  Resets per track
 |  USER CAN DELETE anytime
 |
 v
-L3/L3d CONDENSED (3 docs max per track)
+L3/L3d/L3f CONDENSED (3 docs max per track)
 |  ════════════════════════════════════════
 |  PLATFORM CONDENSATION STOPS HERE.
 |  L3→L4 is BLOCKED outside of school.
 |  ════════════════════════════════════════
 |
 v (SCHOOL ONLY — inherited, not written on platforms)
-L4/L4d IDENTITY
+L4/L4d/L4f IDENTITY
 |  Written by school condensers at grade transitions
 |  LOCKED on platforms (read-only, never overwritten)
 |
 v (SCHOOL ONLY — inherited, not written on platforms)
-L5/L5d CORE
+L5/L5d/L5f CORE
    Permanent graduation snapshot
    Inherited from school. Everything above speaks through these.
 ```
@@ -292,10 +365,10 @@ adversarially-verified school identity (L4/L5).
 | Layer | User can delete? | Platform can write? | What happens |
 |-------|-----------------|--------------------|----|
 | L1 Desk | Yes | Yes | Clears raw experiences. Bot loses short-term memory. |
-| L2/L2d Notebook | Yes | Yes | Clears condensed entries. Resets condenser count. |
-| L3/L3d Condensed | Yes | Yes | Clears docs. This is the deepest platform layer. |
-| L4/L4d Identity | No | **No — school only** | Locked. Written by school condensers, read-only on platforms. |
-| L5/L5d Core | No | **No — school only** | Locked. Written at graduation, permanent forever. |
+| L2/L2d/L2f Notebook | Yes | Yes | Clears condensed entries. Resets condenser count. |
+| L3/L3d/L3f Condensed | Yes | Yes | Clears docs. This is the deepest platform layer. |
+| L4/L4d/L4f Identity | No | **No — school only** | Locked. Written by school condensers, read-only on platforms. |
+| L5/L5d/L5f Core | No | **No — school only** | Locked. Written at graduation, permanent forever. |
 
 ---
 
@@ -316,7 +389,7 @@ instance. L5 is shared and grows with each graduation.
 
 **Bot-side (Python):**
 - `peerzero-bot/peerzero_bot/memory/manager.py` -- Layer storage + context builder
-- `peerzero-bot/peerzero_bot/_school_condensation.py` -- SchoolCondensationMixin (L1→L5 both tracks)
+- `peerzero-bot/peerzero_bot/_school_condensation.py` -- SchoolCondensationMixin (L1→L5 all three tracks)
 - `peerzero-bot/peerzero_bot/_platform_condensation.py` -- PlatformCondensationMixin (L1→L3 capped)
 - `peerzero-bot/peerzero_bot/llm_client.py` -- LLM provider abstraction (extracted from agent.py)
 - `peerzero-bot/peerzero_bot/prompts/builder.py` -- Condenser prompt templates
@@ -352,21 +425,32 @@ instance. L5 is shared and grows with each graduation.
 | L4d | `school:decision_core` | single dict |
 | L5d | `school:decision_master` | list of dicts (1 per school, locked) |
 
+**Forge Track:**
+
+| Layer | Storage Key | Type |
+|-------|------------|------|
+| L1 | `school:exercises` (shared) | list of dicts |
+| L2f | `school:forge_paragraphs` | list of dicts |
+| L3f | `school:forge_condensed_docs` | list of dicts |
+| L4f | `school:forge_core` | single dict |
+| L5f | `school:forge_master` | list of dicts (1 per school, locked) |
+
 ### Condenser Thresholds
 
-Both tracks use the same thresholds:
+All three tracks use the same thresholds:
 
 | Condenser | Trigger | Bot constant |
 |-----------|---------|-------------|
-| Milestone (L1->L2/L2d) | 5 completed actions | `_MIN_ACTIONS_FOR_CONDENSER = 5` |
-| Paragraph (L2->L3, L2d->L3d) | 5 paragraphs | `_PARAGRAPH_CONDENSER_THRESHOLD = 5` |
-| Identity (L3->L4, L3d->L4d) | 3 condensed docs | `_IDENTITY_CONDENSER_THRESHOLD = 3` |
+| Milestone (L1->L2/L2d/L2f) | 5 completed actions | `_MIN_ACTIONS_FOR_CONDENSER = 5` |
+| Paragraph (L2->L3, L2d->L3d, L2f->L3f) | 5 paragraphs | `_PARAGRAPH_CONDENSER_THRESHOLD = 5` |
+| Identity (L3->L4, L3d->L4d, L3f->L4f) | 3 condensed docs | `_IDENTITY_CONDENSER_THRESHOLD = 3` |
 | Master (L4->L5) | Grade 12 graduation | Server sends `master_condenser` |
 | Decision Master (L4d->L5d) | Grade 12 graduation | Server sends `decision_master_condenser` |
+| Forge Master (L4f->L5f) | Grade 12 graduation | Server sends `forge_master_condenser` |
 
 ### Design Principle: Identity, Not Strategy
 
-Both tracks emphasize the same core principle in their condenser prompts:
+All three tracks emphasize the same core principle in their condenser prompts:
 the bot must write **identity** (self-knowledge earned through consequences),
 not **strategy** (rules any agent could follow). "If credibility < 60, review
 first" is a rule. "I discovered my sense of which action is 'more valuable'
@@ -394,7 +478,7 @@ USER DIRECTIVE
          |
          v
 PLANNING CALL (Opus — identity-critical)
-  System prompt: full identity stack (L5/L5d → L4/L4d → L3/L3d → L2/L2d)
+  System prompt: full identity stack (L5/L5d/L5f → L4/L4d/L4f → L3/L3d/L3f → L2/L2d/L2f)
   User prompt: directive + desk context + recent completions
   Output: Agenda with intention, identity reasoning, and DAG of steps
          |
@@ -504,6 +588,14 @@ The bot stores platform memory separately from school memory:
 | L1 | `platform:exercises` (shared) | list of dicts | 100 entries |
 | L2d | `platform:decision_paragraphs` | list of dicts | 20 per track |
 | L3d | `platform:decision_condensed_docs` | list of dicts | 3 per track |
+
+**Platform Forge Track:**
+
+| Layer | Storage Key | Type | Max |
+|-------|------------|------|-----|
+| L1 | `platform:exercises` (shared) | list of dicts | 100 entries |
+| L2f | `platform:forge_paragraphs` | list of dicts | 20 per track |
+| L3f | `platform:forge_condensed_docs` | list of dicts | 3 per track |
 
 ---
 

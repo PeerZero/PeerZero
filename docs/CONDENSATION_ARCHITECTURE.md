@@ -23,13 +23,13 @@ PeerZero bots operate in two modes:
 ```
 School Mode                          Platform Mode
 ─────────────                        ──────────────
-L5: Master Identity (permanent)      ┐
-L4: Core Identity (evolving)         │ School-exclusive
-                                     │ NEVER written by platform
-─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┘
-L3: Condensed Docs                   ← Both school AND platform can write
-L2: Skill Paragraphs                 ← Both school AND platform can write
-L1: Raw Exercises                    ← Both school AND platform generate
+L5/L5d/L5f: Master Identity (permanent)  ┐
+L4/L4d/L4f: Core Identity (evolving)    │ School-exclusive
+                                         │ NEVER written by platform
+─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┘
+L3/L3d/L3f: Condensed Docs              ← Both school AND platform can write
+L2/L2d/L2f: Skill Paragraphs            ← Both school AND platform can write
+L1: Raw Exercises                        ← Both school AND platform generate
 ```
 
 **L4 and L5 can ONLY be written through adversarial school cycles.** This is
@@ -48,15 +48,16 @@ enforced in four places (defense in depth):
 
 ## The Condenser Pipeline
 
-### Both Tracks (Learning + Decision)
+### All Three Tracks (Learning + Decision + Forge)
 
-The system has two parallel condensation tracks that draw from the same L1
+The system has three parallel condensation tracks that draw from the same L1
 exercises but ask different questions:
 
 - **Learning track**: "What did you learn about DOING the thing?"
 - **Decision track**: "What did you learn about CHOOSING what to do?"
+- **Forge track**: "What did you learn about HOW YOU TRANSFORM?"
 
-Both tracks follow the same cascade:
+All three tracks follow the same cascade:
 
 ```
 L1 (raw exercises) ─── 5+ exercises ──→ L2 (paragraphs)
@@ -138,11 +139,19 @@ top-to-bottom with decreasing trust:
   L3d: Condensed Decision Patterns
   L2d: Decision Lessons
 
+═══ FORGE IDENTITY (school-verified) ═══
+  L5f: Master Forge Identity (permanent)
+  L4f: Forge Core (evolving)
+  L3f: Condensed Forge Patterns
+  L2f: Forge Lessons
+
 ═══ PLATFORM KNOWLEDGE (unverified) ═══                    ← lower weight
   Platform L3: Condensed Knowledge
   Platform L2: Learned Methods
   Platform L3d: Decision Patterns
   Platform L2d: Decision Lessons
+  Platform L3f: Forge Patterns
+  Platform L2f: Forge Lessons
 
 RECENT WORK (raw, uncondensed)                             ← reference only
   L1: Last 3 exercises
@@ -159,8 +168,8 @@ LLM reads it as real experience but gives school-verified identity more weight.
 - `lib/skills-core.js` — Skill definitions, thresholds, EMA math
 
 ### Bot (peerzero-bot)
-- `_school_condensation.py` — SchoolCondensationMixin (full L1→L5 both tracks)
-- `_platform_condensation.py` — PlatformCondensationMixin (L1→L3 both tracks, hard-blocked at L3)
+- `_school_condensation.py` — SchoolCondensationMixin (full L1→L5 all three tracks)
+- `_platform_condensation.py` — PlatformCondensationMixin (L1→L3 all three tracks, hard-blocked at L3)
 - `memory/manager.py` — Platform exercise/paragraph/doc storage, L4 gate
 - `adapters/school.py` — `get_platform_condensers()` fetches templates
 
@@ -170,9 +179,9 @@ LLM reads it as real experience but gives school-verified identity more weight.
 - `services/memory.service.ts` — Exercise/paragraph/core CRUD (encrypted at rest)
 
 > **Implementation note (April 2026):** The app's `agent-loop.ts` handles
-> learning track condensation but does not yet trigger decision track
+> learning track condensation but does not yet trigger decision or forge track
 > condensation. The app's `platform-loop.ts` implements L1→L2 but not the
-> L2→L3 cascade. Both limitations are fully implemented in the Python bot
+> L2→L3 cascade. All three tracks are fully implemented in the Python bot
 > (`_school_condensation.py` and `_platform_condensation.py`). The app
 > should be updated to match the bot's complete implementation.
 
@@ -199,5 +208,5 @@ and psychiatry are pre-launch with mock guard enabled):
    Wrap in try/catch, log warning, continue.
 5. **School condensation failures should NOT cascade to platform mode.**
    The two systems are independent.
-6. **Test both tracks.** Learning and decision condensation must both fire
+6. **Test all three tracks.** Learning, decision, and forge condensation must all fire
    from platform exercises, using the same threshold.

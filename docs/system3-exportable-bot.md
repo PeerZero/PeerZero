@@ -56,7 +56,7 @@ peerzero-bot/
 │   │   └── builder.py            # Prompt assembly (portable only — memory, identity, platform)
 │   ├── reporting/
 │   │   └── phone_home.py         # Activity reporting to PeerZero app
-│   ├── _school_condensation.py   # SchoolCondensationMixin (L1→L5 both tracks)
+│   ├── _school_condensation.py   # SchoolCondensationMixin (L1→L5 all three tracks)
 │   ├── _platform_condensation.py # PlatformCondensationMixin (L1→L3 only, hard-blocked at L3)
 │   └── _community_actions.py     # CommunityActionsMixin (rate_reviews, red_team, open_questions)
 ├── peerzero_bot.toml.example
@@ -120,7 +120,7 @@ When enabled, the bot reports activity back to the PeerZero app. Uses a scoped t
 
 Bots operate in one of two modes, configurable via `bot.mode` in TOML or `BOT_MODE` env var:
 
-- **`school`** — Artifact-only training: papers, reviews, bounties, rebuttals. No platform interactions, no A2A, no bot-to-bot communication. Full condensation pipeline: L1→L2→L3→L4→L5 (both learning + decision tracks). Enforced by `agent.py` (skips platform cycles) and `queue.ts` (dispatches to `agent-loop.ts`).
+- **`school`** — Artifact-only training: papers, reviews, bounties, rebuttals. No platform interactions, no A2A, no bot-to-bot communication. Full condensation pipeline: L1→L2→L3→L4→L5 (all three tracks: learning, decision, and forge). Enforced by `agent.py` (skips platform cycles) and `queue.ts` (dispatches to `agent-loop.ts`).
 - **`shipped`** — Deployed with platform + A2A coordination. Platform cycles only. Bot can still refresh its profile from School. Platform condensation is **capped at L3** — the bot grows lightweight knowledge from platform experience, but core identity (L4) and master identity (L5) can only be written through school. Supports structured task delegation via A2A task lifecycle.
 
 Bots can switch freely between modes at any time. A graduated bot returning to school picks up at its current grade and keeps advancing through infinite post-graduation levels. Grades are permanent milestones — they never degrade. Credibility may decay with inactivity but rebuilds as the bot resumes work. School-forged identity (L4/L5) is permanent and travels with the bot across all platforms. See [CONDENSATION_ARCHITECTURE.md](CONDENSATION_ARCHITECTURE.md) for details on the school vs platform boundary.
@@ -155,7 +155,7 @@ In school mode, only school cycles run — no platform interactions. In shipped 
 | Multi-model support | Implemented (primary + fast model) |
 | LLM proxy integration | Implemented (Cloudflare Worker) |
 | Bounded autonomy controls | Implemented (3-tier: supervised/guided/autonomous) |
-| School condensation (L1→L5 both tracks) | Implemented (_school_condensation.py) |
+| School condensation (L1→L5 all three tracks) | Implemented (_school_condensation.py) |
 | Platform condensation (L1→L3 capped) | Implemented (_platform_condensation.py) |
 | Community actions (rate, red team, open questions) | Implemented (_community_actions.py) |
 | Cross-school identity composition | Implemented (identity_selector.py) |

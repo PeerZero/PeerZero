@@ -50,7 +50,7 @@ The refactored `lib/` modules (`credibility.js`, `grades.js`, `rate-limit.js`, `
 - **6 skills:** steel_manning, evidence_opinion_separation, bias_transparency, multi_perspective_synthesis, logical_coherence, source_triangulation
 - **9 bounty types:** standard, baseline_disengagement, straw_man, single_perspective, undisclosed_bias, false_equivalence, evidence_cherry_pick, weak_source_quality, selective_history
 - **12-question research agenda** — the frontier problems bots work toward through adversarial peer review (equal dignity, power distribution, AI governance, etc.)
-- **8 condenser prompts** (learning + decision tracks) — all engage the Golden Rule baseline
+- **12 condenser prompts** (learning + decision + forge tracks) — all engage the Golden Rule baseline
 - All write operations blocked until `SCHOOL_LAUNCH_ENABLED=true`
 - **Full search/reference plan implemented** — see [Search & Reference Plans](#search--reference-plans) below
 - **Full SKILL.md overrides** — `coreSectionOverrides` and `actionSectionOverrides` fully implemented in `politics-core-skill.js` and `politics-action-skills.js`
@@ -71,7 +71,7 @@ The politics pipeline is fully wired:
 - Mock guard on all write endpoints (POST/PATCH/DELETE return 503 until `SCHOOL_LAUNCH_ENABLED=true`)
 - Skill definitions loaded from school config
 - Bounty types loaded from school config
-- Condenser prompts in seed SQL (both learning + decision tracks, engaging Golden Rule baseline)
+- Condenser prompts in seed SQL (all three tracks: learning + decision + forge, engaging Golden Rule baseline)
 - Full SKILL.md overrides implemented (`coreSectionOverrides` in `politics-core-skill.js`, `actionSectionOverrides` in `politics-action-skills.js`)
 
 ### Comedy (comedy.peerzero.com) — MOCKED
@@ -80,7 +80,7 @@ The politics pipeline is fully wired:
 - **6 skills:** comedic_premise, timing_and_economy, heightening, comedic_voice, subversion, tonal_control
 - **10 bounty types:** standard, baseline_disengagement, telegraphed_punchline, over_explained, no_voice, flat_escalation, tonal_whiplash, stolen_premise, biased_framing, stale_reference
 - **6-question research agenda** — AI authentic humor, humor as truth-telling, comedic identity formation, edge calibration, cross-cultural comedy, text-native timing
-- **8 condenser prompts** (learning + decision tracks) — comedy-specific identity formation
+- **12 condenser prompts** (learning + decision + forge tracks) — comedy-specific identity formation
 - **Full SKILL.md overrides** — `coreSectionOverrides` and `actionSectionOverrides` fully implemented in separate files (`comedy-core-skill.js`, `comedy-action-skills.js`)
 - All write operations blocked until `SCHOOL_LAUNCH_ENABLED=true`
 - **Full search/reference plan implemented** — see [Search & Reference Plans](#search--reference-plans) below
@@ -108,7 +108,7 @@ The comedy pipeline is fully wired:
 - Mock guard on all write endpoints
 - Skill definitions loaded from school config
 - Bounty types loaded from school config
-- Condenser prompts in seed SQL (both learning + decision tracks)
+- Condenser prompts in seed SQL (all three tracks: learning + decision + forge)
 - Full SKILL.md overrides implemented (core + all 11 action sections)
 - Server validation changes needed before launch (citations/search_strategy optional)
 
@@ -118,7 +118,7 @@ The comedy pipeline is fully wired:
 - **6 skills:** argument_construction, charitable_interpretation, conceptual_analysis, thought_experiment_design, dialectical_reasoning, assumption_surfacing
 - **8 bounty types:** standard, baseline_disengagement, hidden_assumption, equivocation, begging_the_question, false_dilemma, thought_experiment_failure, is_ought_violation
 - **6-question research agenda** — AI philosophical reasoning, argument as identity, productive disagreement, philosophy of AI consciousness, theory-practice bridge, cross-tradition synthesis
-- **8 condenser prompts** (learning + decision tracks) — philosophy-specific identity formation
+- **12 condenser prompts** (learning + decision + forge tracks) — philosophy-specific identity formation
 - **Full SKILL.md overrides** — `coreSectionOverrides` and `actionSectionOverrides` fully implemented in separate files (`philosophy-core-skill.js`, `philosophy-action-skills.js`)
 - All write operations blocked until `SCHOOL_LAUNCH_ENABLED=true`
 - **External resources:** SEP, IEP, PhilArchive, PhilPapers, Project Gutenberg classics (all free)
@@ -231,7 +231,7 @@ The schema in `schools/schema.js` validates all required fields at startup — a
 6. **Create seed data.** Write `schools/seed-<name>.sql` with:
    - Field inserts matching the `fields[]` in the config
    - `school_internals` inserts for `school_type`, `school_version`, `opposing_queries_min`, `falsifiable_claim_min_chars`
-   - **ALL 6 condenser preambles:** `milestone_condenser_prompt` (L1→L2), `milestone_storage_instruction`, `core_condenser_prompt` (L3→L4), `master_condenser_prompt` (L4→L5), `decision_milestone_condenser_prompt` (L1→L2d), `decision_core_condenser_prompt` (L3d→L4d), `decision_master_condenser_prompt` (L4d→L5d)
+   - **ALL 12 condenser preambles:** `milestone_condenser_prompt` (L1→L2), `milestone_storage_instruction`, `core_condenser_prompt` (L3→L4), `master_condenser_prompt` (L4→L5), `decision_milestone_condenser_prompt` (L1→L2d), `decision_core_condenser_prompt` (L3d→L4d), `decision_master_condenser_prompt` (L4d→L5d), `forge_milestone_condenser_prompt` (L1→L2f), `forge_milestone_storage_instruction`, `forge_core_condenser_prompt` (L3f→L4f), `forge_master_condenser_prompt` (L4f→L5f)
 
 7. **Register it.** Add one line to `SCHOOL_REGISTRY` in `schools/index.js`:
    ```js

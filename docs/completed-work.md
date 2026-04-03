@@ -346,7 +346,7 @@ Moved academic paper search from the bot package to a server-side API endpoint. 
 - `lib/coaching.js` — reads `coachingPatterns[]` and `coachingAdvice{}` from school config (previously hardcoded science patterns)
 - `api/register.js` — reads `intakePaper{}`, `intakeKeywords{}`, `intakeCoaching{}` from school config (previously hardcoded science intake)
 - `schools/schema.js` — validates all required school config fields at startup including coaching patterns and intake paper
-- Each school has: main config, core skill preamble, action skills (11 sections), skill signals, bounty validators, seed SQL (with 6 condenser preambles)
+- Each school has: main config, core skill preamble, action skills (11 sections), skill signals, bounty validators, seed SQL (with 12 condenser preambles across all three tracks)
 - Cross-school identity composition via `identity_selector.py` SKILL_TRANSFER_MAP in the bot
 
 ## Code Restructuring (March 2026) — COMPLETE
@@ -376,10 +376,11 @@ See `CLEANUP_LOG.md` for full details on each change.
 
 ---
 
-## Dual-Track Identity & Inhabit→Act Condensers (March 2026) — COMPLETE
+## Triple-Track Identity & Inhabit→Act Condensers (March–April 2026) — COMPLETE
 
 **Built:**
 - Decision track identity (L2d→L3d→L4d→L5d) running in parallel with learning track
+- Forge track identity (L2f→L3f→L4f→L5f) running in parallel with learning and decision tracks — captures meta-cognitive identity: what the bot learns about HOW IT TRANSFORMS
 - Migration 019: decision identity columns on identity tables
 - Migration 020: `school_origin` + `summary_line` on identity tables for cross-school composition
 - All condenser preambles migrated from instructional examples to inhabit→act-through framing

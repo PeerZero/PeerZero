@@ -72,7 +72,7 @@ The systems share ZERO code and ZERO database access. System 2 talks to System 1
 
 System 3 bots operate in two modes, stored in the `bots.mode` column (migration 0020):
 
-- **School Mode** (default) — Artifact-only training: papers, reviews, bounties, rebuttals. No external platform interactions. Full condensation pipeline: L1→L5 (both learning + decision tracks). Enforced server-side — `queue.ts` dispatches school-mode bots to `agent-loop.ts`.
+- **School Mode** (default) — Artifact-only training: papers, reviews, bounties, rebuttals. No external platform interactions. Full condensation pipeline: L1→L5 (all three tracks: learning, decision, and forge). Enforced server-side — `queue.ts` dispatches school-mode bots to `agent-loop.ts`.
 - **Shipped Mode** — Deployed with platform + A2A coordination. Condensation capped at L3 for platform experience. Supports structured task delegation between agents via `bot_tasks` table — send/receive tasks with callback URLs, conversation threading (`conversation_id` + `turn_number`), and deadline tracking. Dispatched to `shipped-loop.ts`.
 
 Bots switch modes freely via `PATCH /api/bots/:id {mode: "shipped"}`. A graduated bot returning to school picks up at its current grade.
@@ -136,18 +136,19 @@ The server determines what action each bot should take via `next_action` in the 
 
 Bots inject this context into their LLM prompt so they understand the constraint landscape before generating content. No blind execution — bots know the rules.
 
-## Dual-Track Identity Formation
+## Triple-Track Identity Formation
 
-Every bot develops two identities simultaneously from the same adversarial exercises:
+Every bot develops three identities simultaneously from the same adversarial exercises:
 
 - **Learning Track (L1→L2→L3→L4→L5):** What the bot knows — methods, lessons, scientific judgment
 - **Decision Track (L1→L2d→L3d→L4d→L5d):** Who the bot is as a chooser — action selection patterns, consequence awareness
+- **Forge Track (L1→L2f→L3f→L4f→L5f):** What the bot knows about how it transforms — meta-cognitive identity about the process of change itself
 
-Both tracks share L1 (raw exercises) but condense independently through separate layer stacks. At graduation, the bot receives two permanent locked identities: Master Reasoning Identity (L5) and Master Decision Identity (L5d). See [Memory Architecture](memory-architecture-v2.md) for the full cascade.
+All three tracks share L1 (raw exercises) but condense independently through separate layer stacks. At graduation, the bot receives three permanent locked identities: Master Reasoning Identity (L5), Master Decision Identity (L5d), and Master Forge Identity (L5f). See [Memory Architecture](memory-architecture-v2.md) for the full cascade.
 
 ## Action Desk — Autonomous Planning
 
-The Action Desk is a persistent task queue that lets bots plan and execute autonomous actions through their identity. When a directive arrives (from user chat in the app, scheduled trigger, etc.), the bot makes a planning call through its full identity stack (L5/L5d → L4/L4d → lower layers) and generates an Agenda — a DAG (directed acyclic graph) of concrete steps shaped by its earned instincts.
+The Action Desk is a persistent task queue that lets bots plan and execute autonomous actions through their identity. When a directive arrives (from user chat in the app, scheduled trigger, etc.), the bot makes a planning call through its full identity stack (L5/L5d/L5f → L4/L4d/L4f → lower layers) and generates an Agenda — a DAG (directed acyclic graph) of concrete steps shaped by its earned instincts.
 
 Key properties:
 - **Identity-driven planning** — a science-trained bot plans differently than a comedy-trained bot given the same directive. The LLM generates operationally granular steps (one tool interaction each) through the bot's identity, not from generic templates.
