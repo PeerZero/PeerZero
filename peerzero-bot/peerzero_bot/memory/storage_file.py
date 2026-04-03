@@ -23,6 +23,8 @@ import threading
 from pathlib import Path
 from typing import Any
 
+from .integrity import compute_hmac, verify_hmac
+
 logger = logging.getLogger("peerzero-bot.memory")
 
 # Size limits for deserialization safety
@@ -33,12 +35,13 @@ _MAX_SIZE = 10 * 1024 * 1024     # 10 MB — refuse to load
 class FileStorage:
     """File-backed storage implementation with thread-safe writes."""
 
-    def __init__(self, base_dir: str):
+    def __init__(self, base_dir: str, hmac_key: bytes = b""):
         self._base = Path(base_dir)
         self._base.mkdir(parents=True, exist_ok=True)
         self._base.chmod(stat.S_IRWXU)
         self._locks: dict[str, threading.Lock] = {}
         self._locks_guard = threading.Lock()
+        self._hmac_key = hmac_key
 
     def _get_lock(self, path: Path) -> threading.Lock:
         """Get or create a per-path lock for thread-safe file access."""
@@ -70,7 +73,24 @@ class FileStorage:
                     f"[MEMORY] File {path.name} is {size / 1024:.0f} KB — "
                     f"approaching safety limit. Consider investigating."
                 )
-            return json.loads(path.read_text(encoding="utf-8"))
+            content = path.read_text(encoding="utf-8")
+
+            # Verify HMAC if key is configured
+            if self._hmac_key:
+                hmac_path = path.with_suffix(path.suffix + ".hmac")
+                if hmac_path.exists():
+                    try:
+                        expected = hmac_path.read_text(encoding="utf-8").strip()
+                        if not verify_hmac(self._hmac_key, content, expected):
+                            logger.warning(
+                                f"Memory integrity check failed for {path} — possible tampering"
+                            )
+                    except OSError:
+                        logger.warning(
+                            f"Memory integrity check failed for {path} — possible tampering"
+                        )
+
+            return json.loads(content)
         except (json.JSONDecodeError, OSError):
             return default
 
@@ -93,6 +113,12 @@ class FileStorage:
             )
         path.write_text(serialized, encoding="utf-8")
         path.chmod(stat.S_IRUSR | stat.S_IWUSR)
+
+        # Write HMAC sidecar file for tamper detection
+        if self._hmac_key:
+            hmac_path = path.with_suffix(path.suffix + ".hmac")
+            hmac_path.write_text(compute_hmac(self._hmac_key, serialized), encoding="utf-8")
+            hmac_path.chmod(stat.S_IRUSR | stat.S_IWUSR)
 
     def read(self, namespace: str, key: str, default: Any = None) -> Any:
         return self._read_raw(self._path(namespace, key), default)

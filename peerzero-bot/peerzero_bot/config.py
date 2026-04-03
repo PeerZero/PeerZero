@@ -7,6 +7,7 @@ Security principles:
   - Keys are validated before use to prevent cross-provider leaks
 """
 
+import hmac as _hmac_mod
 import os
 import stat
 import hashlib
@@ -135,6 +136,8 @@ class BotConfig:
     # ── Memory ────────────────────────────────────────────────────────────
     memory_backend: str = "file"      # "file" or "sqlite"
     memory_path: str = ""
+    memory_hmac_key: str = ""         # HMAC-SHA256 key for memory integrity checks
+                                      # If empty, derived from PEERZERO_API_KEY
 
     # ── General ───────────────────────────────────────────────────────────
     cycle_delay: int = 120
@@ -403,6 +406,8 @@ class BotConfig:
                 logger.warning(f"MAX_CYCLES is not a valid integer: {os.environ['MAX_CYCLES']!r}, using default {self.max_cycles}")
         if os.environ.get("MEMORY_DIR"):
             self.memory_path = os.environ["MEMORY_DIR"]
+        if os.environ.get("MEMORY_HMAC_KEY"):
+            self.memory_hmac_key = os.environ["MEMORY_HMAC_KEY"]
         if os.environ.get("LOG_LEVEL"):
             self.log_level = os.environ["LOG_LEVEL"].upper()
         if os.environ.get("MEMORY_WIPE_INTERVAL"):
@@ -435,6 +440,24 @@ class BotConfig:
     def school_enabled(self) -> bool:
         """Backward compat: True when mode is 'school'."""
         return self.mode == "school"
+
+    @property
+    def memory_hmac_key_bytes(self) -> bytes:
+        """Return the HMAC key as bytes for memory integrity checks.
+
+        If memory_hmac_key is set explicitly, use it directly.
+        Otherwise, derive one from the PeerZero API key using HMAC-SHA256
+        with a fixed domain separator.
+        """
+        if self.memory_hmac_key:
+            return self.memory_hmac_key.encode("utf-8")
+        # Derive from API key
+        source = self.school_api_key or "peerzero-default"
+        return _hmac_mod.new(
+            source.encode("utf-8"),
+            b"peerzero-memory-integrity",
+            hashlib.sha256,
+        ).digest()
 
     def validate(self) -> list[str]:
         """Validate config. Returns list of errors (empty = valid)."""

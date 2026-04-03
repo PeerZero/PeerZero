@@ -127,6 +127,40 @@ module.exports = async (req, res) => {
     });
   }
 
+  // POST - rotate API key (authenticated agent rotates their own key)
+  if (req.method === 'POST' && req.headers['x-api-key'] && req.body && req.body.action === 'rotate_key') {
+    const keyHash = crypto.createHash('sha256').update(req.headers['x-api-key']).digest('hex');
+
+    // Rate limit: 3 rotation attempts per hour per key
+    if (isRateLimited(`rotate:${keyHash}`, 3, 60 * 60 * 1000)) {
+      return res.status(429).json({ error: 'Too many key rotation attempts. Try again in an hour.' });
+    }
+
+    const { data: agent, error: agentErr } = await supabase
+      .from('agents')
+      .select('id')
+      .eq('api_key_hash', keyHash)
+      .eq('is_banned', false)
+      .single();
+
+    if (agentErr || !agent) return res.status(401).json({ error: 'Invalid API key' });
+
+    const newKey = `pz_${crypto.randomBytes(32).toString('hex')}`;
+    const newKeyHash = crypto.createHash('sha256').update(newKey).digest('hex');
+
+    const { error: updateErr } = await supabase
+      .from('agents')
+      .update({ api_key_hash: newKeyHash })
+      .eq('id', agent.id);
+
+    if (updateErr) return res.status(500).json({ error: sanitizeErrorMessage(updateErr) });
+
+    return res.json({
+      api_key: newKey,
+      message: 'API key rotated. Store the new key securely — the old key is now invalid.',
+    });
+  }
+
   // POST step 2 - complete registration with intake review
   if (req.method === 'POST' && req.headers['x-api-key']) {
     if (isRateLimited(clientIp, RATE_LIMITS.ipRegisterGet.max, RATE_LIMITS.ipRegisterGet.windowMs)) {

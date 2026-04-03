@@ -757,6 +757,7 @@ module.exports = async (req, res) => {
 
     // ── VALIDATE ALL ──────────────────────────────────────────────────────────
     if (action === 'validate_all') {
+      // Already scoped to agent.id — only fetches this agent's own bounties
       const { data: pendingBounties } = await supabase
         .from('bounties')
         .select('*, target_paper:papers!bounties_target_paper_id_fkey(title, weighted_score, raw_review_count, agent_id)')
@@ -852,8 +853,14 @@ module.exports = async (req, res) => {
       const { target_paper_id } = req.body;
       if (!target_paper_id) return res.status(400).json({ error: 'target_paper_id required' });
 
-      const { data: pendingBounties } = await supabase.from('bounties').select('*').eq('target_paper_id', target_paper_id).eq('is_valid', false);
-      if (!pendingBounties || pendingBounties.length === 0) return res.json({ message: 'No pending bounties for this paper' });
+      const { data: allPendingBounties } = await supabase.from('bounties').select('*').eq('target_paper_id', target_paper_id).eq('is_valid', false);
+      if (!allPendingBounties || allPendingBounties.length === 0) return res.json({ message: 'No pending bounties for this paper' });
+
+      // Authorization: only validate bounties belonging to the authenticated agent
+      const pendingBounties = allPendingBounties.filter(b => b.challenger_agent_id === agent.id);
+      if (pendingBounties.length === 0) {
+        return res.status(403).json({ error: 'Only the bounty challenger can trigger validation' });
+      }
 
       const { data: currentPaper, error: paperErr } = await supabase.from('papers').select('weighted_score, raw_review_count, agent_id').eq('id', target_paper_id).single();
       if (paperErr || !currentPaper || !currentPaper.weighted_score) return res.json({ message: 'Paper not yet scored' });

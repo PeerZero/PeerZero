@@ -23,6 +23,15 @@ const refreshLimiter = rateLimit({
   message: { error: 'Too many refresh attempts. Try again later.' },
 });
 
+// Strict rate limit for parental consent verification to prevent brute-force token guessing
+const consentLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many verification attempts. Try again later.' },
+});
+
 // Strict rate limit for password reset to prevent brute-force code guessing
 const resetPasswordLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -73,7 +82,7 @@ router.post('/register', async (req: Request, res: Response) => {
   res.status(201).json({ access_token: result.tokens!.accessToken, refresh_token: result.tokens!.refreshToken, user: profile });
 });
 
-router.post('/parental-consent/verify', async (req: Request, res: Response) => {
+router.post('/parental-consent/verify', consentLimiter, async (req: Request, res: Response) => {
   const { token } = req.body;
   if (!token || typeof token !== 'string') {
     res.status(400).json({ error: 'Verification token is required' });

@@ -78,6 +78,9 @@ class LLMClient:
         # which injects the identity preamble server-side
         self._proxy_url = proxy_url.rstrip("/") if proxy_url else ""
         self._proxy_key = proxy_key
+        # Session token exchange: short-lived token replaces sending LLM key each request
+        self._session_token: str = ""
+        self._session_expires_at: float = 0.0  # UTC timestamp
 
     def _get_client(self):
         if self._client is not None:
@@ -92,21 +95,80 @@ class LLMClient:
             self._client = openai.OpenAI(api_key=self._api_key)
         return self._client
 
+    def _exchange_session_token(self) -> bool:
+        """Exchange LLM key + proxy key for a short-lived session token.
+
+        POSTs to {proxy_url}/session and stores the returned token.
+        Returns True if exchange succeeded, False otherwise.
+        """
+        import httpx
+
+        try:
+            response = httpx.post(
+                f"{self._proxy_url}/session",
+                headers={
+                    "X-PeerZero-Proxy-Key": self._proxy_key,
+                    "X-LLM-Key": self._api_key,
+                    "Content-Type": "application/json",
+                },
+                timeout=10.0,
+                verify=True,
+            )
+            if response.status_code != 200:
+                logger.warning(f"[LLM] Session exchange returned {response.status_code}, falling back to key auth")
+                return False
+            data = response.json()
+            self._session_token = data.get("session_token", "")
+            expires_at = data.get("expires_at", "")
+            if expires_at and self._session_token:
+                from datetime import datetime, timezone
+                try:
+                    self._session_expires_at = datetime.fromisoformat(
+                        expires_at.replace("Z", "+00:00")
+                    ).timestamp()
+                except ValueError:
+                    self._session_expires_at = time.time() + 3500  # ~1 hour fallback
+                logger.info("[LLM] Session token exchanged successfully")
+                return True
+            return False
+        except Exception as e:
+            logger.warning(f"[LLM] Session exchange failed: {type(e).__name__}: {str(e)[:200]}, falling back to key auth")
+            return False
+
+    def _get_session_token(self) -> str:
+        """Get a valid session token, exchanging if needed. Returns empty string on failure."""
+        # Check if current token is still valid (with 60s buffer)
+        if self._session_token and time.time() < (self._session_expires_at - 60):
+            return self._session_token
+        # Try to exchange a new one
+        if self._exchange_session_token():
+            return self._session_token
+        return ""
+
     def _proxy_call(self, system_prompt: str, messages: list,
                     tools: list | None = None, tool_choice: dict | None = None) -> dict:
         """Route an LLM request through the PeerZero proxy.
 
         The proxy injects the identity activation preamble server-side,
         so the preamble never exists on the user's machine.
+
+        Uses session tokens when available to avoid sending the full LLM key
+        on every request. Falls back to key auth if session exchange fails.
         """
         import httpx
 
+        # Try session token first, fall back to direct key
+        session_token = self._get_session_token()
+
         headers = {
             "X-PeerZero-Proxy-Key": self._proxy_key,
-            "X-LLM-Key": self._api_key,
             "X-LLM-Provider": self._provider,
             "Content-Type": "application/json",
         }
+        if session_token:
+            headers["X-Session-Token"] = session_token
+        else:
+            headers["X-LLM-Key"] = self._api_key
 
         # Build provider-native request body
         if self._provider == "anthropic":

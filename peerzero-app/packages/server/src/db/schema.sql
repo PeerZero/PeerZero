@@ -132,6 +132,7 @@ CREATE TABLE bots (
 
   -- Phone-home token for self-hosted bots (SHA-256 hashed, write-only scope)
   phone_home_token_hash TEXT,
+  phone_home_token_expires_at TIMESTAMPTZ,
 
   -- Public profile (shareable page, user-facing only — never shown to the bot)
   is_public       BOOLEAN NOT NULL DEFAULT FALSE,

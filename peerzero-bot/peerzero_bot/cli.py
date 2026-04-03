@@ -50,10 +50,11 @@ def _build_bot(config: BotConfig) -> PeerZeroBot:
         audit = AuditLog(audit_dir)
 
     # Memory storage backend
+    hmac_key = config.memory_hmac_key_bytes
     if config.memory_backend == "sqlite":
-        storage = SqliteStorage(config.memory_path)
+        storage = SqliteStorage(config.memory_path, hmac_key=hmac_key)
     else:
-        storage = FileStorage(config.memory_path)
+        storage = FileStorage(config.memory_path, hmac_key=hmac_key)
     memory = MemoryManager(storage)
 
     # Proxy config — shared by both LLM clients

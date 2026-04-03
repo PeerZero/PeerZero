@@ -12,6 +12,8 @@ import stat
 import sqlite3
 from pathlib import Path
 
+from .integrity import compute_hmac, verify_hmac
+
 logger = logging.getLogger("peerzero-bot.memory")
 
 # Size limits for deserialization safety
@@ -22,10 +24,11 @@ _MAX_SIZE = 10 * 1024 * 1024     # 10 MB — refuse to load
 class SqliteStorage:
     """SQLite-backed storage implementation."""
 
-    def __init__(self, base_dir: str):
+    def __init__(self, base_dir: str, hmac_key: bytes = b""):
         self._base = Path(base_dir)
         self._base.mkdir(parents=True, exist_ok=True)
         self._base.chmod(stat.S_IRWXU)
+        self._hmac_key = hmac_key
 
         self._db_path = self._base / "memory.db"
         self._conn = sqlite3.connect(str(self._db_path), timeout=10.0)
@@ -40,6 +43,13 @@ class SqliteStorage:
             )
         """)
         self._conn.commit()
+
+        # Add hmac column if it doesn't exist (migration for existing DBs)
+        try:
+            self._conn.execute("SELECT hmac FROM memory LIMIT 0")
+        except sqlite3.OperationalError:
+            self._conn.execute("ALTER TABLE memory ADD COLUMN hmac TEXT DEFAULT ''")
+            self._conn.commit()
 
     def read(self, namespace: str, key: str, default=None):
         # SECURITY: Check size BEFORE fetching the full blob to prevent OOM
@@ -65,20 +75,32 @@ class SqliteStorage:
                 f"approaching safety limit. Consider investigating."
             )
         row = self._conn.execute(
-            "SELECT data FROM memory WHERE namespace = ? AND key = ?",
+            "SELECT data, hmac FROM memory WHERE namespace = ? AND key = ?",
             (namespace, key),
         ).fetchone()
         if row is None:
             return default
+
+        data_str, stored_hmac = row[0], (row[1] or "")
+
+        # Verify HMAC if key is configured
+        if self._hmac_key and stored_hmac:
+            if not verify_hmac(self._hmac_key, data_str, stored_hmac):
+                logger.warning(
+                    f"Memory integrity check failed for {namespace}/{key} — possible tampering"
+                )
+
         try:
-            return json.loads(row[0])
+            return json.loads(data_str)
         except json.JSONDecodeError:
             return default
 
     def write(self, namespace: str, key: str, data):
+        serialized = json.dumps(data, default=str)
+        hmac_hex = compute_hmac(self._hmac_key, serialized) if self._hmac_key else ""
         self._conn.execute(
-            "INSERT OR REPLACE INTO memory (namespace, key, data) VALUES (?, ?, ?)",
-            (namespace, key, json.dumps(data, default=str)),
+            "INSERT OR REPLACE INTO memory (namespace, key, data, hmac) VALUES (?, ?, ?, ?)",
+            (namespace, key, serialized, hmac_hex),
         )
         self._conn.commit()
 

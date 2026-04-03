@@ -19,6 +19,8 @@ import httpx
 
 logger = logging.getLogger("peerzero-bot.security")
 
+MAX_PROFILE_AGE_DAYS = 7
+
 
 class SignatureError(Exception):
     """Raised when profile signature verification fails."""
@@ -101,6 +103,19 @@ class ProfileVerifier:
 
             signature = b64decode(signature_b64)
             public_key.verify(signature, canonical.encode())
+
+            # Freshness check: reject profiles signed more than MAX_PROFILE_AGE_DAYS ago
+            signed_at = profile.get("signed_at")
+            if signed_at:
+                try:
+                    signed_time = datetime.fromisoformat(signed_at.replace("Z", "+00:00"))
+                    age = datetime.now(timezone.utc) - signed_time
+                    if age.days > MAX_PROFILE_AGE_DAYS:
+                        raise SignatureError(
+                            f"Profile signature too old (max {MAX_PROFILE_AGE_DAYS} days)"
+                        )
+                except ValueError as e:
+                    raise SignatureError(f"Invalid signed_at format: {e}")
 
             logger.info("Portable profile signature verified successfully")
             return profile

@@ -56,6 +56,28 @@ function isRateLimited(rateLimitKey: string): boolean {
   return entry.count > RATE_LIMIT;
 }
 
+// ── Session token store (in-memory, per-worker-instance) ────────────────────
+// Short-lived session tokens replace sending the full LLM key on every request.
+// Tokens expire after 1 hour. Expired entries are cleaned up on each request.
+
+interface SessionEntry {
+  llmKey: string;
+  expiresAt: number;  // Date.now() timestamp
+}
+
+const sessionStore = new Map<string, SessionEntry>();
+const SESSION_TTL_MS = 60 * 60 * 1000;         // 1 hour
+const SESSION_CLEANUP_AGE_MS = 2 * 60 * 60 * 1000;  // 2 hours — remove stale entries
+
+function cleanupSessions(): void {
+  const cutoff = Date.now() - SESSION_CLEANUP_AGE_MS;
+  for (const [token, entry] of sessionStore) {
+    if (entry.expiresAt < cutoff) {
+      sessionStore.delete(token);
+    }
+  }
+}
+
 // ── Request handling ─────────────────────────────────────────────────────────
 
 export default {
@@ -78,6 +100,9 @@ export default {
       return jsonError("Method not allowed", 405, request, env);
     }
 
+    // Clean up expired sessions on each request
+    cleanupSessions();
+
     // ── Request body size limit ──────────────────────────────────────────
     const contentLength = request.headers.get("Content-Length");
     if (contentLength) {
@@ -87,7 +112,7 @@ export default {
       }
     }
 
-    // ── Authenticate ───────────────────────────────────────────────────────
+    // ── Authenticate proxy key ──────────────────────────────────────────
     const proxyKey = request.headers.get("X-PeerZero-Proxy-Key");
     if (!proxyKey || !env.PROXY_AUTH_SECRET) {
       return jsonError("Missing proxy authentication", 401, request, env);
@@ -109,11 +134,53 @@ export default {
       return jsonError("Rate limited", 429, request, env);
     }
 
-    // ── Parse request ──────────────────────────────────────────────────────
+    // ── Session token exchange endpoint ─────────────────────────────────
+    const url = new URL(request.url);
+    if (url.pathname === "/session") {
+      const llmKeyForSession = request.headers.get("X-LLM-Key");
+      if (!llmKeyForSession || llmKeyForSession.length > 1024) {
+        return jsonError("Missing or invalid X-LLM-Key header", 400, request, env);
+      }
+      const sessionToken = crypto.randomUUID();
+      const expiresAt = Date.now() + SESSION_TTL_MS;
+      sessionStore.set(sessionToken, { llmKey: llmKeyForSession, expiresAt });
+      const expiresAtISO = new Date(expiresAt).toISOString();
+      return new Response(
+        JSON.stringify({ session_token: sessionToken, expires_at: expiresAtISO }),
+        {
+          status: 200,
+          headers: {
+            "Content-Type": "application/json",
+            ...buildResponseHeaders(request, env),
+          },
+        },
+      );
+    }
+
+    // ── Resolve LLM key (session token or direct header) ────────────────
     const provider = (request.headers.get("X-LLM-Provider") || "anthropic").toLowerCase();
-    const llmKey = request.headers.get("X-LLM-Key");
+    let llmKey: string | null = null;
+
+    // Try session token first
+    const sessionToken = request.headers.get("X-Session-Token");
+    if (sessionToken) {
+      const session = sessionStore.get(sessionToken);
+      if (session && Date.now() < session.expiresAt) {
+        llmKey = session.llmKey;
+      } else {
+        // Clean up expired/invalid token
+        if (session) sessionStore.delete(sessionToken);
+        return jsonError("Session token expired or invalid", 401, request, env);
+      }
+    }
+
+    // Fall back to direct key header (backward compatibility)
+    if (!llmKey) {
+      llmKey = request.headers.get("X-LLM-Key");
+    }
+
     if (!llmKey || llmKey.length > 1024) {
-      return jsonError("Missing or invalid X-LLM-Key header", 400, request, env);
+      return jsonError("Missing or invalid LLM key", 400, request, env);
     }
 
     const providerUrl = PROVIDER_URLS[provider];
@@ -232,7 +299,7 @@ function buildResponseHeaders(request: Request, env: Env): Record<string, string
     // CORS headers
     ...(allowOrigin ? { "Access-Control-Allow-Origin": allowOrigin } : {}),
     "Access-Control-Allow-Methods": "POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, X-PeerZero-Proxy-Key, X-LLM-Provider, X-LLM-Key, anthropic-beta",
+    "Access-Control-Allow-Headers": "Content-Type, X-PeerZero-Proxy-Key, X-LLM-Provider, X-LLM-Key, X-Session-Token, anthropic-beta",
     // Security headers
     "X-Content-Type-Options": "nosniff",
     "X-Frame-Options": "DENY",
