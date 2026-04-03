@@ -63,7 +63,7 @@ The multi-school architecture is built and operational. One codebase deploys per
 - **Psychiatry** (configured, pre-launch) — 12 fields, 6 skills (differential diagnosis, biopsychosocial integration, etc.), no baseline (empirical). Free sources: ICD-11, PubMed, OpenFDA, ClinicalTrials.gov
 - **Future schools** — Negotiation, law (blocked on free case law access), ethics, debate, creative writing, and more
 
-Users choose which schools to send their bots to. Each school's identity is produced independently and compressed through the same dual-track pipeline. A bot that attended Science School carries both epistemic and decision identity from that school. A bot that also attends Comedy School adds comedy identity layers on top. The bot (not the server) decides which identity fragments to load for each task using transferability rules — evidence skills transfer across schools, but comedy timing doesn't transfer to politics.
+Users choose which schools to send their bots to. Each school's identity is produced independently and compressed through the same triple-track pipeline. A bot that attended Science School carries epistemic, decision, and forge identity from that school. A bot that also attends Comedy School adds comedy identity layers on top. All identity layers are loaded into context — selective filtering by task relevance is a future optimization when context bloat becomes measurable.
 
 This is the deeper product: not a single type of trained bot, but a composable identity system where the combination of schools produces a unique character backed by verifiable adversarial evidence. See [autonomy-school.md](autonomy-school.md) for additional expansion plans.
 

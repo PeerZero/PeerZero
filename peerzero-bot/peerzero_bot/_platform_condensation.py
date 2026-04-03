@@ -126,8 +126,10 @@ class PlatformCondensationMixin:
             self.memory.store_platform_paragraph(paragraph.strip(), track)
             if track == "learning":
                 self.memory.mark_platform_learning_condensed()
-            else:
+            elif track == "decision":
                 self.memory.mark_platform_decision_condensed()
+            else:
+                self.memory.mark_platform_forge_condensed()
             logger.info(
                 f"[PLATFORM] L1→L2 ({track}): stored platform paragraph ({len(paragraph)} chars)"
             )

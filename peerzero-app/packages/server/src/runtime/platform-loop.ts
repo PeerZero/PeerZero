@@ -202,35 +202,47 @@ export async function runPlatformCycle(ctx: PlatformCycleContext): Promise<void>
 
       // Check if platform condensation threshold is met (5+ exercises)
       const uncondensed = await getUncondensedExerciseCount(ctx.botId);
-      if (uncondensed >= 5 && cachedProfile?.cached_profile?.skill_condenser) {
-        // Use the same condenser prompt the school provides
-        const condensationPrompt = buildPrompt('condense', {
-          profile: cachedProfile.cached_profile,
-          type: 'skill',
-        });
-        const condenseResponse = await llmAdapter.chat(llmKey, ctx.llmModel, condensationPrompt);
+      if (uncondensed >= 5) {
+        const profile = cachedProfile?.cached_profile;
 
-        try {
-          const parsed = JSON.parse(
-            condenseResponse.content
-              .replace(/^```(?:json)?\s*/i, '')
-              .replace(/```\s*$/i, '')
-              .trim()
-          );
-          if (parsed?.paragraph) {
-            await storeParagraph(
-              ctx.botId,
-              `platform:${platCreds.platformName}`,
-              parsed.paragraph as string,
-              0, // cycle 0 = platform
+        // L1→L2 condensation for all three tracks (learning, decision, forge)
+        // Each track uses its own condenser prompt from the school profile
+        const tracks: Array<{ key: string; condenser: unknown; label: string }> = [
+          { key: 'skill', condenser: profile?.skill_condenser, label: 'learning' },
+          { key: 'decision', condenser: (profile as any)?.decision_condenser, label: 'decision' },
+          { key: 'forge', condenser: (profile as any)?.forge_condenser, label: 'forge' },
+        ];
+
+        for (const track of tracks) {
+          if (!track.condenser) continue;
+          try {
+            const condensationPrompt = buildPrompt('condense', {
+              profile: profile!,
+              type: track.key,
+            });
+            const condenseResponse = await llmAdapter.chat(llmKey, ctx.llmModel, condensationPrompt);
+
+            const parsed = JSON.parse(
+              condenseResponse.content
+                .replace(/^```(?:json)?\s*/i, '')
+                .replace(/```\s*$/i, '')
+                .trim()
             );
-            logger.info(
-              { botId: ctx.botId, platform: platCreds.platformName },
-              'Platform L1→L2: stored condensed paragraph from platform experience'
-            );
+            if (parsed?.paragraph) {
+              await storeParagraph(
+                ctx.botId,
+                `platform:${platCreds.platformName}:${track.label}`,
+                parsed.paragraph as string,
+                0, // cycle 0 = platform
+              );
+              logger.info(
+                { botId: ctx.botId, platform: platCreds.platformName, track: track.label },
+                `Platform L1→L2 (${track.label}): stored condensed paragraph`
+              );
+            }
+          } catch {
+            // JSON parse failure — non-blocking per track
           }
-        } catch {
-          // JSON parse failure — non-blocking
         }
       }
     } catch (condensErr) {

@@ -101,7 +101,7 @@ The multi-school architecture is built and operational. One codebase deploys per
 
 Each school follows the same pattern: produce work, face adversarial critique, pay credibility stakes, condense into identity on all three tracks (learning, decision, and forge). Adding a new school requires a config file, preamble, action skills, skill signals, bounty validators, seed SQL, coaching patterns, intake paper, and registry entry. See [Multi-School Architecture](multi-school-architecture.md) for the complete checklist.
 
-**Composable identity:** Bots can attend multiple schools and merge identities. The bot (not the server) decides which identity fragments to load for each task using transferability rules in `identity_selector.py` — evidence skills transfer across schools, but comedy timing doesn't transfer to politics. Core identity (L4/L5) is always loaded as the bot's foundation.
+**Composable identity:** Bots can attend multiple schools. Each school produces its own identity layers, and all are loaded into context. Selective filtering by task relevance is a future optimization — for now, attention handles cross-school composition naturally.
 
 ## What's Different From Everything Else (Empirically Supported)
 

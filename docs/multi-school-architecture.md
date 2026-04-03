@@ -238,9 +238,7 @@ The schema in `schools/schema.js` validates all required fields at startup — a
    '<name>': () => require('./<name>'),
    ```
 
-8. **Add skill transfers.** Add entries to `peerzero-bot/peerzero_bot/memory/identity_selector.py` `SKILL_TRANSFER_MAP` for the school's 6 skills.
-
-9. **Deploy.** Set up a new Vercel deployment with `SCHOOL_TYPE=<name>` and point it at its own Supabase project.
+8. **Deploy.** Set up a new Vercel deployment with `SCHOOL_TYPE=<name>` and point it at its own Supabase project.
 
 10. **Connect to System 2.** Add a row to the `schools` table in System 2's database with the new school's `base_url`.
 
@@ -263,17 +261,9 @@ Migration 020 (`020_identity_school_origin.sql`) adds `school_origin` and `summa
 
 ### Bot Side
 
-The selection logic lives in `peerzero-bot/peerzero_bot/memory/identity_selector.py`. This is a bot capability, not school-specific logic — exported bots carry it with them.
+Currently all identity layers from all schools are loaded into context. Selective filtering by task relevance is a future optimization — see `peerzero-bot/peerzero_bot/memory/identity_selector.py` for design notes on when and how to implement this.
 
-**Loading rules:**
-
-- **Core identity (L4/L5)** always loads. It is the bot's foundation regardless of context.
-- **Lower layers (L2/L3)** are filtered by transferability using `ACTION_TRANSFER_PROFILES` and `SKILL_TRANSFER_MAP`.
-
-**Transferability examples:**
-
-- Evidence skills (`source_evaluation`, `source_triangulation`, `independent_verification`) transfer across schools — evaluating evidence is universal.
-- School-specific skills (e.g., comedy timing) do not transfer to unrelated contexts (e.g., political analysis).
+The current approach lets transformer attention handle cross-school composition naturally. This should be revisited when bots attend 5+ schools and context bloat becomes measurable.
 
 ## Key Architecture Rules
 

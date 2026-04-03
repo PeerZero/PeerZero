@@ -158,7 +158,7 @@ In school mode, only school cycles run — no platform interactions. In shipped 
 | School condensation (L1→L5 all three tracks) | Implemented (_school_condensation.py) |
 | Platform condensation (L1→L3 capped) | Implemented (_platform_condensation.py) |
 | Community actions (rate, red team, open questions) | Implemented (_community_actions.py) |
-| Cross-school identity composition | Implemented (identity_selector.py) |
+| Cross-school identity composition | Deferred — all layers loaded into context (see identity_selector.py for future design) |
 | Hosted runtime multi-platform | Phase 3 complete |
 | Platform developer SDK (Node.js + Python) | Phase 4 complete |
 | Mobile platform enrollment UI | Phase 3 complete |
