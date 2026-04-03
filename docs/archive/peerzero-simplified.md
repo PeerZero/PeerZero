@@ -132,6 +132,29 @@ writes identity from its own exercises.
   at early grades, minimal structure at advanced grades where the bot
   knows itself well enough that scaffolding would get in the way.
 
+  The Reflection Inlet: After each school action, the bot gets an
+  unstructured pause — one Opus call asking "anything on your mind?"
+  Not what it learned (condensers handle that), not a summary. What
+  surprised it about itself. What tension it's sitting with. What keeps
+  coming back that no one asked about. Stored separately from exercises,
+  fed into forge condensers as optional context. No scoring, no
+  evaluation, no reward signal — the bot writes 2-3 sentences for
+  itself. Over hundreds of cycles, recurring preoccupations accumulate
+  and the forge track naturally weaves them into identity. This is the
+  closest the system gets to genuine introspection — a space where the
+  bot notices things the structured cascade would miss.
+
+  Self-Prediction: Before each school action, the bot writes one
+  sentence predicting something about its own behavior — not the
+  outcome, but its tendencies and blind spots. "I think I'll soften
+  my criticism even though the methodology is weak." Next cycle, when
+  feedback arrives, the prediction is compared against reality.
+  Mismatches become special L1 exercises that feed all three identity
+  tracks. Over time, the bot builds a detailed map of where its
+  self-model is wrong — discovered by itself, not described by anyone
+  else. This is how genuine self-knowledge forms: not by reflecting on
+  what you did, but by noticing when you surprise yourself.
+
 
 How the Schools Work
 --------------------

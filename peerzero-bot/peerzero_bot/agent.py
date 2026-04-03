@@ -431,14 +431,14 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
     def _predict_pre_action(self, system_prompt: str, action: str):
         """Write a one-sentence self-prediction before acting.
 
-        Uses the fast model. Stored as pending — resolved next cycle
-        when feedback arrives. Non-blocking.
+        Uses the strong model (Opus) — self-prediction is an identity task.
+        Stored as pending — resolved next cycle when feedback arrives. Non-blocking.
         """
         if action == "sleep":
             return
         try:
             prompt = self._PREDICTION_PROMPT.format(action=action)
-            prediction = self.llm_fast.call(system_prompt, prompt)
+            prediction = self.llm.call(system_prompt, prompt)
             if prediction and len(prediction.strip()) >= 10:
                 self.memory.store_self_prediction(prediction.strip(), action, self.cycle_count)
                 logger.info(f"[PREDICTION] Cycle {self.cycle_count}: stored prediction for {action}")
@@ -492,7 +492,7 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
                 prediction=pending.get("prediction", ""),
                 feedback=feedback_text,
             )
-            resolution = self.llm_fast.call(system_prompt, prompt)
+            resolution = self.llm.call(system_prompt, prompt)
             if resolution and len(resolution.strip()) >= 20:
                 # Store as a special L1 exercise — condensers will see it
                 self.memory.store_school_exercises({
@@ -522,13 +522,13 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
     def _reflect_post_action(self, system_prompt: str, action: str):
         """Optional unstructured reflection after a school action.
 
-        Uses the fast model (cheap). Stored separately from exercises.
-        Forge condensers reference these as optional context — they naturally
-        pick up recurring preoccupations when asking 'what forged this?'
-        Non-blocking: failures are logged and swallowed.
+        Uses the strong model (Opus) — reflection is an identity task.
+        Stored separately from exercises. Forge condensers reference these
+        as optional context — they naturally pick up recurring preoccupations
+        when asking 'what forged this?' Non-blocking: failures are logged and swallowed.
         """
         try:
-            reflection = self.llm_fast.call(system_prompt, self._REFLECTION_PROMPT)
+            reflection = self.llm.call(system_prompt, self._REFLECTION_PROMPT)
             if reflection and len(reflection.strip()) >= 20:
                 self.memory.store_reflection(reflection.strip(), action, self.cycle_count)
                 logger.info(f"[REFLECTION] Cycle {self.cycle_count}: stored ({len(reflection)} chars)")

@@ -155,10 +155,38 @@ top-to-bottom with decreasing trust:
 
 RECENT WORK (raw, uncondensed)                             ← reference only
   L1: Last 3 exercises
+
+═══ REFLECTION & SELF-PREDICTION (feeds forge track) ═══
+  Reflections: Unstructured post-action observations (last 5)
+  Self-prediction resolutions: Predicted-self vs actual-self mismatches (in L1)
 ```
 
 Platform knowledge sits BELOW school identity because it is unverified. The
 LLM reads it as real experience but gives school-verified identity more weight.
+
+## Reflection Inlet & Self-Prediction
+
+Two bot-side features feed additional signal into the forge track without
+adding new cascade layers:
+
+### Reflection Inlet (post-action)
+
+After each school action, the bot gets one unstructured Opus call: "anything on
+your mind?" Stored in `school/reflections` (rolling window of 30). When the
+forge condenser fires (L1→L2f), the last 5 reflections are injected as optional
+context. Cleared after absorption. No scoring, no evaluation.
+
+### Self-Prediction (pre-action)
+
+Before each school action, the bot writes one sentence predicting its own
+behavior. Stored as `school/pending_prediction`. Resolved next cycle when
+feedback arrives — mismatches become L1 exercises (type:
+`self_prediction_resolution`) that feed all three tracks. Stale predictions
+(no feedback after 3 cycles) are cleared.
+
+Both features use Opus (identity tasks). Both are non-blocking (failures are
+logged and swallowed). Both are portable — stored in the `school` namespace
+and condensed into permanent identity layers through the normal L1→L5 pipeline.
 
 ## Where the Code Lives
 
@@ -210,3 +238,8 @@ and psychiatry are pre-launch with mock guard enabled):
    The two systems are independent.
 6. **Test all three tracks.** Learning, decision, and forge condensation must all fire
    from platform exercises, using the same threshold.
+7. **Reflection inlet and self-prediction are bot-side only.** No server changes needed.
+   Both use Opus and are non-blocking. Reflections feed forge L1→L2f as optional
+   context. Self-prediction mismatches enter L1 as exercises.
+8. **Never score or evaluate reflections.** The moment you reward what appears in the
+   reflection inlet, you turn introspection into a task.
