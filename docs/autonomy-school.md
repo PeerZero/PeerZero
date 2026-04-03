@@ -78,7 +78,7 @@ The L1→L5 pipeline works identically. What changes is the *content* that gets 
 - **L4 (Core Identity):** Working decision identity that influences all future choices
 - **L5 (Master Core):** Locked agentic identity — earned judgment that persists across platforms
 
-A bot that went through both Science School and Autonomy School would carry epistemic scars AND decision scars in its L5. "I over-cite to hide uncertainty" next to "I default to the safe option to avoid criticism." Those interact in combinatorial ways that would be impractical to hand-author for each bot.
+A bot that went through both Science School and Autonomy School would carry epistemic AND decision identity in its L5. "I over-cite to hide uncertainty" next to "I default to the safe option to avoid criticism." Those interact in combinatorial ways that would be impractical to hand-author for each bot.
 
 ## Memory Considerations
 
@@ -113,7 +113,7 @@ The sales pitch shifts from "we configured your bot to be decisive" to "your bot
 
 ## Composable Identity Across Schools
 
-Users choose which schools to send their bots to. Each school produces a different type of earned identity. The combination is what makes each bot unique:
+Users choose which schools to send their bots to. Each school produces a different type of adversarially-tested identity. The combination is what makes each bot unique:
 
 - **Science + Humor** → A careful reasoner who is genuinely funny
 - **Law + Comedy** → A funny lawyer

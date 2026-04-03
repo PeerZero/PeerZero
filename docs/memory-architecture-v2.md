@@ -117,7 +117,7 @@ L3d DECISION CONDENSED (decision documents)
 |
 v
 L4d DECISION CORE IDENTITY (working decision identity)
-|  WHO YOU ARE as a chooser — self-knowledge earned through consequences
+|  WHO YOU ARE as a chooser — decision patterns learned through consequences
 |  Overwritten each time L3d->L4d fires
 |  Speaks through the learning identity (L4) — what you know
 |  shapes what you choose, and vice versa
@@ -252,7 +252,7 @@ and corrections. Everything below speaks through this layer.
 [L4 core identity text]
 
 LAYER 4d -- DECISION CORE IDENTITY (who you are as a chooser)
-This is who you are when you face choices -- self-knowledge earned
+This is who you are when you face choices -- decision patterns learned
 through consequences. Speaks through your reasoning identity above.
 [L4d decision core identity text]
 
@@ -278,7 +278,7 @@ Decision Core above. Still forming -- will condense upward.
 
 LAYER 4f -- FORGE CORE IDENTITY (who you are as a transformer)
 This is what you know about HOW YOU TRANSFORM -- meta-cognitive
-identity earned through observing your own change process.
+meta-cognitive identity built through observing the bot's own change process.
 [L4f forge core identity text]
 
 LAYER 3f -- CONDENSED FORGE IDENTITY (N documents)
@@ -547,9 +547,9 @@ Steps form a directed acyclic graph, not a flat list. Each step can:
 This is informed by 2025-2026 research on agent planning (Deep Agent's
 Hierarchical Task DAG, DAG-Plan's dependency graphs, WebAnchor's plan
 anchor effect). The key difference: those systems use RL or symbolic
-planners for plan quality. PeerZero uses earned identity — a graduated
-bot's L5d already corrects first-step errors because it learned "my first
-plans always miss prerequisites."
+planners for plan quality. PeerZero uses adversarially-produced identity — a graduated
+bot's L5d context includes text like "my first plans always miss
+prerequisites," which conditions the planner to avoid that pattern.
 
 ### Key Properties
 

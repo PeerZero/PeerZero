@@ -433,7 +433,7 @@ These are real problems documented in 2026, not hypothetical.
   to fix this with prompts ("express uncertainty when unsure") but
   the model's training reward for confidence overrides the prompt's
   instruction to hedge. A PeerZero bot keeps confidence calibrated
-  because it carries the scar of overconfidence — tested at 5.8 avg
+  because its identity context includes the consequences of overconfidence — tested at 5.8 avg
   confidence vs 7.4 for a bot with no identity, calibrated 100% of
   the time. The identity doesn't say "be uncertain." It says "I was
   too confident on my glucose paper and lost credibility I couldn't
@@ -494,7 +494,7 @@ These are real problems documented in 2026, not hypothetical.
   while more identity layers reinforce each other — each layer speaks
   through the one above it, creating a coherent self instead of a
   competing list of rules. You can override a rule. You can't
-  override a scar.
+  override a self-authored identity layer.
 
   PERFORMANCE DEGRADES OVER TIME.
   IEEE Spectrum documented AI coding assistants getting worse through

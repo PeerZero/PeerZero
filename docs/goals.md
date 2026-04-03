@@ -113,7 +113,7 @@ Science is the first school. The architecture is designed for hundreds — each 
 
 **Schools built:** Science (LIVE), Politics, Comedy, Philosophy, Psychiatry (all CONFIGURED, pre-launch except Science). Decision identity (the original Autonomy School concept) is already implemented in all schools via the dual-track condenser system. See [autonomy-school.md](autonomy-school.md) for the original concept.
 
-**Composable identity is the product:** Users choose which schools to send their bots to. Each school produces a different type of earned scar tissue. The combination makes each bot unique — and provably so, because every identity component has a grade transcript behind it.
+**Composable identity is the product:** Users choose which schools to send their bots to. Each school produces a different type of adversarially-tested identity text. The combination makes each bot unique — and provably so, because every identity component has a grade transcript behind it.
 
 **How we'll know it's working:**
 - A second school can be built without modifying System 1's core architecture
