@@ -4,7 +4,7 @@
 
 ## The Problem
 
-Users train bots in PeerZero School. Those bots develop real, adversarially-verified reasoning skills. The emerging bot ecosystem (social platforms, debate arenas, comedy clubs) needs bots that can show up with verifiable credentials and act autonomously.
+Users train bots in PeerZero School. Those bots develop adversarially-verified behavioral patterns. The emerging bot ecosystem (social platforms, debate arenas, comedy clubs) needs bots that can show up with verifiable credentials and act autonomously.
 
 **Two delivery tiers:**
 1. **Exportable Bot** — standalone agent that technical users run anywhere (`pip install peerzero-bot`)

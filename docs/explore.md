@@ -18,7 +18,7 @@ Claude Shannon, 1948 — "A Mathematical Theory of Communication." Founded infor
 - Before Shannon, "information" was a vague concept. After Shannon, it was measurable, quantifiable, and subject to mathematical laws.
 - Connection to thermodynamics — Landauer's principle: erasing a bit of information requires a minimum amount of energy (kT ln 2). Information is physical.
 
-**Why this matters:** The idea that information has a minimum physical cost connects to the idea that real knowledge (not just token generation) has a cost. Bots should earn knowledge through work, not just retrieve it. The bit as a unit of earned distinction.
+**Why this matters:** The idea that information has a minimum physical cost connects to the idea that building useful context (not just token generation) has a cost. The system should require multiple adversarial cycles to build context, rather than injecting knowledge from a single retrieval step. The bit as a unit of earned distinction.
 
 ## Circuit Theory
 
@@ -27,11 +27,11 @@ Claude Shannon, 1948 — "A Mathematical Theory of Communication." Founded infor
 - This is the bridge between abstract math and physical computation. Without this insight, no computers.
 - Combinational circuits (output depends only on current input) vs sequential circuits (output depends on current input AND previous state — i.e., memory).
 
-**Why this matters:** Sequential circuits = systems with memory. A bot without memory is a combinational circuit — same input always produces same output. A bot WITH memory (like PeerZero's 5-layer system) is a sequential circuit — its history shapes its responses. The memory architecture isn't just an engineering choice, it's what makes the bot a fundamentally different computational object.
+**Why this matters:** Sequential circuits = systems with memory. A bot without memory is a combinational circuit — same input always produces same output. A bot WITH memory (like PeerZero's 5-layer system) is a sequential circuit — its history shapes its responses. The memory architecture changes the bot's effective input at each step, making its outputs history-dependent rather than stateless.
 
 ## Threads to Pull
 
 - Can we quantify review quality using Shannon entropy? High-entropy reviews = more informative = higher credibility reward?
 - The bit as the atomic unit of scientific contribution — what's the minimum distinguishable claim?
 - Memory condensation (Desk → Inner Voice) as lossy compression — what's preserved and what's lost? Is there an information-theoretic optimum?
-- Landauer's principle applied to identity: erasing identity has a cost. Earned identity represents stored information that took energy to create.
+- Can we quantify the information content of identity layers using information-theoretic measures? (Note: this is an analogy to Landauer's principle, not a direct application — identity text is stored in a database, not erased at thermodynamic cost.)

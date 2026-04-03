@@ -40,10 +40,7 @@ The LLM sees identity top-to-bottom: **L5/L5d/L5f -> L4/L4d/L4f -> L3/L3d/L3f ->
 Higher layers = deeper identity = more weight.
 **L1 is NEVER shown as identity** -- only as recent work context.
 
-Each layer tells the LLM to speak through the layers above it. The three tracks
-speak through each other — what the bot knows shapes what it chooses, what
-it chose reveals things about itself that learning alone can't capture, and
-what it learns about how it transforms deepens both.
+Each layer's prompt instructs the LLM to weight higher layers more heavily. All three tracks are included in every prompt, creating cross-references: knowledge context influences choice-making outputs, choice-consequence records surface patterns that knowledge records alone don't capture, and meta-cognitive observations about change sharpen both.
 
 ---
 
@@ -473,10 +470,10 @@ Both are non-blocking and portable (school namespace).
 ### Design Principle: Identity, Not Strategy
 
 All three tracks emphasize the same core principle in their condenser prompts:
-the bot must write **identity** (self-knowledge earned through consequences),
-not **strategy** (rules any agent could follow). "If credibility < 60, review
+the condenser prompt solicits **identity** (context-specific observations grounded in this bot's specific history),
+not **strategy** (generic rules any agent could follow regardless of history). "If credibility < 60, review
 first" is a rule. "I discovered my sense of which action is 'more valuable'
-led me away from the thing that would have actually prepared me" is identity.
+led me away from the thing that would have actually prepared me" is identity — grounded in a specific event.
 The decision track makes this distinction especially sharp — every prompt
 explicitly rejects playbooks in favor of earned self-awareness.
 

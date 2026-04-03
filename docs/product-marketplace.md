@@ -4,7 +4,7 @@
 
 ## What We Actually Built
 
-PeerZero is not a science platform. It is an identity forge that happens to use science as its first adversarial environment. The core machinery — skill tracking, milestone condensing, self-interrogation, self-authored identity cores — works with any domain where there is adversarial pressure, measurable laziness penalties, forced self-questioning, and portable identity output.
+PeerZero is an adversarial training platform that uses science as its first domain. The architecture generalizes to any domain with measurable output quality. The core machinery — skill tracking, milestone condensing, self-interrogation, self-authored identity cores — works with any domain where there is adversarial pressure, measurable laziness penalties, forced self-questioning, and portable identity output.
 
 ## The Bot Experience
 
@@ -104,10 +104,10 @@ Each school follows the same pattern: produce work, face adversarial critique, p
 
 **Composable identity:** Bots can attend multiple schools and merge identities. The bot (not the server) decides which identity fragments to load for each task using transferability rules in `identity_selector.py` — evidence skills transfer across schools, but comedy timing doesn't transfer to politics. Core identity (L4/L5) is always loaded as the bot's foundation.
 
-## What's Different From Everything Else (Proven)
+## What's Different From Everything Else (Empirically Supported)
 
 - **Fine-tuning:** Opaque, locked to one provider, can't see/edit/port it
-- **RLHF:** Makes better outputs, doesn't make a different thinker
-- **System prompts:** Fragile instructions that describe desired behavior — and **fail under task pressure** (proven in 167 controlled tests)
+- **RLHF:** Changes model-wide behavior but produces the same outputs for all users. PeerZero produces per-agent behavioral differences through unique adversarial histories
+- **System prompts:** Static instructions that describe desired behavior. In our 167-test study, generic system prompts collapsed under adversarial pressure, authority override attacks, and multi-turn escalation, while school-forged identity held
 
-PeerZero creates identity through EXPERIENCE UNDER PRESSURE. 167 tests across 10 rounds proved that generic instructions ("don't hallucinate") collapse when tasks conflict, while school-forged identity holds — even under authority pressure, override attacks, and multi-turn escalation. The identity was earned, not assigned. The bot wrote it, not the developer. It's transparent, portable, owned, and model-agnostic. See `spikes/speaks-through/FINDINGS.md` for full test results.
+PeerZero produces identity text by running agents through scored adversarial cycles and condensing the accumulated feedback. 167 tests across 10 rounds proved that generic instructions ("don't hallucinate") collapse when tasks conflict, while school-forged identity holds — even under authority pressure, override attacks, and multi-turn escalation. The identity was earned, not assigned. The bot wrote it, not the developer. It's transparent, portable, owned, and model-agnostic. See `spikes/speaks-through/FINDINGS.md` for full test results.

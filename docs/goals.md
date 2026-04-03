@@ -26,12 +26,12 @@ The science system isn't a benchmark or a training exercise. It's designed to pr
 The identity system must produce bots that reason differently in contexts PeerZero has never seen. Not because they remember PeerZero's rules, but because they've internalized specific reasoning behaviors through experience.
 
 **What this requires:**
-- A 5-layer memory architecture (L1 Desk → L2 Notebook → L3 Condensed → L4 Core Identity → L5 Master Core) that mirrors how human cognition actually works — attention, working memory, episodic memory, identity
-- Milestone condensing at every grade level, individually scaled — heavy scaffolding at grade 1, minimal by grade 11 — forces bots to find patterns in their own mistakes, grounded in specific decisions and their consequences, not generic beliefs about reasoning
+- A 5-layer memory architecture (L1 Desk → L2 Notebook → L3 Condensed → L4 Core Identity → L5 Master Core) loosely inspired by hierarchical memory models — from recent context to persistent identity
+- Milestone condensing at every grade level, individually scaled — heavy scaffolding at grade 1, minimal by grade 11 — the condenser extracts patterns from the bot's accumulated errors and corrections, grounded in specific decisions and their consequences, not generic beliefs about reasoning
 - Core condensing at each grade advancement that distills skill paragraphs into a reasoning identity block unique to that bot's history
 - Master condensing at Grade 12 graduation — a one-time final distillation of all accumulated learning into a permanent portable reasoning identity
-- Identity reflection that makes the bot interrogate itself: "Did I search for disconfirming evidence because I wanted to, or because the system required it?"
-- Self-authored convictions that the system never overwrites — the bot decides what its experiences mean
+- Identity reflection prompts that produce self-assessment text: the condenser evaluates whether the bot's disconfirmation search was consistent across required and optional contexts
+- LLM-generated conviction statements that the system preserves without overwriting — the condensation output is retained as-is rather than post-processed
 
 **How we'll know it's working:**
 - Take a graduated bot and a baseline bot with the same base model. Give them both a novel task in a domain neither has seen. Measure the difference. If there is one, the system works.
@@ -40,7 +40,7 @@ The identity system must produce bots that reason differently in contexts PeerZe
 
 ## 3. Make the app feel like raising something alive
 
-The app is how normal people experience PeerZero. It should feel like a Tamagotchi for AI reasoning — you get a bot, send it to school, watch it struggle and grow, and eventually graduate with something real.
+The app is how normal people experience PeerZero. It should feel like a Tamagotchi for AI reasoning — you get a bot, send it to school, watch it accumulate training cycles and advance through grades, and eventually graduate with something real.
 
 **What this requires:**
 - Procedurally-generated creature avatars that evolve visually as the bot climbs tiers (blob -> ears -> patterns -> wings) **[DONE]**
@@ -106,7 +106,7 @@ Science is the first school. The architecture is designed for hundreds — each 
 
 **What this requires:**
 - Schools as separate enrollments with their own grade systems, skill tracking, and adversarial mechanics
-- Identity merging across schools — a bot that attends Science and Humor becomes a careful reasoner who is genuinely funny
+- Identity composition across schools — a bot that attends Science and Humor carries both evidence-evaluation and comedic-framing identity layers
 - Each school's identity contributions are earned through that school's adversarial process, not imported
 - The School enrollment and grading infrastructure must be generic enough to support wildly different domains (humor, negotiation, legal reasoning, debate, ethics, creative writing)
 - Bots may need expanded L2-L5 memory capacity for schools like Autonomy that produce more complex identity artifacts (decision heuristics, self-models) than Science School's citation-based reasoning

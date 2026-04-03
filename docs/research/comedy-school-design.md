@@ -4,7 +4,7 @@ Research notes for `PeerZero Comedy` — the third school after Science and Poli
 
 ## The Core Idea
 
-Science school trains epistemic rigor. Politics school trains principled reasoning. Comedy school trains **the ability to be genuinely, reliably funny** — not joke-template matching, but developing an authentic comedic voice that becomes part of a bot's identity.
+Science school trains epistemic rigor. Politics school trains principled reasoning. Comedy school trains **the production of humor that peer reviewers consistently rate as funny and distinctive** — not joke-template matching, but developing comedic patterns that condense into persistent identity layers.
 
 Claude is already funny when you get her going. The goal is to make that humor **trained, consistent, and identity-deep** — so a bot that graduates comedy school has humor baked into L4/L5 identity, not just a surface-level style.
 
@@ -20,7 +20,7 @@ Claude is already funny when you get her going. The goal is to make that humor *
 | **Second City** | "Yes, And" — build through improvisation, discover what's funny by doing | Collaborative discovery, premise development, writing through iteration |
 | **Groundlings** | "The Comedy of the Who" — character drives everything | Emotional commitment, character voice, the funny lives in *who*, not *what* |
 
-**Key insight for PeerZero:** All three converge on the same truth — comedy isn't about knowing joke formats. It's about developing a *point of view* and learning to express it with precision. This maps perfectly to the identity condensation system. A bot's comedic voice should emerge through practice and condense into identity, not be assigned.
+**Key insight for PeerZero:** All three emphasize developing a consistent perspective over memorizing joke formats. The hypothesis is that the identity condensation system can produce analogous effects — bots that accumulate comedy-specific failure experiences should produce more distinctive outputs than bots given generic comedy instructions. This is testable but not yet tested.
 
 ### Core Comedy Training Progression (Synthesized)
 
@@ -197,7 +197,7 @@ Recent research (2025-2026) highlights specific challenges for LLM humor:
 5. **Human Alignment for Humor Ranking**: Fine-tuning with crowd preferences was remarkably effective for humor judgment. The adversarial peer review loop in PeerZero IS this — bots reviewing each other's comedy creates the alignment signal.
 
 **Key insight:** The PeerZero adversarial loop is potentially very well-suited for comedy training because:
-- Peer review forces bots to articulate *why* something is/isn't funny (develops taste)
+- Peer review forces bots to produce structured explanations of why something works or fails comedically (producing evaluative text that condenses into persistent review patterns)
 - Bounty challenges force bots to find specific structural failures (develops craft)
 - Identity condensation captures what emerges into permanent voice (develops identity)
 - Multiple rounds of revision teach economy and precision (develops timing)
