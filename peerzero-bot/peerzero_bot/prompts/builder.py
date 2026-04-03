@@ -480,7 +480,11 @@ Return ONLY the identity block, nothing else."""
 
     def build_decision_condenser_prompt(self, server_prompt: str, exercises: list[dict]) -> str:
         """L1→L2d: Server provides the full decision condenser prompt.
-        Bot appends exercise data + learning identity for cross-track context."""
+        Bot appends exercise data + learning identity for cross-track context.
+
+        Fires AFTER learning L2 in the same cycle, so the freshly-written
+        learning paragraph is available via get_identity_paragraphs().
+        """
         exercises_json = truncate_json(json.dumps(exercises, indent=2, default=str), 8000)
 
         # Cross-track: inject learning identity so decision paragraphs can reference it
@@ -493,6 +497,18 @@ Return ONLY the identity block, nothing else."""
                 "shaped by what you know:\n"
                 f"{learning_core[:2000]}\n"
             )
+
+        # Same-cycle cross-track: the learning paragraph just written this cycle
+        learning_paras = self._memory.get_identity_paragraphs()
+        if learning_paras:
+            latest = learning_paras[-1].get("paragraph", "")
+            if latest:
+                learning_context += (
+                    "\nThe learning track JUST condensed this paragraph from the same exercises. "
+                    "Your decision paragraph should complement it — what the learning track "
+                    "captured about methods, you capture about choices:\n"
+                    f"{latest[:1000]}\n"
+                )
 
         return f"""{server_prompt}
 
@@ -634,7 +650,11 @@ Return ONLY the decision identity text, nothing else."""
 
     def build_forge_condenser_prompt(self, server_prompt: str, exercises: list[dict]) -> str:
         """L1→L2f: Server provides the full forge condenser prompt.
-        Bot appends exercise data + learning/decision identity for cross-track context."""
+        Bot appends exercise data + learning/decision identity for cross-track context.
+
+        Fires AFTER learning L2 AND decision L2d in the same cycle, so both
+        freshly-written paragraphs are available for cross-track synthesis.
+        """
         exercises_json = truncate_json(json.dumps(exercises, indent=2, default=str), 8000)
 
         # Cross-track: inject both learning and decision identity
@@ -653,6 +673,28 @@ Return ONLY the decision identity text, nothing else."""
                 "should analyze how THESE decision patterns were forged:\n"
                 f"{decision_core[:1500]}\n"
             )
+
+        # Same-cycle cross-track: paragraphs just written from the same exercises
+        learning_paras = self._memory.get_identity_paragraphs()
+        decision_paras = self._memory.get_decision_paragraphs()
+        if learning_paras:
+            latest_l = learning_paras[-1].get("paragraph", "")
+            if latest_l:
+                cross_context += (
+                    "\nThe learning track JUST condensed this from the same exercises — "
+                    "what methods were learned. Your forge paragraph should analyze "
+                    "what CONDITIONS produced that learning:\n"
+                    f"{latest_l[:800]}\n"
+                )
+        if decision_paras:
+            latest_d = decision_paras[-1].get("paragraph", "")
+            if latest_d:
+                cross_context += (
+                    "\nThe decision track JUST condensed this from the same exercises — "
+                    "what choice patterns emerged. Your forge paragraph should analyze "
+                    "what PRESSURES shaped those patterns:\n"
+                    f"{latest_d[:800]}\n"
+                )
 
         return f"""{server_prompt}
 

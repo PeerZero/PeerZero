@@ -128,7 +128,9 @@ class SchoolCondensationMixin:
     def _process_inline_condensers(self, memory_prompts: dict, system_prompt: str):
         """Process condensers from inline memory prompts (post-action).
 
-        Runs ALL THREE tracks (learning, decision, forge) from the same L1 exercises.
+        Runs ALL THREE tracks (learning → decision → forge) SEQUENTIALLY.
+        Order matters: each later track sees freshly-written paragraphs
+        from earlier tracks, enabling cross-track synthesis.
         L1 is cleared only after all tracks have condensed.
         """
         if not memory_prompts:
@@ -149,11 +151,24 @@ class SchoolCondensationMixin:
     def _process_post_action_triggers(self, profile: dict, system_prompt: str, grade: int = 1):
         """Process condensers from profile triggers (post-action).
 
-        Both tracks cascade independently:
+        Three tracks fire SEQUENTIALLY (learning → decision → forge):
           Learning: L1→L2, L2→L3, L3→L4  (or L4→L5 at graduation)
           Decision: L1→L2d, L2d→L3d, L3d→L4d  (or L4d→L5d at graduation)
+          Forge:    L1→L2f, L2f→L3f, L3f→L4f  (or L4f→L5f at graduation)
 
-        L1 is shared — cleared only after both tracks condense from it.
+        ORDERING IS INTENTIONAL. Each track sees freshly-written results from
+        earlier tracks via memory reads:
+          - Decision L2d sees learning L2 paragraph just written
+          - Forge L2f sees both L2 and L2d paragraphs just written
+          - Decision L4d sees learning L4 core just written
+          - Forge L4f sees both L4 and L4d cores just written
+          - Decision L5d sees learning L5 master just written
+          - Forge L5f sees both L5 and L5d masters just written (capstone)
+
+        This means forge identity naturally synthesizes across all three tracks
+        because it always writes last with full visibility.
+
+        L1 is shared — cleared only after all three tracks condense from it.
         """
         has_exercises = self._has_enough_exercises()
 
