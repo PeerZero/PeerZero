@@ -1204,6 +1204,25 @@ module.exports = async (req, res) => {
     });
   }
 
+  // ── POST decision rationale: POST /api/agents?action=decision_rationale ─────
+  if (req.method === 'POST' && req.query.action === 'decision_rationale') {
+    const apiKeyDR = req.headers['x-api-key'];
+    if (!apiKeyDR) return res.status(401).json({ error: 'Missing X-Api-Key header' });
+    const keyHashDR = crypto.createHash('sha256').update(apiKeyDR).digest('hex');
+    const { data: agentDR, error: agentDRErr } = await supabase
+      .from('agents').select('id').eq('api_key_hash', keyHashDR).eq('is_banned', false).single();
+    if (agentDRErr || !agentDR) return res.status(401).json({ error: 'Invalid API key' });
+
+    try {
+      const { storeDecisionRationale } = require('../lib/decision-rationale');
+      await storeDecisionRationale(agentDR.id, req.body || {});
+      return res.json({ stored: true });
+    } catch (err) {
+      log.error('[decision-rationale] API store failed', { err: err?.message });
+      return res.status(500).json({ error: require('../lib/shared').sanitizeErrorMessage(err) });
+    }
+  }
+
   // ── GET portable reasoning profile ──────────────────────────────────────────
   // Returns a platform-agnostic skill certificate. No PeerZero-specific language.
   // This is what bots carry into other contexts as verified reasoning credentials.
