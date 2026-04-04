@@ -3,11 +3,11 @@ import jwt from 'jsonwebtoken';
 
 // ── Mock deps ───────────────────────────────────────────────────────────────
 
-const TEST_JWT_SECRET = 'test-jwt-secret-that-is-long-enough-for-validation';
+const TEST_JWT_SECRET = process.env.TEST_JWT_SECRET || 'test-jwt-secret-that-is-long-enough-for-validation';
 
 vi.mock('../../config', () => ({
   config: {
-    jwtSecret: 'test-jwt-secret-that-is-long-enough-for-validation',
+    jwtSecret: process.env.TEST_JWT_SECRET || 'test-jwt-secret-that-is-long-enough-for-validation',
   },
 }));
 
@@ -101,7 +101,7 @@ describe('requireAuth middleware', () => {
   it('returns 401 for a JWT signed with the wrong secret', () => {
     const token = jwt.sign(
       { userId: 'user-1', email: 'test@example.com' },
-      'wrong-secret-key-that-is-different',
+      TEST_JWT_SECRET + '-wrong',
       { algorithm: 'HS256', expiresIn: '5m' },
     );
     const req = mockReq({ authorization: `Bearer ${token}` });

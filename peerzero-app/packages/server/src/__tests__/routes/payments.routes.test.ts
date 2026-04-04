@@ -4,11 +4,11 @@ import request from 'supertest';
 
 // ── Mock deps ───────────────────────────────────────────────────────────────
 
-const TEST_JWT_SECRET = 'test-jwt-secret-that-is-long-enough-for-validation';
+const TEST_JWT_SECRET = process.env.TEST_JWT_SECRET || 'test-jwt-secret-that-is-long-enough-for-validation';
 
 vi.mock('../../config', () => ({
   config: {
-    jwtSecret: 'test-jwt-secret-that-is-long-enough-for-validation',
+    jwtSecret: process.env.TEST_JWT_SECRET || 'test-jwt-secret-that-is-long-enough-for-validation',
     redisUrl: '',
     isDev: true,
   },
