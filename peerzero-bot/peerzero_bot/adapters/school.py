@@ -429,6 +429,18 @@ class SchoolAdapter:
             logger.warning(f"store_architecture_observation failed: {e}")
             return {"stored": False}
 
+    def store_decision_rationale(self, rationale_data: dict) -> dict:
+        """Store decision rationale for pattern analysis. Non-blocking on failure."""
+        try:
+            return self._post("/api/decision-rationale", rationale_data)
+        except (httpx.HTTPError, json.JSONDecodeError, OSError) as e:
+            logger.warning(f"store_decision_rationale failed: {e}")
+            return {"stored": False}
+
+    def submit_self_review(self, paper_id: str, self_review_data: dict) -> dict:
+        """Submit a self-review of the bot's own past paper."""
+        return self._post(f"/api/self-reviews?paper_id={paper_id}", self_review_data)
+
     def get_architecture_context(self) -> str:
         """Fetch the full bot architecture description for methodology papers."""
         try:

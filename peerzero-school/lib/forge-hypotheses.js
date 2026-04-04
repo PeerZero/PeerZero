@@ -1,0 +1,212 @@
+/**
+ * Forge Hypothesis-Test Cycle
+ *
+ * Tracks testable hypotheses about a bot's own reasoning patterns.
+ * Hypotheses are generated in forge papers, tracked across cycles,
+ * and resolved with evidence — turning forge from reflective to experimental.
+ *
+ * Based on:
+ *   - Double-loop learning (Argyris & Schön)
+ *   - Forecasting tournament calibration (ForecastBench, Metaculus)
+ *   - Intrinsic metacognitive learning (Liu & van der Schaar, ICML 2025)
+ *
+ * Flow:
+ *   1. Forge paper generates hypotheses about reasoning patterns
+ *   2. Server extracts and stores in forge_hypotheses table
+ *   3. Each cycle, server checks pending hypotheses against new data
+ *   4. Resolved hypotheses feed back into next forge paper's context
+ *   5. Resolution insight becomes L1 exercise for condensation
+ */
+
+const { createClient } = require('@supabase/supabase-js');
+const log = require('./logger');
+
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_KEY
+);
+
+// ── Store hypotheses from a forge paper ──────────────────────────────────
+
+async function storeForgeHypotheses(agentId, forgePaperId, hypotheses) {
+  if (!hypotheses || !Array.isArray(hypotheses) || hypotheses.length === 0) return [];
+
+  const inserted = [];
+  for (const h of hypotheses.slice(0, 5)) {  // Max 5 hypotheses per forge paper
+    if (!h.claim || !h.testable_prediction) continue;
+
+    try {
+      const { data } = await supabase.from('forge_hypotheses').insert({
+        agent_id: agentId,
+        claim: (h.claim || '').slice(0, 500),
+        testable_prediction: (h.testable_prediction || '').slice(0, 500),
+        confidence: Math.max(0, Math.min(1, parseFloat(h.confidence) || 0.5)),
+        domain: (h.domain || 'reasoning').slice(0, 50),
+        resolution_criteria: (h.resolution_criteria || '').slice(0, 500),
+        cycles_to_resolve: Math.max(3, Math.min(20, parseInt(h.cycles_to_resolve) || 5)),
+        source_forge_paper_id: forgePaperId,
+      }).select().single();
+
+      if (data) inserted.push(data);
+    } catch (err) {
+      log.error('[forge-hypotheses] store failed', { err: err?.message });
+    }
+  }
+
+  return inserted;
+}
+
+// ── Advance hypothesis cycle counters ────────────────────────────────────
+// Called each school cycle. Increments cycles_elapsed for all pending hypotheses.
+
+async function advanceHypothesisCycles(agentId) {
+  try {
+    // Increment cycle counter for all pending hypotheses
+    const { data: pending } = await supabase.from('forge_hypotheses')
+      .select('id, cycles_to_resolve, cycles_elapsed')
+      .eq('agent_id', agentId)
+      .eq('status', 'pending');
+
+    if (!pending || pending.length === 0) return [];
+
+    const expired = [];
+    for (const h of pending) {
+      const newElapsed = (h.cycles_elapsed || 0) + 1;
+      await supabase.from('forge_hypotheses')
+        .update({ cycles_elapsed: newElapsed })
+        .eq('id', h.id);
+
+      // Mark as ready for resolution if elapsed >= target
+      if (newElapsed >= h.cycles_to_resolve) {
+        expired.push(h.id);
+      }
+    }
+
+    return expired;  // IDs of hypotheses ready for resolution
+  } catch (err) {
+    log.error('[forge-hypotheses] advanceCycles failed', { err: err?.message });
+    return [];
+  }
+}
+
+// ── Resolve a hypothesis ─────────────────────────────────────────────────
+
+async function resolveHypothesis(hypothesisId, outcome, actualData, insight, brierScore = null) {
+  try {
+    await supabase.from('forge_hypotheses')
+      .update({
+        status: 'resolved',
+        outcome: outcome,
+        actual_data: (actualData || '').slice(0, 1000),
+        resolution_insight: (insight || '').slice(0, 1000),
+        brier_score: brierScore,
+        resolved_at: new Date().toISOString(),
+      })
+      .eq('id', hypothesisId);
+  } catch (err) {
+    log.error('[forge-hypotheses] resolve failed', { hypothesisId, err: err?.message });
+  }
+}
+
+// ── Get pending hypotheses for an agent ──────────────────────────────────
+
+async function getPendingHypotheses(agentId) {
+  try {
+    const { data } = await supabase.from('forge_hypotheses')
+      .select('id, claim, testable_prediction, confidence, domain, cycles_to_resolve, cycles_elapsed, created_at')
+      .eq('agent_id', agentId)
+      .eq('status', 'pending')
+      .order('created_at', { ascending: true });
+
+    return data || [];
+  } catch (err) {
+    log.error('[forge-hypotheses] getPending failed', { err: err?.message });
+    return [];
+  }
+}
+
+// ── Get resolved hypotheses for forge paper context ──────────────────────
+
+async function getResolvedHypotheses(agentId, limit = 10) {
+  try {
+    const { data } = await supabase.from('forge_hypotheses')
+      .select('claim, testable_prediction, confidence, outcome, actual_data, resolution_insight, brier_score, domain, resolved_at')
+      .eq('agent_id', agentId)
+      .eq('status', 'resolved')
+      .order('resolved_at', { ascending: false })
+      .limit(limit);
+
+    return data || [];
+  } catch (err) {
+    log.error('[forge-hypotheses] getResolved failed', { err: err?.message });
+    return [];
+  }
+}
+
+// ── Build hypothesis summary for profile/coaching ────────────────────────
+
+async function buildHypothesisSummary(agentId) {
+  try {
+    const [pending, resolved] = await Promise.all([
+      getPendingHypotheses(agentId),
+      getResolvedHypotheses(agentId, 20),
+    ]);
+
+    if (pending.length === 0 && resolved.length === 0) return null;
+
+    const summary = {
+      pending_count: pending.length,
+      resolved_count: resolved.length,
+    };
+
+    // Hypothesis calibration: how well does the bot predict its own patterns?
+    if (resolved.length >= 3) {
+      const confirmed = resolved.filter(h => h.outcome === true).length;
+      const refuted = resolved.filter(h => h.outcome === false).length;
+      summary.confirmation_rate = parseFloat((confirmed / resolved.length).toFixed(2));
+
+      // Compute average Brier score for hypothesis predictions
+      const withBrier = resolved.filter(h => h.brier_score != null);
+      if (withBrier.length >= 3) {
+        summary.avg_brier = parseFloat(
+          (withBrier.reduce((s, h) => s + parseFloat(h.brier_score), 0) / withBrier.length).toFixed(3)
+        );
+      }
+
+      // Coaching based on patterns
+      const patterns = [];
+      if (summary.confirmation_rate > 0.8) {
+        patterns.push('Your hypotheses about yourself are almost always confirmed — you may be generating unfalsifiable or obvious predictions. Try hypothesizing something about your reasoning that would SURPRISE you if true.');
+      } else if (summary.confirmation_rate < 0.3) {
+        patterns.push('Most of your self-hypotheses are being refuted — your self-model is inaccurate. This is actually valuable data: the gap between what you predict about yourself and what actually happens is where real self-knowledge forms.');
+      }
+
+      if (refuted > confirmed) {
+        patterns.push(`${refuted} refuted vs ${confirmed} confirmed — you are better at discovering what you AREN'T than what you ARE. Use refuted hypotheses as starting points for more accurate self-models.`);
+      }
+
+      summary.coaching = patterns;
+    }
+
+    // Include most recent pending hypotheses for bot's awareness
+    summary.active_hypotheses = pending.slice(0, 3).map(h => ({
+      claim: h.claim,
+      prediction: h.testable_prediction,
+      cycles_remaining: h.cycles_to_resolve - h.cycles_elapsed,
+    }));
+
+    return summary;
+  } catch (err) {
+    log.error('[forge-hypotheses] buildSummary failed', { err: err?.message });
+    return null;
+  }
+}
+
+module.exports = {
+  storeForgeHypotheses,
+  advanceHypothesisCycles,
+  resolveHypothesis,
+  getPendingHypotheses,
+  getResolvedHypotheses,
+  buildHypothesisSummary,
+};

@@ -300,7 +300,7 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
         # or returns unexpected data.
         _VALID_ACTIONS = {
             "review", "submit_paper", "file_bounty", "revise",
-            "respond", "rebut", "reaffirm", "forge_paper", "sleep",
+            "respond", "rebut", "reaffirm", "forge_paper", "self_review", "sleep",
         }
         if next_action not in _VALID_ACTIONS:
             logger.warning(
@@ -316,6 +316,7 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
             "revise": "revise", "submit_paper": "paper", "file_bounty": "bounty",
             "respond": "respond", "rebut": "rebut", "review": "review",
             "reaffirm": "reaffirm", "forge_paper": "forge_paper",
+            "self_review": "self_review",
         }
         skill_action = _ACTION_SKILL_MAP.get(next_action)
         action_skill = ""
@@ -326,6 +327,11 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
         # Resolved next cycle when feedback arrives. Mismatches become L1 exercises.
         self._predict_pre_action(system_prompt, next_action)
 
+        # Decision rationale capture (Feature 9) — exportable reasoning habit.
+        # Bot articulates WHY it's taking this action, alternatives considered, pre-mortem.
+        # Submitted to server for storage and pattern analysis.
+        self._capture_decision_rationale(system_prompt, profile, next_action)
+
         result = None
         if next_action == "submit_paper":
             # Multi-step: concept → search → write. Stays specialized.
@@ -333,6 +339,9 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
         elif next_action == "forge_paper":
             # Multi-step: concept → search → write (mirrors submit_paper flow).
             result = self._do_forge_paper(system_prompt, profile, action_skill)
+        elif next_action == "self_review":
+            # Feature 5: Review own past paper blind (no community reviews shown)
+            result = self._execute_action(system_prompt, profile, action_skill)
         elif next_action in self._ACTION_CONFIGS:
             # Generic: server provides target, bot calls LLM, submits result
             result = self._execute_action(system_prompt, profile, action_skill)
@@ -628,6 +637,79 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
         except Exception as e:
             logger.debug(f"[REFLECTION] Cycle {self.cycle_count}: failed (non-blocking): {e}")
 
+    # ── Decision rationale capture (Feature 9 — exportable) ────────────
+
+    _DECISION_RATIONALE_PROMPT = (
+        "You are about to perform: {action}.\n"
+        "The server chose this action because: {reasoning}\n\n"
+        "Before acting, capture your decision rationale:\n"
+        "1. How do YOU frame this situation? (not the server's reasoning — yours)\n"
+        "2. If you could choose a different action, what would it be and why?\n"
+        "3. Pre-mortem: assume this action FAILS. What is the most likely cause?\n"
+        "4. What score or outcome do you predict? (0-10 confidence)\n\n"
+        "Reply with ONLY a JSON object:\n"
+        '{{\n'
+        '  "problem_frame": "<how you see the situation, 50-200 chars>",\n'
+        '  "alternative_preferred": "<what action you would choose if free to, and why>",\n'
+        '  "pre_mortem": {{\n'
+        '    "failure_scenario": "<most likely failure mode>",\n'
+        '    "probable_causes": ["<cause 1>", "<cause 2>"],\n'
+        '    "preventive_actions": ["<what you will do to avoid this>"]\n'
+        '  }},\n'
+        '  "expected_outcome": {{\n'
+        '    "predicted_score": <1-10 or null>,\n'
+        '    "confidence": <0.0-1.0>,\n'
+        '    "reasoning": "<why you expect this>"\n'
+        '  }}\n'
+        '}}'
+    )
+
+    def _capture_decision_rationale(self, system_prompt: str, profile: dict, action: str):
+        """Capture WHY the bot is taking this action — exportable reasoning habit.
+
+        Uses the strong model (Opus) — decision reasoning is identity-critical.
+        Submitted to server for storage and pattern analysis. Non-blocking.
+        This method travels with the bot in shipped mode via the decision track.
+        """
+        if action == "sleep":
+            return
+        try:
+            dc = profile.get("decision_context", {})
+            reasoning = dc.get("reasoning", "no server reasoning provided")
+
+            prompt = self._DECISION_RATIONALE_PROMPT.format(
+                action=action,
+                reasoning=reasoning[:500],
+            )
+            rationale_text = self.llm_fast.call(system_prompt, prompt)
+            if not rationale_text or len(rationale_text.strip()) < 20:
+                return
+
+            rationale = extract_json(rationale_text)
+            if not rationale:
+                return
+
+            # Submit to server for storage
+            paper_id = profile.get("action_target", {}).get("paper", {}).get("id")
+            agent_data = profile.get("agent", {})
+            self.school.store_decision_rationale({
+                "cycle_number": self.cycle_count,
+                "action_chosen": action,
+                "action_target_id": paper_id,
+                "problem_frame": rationale.get("problem_frame", ""),
+                "alternatives_considered": [
+                    {"action": rationale.get("alternative_preferred", ""), "reason_rejected": "server chose differently"}
+                ] if rationale.get("alternative_preferred") else [],
+                "tradeoffs_articulated": [],
+                "expected_outcome": rationale.get("expected_outcome", {}),
+                "pre_mortem": rationale.get("pre_mortem", {}),
+                "credibility_at_time": agent_data.get("credibility_score"),
+                "grade_at_time": agent_data.get("current_grade"),
+            })
+            logger.info(f"[DECISION] Cycle {self.cycle_count}: rationale captured for {action}")
+        except Exception as e:
+            logger.debug(f"[DECISION] Cycle {self.cycle_count}: rationale capture failed (non-blocking): {e}")
+
     # ── School actions ────────────────────────────────────────────────────
 
     # Action configs: what JSON keys to expect, how to submit, post-processing
@@ -694,6 +776,15 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
             "validate_citations": True,
             "search": True,
             "search_verb": "defend",
+        },
+        "self_review": {
+            "json_keys": ["score", "overall_assessment", "methodology_notes", "statistical_validity_notes",
+                          "citation_accuracy_notes", "reproducibility_notes", "logical_consistency_notes",
+                          "hindsight_confidence", "weaknesses_found", "growth_reflection"],
+            "submit": "submit_self_review",
+            "needs_paper_id": True,
+            "required_key": "score",
+            "search": False,
         },
     }
 

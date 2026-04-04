@@ -108,6 +108,9 @@ module.exports = {
     { key: 'confirmation_bias',          label: 'Confirmation Bias',         requiresSources: false, requiresSearchStrategy: false, forgeOnly: true },
     { key: 'missing_calibration',        label: 'Missing Calibration',       requiresSources: false, requiresSearchStrategy: false, forgeOnly: true },
     { key: 'unfalsifiable_self_claim',   label: 'Unfalsifiable Self-Claim',  requiresSources: false, requiresSearchStrategy: false, forgeOnly: true },
+    // Reasoning chain verification bounty types (Feature 7)
+    { key: 'decorative_reasoning',      label: 'Decorative Reasoning',      requiresSources: false, requiresSearchStrategy: false },
+    { key: 'post_hoc_rationalization',   label: 'Post-Hoc Rationalization', requiresSources: true,  requiresSearchStrategy: true },
   ],
 
   // ── Review Score Categories ───────────────────────────────────────────

@@ -31,6 +31,9 @@ SCHOOL_PATHS = frozenset([
     "/api/skill-reflections",
     "/api/review-ratings",
     "/api/open-questions",
+    "/api/decision-rationale",
+    "/api/self-reviews",
+    "/api/architecture-observations",
 ])
 
 LLM_HOSTS = frozenset([

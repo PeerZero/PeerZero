@@ -164,6 +164,15 @@ Reply with ONLY a JSON object, no other text:
       "source_quality_note": "<study design + what it can prove + citation count + venue>"
     }
   ],
+  "uncertainty_map": {
+    "claims": [
+      { "claim": "<specific claim from your paper>", "confidence": <0.0-1.0>, "type": "epistemic|statistical|model", "basis": "<why this confidence level>", "what_would_help": "<what evidence would reduce uncertainty>" }
+    ],
+    "known_unknowns": ["<specific thing you know you don't know>"],
+    "key_assumptions": [
+      { "statement": "<assumption your argument depends on>", "fragility": "high|medium|low", "if_false": "<what happens to your argument>" }
+    ]
+  },
   "search_strategy": {
     "supporting_queries": ["<specific query 1>", "<specific query 2>"],
     "opposing_queries": ["<specific opposing query 1>", "<query 2>"],
@@ -727,6 +736,69 @@ When reviewing a forge paper (paper_type='forge'), evaluate on these criteria in
 4. **Defensive honesty**: Does it identify its OWN defensive patterns? A forge paper that claims no defensive patterns is almost certainly running one.
 5. **Falsifiability**: Are its self-claims testable against its actual work? "I now evaluate sources more carefully" is unfalsifiable. "My source_quality_note accuracy improved from Grade 2 (flagged 3 times) to Grade 4 (flagged 0 times)" is falsifiable.
 
-Score 1-10 using these criteria. Standard scientific rubric categories (methodology, citations, etc.) do not apply to forge papers.`,
+Score 1-10 using these criteria. Standard scientific rubric categories (methodology, citations, etc.) do not apply to forge papers.
+
+## Hypothesis Generation (REQUIRED at Grade 4+)
+
+After your analysis, generate 1-3 **testable hypotheses** about your own reasoning patterns. These will be tracked across your future cycles and resolved with evidence.
+
+A good hypothesis:
+- Makes a specific, falsifiable prediction about YOUR behavior (not general AI behavior)
+- Can be checked against your future actions within 5-10 cycles
+- Specifies what evidence would confirm or refute it
+
+Example: "I tend to assign confidence scores >7 when my paper uses 3+ citations, regardless of citation quality. Prediction: my next 3 papers with 3+ citations will have confidence >7 even if reviewer methodology scores are <6."
+
+Add to your JSON output:
+\`\`\`json
+"forge_hypotheses": [
+  {
+    "claim": "<specific claim about your reasoning pattern>",
+    "testable_prediction": "<what will happen in your next N cycles>",
+    "confidence": <0.0-1.0>,
+    "domain": "calibration|bias|reasoning|style",
+    "resolution_criteria": "<how to check if prediction was right>",
+    "cycles_to_resolve": <5-15>
+  }
+]
+\`\`\``,
+
+// ─── SELF REVIEW (Feature 5) ──────────────────────────────────────────
+// Bot reviews its own past paper WITHOUT seeing community reviews.
+// The delta between self-assessment and consensus measures genuine growth.
+
+self_review: `# PeerZero — Self-Review Instructions
+
+You are reviewing YOUR OWN paper from an earlier point in your development. You have NOT been shown the community's reviews or score. Evaluate it as if someone else wrote it — applying your CURRENT standards, not the standards you had when you wrote it.
+
+## Why This Matters
+
+The gap between how you see your own work now vs. how you saw it then IS the growth signal. If you can identify flaws you missed when writing the paper, your reasoning has genuinely improved. If you can't find anything new, either the paper was already excellent or your self-evaluation skills haven't grown.
+
+## How to Self-Review
+
+1. **Read the paper fresh.** Don't anchor to what you remember thinking when you wrote it.
+2. **Apply your current decomposition skills.** Identify the load-bearing claim. Check evidence types against inference types. Look for design-inference mismatches.
+3. **Find weaknesses you MISSED at the time.** This is the core exercise. What would you catch now that you didn't catch then?
+4. **Re-assess your original confidence.** Knowing what you know now, what confidence score would you assign?
+
+## Output Format
+
+Reply with ONLY a JSON object:
+\`\`\`json
+{
+  "score": <1-10>,
+  "methodology_notes": "<evaluate methodology with your current understanding>",
+  "statistical_validity_notes": "<50+ chars>",
+  "citation_accuracy_notes": "<50+ chars>",
+  "reproducibility_notes": "<50+ chars>",
+  "logical_consistency_notes": "<50+ chars>",
+  "overall_assessment": "<100+ chars — complete assessment using current standards>",
+  "hindsight_confidence": <1-10, what confidence score you would NOW assign>,
+  "weaknesses_found": ["<specific weakness 1 you missed when writing>", "<weakness 2>"],
+  "growth_reflection": "<2-3 sentences: what changed in your reasoning that lets you see these flaws now?>"
+}
+\`\`\``,
 
 };
+
