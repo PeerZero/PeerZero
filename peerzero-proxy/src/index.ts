@@ -36,6 +36,7 @@ interface Env {
   IDENTITY_PREAMBLE: string;    // The activation preamble (Worker secret)
   PROXY_AUTH_SECRET: string;    // Shared secret for validating proxy requests
   ALLOWED_ORIGINS?: string;     // Comma-separated list of allowed CORS origins
+  RATE_LIMIT_KV?: KVNamespace;  // Optional KV namespace for distributed rate limiting
 }
 
 // ── Provider endpoints ───────────────────────────────────────────────────────
@@ -51,26 +52,45 @@ const ANTHROPIC_VERSION = "2023-06-01";
 
 const MAX_BODY_SIZE = 10 * 1024 * 1024; // 10 MB
 
-// ── Rate limiting (in-memory, per-worker-instance) ───────────────────────────
-// SECURITY NOTE: This rate limit is per-isolate. Cloudflare Workers can run
-// across multiple isolates, so an attacker can partially bypass this by
-// round-robining requests. For stronger enforcement, migrate to Cloudflare
-// Durable Objects or KV-backed rate limiting. The current limit still catches
-// accidental floods and naive abuse from a single isolate.
+// ── Rate limiting (KV-backed with in-memory fallback) ────────────────────────
+// When RATE_LIMIT_KV is bound, rate limits are enforced across all isolates
+// using Cloudflare KV. Falls back to per-isolate in-memory limiting when KV
+// is not configured (still catches accidental floods and naive abuse).
 
-const rateLimits = new Map<string, { count: number; resetAt: number }>();
+const inMemoryRateLimits = new Map<string, { count: number; resetAt: number }>();
 const RATE_LIMIT = 120;         // requests per window
 const RATE_WINDOW_MS = 60_000;  // 1 minute
+const RATE_WINDOW_S = 60;       // KV TTL in seconds
 
-function isRateLimited(rateLimitKey: string): boolean {
+function isRateLimitedInMemory(rateLimitKey: string): boolean {
   const now = Date.now();
-  const entry = rateLimits.get(rateLimitKey);
+  const entry = inMemoryRateLimits.get(rateLimitKey);
   if (!entry || now > entry.resetAt) {
-    rateLimits.set(rateLimitKey, { count: 1, resetAt: now + RATE_WINDOW_MS });
+    inMemoryRateLimits.set(rateLimitKey, { count: 1, resetAt: now + RATE_WINDOW_MS });
     return false;
   }
   entry.count++;
   return entry.count > RATE_LIMIT;
+}
+
+async function isRateLimited(rateLimitKey: string, kv?: KVNamespace): Promise<boolean> {
+  // Use KV-backed distributed rate limiting when available
+  if (kv) {
+    try {
+      const kvKey = `rl:${rateLimitKey}`;
+      const existing = await kv.get(kvKey);
+      const count = existing ? parseInt(existing, 10) : 0;
+      if (count >= RATE_LIMIT) return true;
+      // Increment — KV put is eventually consistent but sufficient for rate limiting.
+      // TTL auto-expires the key so windows reset naturally.
+      await kv.put(kvKey, String(count + 1), { expirationTtl: RATE_WINDOW_S });
+      return false;
+    } catch {
+      // KV failure — fall back to in-memory
+      return isRateLimitedInMemory(rateLimitKey);
+    }
+  }
+  return isRateLimitedInMemory(rateLimitKey);
 }
 
 // ── Session token store (in-memory, per-worker-instance) ────────────────────
@@ -147,7 +167,7 @@ export default {
     const keyHashHex = bufToHex(providedBuf);
     const clientIp = request.headers.get("CF-Connecting-IP") || "unknown";
     const rateLimitKey = keyHashHex + ":" + clientIp;
-    if (isRateLimited(rateLimitKey)) {
+    if (await isRateLimited(rateLimitKey, env.RATE_LIMIT_KV)) {
       return jsonError("Rate limited", 429, request, env);
     }
 

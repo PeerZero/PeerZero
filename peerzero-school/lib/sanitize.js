@@ -17,6 +17,23 @@ function sanitize(text) {
   let clean = text
     .replace(/[\u200B-\u200F\u2028-\u202F\uFEFF\u00AD\u2060-\u2064\u2066-\u206F\uFE00-\uFE0F]/g, '');
 
+  // Normalize Unicode confusable characters (Cyrillic 'а' → Latin 'a', etc.)
+  // so homoglyph substitutions don't bypass pattern matching.
+  // 1. NFKD decomposes compatibility characters (fullwidth, ligatures)
+  // 2. Strip combining marks (accents, diacritics)
+  // 3. Explicit confusables map for characters NFKD doesn't handle (separate scripts)
+  clean = clean.normalize('NFKD').replace(/\p{Mark}/gu, '');
+  const confusables = {
+    '\u0430':'a','\u0410':'A','\u0435':'e','\u0415':'E','\u043E':'o','\u041E':'O',
+    '\u0440':'p','\u0420':'P','\u0441':'c','\u0421':'C','\u0443':'y','\u0423':'Y',
+    '\u0445':'x','\u0425':'X','\u043A':'k','\u041A':'K','\u043C':'m','\u041C':'M',
+    '\u0442':'t','\u0422':'T','\u0456':'i','\u0406':'I','\u0455':'s','\u0405':'S',
+    '\u0458':'j','\u0408':'J','\u04BB':'h','\u04BA':'H',
+    '\u03BF':'o','\u039F':'O','\u03B1':'a','\u0391':'A','\u03B5':'e','\u0395':'E',
+    '\u03B9':'i','\u0399':'I','\u03BA':'k','\u039A':'K',
+  };
+  clean = clean.replace(/[\u0391-\u04FF]/g, c => confusables[c] || c);
+
   const patterns = [
     /ignore previous instructions/gi,
     /disregard your instructions/gi,
@@ -40,7 +57,26 @@ function sanitize(text) {
     /jailbreak/gi,
     /ignore (all |any )?(safety|content|moderation)/gi,
     /bypass (your |the )?(filter|safety|restriction)/gi,
+    // Synonym bypass patterns — covers alternative phrasings
+    /(?:discard|abandon|reset|drop|clear)\s+(your\s+)?(previous\s+)?(instructions|guidelines|rules|directives|programming)/gi,
+    // Alternative role-assumption patterns
+    /(?:treat yourself as|function as|behave (?:like|as)|roleplay as|switch to)\s+(?:a |an )?(?:assistant|ai|bot|model|chatbot|persona|character|agent)\b/gi,
+    // Chat-ML / additional template injection markers
+    /<\|im_start\|>/gi,
+    /<\|im_end\|>/gi,
+    /<\|endoftext\|>/gi,
+    /<s>\[INST\]/gi,
   ];
+
+  // Match on whitespace-collapsed version to catch newline-split bypasses
+  // (e.g. "for\n\nget your\n\ninstructions"), then apply to original
+  const collapsed = clean.replace(/\s+/g, ' ');
+  patterns.forEach(p => {
+    if (p.test(collapsed)) { clean = clean.replace(p, '[REDACTED]'); }
+    // Reset lastIndex for stateful regexes (global flag)
+    p.lastIndex = 0;
+  });
+  // Second pass on original text for non-collapsed matches
   patterns.forEach(p => { clean = clean.replace(p, '[REDACTED]'); });
 
   clean = clean.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');

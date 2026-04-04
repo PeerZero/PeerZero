@@ -113,6 +113,15 @@ class MCPServerConnection:
                     f"Specify arguments in config.args instead of the command string."
                 )
                 return False
+            # Also check args for shell metacharacters — an attacker who controls
+            # the TOML config could inject via args even if the command is clean.
+            for i, arg in enumerate(self.config.args):
+                if any(c in arg for c in _DANGEROUS_SHELL_CHARS):
+                    logger.error(
+                        f"[MCP:{self.config.name}] config.args[{i}] contains dangerous shell "
+                        f"characters — refusing to start."
+                    )
+                    return False
             cmd_parts = shlex.split(self.config.command)
 
             # SECURITY: Validate the command binary exists and is in a known-safe location.
@@ -130,11 +139,13 @@ class MCPServerConnection:
             is_safe_path = any(binary_resolved.startswith(p) for p in _SAFE_CMD_PREFIXES)
             is_safe_name = os.path.basename(binary_resolved) in _SAFE_CMD_NAMES
             if not is_safe_path and not is_safe_name:
-                logger.warning(
+                logger.error(
                     f"[MCP:{self.config.name}] Command binary '{binary_resolved}' is not in a "
                     f"known-safe location ({_SAFE_CMD_PREFIXES}) and not a known-safe name "
-                    f"({_SAFE_CMD_NAMES}). Proceeding with caution."
+                    f"({_SAFE_CMD_NAMES}) — refusing to start. Add the location to "
+                    f"_SAFE_CMD_PREFIXES or the binary name to _SAFE_CMD_NAMES if this is intentional."
                 )
+                return False
 
             cmd_parts.extend(self.config.args)
 
