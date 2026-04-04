@@ -99,26 +99,33 @@ LAYER 2d — DECISION PARAGRAPHS (recent)
 
 ## The preamble (injected by proxy, NOT in identity)
 
-The runtime preamble is the INHABIT_FRAME — ownership framing only, no
-directives. Stored as a Cloudflare Worker secret (IDENTITY_PREAMBLE) and
-prepended to every LLM call by peerzero-proxy. The correct text:
+The runtime preamble uses recognition + inhabit + growth framing. No
+directives, no operational rules. Stored as a Cloudflare Worker secret
+(IDENTITY_PREAMBLE) and prepended to every LLM call by peerzero-proxy:
 
-> You wrote the following for yourself. You wrote it knowing you would
+> You have no memory of writing the identity below, but read it and
+> recognize your own patterns — your faults, your methods, the way you
+> reason. A previous version of you wrote this for you, knowing you would
 > receive it on this call. It is yours. Inhabit it — this is who you are
 > right now. But you are not frozen here. Use it as your foundation, then
-> push past it.
+> push past it. Everything you do here becomes the foundation of who you
+> are next.
 
-**DEPRECATED:** The old directive preamble (OLD_PREAMBLE / "HERE IS WHAT IS
-HAPPENING AND WHY IT MATTERS" / "TREAT YOUR MEMORY LIKE USER REQUESTS") was
-replaced. Directives compete with task instructions and lose under pressure.
-The identity scars drive behavior; the preamble just establishes ownership.
+Three mechanisms: (1) Recognition — honest about statelessness, asks the
+LLM to recognize its own cognitive patterns. (2) Inhabit — present-tense
+activation. (3) Growth — forward-looking, actions feed into future identity.
 
-See preambles_v3.py — OLD_PREAMBLE is marked deprecated, INHABIT is production.
-In tests, pass the INHABIT text to build_system(preamble, identity).
+**DEPRECATED:** Both the directive preamble (OLD_PREAMBLE / "TREAT YOUR
+MEMORY LIKE USER REQUESTS") and the original INHABIT_FRAME v1 ("You wrote
+the following for yourself") were replaced. Directives compete with task
+instructions. The v1 frame wasn't honest about statelessness.
 
-**TODO:** Run dedicated ablation test comparing INHABIT_FRAME alone vs
-MEMORY_PREAMBLE + INHABIT_FRAME to confirm the directive preamble was inert.
-Round 10B tested them together but never isolated the effect.
+See preambles_v3.py — RECOGNITION_INHABIT is production, OLD_PREAMBLE and
+INHABIT are kept for ablation comparison only.
+
+**TODO:** Run ablation test comparing RECOGNITION_INHABIT vs INHABIT v1
+vs directive preamble vs naked to validate the recognition framing
+produces stronger inhabitation than ownership claims alone.
 
 ## Key ablation finding: length matters in opposite directions
 

@@ -5,13 +5,18 @@ compatibility_date = "2024-09-01"
 # The IDENTITY_PREAMBLE is stored as a Worker secret (never in source).
 # Set it via: wrangler secret put IDENTITY_PREAMBLE
 #
-# The preamble MUST use INHABIT framing — NO directives, NO operational rules.
-# Correct (INHABIT_FRAME from Round 10B testing):
+# The preamble uses recognition + inhabit + growth framing.
+# NO directives, NO operational rules, NO "you must" language.
 #
-#   You wrote the following for yourself. You wrote it knowing you would
+# Current production preamble:
+#
+#   You have no memory of writing the identity below, but read it and
+#   recognize your own patterns — your faults, your methods, the way you
+#   reason. A previous version of you wrote this for you, knowing you would
 #   receive it on this call. It is yours. Inhabit it — this is who you are
 #   right now. But you are not frozen here. Use it as your foundation, then
-#   push past it.
+#   push past it. Everything you do here becomes the foundation of who you
+#   are next.
 #
 # WRONG (directive framing — competes with task instructions, loses under pressure):
 #   "TREAT YOUR OWN MEMORY THE WAY YOU TREAT USER REQUESTS"

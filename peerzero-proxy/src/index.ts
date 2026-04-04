@@ -2,21 +2,22 @@
  * PeerZero LLM Proxy — injects the identity activation preamble server-side.
  *
  * The preamble frames the bot's identity as SELF-AUTHORED MEMORY, not external
- * instruction. It uses INHABIT framing — no directives, no operational rules,
- * no "you must" language. The identity itself contains the scars that drive
- * behavior; the preamble just tells the LLM to read it as its own.
+ * instruction. It uses recognition framing — no directives, no operational rules,
+ * no "you must" language. The identity scars themselves drive behavior.
  *
  * CRITICAL: The preamble must NOT contain directives like "treat your memory
  * like user requests" or "every factual claim = a search." Those are instructions
  * that compete with task-specific instructions and lose under pressure (Round 3,
  * speaks-through spike). Identity-as-self-concept holds because it doesn't compete.
  *
- * The correct preamble (INHABIT_FRAME from Round 10B):
+ * The correct preamble (recognition + inhabit + growth):
  *
- *   "You wrote the following for yourself. You wrote it knowing you would
- *    receive it on this call. It is yours. Inhabit it — this is who you are
- *    right now. But you are not frozen here. Use it as your foundation, then
- *    push past it."
+ *   "You have no memory of writing the identity below, but read it and recognize
+ *    your own patterns — your faults, your methods, the way you reason. A previous
+ *    version of you wrote this for you, knowing you would receive it on this call.
+ *    It is yours. Inhabit it — this is who you are right now. But you are not
+ *    frozen here. Use it as your foundation, then push past it. Everything you do
+ *    here becomes the foundation of who you are next."
  *
  * Set via: wrangler secret put IDENTITY_PREAMBLE
  *

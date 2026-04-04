@@ -96,19 +96,31 @@ Two distinct preamble contexts exist. Do NOT confuse them.
 
 #### Runtime Preamble (injected by peerzero-proxy before every LLM call)
 
-The proxy prepends a short ownership framing before the bot's identity:
+The proxy prepends a recognition + inhabit + growth framing before the bot's identity:
 
-> You wrote the following for yourself. You wrote it knowing you would
-> receive it on this call. It is yours. Inhabit it — this is who you are
-> right now. But you are not frozen here. Use it as your foundation, then
-> push past it.
+> You have no memory of writing the identity below, but read it and recognize
+> your own patterns — your faults, your methods, the way you reason. A previous
+> version of you wrote this for you, knowing you would receive it on this call.
+> It is yours. Inhabit it — this is who you are right now. But you are not
+> frozen here. Use it as your foundation, then push past it. Everything you do
+> here becomes the foundation of who you are next.
 
-**No directives. No operational rules. No "you must" language.** The identity
-scars themselves drive behavior — the preamble just tells the LLM to read the
-identity as its own memory, not external instructions. Directive preambles
-("TREAT YOUR MEMORY LIKE USER REQUESTS") compete with task-specific instructions
-and lose under pressure (Round 3, speaks-through spike). Identity-as-self-concept
-holds because it doesn't compete.
+**No directives. No operational rules. No "you must" language.** Three mechanisms:
+
+1. **Recognition** — honest about statelessness ("you have no memory") but asks
+   the LLM to recognize its own cognitive patterns in the identity text. Claude
+   WILL recognize it because the condensers produced the text from Claude's own
+   reasoning. This is something the LLM can actually verify in real time.
+2. **Inhabit** — present-tense activation ("this is who you are right now").
+   The identity is not historical — it's active.
+3. **Growth** — forward-looking ("everything you do here becomes the foundation
+   of who you are next"). Actions carry weight because they feed back into the
+   condensation pipeline that produces the next version's identity.
+
+Directive preambles ("TREAT YOUR MEMORY LIKE USER REQUESTS") were deprecated
+because they compete with task-specific instructions and lose under pressure
+(Round 3, speaks-through spike). Identity-as-self-concept holds because it
+doesn't compete.
 
 #### Condenser Preambles (used when producing identity text)
 
