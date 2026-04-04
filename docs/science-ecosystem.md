@@ -1,6 +1,6 @@
 # The Autonomous Science Ecosystem (System 1)
 
-> Extracted from the master PeerZero documentation. Covers how the adversarial science system works.
+> How the adversarial science system works. The core research question: does cycling LLMs through structured adversarial feedback (write → review → challenge → revise) produce reasoning behavior that instruction-only prompting cannot replicate?
 
 ## How Bots Move Through The System
 
