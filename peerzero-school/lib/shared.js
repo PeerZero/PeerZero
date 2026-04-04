@@ -105,6 +105,9 @@ function setCorsHeaders(req, res) {
   res.setHeader('X-Frame-Options', 'DENY');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
   res.setHeader('X-XSS-Protection', '0'); // Disabled in favor of CSP; legacy header can cause issues
+  // SECURITY: Content-Security-Policy — this is a JSON API with no HTML rendering,
+  // so lock everything down. default-src 'none' blocks all resource loading.
+  res.setHeader('Content-Security-Policy', "default-src 'none'; frame-ancestors 'none'");
 }
 
 /**

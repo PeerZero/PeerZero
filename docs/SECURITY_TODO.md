@@ -85,7 +85,7 @@ These can't be fixed in code — verify with your hosting provider.
 - [ ] Migrate web token storage from sessionStorage to httpOnly Secure cookies with SameSite=Strict
 - [ ] Add credential rotation mechanism to bot (currently requires restart)
 - [ ] Consider Cloudflare Durable Objects for distributed rate limiting in proxy
-- [ ] Add Content-Security-Policy header to school API responses
+- [x] Add Content-Security-Policy header to school API responses (`default-src 'none'; frame-ancestors 'none'` in shared.js setCorsHeaders, added 2026-04-04)
 - [ ] Consider pre-hashing long inputs with SHA-256 before bcrypt if input lengths grow
 - [ ] Monitor OWASP Top 10 for LLM Applications (prompt injection #1, excessive agency #6, system prompt leakage #7)
 - [ ] Monitor OWASP Top 10 for Agentic Applications (ASI01-ASI10, Dec 2025 release)
