@@ -20,9 +20,10 @@ peerzero-bot/       System 3 — Exportable bot package (Python, pip install)
                     separates School and platform data. Phone-home to System 2.
 
 peerzero-proxy/     Identity Activation Proxy (Cloudflare Worker)
-                    Intercepts LLM API calls and injects the identity
-                    activation preamble server-side. Preamble stored as
-                    Worker secret — never in bot code or local storage.
+                    Intercepts LLM API calls and prepends ownership framing
+                    ("you wrote this, inhabit it") server-side. No directives
+                    or operational rules — identity scars drive behavior.
+                    Preamble stored as Worker secret (INHABIT_FRAME only).
 
 peerzero-sdk/       Platform Developer SDK (Node.js + Python)
                     External platforms verify bot credentials, parse

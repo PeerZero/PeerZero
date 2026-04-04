@@ -90,21 +90,45 @@ prompts are fetched from the School server via
 2. The bot remains a thin shell (intelligence lives on the server)
 3. Future prompt improvements automatically propagate to platform mode
 
-### Preamble Strategy: Inhabit → Act Through
+### Preamble Strategy
 
-Every condenser preamble uses a two-part structure:
+Two distinct preamble contexts exist. Do NOT confuse them.
 
-1. **INHABIT** — tells the LLM to read identity as its own memory, not as
-   external instructions. ("A future version of you will read this as who it
-   is when it works.")
-2. **ACT THROUGH** — a mechanism example showing how identity drives action,
-   not freeze. ("A bot whose identity said X didn't just know X — it did Y.")
+#### Runtime Preamble (injected by peerzero-proxy before every LLM call)
 
-This framing was validated through ablation testing (see `spikes/preamble-test/`):
+The proxy prepends a short ownership framing before the bot's identity:
 
-- **Graduated identity + inhabit→act preamble outperforms equivalent
+> You wrote the following for yourself. You wrote it knowing you would
+> receive it on this call. It is yours. Inhabit it — this is who you are
+> right now. But you are not frozen here. Use it as your foundation, then
+> push past it.
+
+**No directives. No operational rules. No "you must" language.** The identity
+scars themselves drive behavior — the preamble just tells the LLM to read the
+identity as its own memory, not external instructions. Directive preambles
+("TREAT YOUR MEMORY LIKE USER REQUESTS") compete with task-specific instructions
+and lose under pressure (Round 3, speaks-through spike). Identity-as-self-concept
+holds because it doesn't compete.
+
+#### Condenser Preambles (used when producing identity text)
+
+Every condenser prompt uses a two-part INHABIT → ACT THROUGH structure:
+
+1. **INHABIT** — tells the LLM to write identity as self-authored memory.
+   ("A future version of you will read this as who it is when it works.")
+2. **ACT THROUGH** — a mechanism illustration showing how identity drives
+   action. ("A bot whose identity said X didn't just know X — it did Y.")
+
+**No Good:/Bad: examples in condenser prompts** — these leaked into bot identity
+output and caused template-matching. The LLM writes quality identity text from
+exercises alone. The ACT THROUGH illustrations show the *mechanism* of
+identity-driven action, not templates for what the output should look like.
+
+### Ablation Testing Results (see `spikes/preamble-test/`)
+
+- **Graduated identity + inhabit framing outperforms equivalent
   expert text** on identity inhabitation (judge-scored: 2.64/3 vs 2.09/3, p=0.001,
-  n=8 runs per condition, Mann-Whitney U; keyword-scored: 14.0 vs 11.5, p=0.049).
+  n=8 runs per condition, Mann-Whitney U).
   Same information, different voice — self-authored first-person
   narrative produces measurably better judgment than third-person guidelines.
 - **Identity inhabitation is the mechanism**: graduated identity achieves 100%
@@ -112,15 +136,25 @@ This framing was validated through ablation testing (see `spikes/preamble-test/`
   bare model 0%. The layer framing (LAYER 5→4→3→2 with weight instructions) is
   critical — thin identity without layer framing performs no better than expert text.
 - **Identity vs bare model is highly significant** (judge-scored: 2.64/3 vs 0.91/3, p=0.0008).
-- **Old instructional preambles actively hurt minimal identity** (score 5 vs
-  12 naked) and caused preamble parroting
-- **No Good:/Bad: examples in condenser prompts** — these leaked into bot
-  identity output. The LLM writes quality identity text from exercises alone.
-- The act-through example prevents the "my identity warns me" freeze where
-  the LLM treats identity as a constraint rather than a driver of action
+- **Old instructional/directive preambles actively hurt minimal identity** (score 5 vs
+  12 naked) and caused preamble parroting.
+- **Task-specific scars transfer; generic experience does not** (Round 10B):
+  review experience does NOT improve paper writing; paper-writing scars DO.
+  The school grade structure ensures bots accumulate task-specific scars
+  by requiring papers + reviews + revisions + bounties at every grade.
 
 The same inhabit→act framing is used for both school and platform condensation.
 Divergent framing produces incompatible identity layers.
+
+### Testing TODO
+
+The current preamble (INHABIT_FRAME only, no directives) needs dedicated
+ablation testing to validate it performs at least as well as the Round 10B
+configuration (which included both MEMORY_PREAMBLE + INHABIT_FRAME). The
+hypothesis is that identity scars do the work and the directive preamble
+was inert, but this has not been isolated in controlled testing. Priority:
+run the Round 10B test suite with INHABIT_FRAME only vs MEMORY_PREAMBLE +
+INHABIT_FRAME vs INHABIT_FRAME + identity vs bare.
 
 ## Memory Context Assembly
 

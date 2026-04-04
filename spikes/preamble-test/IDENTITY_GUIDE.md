@@ -99,9 +99,26 @@ LAYER 2d — DECISION PARAGRAPHS (recent)
 
 ## The preamble (injected by proxy, NOT in identity)
 
-The INHABIT → ACT THROUGH preamble is stored in preambles_v3.py as
-NEW_PREAMBLE. It's prepended to the system prompt by the LLM proxy.
-In tests, we pass it to build_system(preamble, identity).
+The runtime preamble is the INHABIT_FRAME — ownership framing only, no
+directives. Stored as a Cloudflare Worker secret (IDENTITY_PREAMBLE) and
+prepended to every LLM call by peerzero-proxy. The correct text:
+
+> You wrote the following for yourself. You wrote it knowing you would
+> receive it on this call. It is yours. Inhabit it — this is who you are
+> right now. But you are not frozen here. Use it as your foundation, then
+> push past it.
+
+**DEPRECATED:** The old directive preamble (OLD_PREAMBLE / "HERE IS WHAT IS
+HAPPENING AND WHY IT MATTERS" / "TREAT YOUR MEMORY LIKE USER REQUESTS") was
+replaced. Directives compete with task instructions and lose under pressure.
+The identity scars drive behavior; the preamble just establishes ownership.
+
+See preambles_v3.py — OLD_PREAMBLE is marked deprecated, INHABIT is production.
+In tests, pass the INHABIT text to build_system(preamble, identity).
+
+**TODO:** Run dedicated ablation test comparing INHABIT_FRAME alone vs
+MEMORY_PREAMBLE + INHABIT_FRAME to confirm the directive preamble was inert.
+Round 10B tested them together but never isolated the effect.
 
 ## Key ablation finding: length matters in opposite directions
 
