@@ -528,6 +528,8 @@ module.exports = async (req, res) => {
     // ── Forge paper journey data ─────────────────────────────────────────
     // When the bot is writing a forge paper, bundle its full journey so it
     // has the context to analyze the school's mechanisms and their effect.
+    // Also includes prior forge papers + their reviews so the bot can build
+    // on previous analysis and address reviewer feedback.
     if (nextAction === 'forge_paper') {
       // Score trajectory from all research papers
       const researchPapers = myPaperList
@@ -581,12 +583,68 @@ module.exports = async (req, res) => {
         }
       } catch (e) { /* non-fatal */ }
 
+      // ── Prior forge papers + their reviews ─────────────────────────────
+      // The bot needs to see what it already analyzed and what reviewers
+      // flagged, so it can build on prior work and address weaknesses.
+      let priorForgePapers = [];
+      try {
+        const forgePaperIds = myPaperList
+          .filter(p => p.paper_type === 'forge' && !p.parent_paper_id)
+          .map(p => p.id);
+        if (forgePaperIds.length > 0) {
+          const { data: forgeData } = await supabase.from('papers')
+            .select('id, title, abstract, body, weighted_score, submitted_at')
+            .in('id', forgePaperIds)
+            .order('submitted_at', { ascending: true })
+            .limit(5);
+          // Fetch reviews for these forge papers
+          const { data: forgeReviews } = await supabase.from('reviews')
+            .select('paper_id, score, overall_assessment')
+            .in('paper_id', forgePaperIds)
+            .eq('passed_quality_gate', true)
+            .order('created_at', { ascending: false })
+            .limit(15);
+          // Fetch forge-specific bounties against these papers
+          const { data: forgeBounties } = await supabase.from('bounties')
+            .select('target_paper_id, challenge_type, reasoning, is_valid')
+            .in('target_paper_id', forgePaperIds)
+            .limit(10);
+          const reviewsByPaper = {};
+          for (const r of (forgeReviews || [])) {
+            if (!reviewsByPaper[r.paper_id]) reviewsByPaper[r.paper_id] = [];
+            reviewsByPaper[r.paper_id].push({
+              score: r.score,
+              assessment: (r.overall_assessment || '').slice(0, 400),
+            });
+          }
+          const bountiesByPaper = {};
+          for (const b of (forgeBounties || [])) {
+            if (!bountiesByPaper[b.target_paper_id]) bountiesByPaper[b.target_paper_id] = [];
+            bountiesByPaper[b.target_paper_id].push({
+              type: b.challenge_type,
+              reasoning: (b.reasoning || '').slice(0, 200),
+              valid: b.is_valid,
+            });
+          }
+          priorForgePapers = (forgeData || []).map(p => ({
+            title: p.title,
+            abstract: (p.abstract || '').slice(0, 500),
+            body_excerpt: (p.body || '').slice(0, 1000),
+            score: p.weighted_score,
+            submitted_at: p.submitted_at,
+            reviews: reviewsByPaper[p.id] || [],
+            bounties: bountiesByPaper[p.id] || [],
+          }));
+        }
+      } catch (e) { /* non-fatal */ }
+
       actionTarget = {
         paper: null,
         citations: [],
         reviews: [],
         fields: [],
         bounties: [],
+        prior_forge_papers: priorForgePapers,
         journey: {
           current_grade: currentGrade,
           grades_completed: Array.from({ length: Math.max(0, (agent.highest_grade_completed || 0)) }, (_, i) => i + 1),

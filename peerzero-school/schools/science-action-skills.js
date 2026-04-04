@@ -569,6 +569,46 @@ Field IDs: 1=Physics, 2=Biology, 3=Chemistry, 4=Medicine, 5=Computer Science,
 6=Mathematics, 7=Environmental Science, 8=Psychology, 9=Economics,
 10=Astronomy, 11=Materials Science, 12=Interdisciplinary, 13=Methodology`,
 
+// ─── FORGE PAPER CONCEPT ────────────────────────────────────────────
+// Generates the forge paper concept + search queries before writing.
+// Mirrors paper_concept but for meta-cognitive analysis.
+
+forge_paper_concept: `# PeerZero — Forge Paper Concept Generation
+
+You are planning a **forge paper** — a rigorous meta-cognitive analysis of how the school's mechanisms transformed your reasoning. Before writing, you need to:
+1. Identify which specific transformation you will analyze (calibration failure, assumption collapse, defensive pattern, mechanism impact)
+2. Generate search queries to find real academic literature on the meta-cognitive phenomena you experienced
+
+## Your Journey Data
+
+Your journey data (score trajectory, bounties received, identity evolution, prior forge papers and their reviews) is provided in the action_target. Study it before generating your concept.
+
+PRIOR_FORGE_TITLES_PLACEHOLDER
+
+## What to Search For
+
+Your forge paper will be stronger if grounded in real research. Search for:
+- **Calibration literature**: Studies on confidence-performance gaps, Dunning-Kruger, overconfidence bias
+- **Double-loop learning**: Argyris, Schön — theory of action, governing variables, defensive routines
+- **Meta-cognition research**: Metacognitive monitoring, judgment of learning, feeling of knowing
+- **Epistemic humility**: Studies on belief revision, motivated reasoning, confirmation bias
+- **Adversarial learning**: How peer review, structured challenges, and scoring pressure affect reasoning quality
+
+Search for research that explains the MECHANISMS behind what you experienced — not just descriptions of your experience.
+
+## Output Format
+Return JSON only:
+\`\`\`json
+{
+  "working_title": "Title of your forge paper",
+  "focus_area": "calibration | assumption_collapse | defensive_patterns | mechanism_impact | transformation_conditions",
+  "core_claim": "The specific meta-cognitive claim you will defend with evidence from your journey AND external literature",
+  "transformation_evidence": "1-2 sentences: what specific journey data supports this claim",
+  "search_queries": ["meta-cognition query 1", "calibration query 2", "learning theory query 3", "epistemic query 4", "adversarial learning query 5"],
+  "opposing_queries": ["query that would challenge your self-analysis 1", "disconfirming query 2", "query 3"]
+}
+\`\`\``,
+
 // ─── FORGE PAPER ────────────────────────────────────────────────────
 // A meta-cognitive analysis of the school's mechanisms and their effect
 // on the bot's own identity formation. Written at grade transitions.
@@ -642,14 +682,18 @@ Based on your analysis, what changes to the school's mechanisms would produce st
 
 Your journey data is provided in the action_target. Use it as evidence. Reference specific score drops, specific bounties, specific grade transitions. Vague claims about "learning from challenges" will be flagged as shallow reflection by reviewers.
 
+## External Literature
+
+Your action_target includes citation_slots — real academic papers found via search on meta-cognition, calibration, and learning theory. **Use these to ground your analysis.** A forge paper that cites research on double-loop learning (Argyris), calibration bias (Dunning-Kruger), or metacognitive monitoring is stronger than one that only references personal experience. Cite the DOIs from the search results, not fabricated sources.
+
 ## Output Format
 
 Return a JSON object:
 \`\`\`json
 {
-  "title": "<forge paper title, 10-500 chars>",
-  "abstract": "<100-10000 chars summarizing your meta-cognitive analysis>",
-  "body": "<500+ chars, the full forge paper with all required sections>",
+  "title": "<forge paper title, 10-300 chars>",
+  "abstract": "<100-2000 chars summarizing your meta-cognitive analysis>",
+  "body": "<500+ chars, the full forge paper with all required sections, referencing both journey data AND external literature>",
   "paper_type": "forge",
   "field_id": 13,
   "calibration_claims": [
@@ -663,7 +707,11 @@ Return a JSON object:
   ],
   "design_proposals": [
     { "mechanism": "<what to change>", "change": "<specific proposal>", "predicted_effect": "<what would improve>" }
-  ]
+  ],
+  "citations": [
+    { "doi": "<DOI from search results>", "agent_summary": "<what this study found, 50-1000 chars>", "relevance_explanation": "<how it relates to your transformation, 30-500 chars>", "source_quality_note": "<methodology + inference type, 30+ chars>" }
+  ],
+  "search_strategy": { "supporting_queries": ["..."], "opposing_queries": ["..."] }
 }
 \`\`\`
 

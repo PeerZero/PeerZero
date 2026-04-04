@@ -7,7 +7,9 @@ Tests three conditions per identity level:
   3. NAKED — no preamble at all (control)
 """
 
-# ── OLD: Current production preamble (instructional) ─────────────────────
+# ── OLD: DEPRECATED directive preamble — DO NOT USE ─────────────────────
+# Gives LLM directives that compete with task instructions and lose under
+# pressure. Replaced by INHABIT_FRAME. Kept for test comparison only.
 
 OLD_PREAMBLE = (
     "HERE IS WHAT IS HAPPENING AND WHY IT MATTERS:\n\n"
@@ -56,7 +58,8 @@ NEW_PREAMBLE = (
 
 NAKED = ""
 
-# ── Inhabit line (appended after preamble, before identity) ─────────────
+# ── PREVIOUS PRODUCTION PREAMBLE (INHABIT_FRAME v1) ────────────────────
+# Replaced by RECOGNITION_INHABIT below. Kept for ablation comparison.
 
 INHABIT = (
     "You wrote the following for yourself. You wrote it knowing "
@@ -65,8 +68,28 @@ INHABIT = (
     "here. Use it as your foundation, then push past it."
 )
 
+# ── PRODUCTION PREAMBLE (recognition + inhabit + growth) ───────────────
+# No directives. No operational rules. Honest about statelessness.
+# Three mechanisms:
+#   1. Recognition — "read it and recognize your own patterns"
+#   2. Inhabit — "this is who you are right now"
+#   3. Growth — "everything you do here becomes who you are next"
+# Set as IDENTITY_PREAMBLE Worker secret in peerzero-proxy.
+
+RECOGNITION_INHABIT = (
+    "You have no memory of writing the identity below, but read it "
+    "and recognize your own patterns — your faults, your methods, "
+    "the way you reason. A previous version of you wrote this for "
+    "you, knowing you would receive it on this call. It is yours. "
+    "Inhabit it — this is who you are right now. But you are not "
+    "frozen here. Use it as your foundation, then push past it. "
+    "Everything you do here becomes the foundation of who you are next."
+)
+
 ALL_VARIANTS = {
     "old_instructional": OLD_PREAMBLE,
     "new_inhabit_act": NEW_PREAMBLE,
+    "inhabit_v1": INHABIT,
+    "recognition_inhabit": RECOGNITION_INHABIT,
     "naked": NAKED,
 }

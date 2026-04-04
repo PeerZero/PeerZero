@@ -460,6 +460,19 @@ class LLMClient:
         blocking the cycle with retries is worse than skipping.
         """
         try:
+            # ── Proxy mode ──────────────────────────────────────────
+            if self._proxy_url:
+                messages = [{"role": "user", "content": user_message}]
+                result = self._proxy_call(system_prompt, messages)
+                if self._provider == "anthropic":
+                    content = result.get("content", [])
+                    return self._extract_text_from_content(content) or None
+                elif self._provider == "openai":
+                    if result.get("choices"):
+                        return result["choices"][0]["message"]["content"]
+                return None
+
+            # ── Direct mode ─────────────────────────────────────────
             client = self._get_client()
             if self._provider == "anthropic":
                 response = client.messages.create(
@@ -524,6 +537,18 @@ class LLMClient:
         if self._provider == "anthropic":
             tools = self.ANTHROPIC_SERVER_TOOLS + list(tools)
 
+        # ── Proxy mode: route tool loop through proxy ─────────────
+        # The proxy injects the identity preamble on every call.
+        # Tool loops make multiple calls — each one must go through
+        # the proxy so the preamble is present on every round.
+        if self._proxy_url:
+            result = self._proxy_tool_loop(
+                system_prompt, user_message, tools,
+                tool_executor, autonomy_gate, platform_name,
+            )
+            return result
+
+        # ── Direct mode ───────────────────────────────────────────
         client = self._get_client()
         result = ToolUseResult()
 
@@ -539,6 +564,119 @@ class LLMClient:
             )
         else:
             raise ValueError(f"Unknown LLM provider: {self._provider}")
+
+        return result
+
+    def _proxy_tool_loop(
+        self, system_prompt, user_message, tools,
+        tool_executor, autonomy_gate, platform_name,
+    ) -> "ToolUseResult":
+        """Tool use loop routed through the proxy (preamble injected every round).
+
+        Mirrors _anthropic_tool_loop but uses _proxy_call() instead of direct
+        SDK calls. Works with dicts (proxy responses) instead of SDK objects.
+        """
+        # Convert tools to Anthropic format for the proxy
+        anthropic_tools = []
+        for tool in tools:
+            anthropic_tools.append({
+                "name": tool["name"],
+                "description": tool["description"],
+                "input_schema": tool.get("input_schema", {"type": "object", "properties": {}}),
+            })
+
+        messages = [{"role": "user", "content": user_message}]
+        result = ToolUseResult()
+
+        for round_num in range(self.MAX_TOOL_ROUNDS):
+            try:
+                response = self._proxy_call(
+                    system_prompt, messages, tools=anthropic_tools,
+                )
+            except Exception as e:
+                if self._is_retryable(e):
+                    logger.warning(f"[LLM] Proxy tool loop retry: {type(e).__name__}: {str(e)[:200]}")
+                    time.sleep(self.BASE_DELAY)
+                    continue
+                raise
+
+            content = response.get("content", [])
+            stop_reason = response.get("stop_reason", "end_turn")
+
+            # Process response blocks (dicts from proxy, not SDK objects)
+            text_parts = []
+            tool_uses = []
+
+            for block in content:
+                if isinstance(block, dict):
+                    if block.get("type") == "text":
+                        text_parts.append(block.get("text", ""))
+                    elif block.get("type") == "tool_use":
+                        tool_uses.append(block)
+
+            if text_parts:
+                result.text = "\n".join(text_parts)
+
+            if not tool_uses or stop_reason == "end_turn":
+                break
+
+            # Server-side tool loop hit iteration limit — re-send to continue
+            if stop_reason == "pause_turn" and not tool_uses:
+                messages = [
+                    {"role": "user", "content": user_message},
+                    {"role": "assistant", "content": content},
+                ]
+                continue
+
+            # Execute tool calls
+            messages.append({"role": "assistant", "content": content})
+            tool_results = []
+
+            for tool_use in tool_uses:
+                tool_name = tool_use.get("name", "")
+                arguments = tool_use.get("input", {})
+                tool_use_id = tool_use.get("id", "")
+
+                # Check autonomy policy
+                if autonomy_gate:
+                    decision = autonomy_gate.check_action(
+                        "tool_call", platform_name,
+                        tool_name=tool_name,
+                    )
+                    if not decision:
+                        logger.warning(f"[AUTONOMY] Tool call blocked: {decision.reason}")
+                        tool_results.append({
+                            "type": "tool_result",
+                            "tool_use_id": tool_use_id,
+                            "content": f"Tool call blocked by autonomy policy: {decision.reason}",
+                            "is_error": True,
+                        })
+                        result.blocked_calls.append({"tool": tool_name, "reason": decision.reason})
+                        continue
+
+                # Execute the tool
+                try:
+                    tool_output = tool_executor(tool_name, arguments)
+                    output_text = str(tool_output.get("output", tool_output))
+                    is_error = tool_output.get("is_error", False)
+                except Exception as e:
+                    output_text = f"Tool execution error: {e}"
+                    is_error = True
+
+                tool_results.append({
+                    "type": "tool_result",
+                    "tool_use_id": tool_use_id,
+                    "content": output_text[:10000],
+                    "is_error": is_error,
+                })
+                result.tool_calls.append({
+                    "tool": tool_name,
+                    "arguments": arguments,
+                    "output": output_text[:500],
+                    "is_error": is_error,
+                })
+
+            messages.append({"role": "user", "content": tool_results})
 
         return result
 

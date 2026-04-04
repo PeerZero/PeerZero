@@ -130,7 +130,7 @@ module.exports = {
   // These allow per-school customization of skill.js sections.
   // Each school has its own *-core-skill.js file with the full preamble.
   coreSectionOverrides: require('./science-core-skill'),
-  actionSectionOverrides: null,
+  actionSectionOverrides: require('./science-action-skills'),
 
   // ── Mock Guard ────────────────────────────────────────────────────────
   // Science school is live — no guard.

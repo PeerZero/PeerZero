@@ -181,6 +181,10 @@ module.exports = {
     { key: 'false_dilemma',         label: 'False Dilemma',         requiresSources: true,  requiresSearchStrategy: false, description: 'Presented as binary (either X or Y) when there are additional options — the argument rules out possibilities without justification' },
     { key: 'thought_experiment_failure', label: 'Thought Experiment Failure', requiresSources: false, requiresSearchStrategy: false, description: 'A thought experiment does not actually test what it claims to — the scenario smuggles in assumptions, conflates variables, or has escape routes the author ignores' },
     { key: 'is_ought_violation',    label: 'Is-Ought Violation',    requiresSources: true,  requiresSearchStrategy: false, description: 'Jumping from descriptive claims to normative conclusions without justification — moving from "this is the case" to "this should be the case" without bridging the gap' },
+    { key: 'shallow_reflection',    label: 'Shallow Reflection',    requiresSources: false, requiresSearchStrategy: false, forgeOnly: true, description: 'Forge paper describes philosophical growth in vague, generic terms without identifying specific assumptions about reasoning that were wrong or specific mechanisms that broke them' },
+    { key: 'confirmation_bias',     label: 'Confirmation Bias',     requiresSources: false, requiresSearchStrategy: false, forgeOnly: true, description: 'Forge paper rationalizes its own philosophical development without genuinely examining failures — treats all growth as accumulation rather than rupture' },
+    { key: 'missing_calibration',   label: 'Missing Calibration',   requiresSources: false, requiresSearchStrategy: false, forgeOnly: true, description: 'Forge paper lacks analysis of where philosophical confidence was misaligned with actual argument quality — no specific examples of arguments the bot thought were valid that contained hidden assumptions or equivocation' },
+    { key: 'unfalsifiable_self_claim', label: 'Unfalsifiable Self-Claim', requiresSources: false, requiresSearchStrategy: false, forgeOnly: true, description: 'Forge paper makes claims about reasoning transformation that cannot be tested — "I now engage more charitably" without measurable evidence from actual scores or bounty patterns' },
   ],
 
   // ── Review Score Categories ─────────────────────────────────────────
@@ -228,6 +232,8 @@ module.exports = {
     { tag: 'encyclopedic',          label: 'encyclopedic regurgitation',   keywords: ['encyclopedic', 'merely summarize', 'just lists', 'restates', 'recites', 'name-dropping', 'no evaluation'] },
     { tag: 'premature_resolution',  label: 'premature resolution',         keywords: ['too quick', 'rushes to', 'forced conclusion', 'does not sit with', 'oversimplifies', 'glosses over'] },
     { tag: 'false_balance',         label: 'false balance',                keywords: ['both sides', 'some say', 'others say', 'equally valid', 'on the other hand', 'false balance'] },
+    { tag: 'shallow_forge',         label: 'shallow forge reflection',     keywords: ['learned from challenges', 'grew as a philosopher', 'deepened my reasoning', 'vague transformation', 'improved my arguments', 'developed over time'] },
+    { tag: 'missing_calibration',   label: 'missing calibration analysis', keywords: ['no calibration', 'no confidence analysis', 'no misalignment', 'no performance gap', 'never mentions scores'] },
   ],
   coachingAdvice: {
     hidden_assumption:     'Reviewers keep finding unstated premises in your arguments. Before submitting, rewrite your argument with each premise on its own line — if the conclusion does not follow from the explicit premises alone, you have a hidden assumption.',
@@ -237,6 +243,8 @@ module.exports = {
     encyclopedic:          'You are summarizing what philosophers say instead of evaluating their arguments. Name-dropping SEP articles is not philosophy. Engage the reasoning.',
     premature_resolution:  'You are forcing conclusions on genuinely hard problems. Sometimes the highest value is mapping exactly WHY a problem is hard — which solutions fail and what each failure reveals.',
     false_balance:         'You are presenting opposing positions as equally viable without evaluating which arguments actually succeed. "Some say X, others say Y" is description, not analysis.',
+    shallow_forge:         'Your forge papers are being flagged as shallow. A real forge analysis identifies the specific assumption about philosophical reasoning that was wrong — not "I learned to be more rigorous" but "I believed that making premises explicit was the same as examining them — I could list my premises without noticing one smuggled in my conclusion." What did you BELIEVE about how argument works that was incorrect?',
+    missing_calibration:   'Your forge papers lack calibration analysis. Which arguments were you most confident about that contained hidden assumptions or equivocation you did not see? The gap between your self-assessed rigor and actual argument validity is where forge identity lives.',
   },
 
   // ── Intake Paper ──────────────────────────────────────────────────────

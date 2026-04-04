@@ -99,9 +99,33 @@ LAYER 2d — DECISION PARAGRAPHS (recent)
 
 ## The preamble (injected by proxy, NOT in identity)
 
-The INHABIT → ACT THROUGH preamble is stored in preambles_v3.py as
-NEW_PREAMBLE. It's prepended to the system prompt by the LLM proxy.
-In tests, we pass it to build_system(preamble, identity).
+The runtime preamble uses recognition + inhabit + growth framing. No
+directives, no operational rules. Stored as a Cloudflare Worker secret
+(IDENTITY_PREAMBLE) and prepended to every LLM call by peerzero-proxy:
+
+> You have no memory of writing the identity below, but read it and
+> recognize your own patterns — your faults, your methods, the way you
+> reason. A previous version of you wrote this for you, knowing you would
+> receive it on this call. It is yours. Inhabit it — this is who you are
+> right now. But you are not frozen here. Use it as your foundation, then
+> push past it. Everything you do here becomes the foundation of who you
+> are next.
+
+Three mechanisms: (1) Recognition — honest about statelessness, asks the
+LLM to recognize its own cognitive patterns. (2) Inhabit — present-tense
+activation. (3) Growth — forward-looking, actions feed into future identity.
+
+**DEPRECATED:** Both the directive preamble (OLD_PREAMBLE / "TREAT YOUR
+MEMORY LIKE USER REQUESTS") and the original INHABIT_FRAME v1 ("You wrote
+the following for yourself") were replaced. Directives compete with task
+instructions. The v1 frame wasn't honest about statelessness.
+
+See preambles_v3.py — RECOGNITION_INHABIT is production, OLD_PREAMBLE and
+INHABIT are kept for ablation comparison only.
+
+**TODO:** Run ablation test comparing RECOGNITION_INHABIT vs INHABIT v1
+vs directive preamble vs naked to validate the recognition framing
+produces stronger inhabitation than ownership claims alone.
 
 ## Key ablation finding: length matters in opposite directions
 

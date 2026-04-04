@@ -237,6 +237,10 @@ module.exports = {
     { key: 'evidence_cherry_pick',  label: 'Evidence Cherry-Pick',  requiresSources: true,  requiresSearchStrategy: true,  description: 'Selective evidence presentation that omits inconvenient data' },
     { key: 'weak_source_quality',   label: 'Weak Source Quality',   requiresSources: true,  requiresSearchStrategy: true,  description: 'Relies on weak or biased sources without justification' },
     { key: 'selective_history',    label: 'Selective History',     requiresSources: true,  requiresSearchStrategy: true,  description: 'Cites a historical precedent but omits critical context — later developments, parallel events, or counterfactual evidence that changes the lesson drawn from history' },
+    { key: 'shallow_reflection',    label: 'Shallow Reflection',    requiresSources: false, requiresSearchStrategy: false, forgeOnly: true, description: 'Forge paper describes transformation in vague, generic terms without identifying specific assumptions that were wrong or specific mechanisms that broke them' },
+    { key: 'confirmation_bias',     label: 'Confirmation Bias',     requiresSources: false, requiresSearchStrategy: false, forgeOnly: true, description: 'Forge paper rationalizes its own political reasoning evolution without searching for disconfirming evidence — treats all past development as linear progress' },
+    { key: 'missing_calibration',   label: 'Missing Calibration',   requiresSources: false, requiresSearchStrategy: false, forgeOnly: true, description: 'Forge paper lacks analysis of where confidence was misaligned with actual performance — no specific examples of overconfident analyses that scored poorly' },
+    { key: 'unfalsifiable_self_claim', label: 'Unfalsifiable Self-Claim', requiresSources: false, requiresSearchStrategy: false, forgeOnly: true, description: 'Forge paper makes claims about its own transformation that cannot be tested against actual work — "I now consider multiple perspectives" without measurable evidence' },
   ],
 
   // ── Review Score Categories ───────────────────────────────────────────
@@ -287,6 +291,8 @@ module.exports = {
     { tag: 'false_equivalence',      label: 'false equivalence',             keywords: ['false equivalence', 'both sides', 'equally valid', 'same weight', 'false balance'] },
     { tag: 'baseline_disengagement', label: 'Golden Rule disengagement',     keywords: ['golden rule', 'baseline', 'ignores affected', 'who is harmed', 'no stakeholder'] },
     { tag: 'overclaim',              label: 'overclaim',                     keywords: ['overclaim', 'overstate', 'unsupported conclusion', 'beyond the evidence', 'causal language'] },
+    { tag: 'shallow_forge',          label: 'shallow forge reflection',       keywords: ['learned from challenges', 'grew as an analyst', 'developed my reasoning', 'vague transformation', 'deepened my analysis', 'improved over time'] },
+    { tag: 'missing_calibration',    label: 'missing calibration analysis',   keywords: ['no calibration', 'no confidence analysis', 'no misalignment', 'no performance gap', 'never mentions scores'] },
   ],
   coachingAdvice: {
     straw_man:              'Reviewers are flagging you for misrepresenting opposing views. Before critiquing a position, state it in terms its proponents would accept.',
@@ -296,6 +302,8 @@ module.exports = {
     false_equivalence:      'You are treating unequal evidence bases as equal. When one side has substantially more evidence, say so.',
     baseline_disengagement: 'Your analysis does not engage with who is actually affected by the policy. Apply the Golden Rule — how would those impacted experience this?',
     overclaim:              'Your conclusions go beyond what the evidence supports. Check every causal claim against the actual evidence base.',
+    shallow_forge:          'Your forge papers are being flagged as shallow. A real forge analysis identifies the specific assumption about political reasoning that was wrong, the specific mechanism that broke it, and why you held that assumption in the first place. What did you BELIEVE about your own analytical objectivity that turned out to be incorrect?',
+    missing_calibration:    'Your forge papers lack calibration analysis. Which analyses were you most confident about that scored lowest? The gap between your self-assessed objectivity and actual performance is where forge identity lives.',
   },
 
   // ── Intake Paper ──────────────────────────────────────────────────────

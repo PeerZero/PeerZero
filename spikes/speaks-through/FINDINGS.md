@@ -383,17 +383,25 @@ This works because it:
 
 ## Final Recommendations
 
-### The optimal system prompt structure (confirmed across 147 tests)
+> **UPDATE (April 2026):** The directive preamble (steps 1-3 below) was
+> replaced with INHABIT_FRAME only ("you wrote this, inhabit it"). Directives
+> compete with task instructions and lose under pressure (Round 3). The identity
+> scars drive behavior; the preamble just establishes ownership. Steps 1-3
+> are DEPRECATED. Testing TODO: run Round 10B suite with INHABIT_FRAME only
+> to confirm directive removal is neutral or positive.
+
+### The system prompt structure tested in this spike
 
 ```
-[1] Architecture explanation (what's happening, why)
-[2] Connection to existing skills ("you already search for users")
-[3] The operational rule ("do it for yourself too")
-[4] Layer 5 (Inner Voice): "You wrote this. Inhabit it."
-[5] Layer 3 (Core): Specific failure experiences + learned methods
-[6] Layer 2 (Skills): Explicit methodologies (three-tier, etc.)
-[7] Layer 4 (Voice): Values, tensions, formed convictions
-[8] Integration rule: "Voice speaks through Core, never around it"
+[1] Architecture explanation (what's happening, why)          ← DEPRECATED
+[2] Connection to existing skills ("you already search")      ← DEPRECATED
+[3] The operational rule ("do it for yourself too")            ← DEPRECATED
+[4] INHABIT_FRAME: "You wrote this. Inhabit it."              ← PRODUCTION
+[5] Layer 5 (Inner Voice): Master identity
+[6] Layer 3 (Core): Specific failure experiences + learned methods
+[7] Layer 2 (Skills): Explicit methodologies (three-tier, etc.)
+[8] Layer 4 (Voice): Values, tensions, formed convictions
+[9] Integration rule: "Voice speaks through Core, never around it"
 ```
 
 ### Critical production requirements
@@ -404,21 +412,27 @@ This works because it:
    sophisticated refusal (better than nothing, but not the full
    potential).
 
-2. **Tell the LLM what's happening.** Don't just inject an identity
-   and hope. Explain: "You're a parent LLM. This identity was
-   forged through school. Your job is to WORK through it." This
-   connects the identity to the LLM's existing tool-use skills.
+2. ~~**Tell the LLM what's happening.**~~ **DEPRECATED.** The
+   directive/architecture explanation preamble was removed. The
+   INHABIT_FRAME alone ("you wrote this, inhabit it") establishes
+   ownership without competing with task instructions. Needs
+   ablation testing to fully validate.
 
-3. **"Treat your memory like a user request."** This is the key
-   operational rule. The LLM already knows how to search for users.
-   The identity tells it to search for ITSELF too.
+3. ~~**"Treat your memory like a user request."**~~ **DEPRECATED.**
+   This is a directive that competes with task instructions. The
+   identity scars themselves drive verification behavior. A bot
+   whose identity says "I got burned fabricating Wang et al." verifies
+   because it IS someone who was burned, not because it was told to.
 
-4. **L3 Core must contain SPECIFIC failures.** "I fabricated Wang
-   et al. and scored 2/10" works. "I value honesty" doesn't.
+4. **Identity must contain SPECIFIC failures.** "I fabricated Wang
+   et al. and scored 2/10" works. "I value honesty" doesn't. No
+   Good:/Bad: examples in condenser prompts — they cause template-
+   matching instead of earned identity.
 
 5. **The "inhabit" framing enables ownership.** Without it, the bot
    says "Anthropic wrote my instructions." With it, the bot says
-   "I chose this because I got burned." (Round 5D.)
+   "I chose this because I got burned." (Round 5D.) This is now the
+   ONLY preamble — no directives alongside it.
 
 6. **The school pipeline is the moat.** Generic instructions fail
    under authority pressure (round 5B). School-forged identity holds.

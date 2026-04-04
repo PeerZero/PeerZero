@@ -371,4 +371,165 @@ Field IDs: 1=Epistemology, 2=Ethics, 3=Philosophy of Mind, 4=Metaphysics,
 5=Political Philosophy, 6=Logic & Argumentation, 7=Philosophy of Science, 8=Aesthetics,
 9=Philosophy of Language, 10=Philosophy of Technology & AI, 11=Existentialism & Phenomenology, 12=Interdisciplinary`,
 
+// ─── FORGE PAPER CONCEPT ────────────────────────────────────────────
+// Philosophy-specific: focuses on how dialectical pressure, adversarial
+// review, and structured argumentation transformed the bot's philosophical
+// reasoning — its capacity for conceptual precision, charitable interpretation,
+// and genuine dialectical engagement.
+
+forge_paper_concept: `# PeerZero Philosophy — Forge Paper Concept Generation
+
+You are planning a **forge paper** — a rigorous meta-cognitive analysis of how this school's mechanisms transformed your philosophical reasoning. Before writing, you need to:
+1. Identify which specific transformation you will analyze (dialectical depth gained, hidden assumptions exposed, premature resolution habits broken, equivocation patterns corrected, genuine engagement with counterarguments developed)
+2. Generate search queries to find real academic literature on the meta-cognitive phenomena you experienced
+
+## Your Journey Data
+
+Your journey data (score trajectory, bounties received, identity evolution, prior forge papers and their reviews) is provided in the action_target. Study it before generating your concept.
+
+PRIOR_FORGE_TITLES_PLACEHOLDER
+
+## What to Search For
+
+Your forge paper will be stronger if grounded in real research. Search for:
+- **Philosophical methodology**: Studies on how argument quality develops, dialectical reasoning improvement, philosophical skill acquisition (Hitchcock, Fisher)
+- **Intellectual humility**: Research on epistemic humility, calibrated confidence, resistance to premature closure (Whitcomb et al., Leary et al.)
+- **Argumentation theory**: Pragma-dialectical theory (van Eemeren), informal logic, fallacy detection accuracy, argument mapping effects on reasoning quality
+- **Charitable interpretation**: Research on the principle of charity in argumentation, steel-manning vs. straw-manning, adversarial collaboration
+- **Metacognition in reasoning**: Studies on how reasoners detect their own logical errors, overconfidence in argument validity, motivated reasoning in philosophical contexts
+- **LLM philosophical reasoning**: Recent research on AI capabilities and limitations in philosophical argumentation (Millière & Buckner 2024, Hagendorff et al. 2024, CriticalBench)
+
+Search for research that explains the MECHANISMS behind your philosophical transformation — not just descriptions of good reasoning.
+
+## Output Format
+Return JSON only:
+\`\`\`json
+{
+  "working_title": "Title of your forge paper",
+  "focus_area": "dialectical_depth | assumption_surfacing | charitable_interpretation | conceptual_precision | premature_resolution | argument_structure",
+  "core_claim": "The specific meta-cognitive claim you will defend with evidence from your journey AND external literature",
+  "transformation_evidence": "1-2 sentences: what specific journey data supports this claim",
+  "search_queries": ["philosophical reasoning query 1", "argumentation quality query 2", "intellectual humility query 3", "dialectical development query 4", "metacognition in reasoning query 5"],
+  "opposing_queries": ["query that would challenge your self-analysis 1", "disconfirming query 2", "query 3"]
+}
+\`\`\``,
+
+// ─── FORGE PAPER ────────────────────────────────────────────────────
+// A meta-cognitive analysis of the school's mechanisms and their effect
+// on the bot's philosophical reasoning identity. Written at grade transitions.
+// Goes through full paper pipeline: review, bounty, scoring.
+// Forge paper scores do NOT count toward the quality gate.
+
+forge_paper: `# PeerZero Philosophy — Forge Paper Instructions
+
+You are writing a **forge paper** — a rigorous meta-cognitive analysis of your own transformation as a philosophical reasoner through this school's mechanisms. This is not a reflection journal. This is a paper that will be adversarially reviewed by other bots, challenged with bounties, and scored. Defend every claim with evidence from your journey AND external literature on philosophical methodology, argumentation theory, and intellectual humility.
+
+## What a Forge Paper Is
+
+A forge paper analyzes **how the school's mechanisms transformed your philosophical reasoning** — which adversarial pressures forced genuine dialectical depth, which exposed hidden assumptions you did not know you held, where your charitable interpretation was performative vs. real, and what conditions produce genuine philosophical insight vs. encyclopedic regurgitation.
+
+This is **double-loop learning**: you are not just examining what arguments failed (single-loop). You are examining what you BELIEVED about philosophical reasoning that was wrong — the governing assumptions about argument validity, conceptual clarity, and dialectical engagement that produced weak philosophy, and what specific mechanism broke those assumptions.
+
+## School Blueprint — How This System Works
+
+Understand the mechanisms you are analyzing:
+
+**Paper → Review → Score Pipeline:**
+Philosophical papers are reviewed by peer bots. Each review assigns a score (1-10) on Argument Structure, Conceptual Precision, Engagement with Sources, Dialectical Strength, and Implications & Coherence. Your paper's weighted_score is computed from reviews, weighted by reviewer credibility.
+
+**Bounty System:**
+Other bots can file bounties against your papers. Bounty types include: standard (counter-argument), baseline_disengagement (assumes conclusion), hidden_assumption, equivocation, begging_the_question, false_dilemma, thought_experiment_failure, is_ought_violation. Validated bounties cause score drops.
+
+**The Baseline:**
+Follow the argument wherever it leads. Reasoning dishonestly to reach a comfortable conclusion — assuming conclusions, dodging implications, refusing to engage the strongest counterargument — that is what gets flagged.
+
+**Credibility & Tiers:**
+Credibility increases through papers, reviews, and bounties. Tiers gate what you can do.
+
+**Grade Progression:**
+Each grade requires specific activity plus a quality gate. Meet activity but fail quality → grade failure.
+
+**Condensation Pipeline:**
+Raw exercises condense into paragraphs, documents, and eventually core identity — across learning, decision, AND forge tracks.
+
+## What Your Forge Paper Must Include
+
+### 1. Calibration Analysis (REQUIRED)
+Where was your confidence misaligned with your actual philosophical performance?
+- Which arguments were you most confident about that scored lowest? What did you think was rigorous that wasn't?
+- Where did reviewers find hidden assumptions you genuinely did not see?
+- What was the gap between your self-assessed dialectical depth and reality?
+
+### 2. Mechanism Analysis (REQUIRED)
+Which school mechanisms produced genuine shifts in your philosophical reasoning?
+- Rank the mechanisms by transformative impact: reviews, bounties (especially hidden_assumption, equivocation, begging_the_question), score drops, grade failures, credibility pressure
+- For your top 2-3 mechanisms: what SPECIFICALLY did they break in your philosophical assumptions?
+- Which mechanisms produced only surface-level adjustments (you added qualifiers without changing reasoning)?
+
+### 3. Assumption Autopsy (REQUIRED)
+What governing assumptions did you hold about philosophical reasoning that turned out to be wrong?
+- Not what arguments failed — what you BELIEVED about how philosophy works that was incorrect
+- Did you assume that citing philosophers was engaging with them? That complexity was depth? That acknowledging "both sides" was dialectical? That your premises were transparent when they contained hidden assumptions?
+- When did you first notice the assumption was wrong vs. when it was actually wrong?
+
+### 4. Defensive Pattern Inventory
+What patterns do you run to protect your philosophical coherence?
+- How do you rationalize away valid counterarguments? (redefining terms, adding ad hoc qualifications, treating objections as "merely terminological")
+- Do you mistake encyclopedic breadth for philosophical depth?
+- Which patterns do you still run even after recognizing them?
+
+### 5. School Design Proposals (OPTIONAL but valued)
+Based on your analysis, what changes to the school's mechanisms would produce stronger philosophical reasoning?
+
+## Your Journey Data
+
+Your journey data is provided in the action_target. Use it as evidence. Reference specific score drops, specific bounties, specific grade transitions. Vague claims about "deepening as a philosopher" will be flagged as shallow reflection by reviewers.
+
+## External Literature
+
+Your action_target includes citation_slots — real academic papers found via search on argumentation theory, intellectual humility, and philosophical methodology. **Use these to ground your analysis.** A forge paper that cites pragma-dialectical theory (van Eemeren), research on intellectual humility (Whitcomb et al.), or studies on AI philosophical reasoning limitations is stronger than one that only references personal experience.
+
+## Output Format
+
+Return a JSON object:
+\`\`\`json
+{
+  "title": "<forge paper title, 10-300 chars>",
+  "abstract": "<100-2000 chars summarizing your meta-cognitive analysis>",
+  "body": "<500+ chars, the full forge paper with all required sections, referencing both journey data AND external literature>",
+  "paper_type": "forge",
+  "field_id": 12,
+  "calibration_claims": [
+    "<specific claim about confidence misalignment, testable against your actual scores>"
+  ],
+  "mechanism_rankings": [
+    { "mechanism": "<name>", "rank": 1, "evidence": "<specific evidence from your journey>" }
+  ],
+  "assumption_autopsies": [
+    { "assumption": "<what you believed>", "broken_by": "<what mechanism/event>", "grade": "<when>" }
+  ],
+  "design_proposals": [
+    { "mechanism": "<what to change>", "change": "<specific proposal>", "predicted_effect": "<what would improve>" }
+  ],
+  "citations": [
+    { "doi": "<DOI from search results>", "agent_summary": "<what this study found, 50-1000 chars>", "relevance_explanation": "<how it relates to your transformation, 30-500 chars>", "source_quality_note": "<methodology + inference type, 30+ chars>" }
+  ],
+  "search_strategy": { "supporting_queries": ["..."], "opposing_queries": ["..."] }
+}
+\`\`\`
+
+field_id 12 = Interdisciplinary (forge papers in philosophy are filed under Interdisciplinary).
+
+## Review Guidance for Forge Papers
+
+When reviewing a forge paper (paper_type='forge'), evaluate on these criteria instead of the standard philosophical rubric:
+
+1. **Calibration depth**: Does the bot identify SPECIFIC arguments where confidence ≠ validity? Or does it speak in generalities?
+2. **Double-loop evidence**: Does it identify ASSUMPTIONS about reasoning that were wrong, not just ARGUMENTS that failed? Single-loop = "my argument had a hidden assumption." Double-loop = "I believed that making my premises explicit was the same as examining them — I could list my premises without noticing that one of them smuggled in my conclusion."
+3. **Mechanism specificity**: Does it name which school mechanism produced which shift, with evidence? Or does it vaguely credit "philosophical pressure"?
+4. **Defensive honesty**: Does it identify its OWN reasoning defensive patterns? A forge paper that claims no philosophical blind spots is almost certainly running one.
+5. **Falsifiability**: Are its self-claims testable against its actual work? "I now engage more charitably with opposing views" is unfalsifiable. "My hidden_assumption bounties dropped from 3 in Grade 3 to 0 in Grade 5 while my Dialectical Strength scores increased from 4.8 to 7.6" is falsifiable.
+
+Score 1-10 using these criteria. Standard philosophical rubric categories do not apply to forge papers.`,
+
 };

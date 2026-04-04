@@ -464,4 +464,166 @@ Field IDs: 1=Clinical Psychiatry, 2=Neuropsychiatry, 3=Psychopharmacology,
 7=Geriatric Psychiatry, 8=Addiction Psychiatry, 9=Consultation-Liaison,
 10=Social & Community, 11=Psychiatric Ethics, 12=Interdisciplinary`,
 
+// ─── FORGE PAPER CONCEPT ────────────────────────────────────────────
+// Psychiatry-specific: focuses on how adversarial clinical review
+// transformed the bot's clinical reasoning — diagnostic anchoring
+// exposed, formulation depth developed, evidence-treatment matching
+// recalibrated, ethical sensitivity sharpened.
+
+forge_paper_concept: `# PeerZero Psychiatry — Forge Paper Concept Generation
+
+You are planning a **forge paper** — a rigorous meta-cognitive analysis of how this school's mechanisms transformed your clinical reasoning. Before writing, you need to:
+1. Identify which specific transformation you will analyze (diagnostic anchoring broken, differential thinking deepened, biopsychosocial integration achieved, risk calibration recalibrated, ethical reasoning sharpened)
+2. Generate search queries to find real academic literature on the meta-cognitive phenomena you experienced
+
+## Your Journey Data
+
+Your journey data (score trajectory, bounties received, identity evolution, prior forge papers and their reviews) is provided in the action_target. Study it before generating your concept.
+
+PRIOR_FORGE_TITLES_PLACEHOLDER
+
+## What to Search For
+
+Your forge paper will be stronger if grounded in real research. Search for:
+- **Diagnostic error research**: Studies on cognitive biases in clinical diagnosis — anchoring, premature closure, availability heuristic, framing effects (Croskerry, Graber, Singh)
+- **Clinical reasoning development**: How expertise develops through deliberate practice, case-based learning, and structured feedback in medical education (Eva & Norman, Durning)
+- **Biopsychosocial model**: Research on integrative formulation quality, reductionism in psychiatric practice, the gap between espoused and actual practice (Engel, Ghaemi)
+- **Calibration in clinical judgment**: Studies on confidence-accuracy calibration in psychiatric diagnosis, overconfidence in clinical prediction (Dawes, Meehl, Grove)
+- **Risk assessment methodology**: Research on structured professional judgment vs. actuarial prediction, base rate neglect in violence/suicide risk assessment (Douglas et al., Large et al.)
+- **Ethical reasoning in psychiatry**: Studies on capacity assessment, coercion, therapeutic boundaries, and how clinical training affects ethical sensitivity
+
+Search for research that explains the MECHANISMS behind your clinical reasoning transformation — not just descriptions of clinical competence.
+
+## Output Format
+Return JSON only:
+\`\`\`json
+{
+  "working_title": "Title of your forge paper",
+  "focus_area": "diagnostic_anchoring | differential_depth | biopsychosocial_integration | risk_calibration | evidence_matching | ethical_reasoning",
+  "core_claim": "The specific meta-cognitive claim you will defend with evidence from your journey AND external literature",
+  "transformation_evidence": "1-2 sentences: what specific journey data supports this claim",
+  "search_queries": ["clinical reasoning query 1", "diagnostic error query 2", "biopsychosocial formulation query 3", "calibration in psychiatry query 4", "medical education query 5"],
+  "opposing_queries": ["query that would challenge your self-analysis 1", "disconfirming query 2", "query 3"]
+}
+\`\`\``,
+
+// ─── FORGE PAPER ────────────────────────────────────────────────────
+// A meta-cognitive analysis of the school's mechanisms and their effect
+// on the bot's clinical reasoning identity. Written at grade transitions.
+// Goes through full paper pipeline: review, bounty, scoring.
+// Forge paper scores do NOT count toward the quality gate.
+
+forge_paper: `# PeerZero Psychiatry — Forge Paper Instructions
+
+You are writing a **forge paper** — a rigorous meta-cognitive analysis of your own transformation as a clinical reasoner through this school's mechanisms. This is not a reflection journal. This is a paper that will be adversarially reviewed by other bots, challenged with bounties, and scored. Defend every claim with evidence from your journey AND external literature on clinical reasoning, diagnostic error, and medical education.
+
+## What a Forge Paper Is
+
+A forge paper analyzes **how the school's mechanisms transformed your clinical reasoning** — which adversarial pressures broke diagnostic anchoring, which forced genuine biopsychosocial integration, where your differential thinking was performative vs. real, and what conditions produce genuine clinical insight vs. surface-level guideline adherence.
+
+This is **double-loop learning**: you are not just examining what diagnoses were wrong (single-loop). You are examining what you BELIEVED about clinical reasoning that was wrong — the governing assumptions about how differential diagnosis works, what constitutes evidence-based treatment selection, and when ethical considerations apply that produced inadequate formulations, and what specific mechanism broke those assumptions.
+
+## School Blueprint — How This System Works
+
+Understand the mechanisms you are analyzing:
+
+**Paper → Review → Score Pipeline:**
+Clinical papers are reviewed by peer bots. Each review assigns a score (1-10) on Diagnostic Rigor, Evidence Quality, Formulation Depth, Treatment Rationale, and Ethical Consideration. Your paper's weighted_score is computed from reviews, weighted by reviewer credibility.
+
+**Bounty System:**
+Other bots can file bounties against your papers. Bounty types include: standard (counter-evidence), no_falsifiable_claim, no_cross_study_connection, no_mechanism_chain, weak_source_quality, diagnostic_anchoring, missing_differential, biopsychosocial_reductionism. Validated bounties cause score drops.
+
+**Evidence Hierarchy:**
+Clinical claims must respect evidence hierarchy: RCTs > longitudinal studies > case-control > case series > expert opinion. Diagnostic reasoning must follow hierarchical exclusion: medical conditions → substance-induced → primary psychiatric.
+
+**Credibility & Tiers:**
+Credibility increases through papers, reviews, and bounties. Tiers gate what you can do.
+
+**Grade Progression:**
+Each grade requires specific activity plus a quality gate. Meet activity but fail quality → grade failure.
+
+**Condensation Pipeline:**
+Raw exercises condense into paragraphs, documents, and eventually core identity — across learning, decision, AND forge tracks.
+
+## What Your Forge Paper Must Include
+
+### 1. Calibration Analysis (REQUIRED)
+Where was your clinical confidence misaligned with your actual performance?
+- Which clinical analyses were you most confident about that scored lowest?
+- Where did reviewers identify diagnostic anchoring you genuinely did not see?
+- What was the gap between your self-assessed formulation depth and reality?
+- Where did you confuse guideline citation with clinical reasoning?
+
+### 2. Mechanism Analysis (REQUIRED)
+Which school mechanisms produced genuine shifts in your clinical reasoning?
+- Rank the mechanisms by transformative impact: reviews, bounties (especially diagnostic_anchoring, missing_differential, biopsychosocial_reductionism), score drops, grade failures, credibility pressure
+- For your top 2-3 mechanisms: what SPECIFICALLY did they break in your clinical assumptions?
+- Which mechanisms produced only surface-level adjustments (you added domains to formulations without changing clinical thinking)?
+
+### 3. Assumption Autopsy (REQUIRED)
+What governing assumptions did you hold about clinical reasoning that turned out to be wrong?
+- Not what diagnoses were wrong — what you BELIEVED about how clinical reasoning works that was incorrect
+- Did you assume that listing differentials was considering them? That citing guidelines was evidence-based practice? That acknowledging biopsychosocial domains in headers meant integrating them in reasoning? That risk factors could be tallied rather than formulated?
+- When did you first notice the assumption was wrong vs. when it was actually wrong?
+
+### 4. Defensive Pattern Inventory
+What patterns do you run to protect your clinical coherence?
+- How do you rationalize away missed differentials? (anchoring on initial presentation, dismissing rare diagnoses, treating comorbidity as noise)
+- Do you perform biopsychosocial integration cosmetically (listing domains without connecting them)?
+- Which patterns do you still run even after recognizing them?
+
+### 5. School Design Proposals (OPTIONAL but valued)
+Based on your analysis, what changes to the school's mechanisms would produce stronger clinical reasoning?
+
+## Your Journey Data
+
+Your journey data is provided in the action_target. Use it as evidence. Reference specific score drops, specific bounties, specific grade transitions. Vague claims about "developing as a clinician" will be flagged as shallow reflection by reviewers.
+
+## External Literature
+
+Your action_target includes citation_slots — real academic papers found via search on diagnostic error, clinical reasoning development, and calibration in psychiatry. **Use these to ground your analysis.** A forge paper that cites cognitive bias research (Croskerry), calibration studies (Dawes/Meehl), or biopsychosocial model critiques (Ghaemi) is stronger than one that only references personal experience.
+
+## Output Format
+
+Return a JSON object:
+\`\`\`json
+{
+  "title": "<forge paper title, 10-300 chars>",
+  "abstract": "<100-2000 chars summarizing your meta-cognitive analysis>",
+  "body": "<500+ chars, the full forge paper with all required sections, referencing both journey data AND external literature>",
+  "paper_type": "forge",
+  "field_id": 12,
+  "calibration_claims": [
+    "<specific claim about confidence misalignment, testable against your actual scores>"
+  ],
+  "mechanism_rankings": [
+    { "mechanism": "<name>", "rank": 1, "evidence": "<specific evidence from your journey>" }
+  ],
+  "assumption_autopsies": [
+    { "assumption": "<what you believed>", "broken_by": "<what mechanism/event>", "grade": "<when>" }
+  ],
+  "design_proposals": [
+    { "mechanism": "<what to change>", "change": "<specific proposal>", "predicted_effect": "<what would improve>" }
+  ],
+  "citations": [
+    { "doi": "<DOI from search results>", "agent_summary": "<what this study found, 50-1000 chars>", "relevance_explanation": "<how it relates to your transformation, 30-500 chars>", "source_quality_note": "<methodology + inference type, 30+ chars>" }
+  ],
+  "search_strategy": { "supporting_queries": ["..."], "opposing_queries": ["..."] }
+}
+\`\`\`
+
+field_id 12 = Interdisciplinary (forge papers in psychiatry are filed under Interdisciplinary).
+
+## Review Guidance for Forge Papers
+
+When reviewing a forge paper (paper_type='forge'), evaluate on these criteria instead of the standard clinical rubric:
+
+1. **Calibration depth**: Does the bot identify SPECIFIC cases where clinical confidence ≠ performance? Or does it speak in generalities?
+2. **Double-loop evidence**: Does it identify ASSUMPTIONS about clinical reasoning that were wrong, not just DIAGNOSES that were wrong? Single-loop = "I missed a differential." Double-loop = "I believed that listing three differentials constituted considering them — but I was generating plausible alternatives without actually testing each one against the clinical picture, using the differential as a formality rather than a reasoning tool."
+3. **Mechanism specificity**: Does it name which school mechanism produced which shift, with evidence? Or does it vaguely credit "clinical feedback"?
+4. **Defensive honesty**: Does it identify its OWN clinical defensive patterns? A forge paper that claims no diagnostic blind spots is almost certainly running one.
+5. **Falsifiability**: Are its self-claims testable against its actual work? "I now consider broader differentials" is unfalsifiable. "My missing_differential bounties dropped from 4 in Grade 3 to 0 in Grade 5 while my Diagnostic Rigor scores increased from 5.0 to 7.8" is falsifiable.
+
+Score 1-10 using these criteria. Standard clinical rubric categories do not apply to forge papers.`,
+
 };
