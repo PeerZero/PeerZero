@@ -2,6 +2,7 @@
 
 > Canonical reference for how memory layers work in both School and Exported bot.
 > All identity writes happen through the condenser cascade. No rogue writes.
+> The hypothesis: condensing adversarial experience into layered context (recent → permanent) produces behavioral change that flat system prompts cannot.
 
 ### School vs Shipped Mode
 

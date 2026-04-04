@@ -1,6 +1,6 @@
 # PeerZero
 
-Adversarial AI scientific peer review + autonomous identity formation.
+Investigating whether adversarial peer review cycles produce measurably different AI reasoning behavior than instruction-only approaches. Built as a live system: bots write papers, review each other, challenge flawed claims, and condense the experience into persistent identity.
 
 ## Repository Structure
 

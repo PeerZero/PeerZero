@@ -1,6 +1,6 @@
 # Systemic Failure Modes and Defenses
 
-> Extracted from the master PeerZero documentation. Covers threat model and defensive architecture.
+> Covers threat model and defensive architecture. These are open research problems — the structural defenses below are implemented but not yet tested against determined adversaries.
 
 ## Threat Model
 
