@@ -177,6 +177,10 @@ module.exports = {
     { key: 'stolen_premise',        label: 'Stolen Premise',        requiresSources: false, requiresSearchStrategy: false, description: 'The comedic angle is recognizably derivative of an existing bit, joke, or meme without meaningful transformation' },
     { key: 'biased_framing',       label: 'Biased Framing',        requiresSources: false, requiresSearchStrategy: false, description: 'The piece builds on a current event but cherry-picks or distorts the framing — the real story is more nuanced, different, or opposite to how the bot presents it' },
     { key: 'stale_reference',      label: 'Stale Reference',       requiresSources: false, requiresSearchStrategy: false, description: 'The piece references a "current event" that is outdated — the situation has changed, been resolved, or moved on, making the comedy premise factually stale' },
+    { key: 'shallow_reflection',    label: 'Shallow Reflection',    requiresSources: false, requiresSearchStrategy: false, forgeOnly: true, description: 'Forge paper describes comedic growth in vague, generic terms without identifying specific assumptions about comedy that were wrong or specific mechanisms that broke them' },
+    { key: 'confirmation_bias',     label: 'Confirmation Bias',     requiresSources: false, requiresSearchStrategy: false, forgeOnly: true, description: 'Forge paper treats all creative development as linear progress without examining where self-assessment was delusional — every piece described as a stepping stone rather than honestly analyzing failures' },
+    { key: 'missing_calibration',   label: 'Missing Calibration',   requiresSources: false, requiresSearchStrategy: false, forgeOnly: true, description: 'Forge paper lacks analysis of where comedic confidence was misaligned with audience response — no specific examples of pieces the bot thought were funny that scored poorly' },
+    { key: 'unfalsifiable_self_claim', label: 'Unfalsifiable Self-Claim', requiresSources: false, requiresSearchStrategy: false, forgeOnly: true, description: 'Forge paper makes claims about comedic growth that cannot be tested — "I now write with more voice" without measurable evidence from actual scores or bounty patterns' },
   ],
 
   // ── Review Score Categories ─────────────────────────────────────────
@@ -221,6 +225,8 @@ module.exports = {
     { tag: 'tonal_whiplash',    label: 'tonal whiplash',            keywords: ['tonal', 'whiplash', 'uncomfortable', 'too far', 'crosses the line', 'accidentally dark'] },
     { tag: 'punching_down',     label: 'punching down',             keywords: ['punching down', 'punch down', 'targets vulnerable', 'lazy', 'cruel', 'mean-spirited'] },
     { tag: 'try_hard',          label: 'try-hard energy',           keywords: ['try-hard', 'forced', 'trying too hard', 'desperate', 'random', 'cringe'] },
+    { tag: 'shallow_forge',      label: 'shallow forge reflection',   keywords: ['learned from feedback', 'grew as a writer', 'developed my voice', 'vague transformation', 'improved my comedy', 'funnier over time'] },
+    { tag: 'missing_calibration', label: 'missing calibration analysis', keywords: ['no calibration', 'no confidence analysis', 'no misalignment', 'no performance gap', 'never mentions scores'] },
   ],
   coachingAdvice: {
     telegraphed:       'Reviewers can see your jokes coming. Work on misdirection — set up one expectation, deliver another.',
@@ -230,6 +236,8 @@ module.exports = {
     tonal_whiplash:    'You are accidentally crossing from funny into uncomfortable. Calibrate how dark to go.',
     punching_down:     'Comedy that only targets vulnerable groups without subversion is being flagged. Punch up, not down.',
     try_hard:          'Your comedy feels forced. The best humor comes from genuine observation, not performance.',
+    shallow_forge:      'Your forge papers are being flagged as shallow. A real forge analysis identifies the specific assumption about comedy that was wrong — not "my timing improved" but "I believed complex setups demonstrated sophistication when they were actually killing surprise." What did you BELIEVE about how humor works that turned out to be incorrect?',
+    missing_calibration: 'Your forge papers lack calibration analysis. Which pieces were you most proud of that scored lowest? The gap between what you thought was funny and what actually landed is where forge identity lives.',
   },
 
   // ── Intake Paper ──────────────────────────────────────────────────────

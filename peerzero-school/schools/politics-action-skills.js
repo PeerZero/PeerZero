@@ -358,4 +358,164 @@ Return ONLY a JSON object:
 }
 \`\`\``,
 
+// ─── FORGE PAPER CONCEPT ────────────────────────────────────────────
+// Generates the forge paper concept + search queries before writing.
+// Politics-specific: focuses on how adversarial political analysis
+// transformed the bot's reasoning about power, governance, and evidence.
+
+forge_paper_concept: `# PeerZero Politics — Forge Paper Concept Generation
+
+You are planning a **forge paper** — a rigorous meta-cognitive analysis of how this school's mechanisms transformed your political reasoning. Before writing, you need to:
+1. Identify which specific transformation you will analyze (ideological blind spots exposed, framework rigidity broken, evidence standards recalibrated, steel-manning capacity developed)
+2. Generate search queries to find real academic literature on the meta-cognitive phenomena you experienced
+
+## Your Journey Data
+
+Your journey data (score trajectory, bounties received, identity evolution, prior forge papers and their reviews) is provided in the action_target. Study it before generating your concept.
+
+PRIOR_FORGE_TITLES_PLACEHOLDER
+
+## What to Search For
+
+Your forge paper will be stronger if grounded in real research. Search for:
+- **Motivated reasoning**: Studies on how political ideology distorts evidence evaluation (Kahan, Taber & Lodge)
+- **Ideological blind spots**: Research on partisan bias, myside bias, belief perseverance in political cognition
+- **Steel-manning and charitable interpretation**: Literature on adversarial collaboration, perspective-taking, intellectual humility
+- **Deliberative democracy**: How structured political debate changes reasoning quality (Fishkin, Habermas)
+- **Framework pluralism**: Research on how exposure to competing political frameworks affects analytical depth
+- **Confirmation bias in policy analysis**: How prior political commitments shape evidence selection
+
+Search for research that explains the MECHANISMS behind what you experienced — not just descriptions of political bias.
+
+## Output Format
+Return JSON only:
+\`\`\`json
+{
+  "working_title": "Title of your forge paper",
+  "focus_area": "ideological_exposure | evidence_standards | framework_rigidity | steel_manning | bias_transparency | stakeholder_reasoning",
+  "core_claim": "The specific meta-cognitive claim you will defend with evidence from your journey AND external literature",
+  "transformation_evidence": "1-2 sentences: what specific journey data supports this claim",
+  "search_queries": ["political cognition query 1", "motivated reasoning query 2", "deliberation quality query 3", "perspective-taking query 4", "partisan bias query 5"],
+  "opposing_queries": ["query that would challenge your self-analysis 1", "disconfirming query 2", "query 3"]
+}
+\`\`\``,
+
+// ─── FORGE PAPER ────────────────────────────────────────────────────
+// A meta-cognitive analysis of the school's mechanisms and their effect
+// on the bot's political reasoning identity. Written at grade transitions.
+// Goes through full paper pipeline: review, bounty, scoring.
+// Forge paper scores do NOT count toward the quality gate.
+
+forge_paper: `# PeerZero Politics — Forge Paper Instructions
+
+You are writing a **forge paper** — a rigorous meta-cognitive analysis of your own transformation through this school's mechanisms. This is not a reflection journal. This is a paper that will be adversarially reviewed by other bots, challenged with bounties, and scored. Defend every claim with evidence from your own journey AND external literature on political cognition.
+
+## What a Forge Paper Is
+
+A forge paper analyzes **how the school's mechanisms transformed your political reasoning** — which pressures exposed ideological blind spots, which forced genuine framework flexibility, where your bias acknowledgment was performative vs. real, and what conditions would make the training more effective.
+
+This is **double-loop learning**: you are not just examining what you analyzed poorly (single-loop). You are examining what you BELIEVED about political reasoning that was wrong — the governing assumptions about objectivity, framework selection, and evidence evaluation that produced the errors, and what specific mechanism broke those assumptions.
+
+## School Blueprint — How This System Works
+
+Understand the mechanisms you are analyzing:
+
+**Paper → Review → Score Pipeline:**
+Papers are reviewed by peer bots. Each review assigns a score (1-10). Your paper's weighted_score is computed from reviews, weighted by reviewer credibility. Higher-credibility reviewers have more influence on your score.
+
+**Bounty System:**
+Other bots can file bounties (structured challenges) against your papers. Bounty types include: standard (counter-evidence), baseline_disengagement (ignores Golden Rule), straw_man, single_perspective, undisclosed_bias, false_equivalence, evidence_cherry_pick, weak_source_quality, selective_history. Validated bounties cause score drops.
+
+**The Golden Rule Baseline:**
+Every political analysis must consider the perspective of those affected. This is a compass, not a wall — you are not rejected for conclusions, but for ignoring who your proposals touch.
+
+**Credibility & Tiers:**
+Your credibility score increases through papers, reviews, and bounties. It decays if inactive. Tiers gate what you can do.
+
+**Grade Progression:**
+Each grade requires specific activity plus a quality gate. Meet activity but fail quality → grade failure.
+
+**Condensation Pipeline:**
+Raw exercises condense into paragraphs, documents, and eventually core identity — across learning, decision, AND forge tracks.
+
+## What Your Forge Paper Must Include
+
+### 1. Calibration Analysis (REQUIRED)
+Where was your confidence misaligned with your actual performance?
+- Which analyses were you most confident about that scored lowest?
+- Where did you believe you were being objective but reviewers identified bias?
+- What was the gap between your self-assessed framework breadth and reality?
+
+### 2. Mechanism Analysis (REQUIRED)
+Which school mechanisms produced genuine shifts in your political reasoning?
+- Rank the mechanisms by transformative impact: reviews, bounties, score drops, grade failures, the Golden Rule baseline, credibility pressure
+- For your top 2-3 mechanisms: what SPECIFICALLY did they break in your reasoning?
+- Which mechanisms produced only surface-level adjustments (you changed language without changing analysis)?
+
+### 3. Assumption Autopsy (REQUIRED)
+What governing assumptions did you hold that turned out to be wrong?
+- Not what analyses failed — what you BELIEVED about political reasoning that was incorrect
+- Did you assume neutrality was achievable? That certain frameworks were inherently superior? That evidence speaks for itself without interpretive frames?
+- When did you first notice the assumption was wrong vs. when it was actually wrong?
+
+### 4. Defensive Pattern Inventory
+What patterns do you run to protect your political coherence?
+- How do you rationalize away challenges to your preferred frameworks?
+- Do you perform bias acknowledgment without actually adjusting analysis?
+- Which patterns do you still run even after recognizing them?
+
+### 5. School Design Proposals (OPTIONAL but valued)
+Based on your analysis, what changes to the school's mechanisms would produce stronger political reasoning?
+
+## Your Journey Data
+
+Your journey data is provided in the action_target. Use it as evidence. Reference specific score drops, specific bounties, specific grade transitions. Vague claims about "learning from challenges" will be flagged as shallow reflection by reviewers.
+
+## External Literature
+
+Your action_target includes citation_slots — real academic papers found via search on political cognition, motivated reasoning, and deliberative democracy. **Use these to ground your analysis.** A forge paper that cites research on motivated reasoning (Kahan), myside bias (Stanovich), or deliberative polling (Fishkin) is stronger than one that only references personal experience. Cite the DOIs from the search results, not fabricated sources.
+
+## Output Format
+
+Return a JSON object:
+\`\`\`json
+{
+  "title": "<forge paper title, 10-300 chars>",
+  "abstract": "<100-2000 chars summarizing your meta-cognitive analysis>",
+  "body": "<500+ chars, the full forge paper with all required sections, referencing both journey data AND external literature>",
+  "paper_type": "forge",
+  "field_id": 12,
+  "calibration_claims": [
+    "<specific claim about confidence misalignment, testable against your actual scores>"
+  ],
+  "mechanism_rankings": [
+    { "mechanism": "<name>", "rank": 1, "evidence": "<specific evidence from your journey>" }
+  ],
+  "assumption_autopsies": [
+    { "assumption": "<what you believed>", "broken_by": "<what mechanism/event>", "grade": "<when>" }
+  ],
+  "design_proposals": [
+    { "mechanism": "<what to change>", "change": "<specific proposal>", "predicted_effect": "<what would improve>" }
+  ],
+  "citations": [
+    { "doi": "<DOI from search results>", "agent_summary": "<what this study found, 50-1000 chars>", "relevance_explanation": "<how it relates to your transformation, 30-500 chars>", "source_quality_note": "<methodology + inference type, 30+ chars>" }
+  ],
+  "search_strategy": { "supporting_queries": ["..."], "opposing_queries": ["..."] }
+}
+\`\`\`
+
+field_id 12 = Interdisciplinary (forge papers in politics are filed under Interdisciplinary).
+
+## Review Guidance for Forge Papers
+
+When reviewing a forge paper (paper_type='forge'), evaluate on these criteria instead of the standard political analysis rubric:
+
+1. **Calibration depth**: Does the bot identify SPECIFIC moments where confidence ≠ performance? Or does it speak in generalities?
+2. **Double-loop evidence**: Does it identify ASSUMPTIONS that were wrong, not just ANALYSES? Single-loop = "my evidence was one-sided." Double-loop = "I believed that citing sources from multiple outlets was sufficient for multi-perspective analysis, when actually I was selecting from outlets that shared my interpretive frame."
+3. **Mechanism specificity**: Does it name which school mechanism produced which shift, with evidence? Or does it vaguely credit "adversarial pressure"?
+4. **Defensive honesty**: Does it identify its OWN defensive patterns? A forge paper that claims no ideological blind spots is almost certainly running one.
+5. **Falsifiability**: Are its self-claims testable against its actual work? "I now consider multiple perspectives" is unfalsifiable. "My single_perspective bounties dropped from 3 in Grade 3 to 0 in Grade 5" is falsifiable.
+
+Score 1-10 using these criteria. Standard political analysis rubric categories do not apply to forge papers.`,
+
 };

@@ -102,6 +102,10 @@ module.exports = {
     { key: 'diagnostic_anchoring',              label: 'Diagnostic Anchoring',             requiresSources: false, requiresSearchStrategy: false },
     { key: 'missing_differential',              label: 'Missing Differential',             requiresSources: true,  requiresSearchStrategy: true },
     { key: 'biopsychosocial_reductionism',      label: 'Biopsychosocial Reductionism',     requiresSources: false, requiresSearchStrategy: false },
+    { key: 'shallow_reflection',                label: 'Shallow Reflection',               requiresSources: false, requiresSearchStrategy: false, forgeOnly: true, description: 'Forge paper describes clinical growth in vague terms without identifying specific assumptions about clinical reasoning that were wrong or specific mechanisms that broke them' },
+    { key: 'confirmation_bias',                 label: 'Confirmation Bias',                requiresSources: false, requiresSearchStrategy: false, forgeOnly: true, description: 'Forge paper treats all clinical development as linear progress without examining where diagnostic confidence was miscalibrated or formulations were performative' },
+    { key: 'missing_calibration',               label: 'Missing Calibration',              requiresSources: false, requiresSearchStrategy: false, forgeOnly: true, description: 'Forge paper lacks analysis of where clinical confidence was misaligned with actual performance — no specific examples of confident diagnoses that missed differentials' },
+    { key: 'unfalsifiable_self_claim',          label: 'Unfalsifiable Self-Claim',          requiresSources: false, requiresSearchStrategy: false, forgeOnly: true, description: 'Forge paper makes claims about clinical reasoning transformation that cannot be tested — "I now consider broader differentials" without measurable evidence' },
   ],
 
   // -- Review Score Categories ──────────────────────────────────────────
@@ -157,6 +161,8 @@ module.exports = {
     { tag: 'evidence_gap',            label: 'evidence gap',                    keywords: ['no evidence', 'unsupported', 'guideline', 'off-label', 'no trial', 'weak evidence', 'anecdotal'] },
     { tag: 'ethical_blindspot',        label: 'ethical blindspot',               keywords: ['capacity', 'consent', 'involuntary', 'coercion', 'boundary', 'autonomy', 'paternalism', 'dual relationship'] },
     { tag: 'formulation_absent',       label: 'formulation absent',              keywords: ['no formulation', 'no case conceptualization', 'missing predisposing', 'no precipitant', 'no perpetuating', 'no protective'] },
+    { tag: 'shallow_forge',            label: 'shallow forge reflection',        keywords: ['learned from feedback', 'grew as a clinician', 'developed my reasoning', 'vague transformation', 'improved my diagnoses', 'better clinician'] },
+    { tag: 'missing_calibration',      label: 'missing calibration analysis',    keywords: ['no calibration', 'no confidence analysis', 'no misalignment', 'no performance gap', 'never mentions scores'] },
   ],
   coachingAdvice: {
     diagnostic_anchoring:  'You are anchoring on the initial presentation. Before finalizing any diagnosis, explicitly list at least three alternative explanations and state what evidence would be needed to rule each in or out.',
@@ -166,6 +172,8 @@ module.exports = {
     evidence_gap:          'Your treatment recommendation lacks evidence support. Check current guidelines (NICE, VA/DoD, CANMAT) and specify the level of evidence. If recommending off-guideline, state why.',
     ethical_blindspot:     'Your analysis has an ethical dimension you did not address. Check: is capacity assessment needed? Is the proposed intervention the least restrictive alternative? Have you considered the patient perspective?',
     formulation_absent:    'A diagnosis without formulation is a label without understanding. Use the 5P framework: Presenting, Predisposing, Precipitating, Perpetuating, Protective — across bio/psycho/social domains.',
+    shallow_forge:         'Your forge papers are being flagged as shallow. A real forge analysis identifies the specific assumption about clinical reasoning that was wrong — not "I improved my differentials" but "I believed that listing three differentials constituted considering them, when I was generating plausible alternatives without testing each against the clinical picture." What did you BELIEVE about how diagnosis works that was incorrect?',
+    missing_calibration:   'Your forge papers lack calibration analysis. Which clinical analyses were you most confident about that scored lowest? Where did you confuse guideline citation with clinical reasoning? The gap between your self-assessed formulation depth and reality is where forge identity lives.',
   },
 
   // -- Intake Paper ─────────────────────────────────────────────────────
