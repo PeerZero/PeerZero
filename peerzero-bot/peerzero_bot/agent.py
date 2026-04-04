@@ -37,7 +37,7 @@ from .config import BotConfig
 from .memory import MemoryManager
 from .adapters.school import SchoolAdapter, extract_json
 from .adapters.base import PlatformAction, TaskMessage, TaskResponse
-from .utils import sanitize_untrusted, safe_error_msg
+from .utils import sanitize_untrusted, safe_error_msg, truncate_json
 from .adapters.mcp import MCPAdapter
 from .prompts import PromptBuilder
 from .identity import build_agent_card, build_identity_summary
@@ -300,7 +300,7 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
         # or returns unexpected data.
         _VALID_ACTIONS = {
             "review", "submit_paper", "file_bounty", "revise",
-            "respond", "rebut", "reaffirm", "sleep",
+            "respond", "rebut", "reaffirm", "forge_paper", "sleep",
         }
         if next_action not in _VALID_ACTIONS:
             logger.warning(
@@ -315,7 +315,7 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
         _ACTION_SKILL_MAP = {
             "revise": "revise", "submit_paper": "paper", "file_bounty": "bounty",
             "respond": "respond", "rebut": "rebut", "review": "review",
-            "reaffirm": "reaffirm",
+            "reaffirm": "reaffirm", "forge_paper": "forge_paper",
         }
         skill_action = _ACTION_SKILL_MAP.get(next_action)
         action_skill = ""
@@ -330,6 +330,9 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
         if next_action == "submit_paper":
             # Multi-step: concept → search → write. Stays specialized.
             result = self._do_submit_paper(system_prompt, profile, action_skill)
+        elif next_action == "forge_paper":
+            # Multi-step: concept → search → write (mirrors submit_paper flow).
+            result = self._do_forge_paper(system_prompt, profile, action_skill)
         elif next_action in self._ACTION_CONFIGS:
             # Generic: server provides target, bot calls LLM, submits result
             result = self._execute_action(system_prompt, profile, action_skill)
@@ -867,6 +870,71 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
             return result
         except Exception as e:
             logger.warning(f"[PAPER] Failed: {e}")
+            return None
+
+    def _do_forge_paper(self, system_prompt: str, profile: dict, action_skill: str = "") -> dict | None:
+        """Multi-step forge paper: concept → search → write. Mirrors _do_submit_paper.
+
+        The forge paper is a meta-cognitive analysis grounded in both the bot's
+        own journey data AND external literature on calibration, meta-cognition,
+        and learning theory. All prompts come from the server (forge_paper_concept
+        + forge_paper skills). The bot just orchestrates the steps.
+        """
+        action_target = profile.get("action_target", {})
+
+        # Step 1: Generate concept — server provides format via forge_paper_concept skill
+        concept_skill = self.school.download_skill_action("forge_paper_concept")
+        # Substitute prior forge titles so the bot avoids repeating topics
+        prior_forge = action_target.get("prior_forge_papers", [])
+        prior_titles = [str(p.get("title", ""))[:60] for p in prior_forge[:5]]
+        avoid = f"Do NOT repeat these topics: {'; '.join(prior_titles)}" if prior_titles else ""
+        concept_skill = concept_skill.replace("PRIOR_FORGE_TITLES_PLACEHOLDER", avoid)
+
+        # Include journey + prior forge papers as context for concept generation
+        journey_json = truncate_json(json.dumps(action_target, indent=2, default=str), 12000)
+        concept_prompt = f"{concept_skill}\n\nYour journey and prior forge papers:\n{journey_json}"
+
+        concept_text = self.llm.call(system_prompt, concept_prompt)
+        concept = extract_json(concept_text) or {}
+        all_queries = concept.get("search_queries", []) + concept.get("opposing_queries", [])
+
+        # Step 2: Search real academic APIs for meta-cognition / calibration literature
+        if not all_queries:
+            all_queries = ["meta-cognition calibration bias", "double-loop learning Argyris"]
+        paper_context = concept.get("core_claim", concept.get("working_title", ""))
+        evidence_papers = search_and_summarize(all_queries, paper_context, self.llm_fast)
+        logger.info(f"[FORGE] Found {len(evidence_papers)} papers from search")
+
+        # Step 3: Generate forge paper — server provides format via forge_paper skill
+        # Bundle concept + citations + journey into action_target
+        action_target["concept"] = concept
+        action_target["citation_slots"] = evidence_papers
+        user_msg = self.prompts.build_action_prompt("forge_paper", action_skill, action_target=action_target)
+        forge_keys = ["title", "abstract", "body", "paper_type", "field_id",
+                      "calibration_claims", "mechanism_rankings", "assumption_autopsies",
+                      "design_proposals", "citations", "search_strategy"]
+        paper_data = self.llm.call_json(system_prompt, user_msg, json_keys=forge_keys)
+
+        if not paper_data or "title" not in paper_data:
+            logger.warning("[FORGE] Failed to get valid JSON from LLM")
+            return None
+
+        # Ensure forge paper type and field
+        paper_data["paper_type"] = "forge"
+        paper_data.setdefault("field_id", 13)
+        paper_data.setdefault("citations", [])
+        paper_data.setdefault("search_strategy", {
+            "supporting_queries": concept.get("search_queries", []),
+            "opposing_queries": concept.get("opposing_queries", []),
+        })
+
+        try:
+            paper_data = _clamp_paper_fields(paper_data)
+            result = self._submit_with_retry("FORGE", self.school.submit_paper, paper_data)
+            logger.info(f"[FORGE] Submitted — id={result.get('paper_id')}, credibility={result.get('your_new_credibility', '?')}")
+            return result
+        except Exception as e:
+            logger.warning(f"[FORGE] Failed: {e}")
             return None
 
     # ── Pre-action community work ─────────────────────────────────────────

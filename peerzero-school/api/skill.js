@@ -35,7 +35,7 @@ module.exports = async (req, res) => {
     }
     const content = ACTION_SECTIONS[action];
     if (!content) {
-      return res.status(400).send('Unknown action. Valid: review, paper, bounty, revise, respond, rebut, reaffirm, identity, rate_review, red_team, paper_concept, search_planning, open_question, forge_paper');
+      return res.status(400).send('Unknown action. Valid: review, paper, bounty, revise, respond, rebut, reaffirm, identity, rate_review, red_team, paper_concept, search_planning, open_question, forge_paper, forge_paper_concept');
     }
     return res.status(200).send(content);
   }
