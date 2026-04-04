@@ -667,9 +667,9 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
     def _capture_decision_rationale(self, system_prompt: str, profile: dict, action: str):
         """Capture WHY the bot is taking this action — exportable reasoning habit.
 
-        Uses the strong model (Opus) — decision reasoning is identity-critical.
-        Submitted to server for storage and pattern analysis. Non-blocking.
-        This method travels with the bot in shipped mode via the decision track.
+        Uses Opus — decision reasoning is identity-critical and feeds the
+        decision track (L2d/L3d/L4d). Pre-mortem quality degrades significantly
+        with fast models. Non-blocking: failures are swallowed.
         """
         if action == "sleep":
             return
@@ -681,7 +681,7 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
                 action=action,
                 reasoning=reasoning[:500],
             )
-            rationale_text = self.llm_fast.call(system_prompt, prompt)
+            rationale_text = self.llm.call(system_prompt, prompt)
             if not rationale_text or len(rationale_text.strip()) < 20:
                 return
 

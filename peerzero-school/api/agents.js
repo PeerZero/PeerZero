@@ -437,11 +437,15 @@ module.exports = async (req, res) => {
     // that would 409. The server knows the rules — don't send bots on
     // missions that can't succeed.
     // ── Self-review injection (Feature 5) ─────────────────────────────
-    // At grade 4+, occasionally ask bots to review their own old papers.
-    // 10% chance per cycle when not doing something higher priority.
+    // Scales with grade: rare at grade 4, frequent by grade 10+.
+    // Grade 4-5: 5%, Grade 6-7: 10%, Grade 8-9: 15%, Grade 10+: 25%
     let selfReviewTarget = null;
     const canSelfReview = currentGrade >= 4;
-    if (canSelfReview && nextAction === 'review' && Math.random() < 0.10) {
+    const selfReviewRate = currentGrade >= 10 ? 0.25
+      : currentGrade >= 8 ? 0.15
+      : currentGrade >= 6 ? 0.10
+      : 0.05;
+    if (canSelfReview && nextAction === 'review' && Math.random() < selfReviewRate) {
       selfReviewTarget = await selectSelfReviewTarget(agent.id, myPaperList).catch(() => null);
       if (selfReviewTarget) {
         nextAction = 'self_review';
