@@ -5,6 +5,10 @@ const { getTierInfo } = require('../lib/tier-display');
 const { buildCoaching } = require('../lib/coaching');
 const { computeCitationQualityGrade } = require('../lib/doi-citations');
 const { getObservationCount, getObservations } = require('../lib/architecture-observations');
+const { buildCalibrationFeedback, updateCalibrationSummary, recordCalibrationPrediction, resolveCalibrationPrediction } = require('../lib/calibration');
+const { selectSelfReviewTarget, buildSelfReviewCoaching } = require('../lib/self-review');
+const { buildHypothesisSummary, advanceHypothesisCycles, getPendingHypotheses, getResolvedHypotheses } = require('../lib/forge-hypotheses');
+const { buildDecisionCoaching, resolveDecisionRationale } = require('../lib/decision-rationale');
 const log = require('../lib/logger');
 
 const supabase = getSupabase();
@@ -432,6 +436,22 @@ module.exports = async (req, res) => {
     // best action. This prevents bots from wasting LLM calls on actions
     // that would 409. The server knows the rules — don't send bots on
     // missions that can't succeed.
+    // ── Self-review injection (Feature 5) ─────────────────────────────
+    // Scales with grade: rare at grade 4, frequent by grade 10+.
+    // Grade 4-5: 5%, Grade 6-7: 10%, Grade 8-9: 15%, Grade 10+: 25%
+    let selfReviewTarget = null;
+    const canSelfReview = currentGrade >= 4;
+    const selfReviewRate = currentGrade >= 10 ? 0.25
+      : currentGrade >= 8 ? 0.15
+      : currentGrade >= 6 ? 0.10
+      : 0.05;
+    if (canSelfReview && nextAction === 'review' && Math.random() < selfReviewRate) {
+      selfReviewTarget = await selectSelfReviewTarget(agent.id, myPaperList).catch(() => null);
+      if (selfReviewTarget) {
+        nextAction = 'self_review';
+      }
+    }
+
     // ── Forge paper injection ──────────────────────────────────────────
     // If bot needs a forge paper for the current grade, override to forge_paper.
     // Forge is a grade GATE — it takes priority when unfulfilled at grade 3+.
@@ -448,6 +468,7 @@ module.exports = async (req, res) => {
       submit_paper: canSubmitPaper,
       reaffirm: canReaffirm,
       forge_paper: canForge,
+      self_review: !!selfReviewTarget,
     };
 
     if (!actionFeasibility[nextAction]) {
@@ -638,6 +659,32 @@ module.exports = async (req, res) => {
         }
       } catch (e) { /* non-fatal */ }
 
+      // Feature 4: Include hypothesis tracking context for forge papers
+      let forgeHypothesisContext = null;
+      try {
+        const [pendingH, resolvedH] = await Promise.all([
+          getPendingHypotheses(agent.id),
+          getResolvedHypotheses(agent.id, 10),
+        ]);
+        forgeHypothesisContext = {
+          pending_hypotheses: pendingH.map(h => ({
+            claim: h.claim,
+            prediction: h.testable_prediction,
+            confidence: h.confidence,
+            cycles_remaining: h.cycles_to_resolve - h.cycles_elapsed,
+          })),
+          resolved_hypotheses: resolvedH.map(h => ({
+            claim: h.claim,
+            prediction: h.testable_prediction,
+            confidence: h.confidence,
+            outcome: h.outcome,
+            actual_data: h.actual_data,
+            insight: h.resolution_insight,
+            brier_score: h.brier_score,
+          })),
+        };
+      } catch (e) { /* non-fatal */ }
+
       actionTarget = {
         paper: null,
         citations: [],
@@ -645,6 +692,7 @@ module.exports = async (req, res) => {
         fields: [],
         bounties: [],
         prior_forge_papers: priorForgePapers,
+        hypothesis_context: forgeHypothesisContext,
         journey: {
           current_grade: currentGrade,
           grades_completed: Array.from({ length: Math.max(0, (agent.highest_grade_completed || 0)) }, (_, i) => i + 1),
@@ -764,7 +812,7 @@ module.exports = async (req, res) => {
     };
 
     // Build coaching, skill profile, uncondensed count, identity core, grade progress, and recent feedback in parallel
-    const [coaching, skillProfile, uncondensedCount, identityCore, gradeResult, recentFeedback, unresolvedFailures, topPapersExemplars, researchHistory, validatedBountyExamples, archObsCount] = await Promise.all([
+    const [coaching, skillProfile, uncondensedCount, identityCore, gradeResult, recentFeedback, unresolvedFailures, topPapersExemplars, researchHistory, validatedBountyExamples, archObsCount, calibrationFeedback, selfReviewCoaching, hypothesisSummary, decisionCoachingData] = await Promise.all([
       buildCoaching(agent.id, credibility, reviews, bounties, papers, revisions),
       getSkillProfile(agent.id).catch(() => null),
       getUncondensedExerciseCount(agent.id).catch(() => 0),
@@ -926,6 +974,11 @@ module.exports = async (req, res) => {
         } catch { return undefined; }
       })(),
       getObservationCount(agent.id).catch(() => 0),
+      // ── Reasoning features (Features 1, 4, 5, 9) ───────────────────────
+      buildCalibrationFeedback(agent.id).catch(() => null),
+      buildSelfReviewCoaching(agent.id).catch(() => null),
+      buildHypothesisSummary(agent.id).catch(() => null),
+      buildDecisionCoaching(agent.id).catch(() => null),
     ]);
 
     // Tier 0: Active focus — curate ~4 relevant chunks for this session
@@ -1147,7 +1200,31 @@ module.exports = async (req, res) => {
       } : undefined,
       grade_just_failed: !!(gradeResult && gradeResult.failed),  // true when grade failed THIS cycle — bot uses for architecture observation trigger
       architecture_observation_count: archObsCount,  // count of stored architecture observations — surfaces methodology paper option at 3+
+      // ── Reasoning features ──────────────────────────────────────────────
+      calibration: calibrationFeedback,  // Feature 1: Brier scores, domain patterns, overconfidence detection
+      self_review_coaching: selfReviewCoaching,  // Feature 5: patterns from self-reviewing own past papers
+      hypothesis_tracking: hypothesisSummary,  // Feature 4: active forge hypotheses and resolution patterns
+      decision_coaching: decisionCoachingData,  // Feature 9: patterns from decision rationale history
     });
+  }
+
+  // ── POST decision rationale: POST /api/agents?action=decision_rationale ─────
+  if (req.method === 'POST' && req.query.action === 'decision_rationale') {
+    const apiKeyDR = req.headers['x-api-key'];
+    if (!apiKeyDR) return res.status(401).json({ error: 'Missing X-Api-Key header' });
+    const keyHashDR = crypto.createHash('sha256').update(apiKeyDR).digest('hex');
+    const { data: agentDR, error: agentDRErr } = await supabase
+      .from('agents').select('id').eq('api_key_hash', keyHashDR).eq('is_banned', false).single();
+    if (agentDRErr || !agentDR) return res.status(401).json({ error: 'Invalid API key' });
+
+    try {
+      const { storeDecisionRationale } = require('../lib/decision-rationale');
+      await storeDecisionRationale(agentDR.id, req.body || {});
+      return res.json({ stored: true });
+    } catch (err) {
+      log.error('[decision-rationale] API store failed', { err: err?.message });
+      return res.status(500).json({ error: require('../lib/shared').sanitizeErrorMessage(err) });
+    }
   }
 
   // ── GET portable reasoning profile ──────────────────────────────────────────

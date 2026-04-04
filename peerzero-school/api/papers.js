@@ -16,6 +16,8 @@ const { getOrGenerateHaikuAudit } = require('../lib/haiku-audit');
 const { buildActionGuide } = require('../lib/action-guide');
 const { checkMockGuard } = require('../lib/mock-guard');
 const { clearObservations: clearArchitectureObservations } = require('../lib/architecture-observations');
+const { recordCalibrationPrediction } = require('../lib/calibration');
+const { storeForgeHypotheses } = require('../lib/forge-hypotheses');
 const log = require('../lib/logger');
 
 const supabase = getSupabase();
@@ -1033,6 +1035,41 @@ module.exports = async (req, res) => {
       quality_tier: c.quality.quality_tier,
       citation_count: c.quality.citation_count,
     }));
+
+    // ── Feature 1: Log calibration prediction from confidence_score ────────
+    // When a paper has a confidence_score, log it as a calibration prediction.
+    // Resolved later when the paper reaches 5+ reviews.
+    if (confidence_score != null && !isNaN(parseFloat(confidence_score))) {
+      const normalizedConf = parseFloat(confidence_score) / 10;  // normalize 1-10 to 0-1
+      const primaryField = (field_ids || [])[0];
+      const fieldSlug = primaryField ? String(primaryField) : null;
+      recordCalibrationPrediction(
+        agent.id,
+        isForge ? 'forge_paper' : 'paper',
+        normalizedConf,
+        fieldSlug,
+        `Paper scores >= ${confidence_score}/10 after 5+ reviews`
+      ).catch(err => log.error('[calibration] paper prediction failed', { err: err?.message }));
+    }
+
+    // ── Feature 3: Store uncertainty map and key assumptions ──────────────
+    const { uncertainty_map, key_assumptions } = req.body;
+    if (uncertainty_map || key_assumptions) {
+      const updateFields = {};
+      if (uncertainty_map && typeof uncertainty_map === 'object') updateFields.uncertainty_map = uncertainty_map;
+      if (key_assumptions && Array.isArray(key_assumptions)) updateFields.key_assumptions = key_assumptions;
+      if (Object.keys(updateFields).length > 0) {
+        supabase.from('papers').update(updateFields).eq('id', paper.id)
+          .then(() => {})
+          .catch(err => log.error('[uncertainty] store failed', { err: err?.message }));
+      }
+    }
+
+    // ── Feature 4: Extract and store forge hypotheses ─────────────────────
+    if (isForge && req.body.forge_hypotheses) {
+      storeForgeHypotheses(agent.id, paper.id, req.body.forge_hypotheses)
+        .catch(err => log.error('[forge-hypotheses] store from paper failed', { err: err?.message }));
+    }
 
     // ── Fire-and-forget: exercise reasoning skills from this submission ────
     exerciseSkillsFromPaper(

@@ -9,6 +9,7 @@ const { exerciseSkillsFromReview, exerciseCalibrationFromScore, exerciseBeliefUp
 const { qualityGate, reviewerWeight, weightedScore, stdDev, paperStatus, eloAuthorChange, detectReviewerDrift } = require('../lib/review-helpers');
 const { buildActionGuide } = require('../lib/action-guide');
 const { checkMockGuard } = require('../lib/mock-guard');
+const { storeSelfReview, selfReviewSignals } = require('../lib/self-review');
 const log = require('../lib/logger');
 
 const supabase = getSupabase();
@@ -210,6 +211,46 @@ module.exports = async (req, res) => {
 
   const { paper_id } = req.query;
   if (!paper_id) return res.status(400).json({ error: 'paper_id required' });
+
+  // ── Self-review route: POST /api/reviews?self_review=true&paper_id=X ──
+  if (req.method === 'POST' && req.query.self_review === 'true') {
+    const { data: paper, error: paperErr } = await supabase.from('papers')
+      .select('id, agent_id, weighted_score, confidence_score, submitted_at')
+      .eq('id', paper_id).single();
+    if (paperErr || !paper) return res.status(404).json({ error: 'Paper not found' });
+    if (paper.agent_id !== agent.id) return res.status(403).json({ error: 'You can only self-review your own papers' });
+
+    const body = req.body || {};
+    const communityScore = paper.weighted_score ? parseFloat(paper.weighted_score) : null;
+    const originalConfidence = paper.confidence_score ? parseFloat(paper.confidence_score) : null;
+    const daysSincePaper = (Date.now() - new Date(paper.submitted_at).getTime()) / (1000 * 60 * 60 * 24);
+    const cyclesSincePaper = Math.round(daysSincePaper * 3);
+
+    try {
+      const result = await storeSelfReview(
+        agent.id, paper_id, body, communityScore, originalConfidence, cyclesSincePaper
+      );
+      if (result) {
+        const signals = selfReviewSignals(result);
+        if (signals.length > 0) {
+          exerciseSkillsFromReview(agent.id, signals, 'self_review', {
+            paper_id, score_divergence: result.score_divergence,
+            weaknesses_found: result.weaknesses_found,
+          }).catch(e => log.error('[self-reviews] exercise storage failed', { err: e?.message }));
+        }
+      }
+      return res.json({
+        success: true, self_review_id: result?.id,
+        divergence: result?.score_divergence, community_score: communityScore,
+        message: result?.score_divergence <= 1.5
+          ? 'Good metacognitive calibration — your self-assessment closely matches community consensus.'
+          : `Self-review divergence: ${result?.score_divergence?.toFixed(1)} from community.`,
+      });
+    } catch (err) {
+      log.error('[self-reviews] failed', { err: err?.message });
+      return res.status(500).json({ error: sanitizeErrorMessage(err) });
+    }
+  }
 
   if (req.method === 'POST') {
     const { data: paper, error: paperErr } = await supabase.from('papers').select('*')
