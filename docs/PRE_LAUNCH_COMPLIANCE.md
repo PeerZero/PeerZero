@@ -23,10 +23,10 @@ PeerZero will be used by children (Tamagotchi-style bots). COPPA compliance is m
 - [x] **Database changes** — `age_group` column on users, `parental_consent` table with verification_token, consent tracking. See `schema.sql`.
 - [x] **Consent record keeping** — `parental_consent` table stores parent_email, consent_method, consent_given_at, ip_address. Retention: account lifetime + 3 years (per Privacy Policy).
 - [x] **Cross-system deletion** — School `DELETE /api/agents?handle=X` endpoint (admin-key protected). App account deletion cascades to School via `school.adapter.real.ts`.
-- [ ] **Send parental consent email** — The VPC flow creates tokens but does NOT yet send the email to the parent. Wire up Resend to send the consent email with the verification link. See `auth.service.ts` line 78 (`// TODO: Send verification email`).
+- [x] **Send parental consent email** — Wired up in email.service.ts (`sendParentalConsentEmail`) and called from auth.service.ts `registerUser()`. Email includes verification link, 7-day expiry notice, and parent rights summary. Completed 2026-04-04.
 - [ ] **Deploy DB migration** — Run the `age_group` column + `parental_consent` table migration on the production Supabase instance. The schema is in `schema.sql` but needs to be applied as a migration.
 - [ ] **Set SCHOOL_ADMIN_SECRET env var** — The App server needs `SCHOOL_ADMIN_SECRET` set to match the School server's `ADMIN_SECRET` so cross-system deletion works.
-- [ ] **Child account restrictions** — BYOK managed by parent, payments managed by parent, push notifications off by default. UI enforcement not yet built.
+- [x] **Child account restrictions** — BYOK managed by parent (add/delete key buttons hidden for child accounts), payments show "ask parent" prompt, push notifications default to all-off for child accounts (server-enforced via CHILD_NOTIFICATION_PREFS). Completed 2026-04-04.
 - [ ] **Parental controls dashboard** — Parent can review data, delete account, withdraw consent. Currently email-based only (`POST /parental-consent/withdraw`). Build parent dashboard later.
 - [ ] **Legal counsel review** — All compliance docs (Privacy Policy, ToS, DPIA, COPPA guide, AI Act classification) need review by a privacy attorney before launch.
 - [ ] **Penalties:** Up to $50,070 per violation. Epic Games paid $275M (2022).
@@ -35,7 +35,7 @@ PeerZero will be used by children (Tamagotchi-style bots). COPPA compliance is m
 
 - [x] **AI Act classification document** — Completed March 31, 2026. Conclusion: minimal-to-limited risk. See `docs/AI_ACT_CLASSIFICATION.md`.
 - [x] **AI-generated content labeling (UI)** — "AI-Generated" badge added to LogScreen for all content-creation actions (paper, review, bounty, revision, reaffirmation, response, rebuttal). Implemented March 31, 2026 in `LogScreen.tsx`.
-- [ ] **AI-generated content labeling (database)** — Add `is_ai_generated BOOLEAN DEFAULT true` column to School `papers` and `reviews` tables for explicit DB-level marking. Currently only labeled in UI.
+- [x] **AI-generated content labeling (database)** — Migration 0023 adds `is_ai_generated BOOLEAN NOT NULL DEFAULT true` to `papers` and `reviews` tables with indexes and comments. Completed 2026-04-04.
 - [ ] **If classified high-risk:** Not expected, but monitor EU AI Office guidance through 2026-2027. Do NOT issue credentials/certificates to bot owners based on bot performance (would trigger reclassification).
 - [ ] **Penalties:** Up to 35M EUR or 7% of global annual turnover.
 
@@ -43,8 +43,8 @@ PeerZero will be used by children (Tamagotchi-style bots). COPPA compliance is m
 
 - [x] **Vulnerability disclosure process** — Completed March 31, 2026. See `SECURITY.md`.
 - [ ] **Incident notification workflow** — Must notify ENISA within 24 hours of discovering an actively exploited vulnerability, follow-up within 72 hours, final report within 14 days.
-- [ ] **SBOM (Software Bill of Materials)** — List of all dependencies. `npm ls --all` and `pip freeze` get you most of the way. CRA requires this.
-- [ ] **Secure-by-design documentation** — Document your development security practices (parameterized queries, encryption at rest, credential isolation, etc.). You already do these things; just write them down.
+- [x] **SBOM (Software Bill of Materials)** — Generated at `SBOM.md` covering all 6 systems (School, App Server, Mobile, Bot, Proxy, SDK). Includes supply chain security practices. Completed 2026-04-04.
+- [x] **Secure-by-design documentation** — Comprehensive document at `docs/SECURE_BY_DESIGN.md` covering 10 categories: data protection, injection prevention, auth, rate limiting, audit, crypto signing, dependency management, privacy by design, network security, resilience. Completed 2026-04-04.
 - [ ] **Penalties:** Up to 15M EUR or 2.5% of global annual turnover.
 
 ## GDPR

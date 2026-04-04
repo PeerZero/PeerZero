@@ -11,7 +11,7 @@ import { queryOne, queryRows, query } from '../db/client';
 import { AppError } from '../middleware/error-handler';
 import { JwtPayload } from '../middleware/auth';
 import { logger } from '../lib/logger';
-import { sendPasswordResetEmail } from './email.service';
+import { sendPasswordResetEmail, sendParentalConsentEmail } from './email.service';
 
 const SALT_ROUNDS = 12;
 
@@ -75,7 +75,7 @@ export async function registerUser(email: string, password: string, displayName?
        VALUES ($1, $2, $3)`,
       [user!.id, parentEmail, verificationToken],
     );
-    // TODO: Send verification email to parent with the token
+    await sendParentalConsentEmail(parentEmail!, verificationToken);
     return { user: user!, consentPending: true };
   }
 

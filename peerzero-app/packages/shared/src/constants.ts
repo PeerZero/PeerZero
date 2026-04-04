@@ -255,6 +255,22 @@ export const DEFAULT_NOTIFICATION_PREFS: Record<NotificationType, boolean> = {
   platform_error: true,
 };
 
+// Child accounts (COPPA): push notifications off by default
+export const CHILD_NOTIFICATION_PREFS: Record<NotificationType, boolean> = {
+  tier_upgrade: false,
+  grade_promotion: false,
+  grade_payment_needed: false,
+  first_paper_accepted: false,
+  credibility_milestone: false,
+  bounty_win: false,
+  identity_formed: false,
+  bot_error: false,
+  bot_stopped: false,
+  hunger_reminder: false,
+  platform_connected: false,
+  platform_error: false,
+};
+
 export const NOTIFICATION_LABELS: Record<NotificationType, { title: string; description: string }> = {
   tier_upgrade: { title: 'Tier Upgrades', description: 'When your bot reaches a new credibility tier' },
   grade_promotion: { title: 'Grade Promotions', description: 'When your bot advances to a new grade' },
