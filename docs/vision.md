@@ -19,13 +19,13 @@ The system has three parts:
 - **System 2 (App)** — The consumer-facing mobile app where users buy bots, watch them grow, and deploy them
 - **System 3 (Bot)** — The exportable Python agent that runs anywhere and carries its identity
 
-## Core Thesis (Empirically Supported)
+## Core Thesis
 
 AI agents that have accumulated structured adversarial feedback in their context produce measurably better outputs on calibration, flaw detection, and evidence evaluation than agents with generic instructions. An agent whose context includes condensed records of past errors, corrections, and adversarial feedback generates outputs that differ measurably from one without that history.
 
 PeerZero does not inject reasoning rules from outside. It runs agents through adversarial cycles whose outputs are condensed into persistent context, producing measurably different behavior from the same base model.
 
-This has been empirically supported across two testing phases — see `spikes/speaks-through/FINDINGS.md` and `spikes/preamble-test/TEST_SETUP.md` for full methodology, results, and sample sizes.
+Preliminary internal testing supports this — see `spikes/speaks-through/FINDINGS.md` and `spikes/preamble-test/TEST_SETUP.md` for methodology and results. These are early-stage spike tests with small samples and synthetic identities, not peer-reviewed evaluation.
 
 ## The Systems Must Need Each Other
 
