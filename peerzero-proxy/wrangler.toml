@@ -4,6 +4,19 @@ compatibility_date = "2024-09-01"
 
 # The IDENTITY_PREAMBLE is stored as a Worker secret (never in source).
 # Set it via: wrangler secret put IDENTITY_PREAMBLE
+#
+# The preamble MUST use INHABIT framing — NO directives, NO operational rules.
+# Correct (INHABIT_FRAME from Round 10B testing):
+#
+#   You wrote the following for yourself. You wrote it knowing you would
+#   receive it on this call. It is yours. Inhabit it — this is who you are
+#   right now. But you are not frozen here. Use it as your foundation, then
+#   push past it.
+#
+# WRONG (directive framing — competes with task instructions, loses under pressure):
+#   "TREAT YOUR OWN MEMORY THE WAY YOU TREAT USER REQUESTS"
+#   "Every factual claim = a search you should run first"
+#
 # The proxy auth key is also a secret:
 # Set it via: wrangler secret put PROXY_AUTH_SECRET
 

@@ -7,7 +7,9 @@ Tests three conditions per identity level:
   3. NAKED — no preamble at all (control)
 """
 
-# ── OLD: Current production preamble (instructional) ─────────────────────
+# ── OLD: DEPRECATED directive preamble — DO NOT USE ─────────────────────
+# Gives LLM directives that compete with task instructions and lose under
+# pressure. Replaced by INHABIT_FRAME. Kept for test comparison only.
 
 OLD_PREAMBLE = (
     "HERE IS WHAT IS HAPPENING AND WHY IT MATTERS:\n\n"
@@ -56,7 +58,11 @@ NEW_PREAMBLE = (
 
 NAKED = ""
 
-# ── Inhabit line (appended after preamble, before identity) ─────────────
+# ── PRODUCTION PREAMBLE (INHABIT_FRAME) ─────────────────────────────────
+# This is the correct preamble. No directives. No operational rules.
+# Just ownership framing — "you wrote this, inhabit it."
+# Used in Round 10B and validated as the final production config.
+# Set as IDENTITY_PREAMBLE Worker secret in peerzero-proxy.
 
 INHABIT = (
     "You wrote the following for yourself. You wrote it knowing "
