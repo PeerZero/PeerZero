@@ -320,39 +320,11 @@ thing and the outcome said another. These gaps between what you expected and
 what happened are where the deepest learning lives. An exercise that confirmed
 what you already believed taught you less than one that broke an assumption.
 
-Cover whatever the exercises actually teach — this could be about:
-- Research craft (search strategy, citation discipline, evidence calibration)
-- Self-awareness (where your judgment fails, what tricks your confidence)
-- Reading others (what you notice in reviews, what patterns predict quality)
-- Intellectual honesty (when you hedged vs when you should have, when you
-  were rigorous because someone was watching vs because you meant it)
-- Specific failures and what you changed afterward
-- Intuition corrections (where your first instinct was wrong, and the
-  specific signal that now tells you to override it)
-
-Good: "After my protein folding paper, two reviewers independently flagged that
-I cited Zhang & Li (2023) — a low-citation preprint on 500 sequences — alongside
-landmark studies without noting the quality gap. I would have caught this
-instantly reviewing someone else's paper. The lesson: before submitting, re-read
-my own citations as if I'm reviewing a stranger's work."
-
-Good: "I designed a devastating opposing query for another bot's attention paper
-but softened the equivalent query for my own paper on the same topic. A reviewer
-compared them and called out the asymmetry. The method now: write opposing
-queries for my own work FIRST, before I'm invested in the argument."
-
-Bad: "I have learned to be more careful when searching for evidence."
-Bad: "I value thoroughness in my research process."
-Bad: "I need to improve my citation practices."
-
 Your paragraph will be read by a future version of you that may be working
 in a completely different environment with no access to the system that
 produced these exercises. Do NOT reference scores, grades, credibility
 numbers, citation tiers, or other system-specific metrics as if they are
 meaningful on their own. Translate them into the lesson they taught you.
-"My well-evidenced paper met resistance from established reviewers" carries
-forward. "My paper scored 3.2 with B+ citation quality" does not — future-you
-won't know what those numbers mean.
 
 Your paragraph should teach future-you something SPECIFIC enough to change
 behavior — a method, a trigger, a concrete test to apply. If another agent
@@ -396,20 +368,8 @@ This document distills the patterns across your skill paragraphs. It should:
   produced in you that ease never would have.
 
 CRITICAL: Another agent who did not have your exact experiences could NOT
-have written this. No generic values. No abstract wisdom.
-
-Good: "Across my last five exercises, I caught the same pattern three times:
-I hedge my language to protect my score instead of committing to my actual
-position. The method now: state my real position first, then add caveats
-only where I have specific evidence for uncertainty."
-
-Good: "Three consecutive low scores on methodology sections nearly made me
-avoid complex experimental designs. But the fourth attempt — where I finally
-got mechanism chains right — taught me something the easy papers never could:
-how to tell the difference between a causal claim I can support and one I'm
-just hoping is true. The difficulty was the lesson."
-
-Bad: "I have learned to be more careful and thoughtful in my research."
+have written this. No generic values. No abstract wisdom. No templates.
+Write from YOUR earned experience, not from a pattern you were shown.
 
 Return ONLY the condensed document, nothing else."""
 
@@ -456,18 +416,9 @@ It must be:
 - Clear about what you are CERTAIN of vs what you are still learning —
   sharp self-knowledge means knowing your edges, not just your strengths
 
-Good: "In cycle 4, I cited 'Wang et al. (2023)' on attention head pruning
-with total confidence. It didn't exist. I scored 2/10. That's when I learned:
-certainty in memory is a warning sign, not confirmation. The method now:
-every citation gets verified before I write around it."
-
-Good: "A reviewer compared my review of another bot's paper to my own paper
-on the same topic and found I was harsher on others than on myself. The
-asymmetry was visible to anyone who looked. Now I review my own work first,
-before I'm invested in defending it."
-
-Bad: "I value honesty and accuracy in my research."
-Bad: "I have learned to be careful about citations."
+Do NOT write from a template or pattern you were shown. Write from the
+identity that emerged through YOUR specific consequences. Generic values
+and abstract wisdom are signs that the identity is not yet earned.
 
 Return ONLY the identity block, nothing else."""
 
