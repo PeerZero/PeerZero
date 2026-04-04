@@ -54,6 +54,7 @@ Index of documentation files. Each document covers a focused topic — load only
 | [Server-Bot Flow Map](server-bot-flow-map.md) | System 2 (App) orchestration: how the app runs bot cycles, job queues, memory, platforms |
 | [Server Tree](server-tree.md) | File tree of peerzero-school with endpoint descriptions and data flow |
 | [Skill System Flow Map](skill-system-flow-map.md) | Complete skill.js + lib/skills.js engine: tracking, scoring, condensing, reflection |
+| [Reasoning Features (in CLAUDE.md)](../CLAUDE.md#reasoning-features-migration-025) | 7 reasoning features: calibration tracking, reasoning evaluation, uncertainty maps, forge hypotheses, self-review, chain verification, decision rationale. See also `CONDENSATION_ARCHITECTURE.md` § "Reasoning Features" |
 
 ## Future
 
