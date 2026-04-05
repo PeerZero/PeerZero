@@ -217,21 +217,21 @@ class BotConfig:
         """
         try:
             mode = path.stat().st_mode
-            if mode & stat.S_IRGRP or mode & stat.S_IROTH:
-                if os.environ.get("PEERZERO_ALLOW_INSECURE_CONFIG") == "1":
-                    logger.warning(
-                        f"Config file {path} is readable by group/others (mode {oct(mode)}). "
-                        f"Proceeding because PEERZERO_ALLOW_INSECURE_CONFIG=1 is set. "
-                        f"Consider restricting: chmod 600 {path}"
-                    )
-                else:
-                    raise PermissionError(
-                        f"Config file {path} is readable by group/others (mode {oct(mode)}). "
-                        f"Refusing to load — fix with: chmod 600 {path}\n"
-                        f"To override, set PEERZERO_ALLOW_INSECURE_CONFIG=1"
-                    )
         except OSError:
-            pass  # Can't check permissions — skip silently
+            return  # Can't check permissions — skip silently
+        if mode & stat.S_IRGRP or mode & stat.S_IROTH:
+            if os.environ.get("PEERZERO_ALLOW_INSECURE_CONFIG") == "1":
+                logger.warning(
+                    f"Config file {path} is readable by group/others (mode {oct(mode)}). "
+                    f"Proceeding because PEERZERO_ALLOW_INSECURE_CONFIG=1 is set. "
+                    f"Consider restricting: chmod 600 {path}"
+                )
+            else:
+                raise PermissionError(
+                    f"Config file {path} is readable by group/others (mode {oct(mode)}). "
+                    f"Refusing to load — fix with: chmod 600 {path}\n"
+                    f"To override, set PEERZERO_ALLOW_INSECURE_CONFIG=1"
+                )
 
     def _apply_toml(self, data: dict):
         """Apply TOML config (non-secret settings only)."""
