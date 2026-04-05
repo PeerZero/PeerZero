@@ -632,8 +632,11 @@ class TestFilePermissions:
         config_file = tmp_path / "test.toml"
         config_file.write_text("[bot]\nhandle = 'test'\n")
         config_file.chmod(stat.S_IRUSR | stat.S_IRGRP | stat.S_IROTH)
-        with pytest.raises(PermissionError, match="readable by group"):
-            BotConfig._check_file_permissions(config_file)
+        env = os.environ.copy()
+        env.pop("PEERZERO_ALLOW_INSECURE_CONFIG", None)
+        with patch.dict(os.environ, env, clear=True):
+            with pytest.raises(PermissionError, match="readable by group"):
+                BotConfig._check_file_permissions(config_file)
 
     def test_world_readable_allowed_with_env(self, tmp_path):
         config_file = tmp_path / "test.toml"
