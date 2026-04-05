@@ -627,6 +627,7 @@ class TestGetKeyFingerprint:
 
 
 class TestFilePermissions:
+    @pytest.mark.skipif(os.getuid() == 0, reason="Root bypasses file permission checks")
     def test_world_readable_raises(self, tmp_path):
         config_file = tmp_path / "test.toml"
         config_file.write_text("[bot]\nhandle = 'test'\n")

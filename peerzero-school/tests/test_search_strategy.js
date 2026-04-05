@@ -294,8 +294,8 @@ section('generateSearchCoaching() — redundant queries');
 {
   const coaching = generateSearchCoaching({
     supporting_queries: [
-      'CRISPR off-target effects in human stem cells measured carefully',
-      'CRISPR off-target effects in human stem cells analyzed precisely',
+      'CRISPR off-target effects in human stem cells',
+      'CRISPR off-target effects in human stem cells measured',
     ],
     opposing_queries: [
       'zinc finger nuclease precision compared to CRISPR editing',

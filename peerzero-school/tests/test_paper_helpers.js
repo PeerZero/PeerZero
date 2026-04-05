@@ -218,17 +218,18 @@ const weakSynth = flagWeakSynthesis('Study A similarly found that both studies e
 assert(weakSynth.flagged === true, 'synthesis with weak signals is flagged');
 assert(weakSynth.reason.includes('superficial'), 'weak synthesis reason mentions superficial');
 
-// Single weak signal — not enough to flag (if long enough)
-const oneSignal = flagWeakSynthesis('Study A similarly found something interesting but then provides a detailed and specific explanation of the non-obvious implication that emerges only when combining the two different methodologies across these different research domains and experimental contexts that nobody expected.');
+// Single weak signal — "similarly" alone is only 1 match, not enough to flag (if long enough)
+// Note: "Study A" matches the weak signal "study a" so we avoid that phrase here
+const oneSignal = flagWeakSynthesis('The first experiment similarly produced an interesting result but then provides a detailed and specific explanation of the non-obvious implication that emerges only when combining the two different methodologies across these different research domains and experimental contexts that nobody expected.');
 assert(oneSignal.flagged === false, 'single weak signal with good length is not flagged');
 
-// Strong synthesis — long, no weak signals
+// Strong synthesis — long, avoids weak signal phrases ("study a", "study b", etc.)
 const strongSynth = flagWeakSynthesis(
-  'Study A demonstrated that CRISPR-Cas9 editing of the BRCA1 gene in mouse models leads to ' +
-  'increased tumor suppression in breast tissue. Study B showed that specific gut microbiome ' +
-  'compositions modulate immune checkpoint proteins. Together, these findings imply that ' +
-  'CRISPR-mediated BRCA1 restoration combined with targeted probiotic intervention could ' +
-  'create a synergistic anti-tumor effect — a combination therapy neither study anticipated.'
+  'The CRISPR-Cas9 editing experiment on the BRCA1 gene in mouse models demonstrated ' +
+  'increased tumor suppression in breast tissue. The microbiome profiling experiment showed that specific gut ' +
+  'compositions modulate immune checkpoint proteins. Combining these results implies that ' +
+  'CRISPR-mediated BRCA1 restoration with targeted probiotic intervention could ' +
+  'create a synergistic anti-tumor effect — a combination therapy neither experiment anticipated.'
 );
 assert(strongSynth.flagged === false, 'strong synthesis is not flagged');
 assert(strongSynth.reason === null, 'strong synthesis has no reason');

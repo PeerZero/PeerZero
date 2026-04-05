@@ -1,9 +1,10 @@
 /**
  * Unit tests for lib/skills-condensers.js
  *
- * Tests the pure function selectByGrade() and the condenser builder
- * functions using mocked getInternals(). The condenser builders are
- * async (they call getInternals), so we mock the internals cache.
+ * Tests the pure function selectByGrade() thoroughly. For the async
+ * condenser builders (which call getInternals → Supabase), we mock
+ * getInternals by replacing it in the require cache before the
+ * condensers module loads.
  *
  * Usage:
  *   node tests/test_skills_condensers.js
@@ -13,6 +14,32 @@
 process.env.SUPABASE_URL = process.env.SUPABASE_URL || 'http://localhost:54321';
 process.env.SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || 'test-key';
 
+// ── Mock getInternals before skills-condensers loads ────────────────────────
+// skills-condensers destructures { getInternals } from skills-core at import
+// time, so we must intercept before the module is required.
+//
+// Strategy: require skills-core first, then replace the getInternals export
+// on the cached module object so that when skills-condensers destructures it,
+// it gets our mock.
+
+// Ensure skills-core is loaded and cached
+const skillsCorePath = require.resolve('../lib/skills-core');
+const skillsCondensersPath = require.resolve('../lib/skills-condensers');
+
+// Remove skills-condensers from cache if already loaded (shouldn't be, but safety)
+delete require.cache[skillsCondensersPath];
+
+// Load skills-core and replace getInternals on the exports object
+const skillsCoreExports = require(skillsCorePath);
+let _mockInternalsData = {};
+const _originalGetInternals = skillsCoreExports.getInternals;
+skillsCoreExports.getInternals = async () => _mockInternalsData;
+
+function mockInternals(data) {
+  _mockInternalsData = data;
+}
+
+// NOW load skills-condensers — it will destructure our mocked getInternals
 const {
   selectByGrade,
   buildMilestoneCondenser,
@@ -99,7 +126,8 @@ const mixedMap = {
 
 assert(selectByGrade(mixedMap, 1) === 'exact-1', 'exact match preferred over band');
 assert(selectByGrade(mixedMap, 4) === 'band-4-6', 'band match for grade 4');
-assert(selectByGrade(mixedMap, 2) === 'exact-1', 'grade 2 falls to first available key when no band');
+// grade 2: no exact, no 13+, no 10-12, no 7-9, no 4-6, no 1-3 → first available key
+assert(selectByGrade(mixedMap, 2) === 'exact-1', 'grade 2 falls to first available key');
 
 section('selectByGrade() — edge cases');
 
@@ -143,39 +171,12 @@ assert(exportKeys.length === 12, `expected 12 exports, got ${exportKeys.length}`
 
 // ═══════════════════════════════════════════════════════════════════════
 // Async condenser builders (with mocked getInternals)
-//
-// We mock the internals cache by calling clearInternalsCache then
-// pre-populating it via a controlled getInternals call. Since the
-// real getInternals hits Supabase, we instead test the condenser
-// builders' response to getInternals returning defaults (catch path).
 // ═══════════════════════════════════════════════════════════════════════
 
-// We can test the condenser builders by monkey-patching getInternals.
-// The condensers import getInternals from skills-core. We intercept
-// the module's reference by overwriting the cache.
-
-const { clearInternalsCache } = require('../lib/skills-core');
-
-// Helper: set up a mock internals cache by temporarily replacing the module
-// Since the condensers call getInternals() which hits Supabase, we need
-// to intercept. We'll use the module's internal cache mechanism.
-// clearInternalsCache + calling getInternals will fail on Supabase,
-// but the condenser functions have defaults for all config values.
-
-// For the async tests, we monkey-patch the skills-core module's getInternals
-// to return mock data.
-const skillsCoreModule = require('../lib/skills-core');
-const originalGetInternals = skillsCoreModule.getInternals;
-
-function mockInternals(mockData) {
-  skillsCoreModule.getInternals = async () => mockData;
-}
-
-function restoreInternals() {
-  skillsCoreModule.getInternals = originalGetInternals;
-}
-
 async function runAsyncTests() {
+
+  // ── buildMilestoneCondenser ───────────────────────────────────────────
+
   section('buildMilestoneCondenser() — below trigger');
 
   mockInternals({ milestone_condenser_trigger: 5 });
@@ -189,6 +190,11 @@ async function runAsyncTests() {
   assert(typeof atTrigger.condenser_prompt === 'string', 'has condenser_prompt');
   assert(typeof atTrigger.storage_instruction === 'string', 'has storage_instruction');
   assert(typeof atTrigger.method_guidance === 'string', 'has method_guidance');
+
+  section('buildMilestoneCondenser() — above trigger');
+
+  const aboveTrigger = await buildMilestoneCondenser(20, 5);
+  assert(aboveTrigger !== null, 'returns result when well above trigger');
 
   section('buildMilestoneCondenser() — with grade map');
 
@@ -207,6 +213,17 @@ async function runAsyncTests() {
   const graded2 = await buildMilestoneCondenser(10, 5);
   assert(graded2.condenser_prompt.includes('mid prompt'), 'grade 5 gets mid prompt');
 
+  section('buildMilestoneCondenser() — default trigger');
+
+  mockInternals({}); // no milestone_condenser_trigger → defaults to 5
+  const defaultTrigger = await buildMilestoneCondenser(4, 1);
+  assert(defaultTrigger === null, 'default trigger is 5, so 4 returns null');
+
+  const defaultTrigger2 = await buildMilestoneCondenser(5, 1);
+  assert(defaultTrigger2 !== null, 'default trigger 5, uncondensed 5 returns result');
+
+  // ── buildCoreCondenserPrompt ──────────────────────────────────────────
+
   section('buildCoreCondenserPrompt()');
 
   mockInternals({});
@@ -223,7 +240,16 @@ async function runAsyncTests() {
   };
   const coreWithSkills = await buildCoreCondenserPrompt('milestone-2', skillSummary, 7);
   assert(coreWithSkills.skill_reference.includes('Calibration'), 'verified skill in reference');
+  assert(coreWithSkills.skill_reference.includes('75'), 'verified strength in reference');
   assert(coreWithSkills.skill_reference.includes('Source Evaluation'), 'developing skill in reference');
+  assert(coreWithSkills.skill_reference.includes('30'), 'developing strength in reference');
+
+  section('buildCoreCondenserPrompt() — null skill summary');
+
+  const coreNoSkills = await buildCoreCondenserPrompt('milestone-3', null, 1);
+  assert(coreNoSkills.skill_reference === '', 'no skills produces empty reference');
+
+  // ── buildMasterCondenser ──────────────────────────────────────────────
 
   section('buildMasterCondenser()');
 
@@ -233,6 +259,15 @@ async function runAsyncTests() {
   assert(master.is_graduation === true, 'is_graduation flag set');
   assert(typeof master.skill_reference === 'string', 'has skill_reference');
   assert(master.skill_reference.includes('Calibration'), 'verified skill in master reference');
+  assert(Array.isArray(master.instructions), 'has instructions array');
+
+  section('buildMasterCondenser() — null skill summary');
+
+  const masterNoSkills = await buildMasterCondenser(null);
+  assert(masterNoSkills.skill_reference === '', 'null skills produces empty reference');
+  assert(masterNoSkills.is_graduation === true, 'still marked as graduation');
+
+  // ── Decision track condensers ─────────────────────────────────────────
 
   section('buildDecisionMilestoneCondenser() — below trigger');
 
@@ -245,6 +280,7 @@ async function runAsyncTests() {
   const decAt = await buildDecisionMilestoneCondenser(5, 1);
   assert(decAt !== null, 'returns result at trigger');
   assert(typeof decAt.decision_condenser_prompt === 'string', 'has decision_condenser_prompt');
+  assert(decAt.decision_condenser_prompt.length > 100, 'decision prompt has substantial content');
 
   section('buildDecisionCoreCondenserPrompt()');
 
@@ -252,12 +288,16 @@ async function runAsyncTests() {
   const decCore = await buildDecisionCoreCondenserPrompt('milestone-1', 5);
   assert(typeof decCore.decision_paragraph_prompt === 'string', 'has decision_paragraph_prompt');
   assert(typeof decCore.decision_identity_prompt === 'string', 'has decision_identity_prompt');
+  assert(decCore.decision_paragraph_prompt.length > 100, 'paragraph prompt has content');
+  assert(decCore.decision_identity_prompt.length > 100, 'identity prompt has content');
 
   section('buildDecisionMasterCondenser()');
 
   const decMaster = await buildDecisionMasterCondenser();
   assert(typeof decMaster.decision_master_condenser_prompt === 'string', 'has decision_master_condenser_prompt');
   assert(decMaster.is_graduation === true, 'decision master has is_graduation flag');
+
+  // ── Forge track condensers ────────────────────────────────────────────
 
   section('buildForgeMilestoneCondenser() — below trigger');
 
@@ -271,6 +311,7 @@ async function runAsyncTests() {
   assert(forgeAt !== null, 'returns result at trigger');
   assert(typeof forgeAt.forge_condenser_prompt === 'string', 'has forge_condenser_prompt');
   assert(typeof forgeAt.forge_storage_instruction === 'string', 'has forge_storage_instruction');
+  assert(forgeAt.forge_condenser_prompt.length > 100, 'forge prompt has substantial content');
 
   section('buildForgeCoreCondenserPrompt()');
 
@@ -285,8 +326,8 @@ async function runAsyncTests() {
   assert(typeof forgeMaster.forge_master_condenser_prompt === 'string', 'has forge_master_condenser_prompt');
   assert(forgeMaster.is_graduation === true, 'forge master has is_graduation flag');
 
-  // Restore
-  restoreInternals();
+  // ── Restore original getInternals ─────────────────────────────────────
+  skillsCoreExports.getInternals = _originalGetInternals;
 }
 
 // Run async tests then print summary

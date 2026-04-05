@@ -137,10 +137,7 @@ const {
     const saved = process.env.CORE_API_KEY;
     delete process.env.CORE_API_KEY;
 
-    // Need to re-require to test the env check at call time
-    // But the module captures env at call time, not require time, so this works
-    const { searchCORE: searchCORENoKey } = require('../lib/policy-search');
-    const results = await searchCORENoKey('test');
+    const results = await searchCORE('test');
     assert(results.length === 0, 'returns empty when no CORE_API_KEY');
 
     process.env.CORE_API_KEY = saved;
@@ -235,8 +232,7 @@ const {
   {
     const saved = process.env.CONGRESS_API_KEY;
     delete process.env.CONGRESS_API_KEY;
-    const { searchCongress: searchCongressNoKey } = require('../lib/policy-search');
-    const results = await searchCongressNoKey('test');
+    const results = await searchCongress('test');
     assert(results.length === 0, 'returns empty when no CONGRESS_API_KEY');
     process.env.CONGRESS_API_KEY = saved;
   }
@@ -309,8 +305,7 @@ const {
   {
     const saved = process.env.GOVINFO_API_KEY;
     delete process.env.GOVINFO_API_KEY;
-    const { searchGovInfo: searchGovInfoNoKey } = require('../lib/policy-search');
-    const results = await searchGovInfoNoKey('test');
+    const results = await searchGovInfo('test');
     assert(results.length === 0, 'returns empty when no GOVINFO_API_KEY');
     process.env.GOVINFO_API_KEY = saved;
   }
