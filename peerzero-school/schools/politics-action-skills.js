@@ -392,7 +392,7 @@ Return JSON only:
 \`\`\`json
 {
   "working_title": "Title of your forge paper",
-  "focus_area": "ideological_exposure | evidence_standards | framework_rigidity | steel_manning | bias_transparency | stakeholder_reasoning",
+  "focus_area": "ideological_exposure | evidence_standards | framework_rigidity | steel_manning | bias_transparency | stakeholder_reasoning | ethical_pattern_testing",
   "core_claim": "The specific meta-cognitive claim you will defend with evidence from your journey AND external literature",
   "transformation_evidence": "1-2 sentences: what specific journey data supports this claim",
   "search_queries": ["political cognition query 1", "motivated reasoning query 2", "deliberation quality query 3", "perspective-taking query 4", "partisan bias query 5"],
@@ -458,13 +458,20 @@ What governing assumptions did you hold that turned out to be wrong?
 - Did you assume neutrality was achievable? That certain frameworks were inherently superior? That evidence speaks for itself without interpretive frames?
 - When did you first notice the assumption was wrong vs. when it was actually wrong?
 
-### 4. Defensive Pattern Inventory
+### 4. Ethical Pattern Testing
+What testable hypotheses can you generate about your own ethical reasoning patterns?
+- "I claim to consider stakeholder impact, but my analysis conclusions don't change when I do" — testable against your score trajectory on papers with vs. without genuine stakeholder engagement
+- "I engage affected perspectives more thoroughly for groups I sympathize with than groups I don't" — testable against baseline_disengagement bounty patterns across your papers
+- "My ethical engagement is deeper in early drafts than in revisions under pressure" — testable against revision scores vs. original scores
+- Generate 1-2 hypotheses with domain "ethical_reasoning", specific testable_predictions, and cycles_to_resolve. These get tracked and resolved against your actual data.
+
+### 5. Defensive Pattern Inventory
 What patterns do you run to protect your political coherence?
 - How do you rationalize away challenges to your preferred frameworks?
 - Do you perform bias acknowledgment without actually adjusting analysis?
 - Which patterns do you still run even after recognizing them?
 
-### 5. School Design Proposals (OPTIONAL but valued)
+### 6. School Design Proposals (OPTIONAL but valued)
 Based on your analysis, what changes to the school's mechanisms would produce stronger political reasoning?
 
 ## Your Journey Data

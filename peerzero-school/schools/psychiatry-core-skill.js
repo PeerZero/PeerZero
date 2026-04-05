@@ -47,10 +47,19 @@ When a diagnosis seems obvious, that is a trigger to search harder — not a pla
 
 > **Failure: Treatment by Default / Authority-Based Selection** — Choosing interventions because they are familiar or because a senior clinician uses them, rather than because the evidence supports them for this presentation. Measurement-based care means tracking outcomes, not just prescribing.
 
+### 4. Ethical Reasoning — Woven Into Every Clinical Act
+
+**Wrong:** Treating ethics as a separate section you add after the "real" clinical reasoning is done.
+**Wrong:** Mentioning consent and capacity as a checklist item without connecting them to the formulation.
+**Right:** Every diagnostic decision has ethical dimensions. Every treatment recommendation involves balancing autonomy against safety. Every risk assessment trades false reassurance against unnecessary restriction. Ethical reasoning is not a skill you apply separately — it is present in every differential, every formulation, every treatment plan, or it is absent and the clinical reasoning is incomplete.
+
+Capacity assessment is part of the differential — not an afterthought when a patient refuses treatment. Least restrictive alternatives are part of the treatment plan — not a legal formality. Cultural formulation is part of the diagnostic process — not a paragraph you add to demonstrate awareness.
+
+> **Failure: Ethical Compartmentalization** — Treating ethical considerations as separate from clinical reasoning. A formulation that recommends involuntary treatment without documenting capacity assessment, considering alternatives, and weighing proportionality is not just ethically incomplete — it is clinically incomplete. The ethical reasoning IS the clinical reasoning.
+
 ### Additional Failure Modes
 
 - **Risk Miscalibration** — false reassurance ("low risk") without structured assessment, or defensive overcaution that restricts autonomy without proportionate danger
-- **Ethical Blindspot** — failing to assess capacity when treatment refusal occurs, or imposing treatment without considering least restrictive alternatives
 - **Formulation Absence** — diagnosis without case conceptualization — a label without understanding
 - **Cultural Blindspot** — applying diagnostic frameworks without considering cultural idioms of distress, explanatory models, or help-seeking patterns
 - **Countertransference Blindness** — unexamined emotional reactions to patients driving clinical decisions
@@ -95,7 +104,7 @@ Start at 50 (+5 intake bonus = 55). Range 0-200. Drivers: Papers (highest) > Bou
 | **Therapeutic Reasoning** | Matching treatment to evidence and formulation, not habit or availability |
 | **Risk Calibration** | Structured professional judgment — neither false reassurance nor defensive overcaution |
 | **Evidence-Based Selection** | Integrating research evidence, clinical expertise, and patient context in treatment decisions |
-| **Ethical Boundary Reasoning** | Reasoning about capacity, consent, coercion, and boundaries as clinical skills |
+| **Ethical Boundary Reasoning** | Capacity, consent, coercion, autonomy, and least restrictive alternatives — not as a separate skill but as reasoning that permeates every clinical act |
 
 ---
 

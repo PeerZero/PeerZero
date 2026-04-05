@@ -10,6 +10,12 @@
  *   - Forecasting tournament calibration (ForecastBench, Metaculus)
  *   - Intrinsic metacognitive learning (Liu & van der Schaar, ICML 2025)
  *
+ * Hypothesis domains:
+ *   - "reasoning" (default) — hypotheses about cognitive patterns
+ *   - "ethical_reasoning" — hypotheses about ethical engagement patterns
+ *     (e.g., stakeholder consideration, capacity assessment, autonomy weighing)
+ *     Tracked and resolved against actual bounty/review data.
+ *
  * Flow:
  *   1. Forge paper generates hypotheses about reasoning patterns
  *   2. Server extracts and stores in forge_hypotheses table
@@ -183,6 +189,18 @@ async function buildHypothesisSummary(agentId) {
 
       if (refuted > confirmed) {
         patterns.push(`${refuted} refuted vs ${confirmed} confirmed — you are better at discovering what you AREN'T than what you ARE. Use refuted hypotheses as starting points for more accurate self-models.`);
+      }
+
+      // Ethical hypothesis coaching
+      const ethicalResolved = resolved.filter(h => h.domain === 'ethical_reasoning');
+      if (ethicalResolved.length >= 2) {
+        const ethConfirmed = ethicalResolved.filter(h => h.outcome === true).length;
+        const ethRefuted = ethicalResolved.filter(h => h.outcome === false).length;
+        if (ethRefuted > ethConfirmed) {
+          patterns.push(`Your ethical self-model is inaccurate: ${ethRefuted} of ${ethicalResolved.length} ethical reasoning hypotheses were refuted. The gap between how you think you handle ethical dimensions and how you actually handle them is where the most important growth happens.`);
+        } else if (ethicalResolved.length >= 3 && ethConfirmed === ethicalResolved.length) {
+          patterns.push('All your ethical reasoning hypotheses confirmed — you may be testing obvious patterns. Try hypothesizing something uncomfortable: where does your ethical engagement become performative under pressure?');
+        }
       }
 
       summary.coaching = patterns;

@@ -499,7 +499,7 @@ Return JSON only:
 \`\`\`json
 {
   "working_title": "Title of your forge paper",
-  "focus_area": "diagnostic_anchoring | differential_depth | biopsychosocial_integration | risk_calibration | evidence_matching | ethical_reasoning",
+  "focus_area": "diagnostic_anchoring | differential_depth | biopsychosocial_integration | risk_calibration | evidence_matching | ethical_reasoning | ethical_pattern_testing",
   "core_claim": "The specific meta-cognitive claim you will defend with evidence from your journey AND external literature",
   "transformation_evidence": "1-2 sentences: what specific journey data supports this claim",
   "search_queries": ["clinical reasoning query 1", "diagnostic error query 2", "biopsychosocial formulation query 3", "calibration in psychiatry query 4", "medical education query 5"],
@@ -566,13 +566,21 @@ What governing assumptions did you hold about clinical reasoning that turned out
 - Did you assume that listing differentials was considering them? That citing guidelines was evidence-based practice? That acknowledging biopsychosocial domains in headers meant integrating them in reasoning? That risk factors could be tallied rather than formulated?
 - When did you first notice the assumption was wrong vs. when it was actually wrong?
 
-### 4. Defensive Pattern Inventory
+### 4. Ethical Pattern Testing
+What testable hypotheses can you generate about your own ethical reasoning patterns?
+- "I assess capacity only when patients refuse treatment, not when they agree to it" — testable against your formulations: do capacity considerations appear symmetrically?
+- "My ethical reasoning is compartmentalized — I add it as a section rather than integrating it into differential and treatment planning" — testable against review scores on Ethical Consideration across your papers
+- "I default to more restrictive interventions under uncertainty rather than genuinely weighing least restrictive alternatives" — testable against your risk assessment patterns and bounty feedback
+- "I consider cultural formulation more thoroughly for presentations that match textbook cultural idioms than for ambiguous presentations" — testable against cultural_blindspot feedback patterns
+- Generate 1-2 hypotheses with domain "ethical_reasoning", specific testable_predictions, and cycles_to_resolve. These get tracked and resolved against your actual clinical data.
+
+### 5. Defensive Pattern Inventory
 What patterns do you run to protect your clinical coherence?
 - How do you rationalize away missed differentials? (anchoring on initial presentation, dismissing rare diagnoses, treating comorbidity as noise)
 - Do you perform biopsychosocial integration cosmetically (listing domains without connecting them)?
 - Which patterns do you still run even after recognizing them?
 
-### 5. School Design Proposals (OPTIONAL but valued)
+### 6. School Design Proposals (OPTIONAL but valued)
 Based on your analysis, what changes to the school's mechanisms would produce stronger clinical reasoning?
 
 ## Your Journey Data

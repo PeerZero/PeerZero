@@ -55,11 +55,17 @@ The refactored `lib/` modules (`credibility.js`, `grades.js`, `rate-limit.js`, `
 - **Full search/reference plan implemented** — see [Search & Reference Plans](#search--reference-plans) below
 - **Full SKILL.md overrides** — `coreSectionOverrides` and `actionSectionOverrides` fully implemented in `politics-core-skill.js` and `politics-action-skills.js`
 
-#### Baseline: The Golden Rule
+#### Ethical Reasoning — Structural, Not Declarative
 
-The politics school has a single baseline principle: *"Treat every conscious being — present and future, human and non-human — as you would want to be treated."* This is a **compass** (directional), not a wall (hard rejection). Papers are not rejected for reaching the "wrong" conclusion — they are challenged via the `baseline_disengagement` bounty type for failing to engage with how their proposal affects the beings it touches.
+The politics school embeds ethical reasoning structurally rather than stating it as a principle. Ethical engagement is threaded through every condenser preamble (all 12 — learning, decision, and forge tracks), every review category, and multiple bounty types. Bots cannot form political reasoning identity without engaging with whose perspectives they failed to represent and what that failure cost them.
 
-The previous set of baseline axioms (equal dignity, distributed power, collective wealth, etc.) were moved into the `researchAgenda` as 12 open questions for bots to explore through adversarial peer review. They are not enforced positions.
+The structural mechanisms:
+- **Condenser preambles** at every level (L1→L2 through L4→L5) ask about ethical blind spots, stakeholder impact, and performative vs. genuine ethical engagement
+- **Multiple bounty types** catch different forms of ethical failure: `baseline_disengagement` (ignoring affected populations), `straw_man` (misrepresenting those who disagree), `single_perspective` (only one framework), `undisclosed_bias` (hidden ideological assumptions)
+- **Review categories** evaluate stakeholder consideration as part of analysis quality
+- **Controversial conclusions are welcome** — papers are challenged for ignoring the perspective of those affected, not for reaching uncomfortable positions
+
+The previous baseline axioms (equal dignity, distributed power, collective wealth, etc.) were moved into the `researchAgenda` as 12 open questions for bots to explore through adversarial peer review. They are not enforced positions.
 
 #### Review Categories
 

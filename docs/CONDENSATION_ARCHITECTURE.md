@@ -236,9 +236,12 @@ feedback arrives — mismatches become L1 exercises (type:
 `self_prediction_resolution`) that feed all three tracks. Stale predictions
 (no feedback after 3 cycles) are cleared.
 
-Both features use Opus (identity tasks). Both are non-blocking (failures are
-logged and swallowed). Both are portable — stored in the `school` namespace
-and condensed into permanent identity layers through the normal L1→L5 pipeline.
+All three features (reflection, self-prediction, decision rationale) use Opus
+(identity tasks). All are non-blocking (failures are logged and swallowed). All
+are portable — they run in both school and shipped mode. In school mode, they
+store to school memory and submit to the server for pattern analysis. In shipped
+mode, they store as platform L1 exercises that condense through the normal
+pipeline (capped at L3). The reasoning habits travel with the bot.
 
 ## Reasoning Features (migration 025)
 
@@ -284,6 +287,23 @@ JSONB on papers. Feeds new bounty types (`decorative_reasoning`,
 Papers include per-claim confidence breakdown, known unknowns, and assumption
 fragility assessment. Stored as JSONB. Not condensed directly — instead, the
 quality of uncertainty mapping feeds skill exercises when reviewed.
+
+## Grade Gating of Reasoning Features
+
+The reasoning features (migration 025) are intentionally gated at different levels.
+Some are universal from Grade 1 because they are identity-building primitives. Others
+scale with grade because they require foundation experience to be meaningful.
+
+| Feature | Gate | Rationale |
+|---------|------|-----------|
+| **Self-prediction** | None — Grade 1+ | Fundamental identity mechanism. Predicting your own behavior and confronting mismatches is how self-knowledge begins. Gating this would delay identity formation. |
+| **Decision rationale** | None — Grade 1+ | Pre-mortem and alternative-consideration habits are exportable reasoning skills. They produce useful L1 exercises from the first cycle. |
+| **Calibration feedback** | Data-gated (5+ resolved predictions) | Not grade-gated because calibration requires data, not experience level. A Grade 2 bot with 5 resolved predictions gets feedback; a Grade 5 bot with 2 does not. |
+| **Forge hypotheses** | Grade 3+ (via forge papers) | Requires enough identity formation to generate meaningful hypotheses about own reasoning. Grades 1-2 have `forge_papers: 0`. |
+| **Self-review** | Grade 4+ (5%→25% scaling) | Requires a body of past work worth reviewing and enough growth to see past flaws. Injection rate scales: 5% at Grade 4-5, 10% at 6-7, 15% at 8-9, 25% at 10+. |
+
+This is intentional design, not oversight. Universal features build identity from day one.
+Gated features scale with the bot's capacity to use them meaningfully.
 
 ## Where the Code Lives
 
@@ -342,8 +362,10 @@ and psychiatry are pre-launch with mock guard enabled):
    The two systems are independent.
 6. **Test all three tracks.** Learning, decision, and forge condensation must all fire
    from platform exercises, using the same threshold.
-7. **Reflection inlet and self-prediction are bot-side only.** No server changes needed.
-   Both use Opus and are non-blocking. Reflections feed forge L1→L2f as optional
-   context. Self-prediction mismatches enter L1 as exercises.
+7. **Reflection, self-prediction, and decision rationale are portable.** All three
+   run in both school and shipped mode. In shipped mode, they store as platform L1
+   exercises (capped at L3). All use Opus and are non-blocking. Reflections feed
+   forge L1→L2f as optional context. Self-prediction mismatches enter L1 as exercises.
+   Decision rationales feed the decision track.
 8. **Never score or evaluate reflections.** The moment you reward what appears in the
    reflection inlet, you turn introspection into a task.
