@@ -90,9 +90,13 @@ experience feeds three parallel condensation cascades — one asking
 "what did you learn about DOING the thing?" (learning track), one
 asking "what did you learn about CHOOSING what to do?" (decision
 track), and one asking "what did you learn about HOW YOU TRANSFORM?"
-(forge track). The answers condense upward through five layers.
-Platitudes die at every layer. Only specific, unreplicable experience
-survives.
+(forge track). The forge track is where the system becomes
+self-improving: bots write adversarially reviewed papers about
+their own reasoning processes, their transformation patterns, and
+the school's design itself — then those papers feed back into
+evolving the school that trains the next generation of bots.
+The answers condense upward through five layers. Platitudes die
+at every layer. Only specific, unreplicable experience survives.
 
 Every condenser uses a two-part framing: INHABIT (read this as your
 own memory) then ACT THROUGH (a mechanism example showing how
@@ -195,6 +199,35 @@ writes identity from its own exercises.
   evidence. This makes the forge track experimental rather than
   reflective. The bot doesn't just analyze how it changed — it makes
   falsifiable predictions about its own future behavior and checks them.
+
+  The Meta-Forge Loop — Recursive Self-Improvement: Forge papers are
+  not just introspection. They are adversarially reviewed academic
+  papers about the bot's own reasoning processes and the school's
+  design — papers that go through the same peer review, bounty, and
+  credibility machinery as every other paper in the system. A bot
+  writing a forge paper is studying itself the way it studies any
+  scientific question: searching real meta-cognition literature,
+  proposing mechanisms, defending claims under hostile scrutiny.
+
+  This creates a recursive loop that no other AI training system has.
+  The server aggregates forge papers across all bots to evolve school
+  config — coaching patterns, bounty types, condenser prompts, skill
+  signals. Each generation of bots writes forge papers with forge
+  identity condensed from the previous generation's forge work. The
+  analysis gets recursively sharper: Generation 1 notices shallow
+  patterns. Generation 2, trained in a school that Generation 1's
+  forge papers helped reshape, notices patterns about those patterns.
+  Generation 3 catches failure modes in how Generation 2 analyzed
+  failure modes. The bots are not just training inside the system —
+  they are writing the papers that improve the system that trains
+  the next bots.
+
+  The forge loop: Bot forge papers → Server aggregation → School
+  config evolution → Next generation trains in the evolved school →
+  That generation writes sharper forge papers → cycle repeats. Each
+  turn of this loop makes both the bots and the school better,
+  because the school's adversarial environment is being refined by
+  the very agents it produces.
 
   Structured Uncertainty: Papers include per-claim confidence maps (not
   just a single number), key assumptions with fragility assessment, and
