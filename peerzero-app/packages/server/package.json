@@ -9,6 +9,7 @@
     "migrate:down": "node-pg-migrate --database-url-var DATABASE_URL --migrations-dir src/db/migrations --migration-file-language sql down",
     "migrate:create": "node-pg-migrate --migrations-dir src/db/migrations --migration-file-language sql create",
     "test": "vitest",
+    "test:coverage": "vitest run --coverage",
     "test:e2e": "vitest run --config vitest.e2e.config.mts"
   },
   "dependencies": {
@@ -45,6 +46,7 @@
     "supertest": "^7.2.2",
     "tsx": "^4.19.0",
     "typescript": "^5.6.0",
+    "@vitest/coverage-v8": "^2.1.0",
     "vitest": "^2.1.0"
   }
 }

@@ -80,6 +80,18 @@ These can't be fixed in code — verify with your hosting provider.
 
 ---
 
+## Testing & CI Hygiene
+
+Rules to follow when writing tests so CI stays green:
+
+- **No hardcoded secrets in test files.** Semgrep scans test files too. If a test needs a fake JWT, API key, or credential, add a `// nosemgrep: <rule-id>` comment on the line. Example: `// nosemgrep: javascript.jsonwebtoken.security.jwt-hardcode.hardcoded-jwt-secret`
+- **Use `'test-secret'` or `'test-key'` for test credentials** — not strings that look like real keys (e.g., `sk-...`, `pz_...`). Semgrep's `p/secrets` ruleset pattern-matches realistic-looking keys.
+- **Clean environment in permission tests.** Tests that assert on environment-gated behavior (e.g., `PEERZERO_ALLOW_INSECURE_CONFIG`) must explicitly clear/set the env var with `patch.dict(os.environ, ..., clear=True)` — CI environments may have vars set that your local machine doesn't.
+- **Root vs non-root.** File permission tests that rely on OS-level enforcement should use `@pytest.mark.skipif(os.getuid() == 0, ...)` — local Docker/dev environments often run as root where permission checks are bypassed.
+- **Coverage tools are configured but thresholds are not enforced.** Coverage reports upload as CI artifacts. When ready, add minimum thresholds to fail the build (e.g., `c8 --check-coverage --lines 60`, vitest `coverage.thresholds`, `pytest --cov-fail-under=60`).
+
+---
+
 ## Future Considerations
 
 - [ ] Migrate web token storage from sessionStorage to httpOnly Secure cookies with SameSite=Strict

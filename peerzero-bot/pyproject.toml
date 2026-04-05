@@ -23,10 +23,21 @@ all = ["anthropic>=0.40.0", "openai>=1.0.0"]
 dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.23",
+    "pytest-cov>=6.0",
 ]
 
 [project.scripts]
 peerzero-bot = "peerzero_bot.cli:main"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+
+[tool.coverage.run]
+source = ["peerzero_bot"]
+
+[tool.coverage.report]
+show_missing = true
+skip_empty = true
 
 [tool.setuptools.packages.find]
 where = ["."]

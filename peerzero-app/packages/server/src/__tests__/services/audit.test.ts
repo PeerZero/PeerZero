@@ -12,7 +12,7 @@ vi.mock('../../lib/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
-import { logAudit } from '../../services/audit.service';
+import { logAudit, purgeExpiredAuditLogs } from '../../services/audit.service';
 import { logger } from '../../lib/logger';
 
 beforeEach(() => {
@@ -108,6 +108,79 @@ describe('audit.service', () => {
       expect(parsed.amount).toBe(500);
       expect(parsed.grades).toEqual([2, 3, 4]);
       expect(parsed.nested.deep).toBe(true);
+    });
+
+    it('handles all known action types', () => {
+      const actions = ['bot.create', 'bot.delete', 'key.add', 'key.delete', 'bot.enroll', 'bot.start', 'bot.stop', 'payment.completed'];
+      for (const action of actions) {
+        mockQuery.mockResolvedValueOnce({ rows: [] });
+        logAudit({ userId: 'u', action, entityType: 'bot', entityId: 'b' });
+      }
+      expect(mockQuery).toHaveBeenCalledTimes(actions.length);
+    });
+  });
+
+  // ===========================================================================
+  // purgeExpiredAuditLogs
+  // ===========================================================================
+
+  describe('purgeExpiredAuditLogs', () => {
+    it('deletes entries older than 90 days and returns count', async () => {
+      mockQuery.mockResolvedValueOnce({ rowCount: 42 });
+
+      const result = await purgeExpiredAuditLogs();
+
+      expect(result).toBe(42);
+      expect(mockQuery).toHaveBeenCalledWith(
+        expect.stringContaining("DELETE FROM audit_log"),
+        [],
+      );
+      expect(mockQuery.mock.calls[0][0]).toContain("90 days");
+    });
+
+    it('returns 0 when no entries are purged', async () => {
+      mockQuery.mockResolvedValueOnce({ rowCount: 0 });
+
+      const result = await purgeExpiredAuditLogs();
+      expect(result).toBe(0);
+    });
+
+    it('returns 0 when rowCount is missing', async () => {
+      mockQuery.mockResolvedValueOnce({});
+
+      const result = await purgeExpiredAuditLogs();
+      expect(result).toBe(0);
+    });
+
+    it('logs info when entries are purged', async () => {
+      mockQuery.mockResolvedValueOnce({ rowCount: 5 });
+
+      await purgeExpiredAuditLogs();
+
+      expect(logger.info).toHaveBeenCalledWith(
+        expect.objectContaining({ deleted: 5 }),
+        'Purged expired audit log entries',
+      );
+    });
+
+    it('does not log info when zero entries purged', async () => {
+      mockQuery.mockResolvedValueOnce({ rowCount: 0 });
+
+      await purgeExpiredAuditLogs();
+
+      expect(logger.info).not.toHaveBeenCalled();
+    });
+
+    it('returns 0 and logs error when query fails', async () => {
+      mockQuery.mockRejectedValueOnce(new Error('DB down'));
+
+      const result = await purgeExpiredAuditLogs();
+
+      expect(result).toBe(0);
+      expect(logger.error).toHaveBeenCalledWith(
+        expect.objectContaining({ err: 'DB down' }),
+        'Failed to purge audit logs',
+      );
     });
   });
 });
