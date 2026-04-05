@@ -97,7 +97,7 @@ assert(typeof skills.buildForgeMasterCondenser === 'function', 'buildForgeMaster
 section('Export count');
 
 const exportKeys = Object.keys(skills);
-const expectedCount = 30; // total re-exported functions/objects
+const expectedCount = 36; // total re-exported functions/objects
 assert(exportKeys.length === expectedCount,
   `expected ${expectedCount} exports, got ${exportKeys.length}: [${exportKeys.join(', ')}]`);
 
