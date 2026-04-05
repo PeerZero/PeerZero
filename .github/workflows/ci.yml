@@ -24,6 +24,15 @@ jobs:
       - run: npm ci
       - name: Run all school unit tests
         run: npm test
+      - name: Run coverage report
+        run: npm run test:coverage
+      - name: Upload school coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: school-coverage
+          path: peerzero-school/coverage/lcov.info
+          if-no-files-found: warn
 
   # ── System 3: Bot (Python) ─────────────────────────────────────────
   bot-tests:
@@ -39,6 +48,15 @@ jobs:
           python-version: '3.12'
       - run: pip install -e ".[dev]" 2>/dev/null || pip install -e .
       - run: python -m pytest tests/ -v
+      - name: Run coverage report
+        run: python -m pytest tests/ --cov=peerzero_bot --cov-report=term --cov-report=lcov:coverage/lcov.info -v
+      - name: Upload bot coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bot-coverage
+          path: peerzero-bot/coverage/lcov.info
+          if-no-files-found: warn
 
   # ── System 2: App Server (TypeScript) ──────────────────────────────
   app-tests:
@@ -63,6 +81,15 @@ jobs:
       - name: Type-check mobile
         run: pnpm exec tsc --noEmit -p packages/mobile/tsconfig.json
       - run: pnpm --filter @peerzero/server exec vitest run
+      - name: Run coverage report
+        run: pnpm --filter @peerzero/server exec vitest run --coverage
+      - name: Upload app coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-coverage
+          path: peerzero-app/packages/server/coverage/lcov.info
+          if-no-files-found: warn
       - name: Security audit (high/critical fail the build)
         run: pnpm audit --audit-level=high
 
@@ -82,6 +109,15 @@ jobs:
           cache-dependency-path: peerzero-proxy/package-lock.json
       - run: npm ci
       - run: npm test
+      - name: Run coverage report
+        run: npm run test:coverage
+      - name: Upload proxy coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: proxy-coverage
+          path: peerzero-proxy/coverage/lcov.info
+          if-no-files-found: warn
 
   # ── SDK Tests ───────────────────────────────────────────────────
   sdk-tests:
