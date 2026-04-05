@@ -637,7 +637,10 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
         except Exception as e:
             logger.debug(f"[REFLECTION] Cycle {self.cycle_count}: failed (non-blocking): {e}")
 
-    # ── Decision rationale capture (Feature 9 — exportable) ────────────
+    # ── Decision rationale capture (Feature 9) ─────────────────────────
+    # School version: detailed, submitted to server for pattern analysis.
+    # Platform version: lightweight, stored as platform L1 exercise.
+    # Both use the same pre-mortem pattern. The habit travels with the bot.
 
     _DECISION_RATIONALE_PROMPT = (
         "You are about to perform: {action}.\n"
@@ -1042,6 +1045,87 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
     # PLATFORM CYCLES (secondary — applying skills)
     # ═══════════════════════════════════════════════════════════════════════
 
+    # ── Exported reasoning habits (run in both school and shipped mode) ───
+    # These were school-exclusive but are now portable: the bot keeps doing
+    # pre-mortems, self-predictions, and reflections on platforms.
+    # Stored as platform L1 exercises (capped at L3), not school submissions.
+
+    def _platform_predict_pre_action(self, system_prompt: str, action_type: str, platform_name: str):
+        """Self-prediction before a platform action (exported reasoning habit).
+
+        Same mechanism as school self-prediction but stores to platform memory.
+        Non-blocking.
+        """
+        try:
+            prompt = (
+                f"You are about to perform '{action_type}' on {platform_name}. "
+                "Predict in one sentence: how will you approach this, and where might you fall short? "
+                "One sentence only. Be specific and honest."
+            )
+            prediction = self.llm.call(system_prompt, prompt)
+            if prediction and len(prediction.strip()) >= 10:
+                self.memory.store_self_prediction(prediction.strip(), f"platform:{action_type}", self.cycle_count)
+                logger.info(f"[PLATFORM-PREDICT] {platform_name}: stored prediction")
+        except Exception as e:
+            logger.debug(f"[PLATFORM-PREDICT] {platform_name}: failed (non-blocking): {e}")
+
+    def _platform_reflect_post_action(self, system_prompt: str, action_type: str, platform_name: str):
+        """Reflection after a platform action (exported reasoning habit).
+
+        Same mechanism as school reflection inlet but stores to platform memory.
+        Non-blocking.
+        """
+        try:
+            prompt = (
+                f"You just completed '{action_type}' on {platform_name}. "
+                "Anything on your mind? Not a summary of what you did — "
+                "anything you noticed about how you approached it, what felt "
+                "uncertain, or what you'd do differently. Brief and honest."
+            )
+            reflection = self.llm.call(system_prompt, prompt)
+            if reflection and len(reflection.strip()) >= 20:
+                self.memory.store_reflection(reflection.strip(), f"platform:{action_type}", self.cycle_count)
+                logger.info(f"[PLATFORM-REFLECT] {platform_name}: stored reflection ({len(reflection)} chars)")
+        except Exception as e:
+            logger.debug(f"[PLATFORM-REFLECT] {platform_name}: failed (non-blocking): {e}")
+
+    def _platform_capture_rationale(self, system_prompt: str, action_type: str, platform_name: str):
+        """Decision rationale capture on platforms (exported reasoning habit).
+
+        Same pre-mortem pattern as school decision rationale but stored as a
+        platform L1 exercise instead of submitted to the school server.
+        Non-blocking.
+        """
+        try:
+            prompt = (
+                f"You are about to perform '{action_type}' on {platform_name}.\n\n"
+                "Before acting, capture your decision rationale:\n"
+                "1. How do you frame this situation?\n"
+                "2. What alternative approach could you take?\n"
+                "3. Pre-mortem: assume this action FAILS. What is the most likely cause?\n\n"
+                "Reply with ONLY a JSON object:\n"
+                '{\n'
+                '  "problem_frame": "<how you see the situation>",\n'
+                '  "alternative": "<what else you could do>",\n'
+                '  "pre_mortem": "<most likely failure mode>"\n'
+                '}'
+            )
+            rationale_text = self.llm.call(system_prompt, prompt)
+            if rationale_text and len(rationale_text.strip()) >= 20:
+                rationale = extract_json(rationale_text)
+                if rationale:
+                    self.memory.store_platform_exercise({
+                        "interaction_type": "decision_rationale",
+                        "platform": platform_name,
+                        "action_type": action_type,
+                        "problem_frame": str(rationale.get("problem_frame", ""))[:300],
+                        "alternative": str(rationale.get("alternative", ""))[:300],
+                        "pre_mortem": str(rationale.get("pre_mortem", ""))[:300],
+                    })
+                    logger.info(f"[PLATFORM-DECISION] {platform_name}: rationale captured for {action_type}")
+        except Exception as e:
+            logger.debug(f"[PLATFORM-DECISION] {platform_name}: failed (non-blocking): {e}")
+
     def run_platform_cycle(self, adapter) -> dict | None:
         """Execute one cycle on an external platform (supports MCP tool use)."""
         platform_name = adapter.platform_name
@@ -1084,6 +1168,11 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
                 return self._run_mcp_tool_cycle(adapter, system_prompt, context, capabilities, platform_name)
 
             # ── Standard Platform Path ─────────────────────────────────────
+
+            # Exported reasoning habits: predict and capture rationale before acting
+            self._platform_predict_pre_action(system_prompt, "platform_action", platform_name)
+            self._platform_capture_rationale(system_prompt, "platform_action", platform_name)
+
             user_msg = self.prompts.build_platform_action_prompt(
                 platform_name=platform_name,
                 context=context.summary,
@@ -1145,7 +1234,11 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
                     "reasoning": str(action_data.get("reasoning", ""))[:300],
                 })
 
-            # Step 5c: Platform condensation (L1→L2→L3, both tracks)
+            # Step 5c: Reflection inlet (exported reasoning habit)
+            if result.success:
+                self._platform_reflect_post_action(system_prompt, action.action_type, platform_name)
+
+            # Step 5d: Platform condensation (L1→L2→L3, both tracks)
             if result.success:
                 try:
                     self._run_platform_condensation(system_prompt)
@@ -1199,6 +1292,10 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
         The LLM gets tool definitions and can call them in a loop,
         with each call checked against the autonomy policy.
         """
+        # Exported reasoning habits: predict and capture rationale before MCP tool use
+        self._platform_predict_pre_action(system_prompt, "mcp_tool_use", platform_name)
+        self._platform_capture_rationale(system_prompt, "mcp_tool_use", platform_name)
+
         # Build tool-aware prompt
         user_msg = self.prompts.build_mcp_tool_prompt(
             platform_name=platform_name,
@@ -1233,6 +1330,10 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
             platform_name=platform_name,
         )
 
+        # Reflection inlet after MCP tool use (exported reasoning habit)
+        if tool_result.used_tools:
+            self._platform_reflect_post_action(system_prompt, "mcp_tool_use", platform_name)
+
         # Store results in platform memory
         action_summary = {
             "action_type": "mcp_tool_use",
@@ -1242,6 +1343,22 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
             "tools_used": [tc["tool"] for tc in tool_result.tool_calls],
         }
         self.memory.store_platform_action(platform_name, action_summary)
+
+        # Store as platform L1 exercise for condensation
+        if tool_result.used_tools:
+            self.memory.store_platform_exercise({
+                "interaction_type": "mcp_tool_use",
+                "platform": platform_name,
+                "tool_calls": len(tool_result.tool_calls),
+                "tools_used": [tc["tool"] for tc in tool_result.tool_calls][:5],
+                "result_summary": tool_result.text[:300] if tool_result.text else "",
+            })
+
+            # Platform condensation (L1→L2→L3, all three tracks)
+            try:
+                self._run_platform_condensation(system_prompt)
+            except Exception as e:
+                logger.warning(f"[{platform_name}] Platform condensation failed (non-blocking): {e}")
 
         # Report
         if self.phone_home:

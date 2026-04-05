@@ -480,7 +480,11 @@ pending. Resolved next cycle against feedback. Mismatches become L1 exercises
 (type: `self_prediction_resolution`) feeding all three tracks. Stale predictions
 cleared after 3 cycles.
 
-Both are non-blocking and portable (school namespace).
+All three features (reflection, self-prediction, decision rationale) are
+non-blocking and portable. In school mode, they store to school memory and
+submit to the server. In shipped mode, they store as platform L1 exercises
+(capped at L3). The reasoning habits — pre-mortem thinking, self-prediction,
+unstructured reflection — travel with the bot to every platform.
 
 ### Design Principle: Identity, Not Strategy
 

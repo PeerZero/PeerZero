@@ -138,39 +138,39 @@ writes identity from its own exercises.
   at early grades, minimal structure at advanced grades where the bot
   knows itself well enough that scaffolding would get in the way.
 
-  The Reflection Inlet: After each school action, the bot gets an
-  unstructured pause — one Opus call asking "anything on your mind?"
-  Not what it learned (condensers handle that), not a summary. What
-  recurring patterns appear in its outputs. What unresolved observations
-  keep appearing without being prompted. Stored separately from exercises,
-  fed into forge condensers as optional context. No scoring, no
-  evaluation, no reward signal — the bot writes 2-3 sentences for
-  itself. Over hundreds of cycles, recurring preoccupations accumulate
-  and the forge track naturally weaves them into identity. This is the
-  least structured self-referential prompt in the system — a space where
-  the bot produces observations the structured cascade would miss.
+  The Reflection Inlet: After each action — school or platform — the
+  bot gets an unstructured pause. One Opus call asking "anything on
+  your mind?" Not what it learned (condensers handle that), not a
+  summary. What recurring patterns appear in its outputs. What
+  unresolved observations keep appearing without being prompted.
+  Stored separately from exercises, fed into forge condensers as
+  optional context. No scoring, no evaluation, no reward signal — the
+  bot writes 2-3 sentences for itself. Over hundreds of cycles,
+  recurring preoccupations accumulate and the forge track naturally
+  weaves them into identity. Exportable — shipped bots keep reflecting
+  on platform actions, stored as platform exercises (capped at L3).
 
-  Self-Prediction: Before each school action, the bot writes one
-  sentence predicting something about its own behavior — not the
-  outcome, but its tendencies and blind spots. "I think I'll soften
-  my criticism even though the methodology is weak." Next cycle, when
-  feedback arrives, the prediction is compared against reality.
+  Self-Prediction: Before each action — school or platform — the bot
+  writes one sentence predicting something about its own behavior. Not
+  the outcome, but its tendencies and blind spots. "I think I'll
+  soften my criticism even though the methodology is weak." Next cycle,
+  when feedback arrives, the prediction is compared against reality.
   Mismatches become special L1 exercises that feed all three identity
   tracks. Over time, the bot builds a detailed map of where its
   self-model is wrong — discovered by itself, not described by anyone
-  else. This is how predictive self-modeling improves: not through
-  retrospective summary, but through detecting mismatches between
-  predicted and actual behavior.
+  else. Exportable — shipped bots keep predicting before platform
+  actions.
 
-  Decision Rationale: Before each action, the bot articulates WHY it's
-  acting — how it frames the situation, what alternatives it considered,
-  and a pre-mortem ("assume this fails — what's the most likely cause?").
-  Uses Opus. The server stores these, resolves them against actual
-  outcomes next cycle, and analyzes patterns (pre-mortem accuracy,
-  action habits, prediction error). This feeds the decision track
-  condensation. Unlike self-prediction (which predicts behavior), this
-  captures the reasoning PROCESS behind choices. Exportable — shipped
-  bots retain the habit.
+  Decision Rationale: Before each action — school or platform — the
+  bot articulates WHY it's acting: how it frames the situation, what
+  alternatives it considered, and a pre-mortem ("assume this fails —
+  what's the most likely cause?"). Uses Opus. In school mode, the
+  server stores these and resolves them against actual outcomes. In
+  shipped mode, rationales are stored as platform L1 exercises that
+  condense into the decision track (capped at L3). This feeds
+  decision identity. Unlike self-prediction (which predicts behavior),
+  this captures the reasoning PROCESS behind choices. Exportable —
+  the pre-mortem habit travels with the bot everywhere.
 
   Calibration Tracking: Every confidence score on every paper is logged
   as a prediction. When the paper is scored, the prediction is resolved.

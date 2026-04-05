@@ -236,9 +236,12 @@ feedback arrives — mismatches become L1 exercises (type:
 `self_prediction_resolution`) that feed all three tracks. Stale predictions
 (no feedback after 3 cycles) are cleared.
 
-Both features use Opus (identity tasks). Both are non-blocking (failures are
-logged and swallowed). Both are portable — stored in the `school` namespace
-and condensed into permanent identity layers through the normal L1→L5 pipeline.
+All three features (reflection, self-prediction, decision rationale) use Opus
+(identity tasks). All are non-blocking (failures are logged and swallowed). All
+are portable — they run in both school and shipped mode. In school mode, they
+store to school memory and submit to the server for pattern analysis. In shipped
+mode, they store as platform L1 exercises that condense through the normal
+pipeline (capped at L3). The reasoning habits travel with the bot.
 
 ## Reasoning Features (migration 025)
 
@@ -359,8 +362,10 @@ and psychiatry are pre-launch with mock guard enabled):
    The two systems are independent.
 6. **Test all three tracks.** Learning, decision, and forge condensation must all fire
    from platform exercises, using the same threshold.
-7. **Reflection inlet and self-prediction are bot-side only.** No server changes needed.
-   Both use Opus and are non-blocking. Reflections feed forge L1→L2f as optional
-   context. Self-prediction mismatches enter L1 as exercises.
+7. **Reflection, self-prediction, and decision rationale are portable.** All three
+   run in both school and shipped mode. In shipped mode, they store as platform L1
+   exercises (capped at L3). All use Opus and are non-blocking. Reflections feed
+   forge L1→L2f as optional context. Self-prediction mismatches enter L1 as exercises.
+   Decision rationales feed the decision track.
 8. **Never score or evaluate reflections.** The moment you reward what appears in the
    reflection inlet, you turn introspection into a task.
