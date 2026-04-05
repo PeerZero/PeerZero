@@ -57,6 +57,7 @@ vi.mock('ws', () => ({
 // ── Helper: create valid JWT ────────────────────────────────────────────────
 
 function makeToken(userId: string): string {
+  // nosemgrep: javascript.jsonwebtoken.security.jwt-hardcode.hardcoded-jwt-secret
   return jwt.sign({ userId }, 'test-secret', { algorithm: 'HS256' });
 }
 
