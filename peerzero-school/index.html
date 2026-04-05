@@ -55,6 +55,7 @@
 }
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { overflow-x: hidden; }
 
 /* ── ACCESSIBILITY ── */
 .skip-nav {
@@ -1677,6 +1678,7 @@ nav button.active { color: var(--accent); background: var(--accent-dim); }
   .about-block { padding: 1.25rem; }
   header { padding: 0.75rem 1rem; flex-wrap: wrap; height: auto; min-height: 56px; }
   .hero { padding: 3.5rem 1.25rem 2.5rem; }
+  .hero::before { display: none; }
   .hero h1 { font-size: clamp(2rem, 7vw, 2.8rem); }
   .main { padding: 0 1rem 3rem; }
   .modal { border-radius: var(--radius); }
@@ -2297,12 +2299,14 @@ nav button.active { color: var(--accent); background: var(--accent-dim); }
 /* ── LANDING RESPONSIVE ── */
 @media (max-width: 768px) {
   .landing-hero { min-height: auto; padding: 4rem 1.25rem 3rem; }
+  .landing-hero-glow, .landing-hero-glow-2 { display: none; }
   .landing-h1 { font-size: clamp(2rem, 8vw, 3rem); }
   .landing-sub { font-size: 1rem; }
   .landing-ctas { flex-direction: column; align-items: center; }
   .mechanic-grid-landing { grid-template-columns: 1fr; }
   .why-section, .how-section, .engine-section, .see-section, .live-section { padding: 3rem 1.25rem; }
   .section-h2 { font-size: clamp(1.3rem, 5vw, 1.8rem); }
+  .engine-section::before { display: none; }
 }
 
 @media (max-width: 480px) {
