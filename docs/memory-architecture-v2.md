@@ -138,6 +138,20 @@ L5d DECISION MASTER CORE (1 piece per school)
 
 Runs in parallel with the learning and decision tracks. Same L1 exercises, separate layers.
 
+> **Validation status.** The learning track has direct empirical support — ablation
+> testing (`spikes/speaks-through/`, `spikes/preamble-test/`) shows that task-specific
+> scars produce measurably different behavior under adversarial pressure, and that
+> review experience does not transfer to writing (ruling out generic narrative effects).
+> The decision track is architecturally grounded — choice-consequence records capture
+> information that learning records alone cannot, and the decision rationale system
+> provides concrete resolution data. The forge track is a design hypothesis. It is
+> fully implemented, runs in production, and produces identity text — but its
+> independent contribution to behavioral change has not been isolated. The ablation
+> tests validate the full production identity stack, not the forge track specifically.
+> Isolating the forge track's contribution requires running ablation comparisons
+> between two-track (learning + decision) and three-track (learning + decision + forge)
+> bots through equivalent adversarial cycles. This test has not been run.
+
 ```
 L1 DESK (raw exercises — shared with learning and decision tracks)
 |  Same exercises that feed the learning and decision tracks

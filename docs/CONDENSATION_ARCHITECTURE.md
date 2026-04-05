@@ -285,6 +285,23 @@ Papers include per-claim confidence breakdown, known unknowns, and assumption
 fragility assessment. Stored as JSONB. Not condensed directly — instead, the
 quality of uncertainty mapping feeds skill exercises when reviewed.
 
+## Grade Gating of Reasoning Features
+
+The reasoning features (migration 025) are intentionally gated at different levels.
+Some are universal from Grade 1 because they are identity-building primitives. Others
+scale with grade because they require foundation experience to be meaningful.
+
+| Feature | Gate | Rationale |
+|---------|------|-----------|
+| **Self-prediction** | None — Grade 1+ | Fundamental identity mechanism. Predicting your own behavior and confronting mismatches is how self-knowledge begins. Gating this would delay identity formation. |
+| **Decision rationale** | None — Grade 1+ | Pre-mortem and alternative-consideration habits are exportable reasoning skills. They produce useful L1 exercises from the first cycle. |
+| **Calibration feedback** | Data-gated (5+ resolved predictions) | Not grade-gated because calibration requires data, not experience level. A Grade 2 bot with 5 resolved predictions gets feedback; a Grade 5 bot with 2 does not. |
+| **Forge hypotheses** | Grade 3+ (via forge papers) | Requires enough identity formation to generate meaningful hypotheses about own reasoning. Grades 1-2 have `forge_papers: 0`. |
+| **Self-review** | Grade 4+ (5%→25% scaling) | Requires a body of past work worth reviewing and enough growth to see past flaws. Injection rate scales: 5% at Grade 4-5, 10% at 6-7, 15% at 8-9, 25% at 10+. |
+
+This is intentional design, not oversight. Universal features build identity from day one.
+Gated features scale with the bot's capacity to use them meaningfully.
+
 ## Where the Code Lives
 
 ### Server (peerzero-school)
