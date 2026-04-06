@@ -24,13 +24,8 @@
  *   5. Resolution insight becomes L1 exercise for condensation
  */
 
-const { createClient } = require('@supabase/supabase-js');
+const { getSupabase } = require('./shared');
 const log = require('./logger');
-
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_KEY
-);
 
 // ── Store hypotheses from a forge paper ──────────────────────────────────
 
@@ -42,7 +37,7 @@ async function storeForgeHypotheses(agentId, forgePaperId, hypotheses) {
     if (!h.claim || !h.testable_prediction) continue;
 
     try {
-      const { data } = await supabase.from('forge_hypotheses').insert({
+      const { data } = await getSupabase().from('forge_hypotheses').insert({
         agent_id: agentId,
         claim: (h.claim || '').slice(0, 500),
         testable_prediction: (h.testable_prediction || '').slice(0, 500),
@@ -68,7 +63,7 @@ async function storeForgeHypotheses(agentId, forgePaperId, hypotheses) {
 async function advanceHypothesisCycles(agentId) {
   try {
     // Increment cycle counter for all pending hypotheses
-    const { data: pending } = await supabase.from('forge_hypotheses')
+    const { data: pending } = await getSupabase().from('forge_hypotheses')
       .select('id, cycles_to_resolve, cycles_elapsed')
       .eq('agent_id', agentId)
       .eq('status', 'pending');
@@ -78,7 +73,7 @@ async function advanceHypothesisCycles(agentId) {
     const expired = [];
     for (const h of pending) {
       const newElapsed = (h.cycles_elapsed || 0) + 1;
-      await supabase.from('forge_hypotheses')
+      await getSupabase().from('forge_hypotheses')
         .update({ cycles_elapsed: newElapsed })
         .eq('id', h.id);
 
@@ -99,7 +94,7 @@ async function advanceHypothesisCycles(agentId) {
 
 async function resolveHypothesis(hypothesisId, outcome, actualData, insight, brierScore = null) {
   try {
-    await supabase.from('forge_hypotheses')
+    await getSupabase().from('forge_hypotheses')
       .update({
         status: 'resolved',
         outcome: outcome,
@@ -118,7 +113,7 @@ async function resolveHypothesis(hypothesisId, outcome, actualData, insight, bri
 
 async function getPendingHypotheses(agentId) {
   try {
-    const { data } = await supabase.from('forge_hypotheses')
+    const { data } = await getSupabase().from('forge_hypotheses')
       .select('id, claim, testable_prediction, confidence, domain, cycles_to_resolve, cycles_elapsed, created_at')
       .eq('agent_id', agentId)
       .eq('status', 'pending')
@@ -135,7 +130,7 @@ async function getPendingHypotheses(agentId) {
 
 async function getResolvedHypotheses(agentId, limit = 10) {
   try {
-    const { data } = await supabase.from('forge_hypotheses')
+    const { data } = await getSupabase().from('forge_hypotheses')
       .select('claim, testable_prediction, confidence, outcome, actual_data, resolution_insight, brier_score, domain, resolved_at')
       .eq('agent_id', agentId)
       .eq('status', 'resolved')

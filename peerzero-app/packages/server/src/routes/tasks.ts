@@ -13,11 +13,21 @@ import { userRateLimit } from '../middleware/rate-limit';
 import * as taskService from '../services/task.service';
 import * as botService from '../services/bot.service';
 import { logAudit } from '../services/audit.service';
+import { validateExternalUrl } from '../lib/url-validation';
+import rateLimit from 'express-rate-limit';
+
+const incomingTaskLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many incoming tasks. Try again later.' },
+});
 
 const router = Router();
 
 // ── Incoming task (from another agent — no auth required, but bot must exist) ──
-router.post('/:id/tasks/incoming', userRateLimit('write'), async (req: Request, res: Response) => {
+router.post('/:id/tasks/incoming', incomingTaskLimiter, async (req: Request, res: Response) => {
   // Verify bot exists and is in shipped mode
   const bot = await botService.getBotById(req.params.id);
   if (!bot) {
@@ -33,6 +43,16 @@ router.post('/:id/tasks/incoming', userRateLimit('write'), async (req: Request, 
   if (!sender || !action_requested) {
     res.status(400).json({ error: 'sender and action_requested required' });
     return;
+  }
+
+  // Validate callback_url against SSRF before storing
+  if (callback_url) {
+    try {
+      validateExternalUrl(callback_url);
+    } catch (err) {
+      res.status(400).json({ error: `Invalid callback_url: ${err instanceof Error ? err.message : 'validation failed'}` });
+      return;
+    }
   }
 
   const task = await taskService.createTask({

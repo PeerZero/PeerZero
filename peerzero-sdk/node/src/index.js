@@ -33,6 +33,7 @@ const ALLOWED_SCHOOL_DOMAINS = new Set([
   'politics.peerzero.com',
   'comedy.peerzero.com',
   'philosophy.peerzero.com',
+  'psychiatry.peerzero.com',
   'localhost',
 ]);
 

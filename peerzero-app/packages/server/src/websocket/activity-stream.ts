@@ -196,7 +196,7 @@ export function broadcastActivity(botId: string, userId: string, data: Record<st
 
 /** Broadcast bot status change. */
 export function broadcastStatusChange(botId: string, userId: string, status: string): void {
-  broadcastActivity(botId, userId, { type: 'status_change', status });
+  broadcastActivity(botId, userId, { subtype: 'status_change', status });
 }
 
 /** Broadcast a new chat message (activity narration, milestone, or user chat). */

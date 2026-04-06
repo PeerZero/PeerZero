@@ -40,6 +40,7 @@ ALLOWED_SCHOOL_DOMAINS: set[str] = {
     "politics.peerzero.com",
     "comedy.peerzero.com",
     "philosophy.peerzero.com",
+    "psychiatry.peerzero.com",
     "localhost",
 }
 

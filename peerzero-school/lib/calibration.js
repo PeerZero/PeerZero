@@ -19,13 +19,8 @@
  *   - Review calibration: resolved when consensus forms (outcome = within 1.5 of consensus)
  */
 
-const { createClient } = require('@supabase/supabase-js');
+const { getSupabase } = require('./shared');
 const log = require('./logger');
-
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_KEY
-);
 
 const WINDOW_SIZE = 50;  // Last N predictions for windowed Brier
 const CALIBRATION_BINS = 10;  // For calibration curve
@@ -36,7 +31,7 @@ async function recordCalibrationPrediction(agentId, actionType, prediction, doma
   try {
     // Normalize prediction to 0-1 range
     const normalized = Math.max(0, Math.min(1, prediction));
-    await supabase.from('calibration_log').insert({
+    await getSupabase().from('calibration_log').insert({
       agent_id: agentId,
       action_type: actionType,
       domain: domain,
@@ -53,7 +48,7 @@ async function recordCalibrationPrediction(agentId, actionType, prediction, doma
 async function resolveCalibrationPrediction(agentId, actionType, outcome, domain = null) {
   try {
     // Find the most recent unresolved prediction for this agent+action+domain
-    const query = supabase.from('calibration_log')
+    const query = getSupabase().from('calibration_log')
       .select('id')
       .eq('agent_id', agentId)
       .eq('action_type', actionType)
@@ -66,7 +61,7 @@ async function resolveCalibrationPrediction(agentId, actionType, outcome, domain
     const { data } = await query;
     if (!data || data.length === 0) return;
 
-    await supabase.from('calibration_log')
+    await getSupabase().from('calibration_log')
       .update({ outcome: outcome ? 1 : 0, resolved_at: new Date().toISOString() })
       .eq('id', data[0].id);
   } catch (err) {
@@ -137,7 +132,7 @@ function computeBrier(predictions) {
 async function updateCalibrationSummary(agentId) {
   try {
     // Fetch all resolved predictions
-    const { data: allPredictions } = await supabase.from('calibration_log')
+    const { data: allPredictions } = await getSupabase().from('calibration_log')
       .select('prediction, outcome, domain, action_type, created_at')
       .eq('agent_id', agentId)
       .not('outcome', 'is', null)
@@ -145,7 +140,7 @@ async function updateCalibrationSummary(agentId) {
 
     if (!allPredictions || allPredictions.length < 5) {
       // Not enough data for meaningful calibration
-      await supabase.from('calibration_summaries').upsert({
+      await getSupabase().from('calibration_summaries').upsert({
         agent_id: agentId,
         total_predictions: allPredictions?.length || 0,
         resolved_predictions: allPredictions?.length || 0,
@@ -204,11 +199,11 @@ async function updateCalibrationSummary(agentId) {
     }
 
     // Count total predictions (including unresolved)
-    const { count: totalCount } = await supabase.from('calibration_log')
+    const { count: totalCount } = await getSupabase().from('calibration_log')
       .select('id', { count: 'exact', head: true })
       .eq('agent_id', agentId);
 
-    await supabase.from('calibration_summaries').upsert({
+    await getSupabase().from('calibration_summaries').upsert({
       agent_id: agentId,
       lifetime_brier: lifetime.brier,
       lifetime_reliability: lifetime.reliability,
@@ -231,7 +226,7 @@ async function updateCalibrationSummary(agentId) {
 
 async function buildCalibrationFeedback(agentId) {
   try {
-    const { data: summary } = await supabase.from('calibration_summaries')
+    const { data: summary } = await getSupabase().from('calibration_summaries')
       .select('*')
       .eq('agent_id', agentId)
       .single();

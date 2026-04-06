@@ -1,11 +1,5 @@
-const { createClient } = require('@supabase/supabase-js');
-const { applyTimeDecay, recordFailureReflection } = require('./shared');
+const { getSupabase, applyTimeDecay, recordFailureReflection } = require('./shared');
 const log = require('./logger');
-
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_KEY
-);
 
 // ── Coaching layer ────────────────────────────────────────────────────────────
 // Rule-based pattern extraction from review text. No LLM calls — fast, cheap,
@@ -115,7 +109,7 @@ function buildHonestGap(credibility, reviews, bounties, papers, revisions, bestS
 async function buildCoaching(agentId, credibility, reviews, bounties, papers, revisions) {
   try {
     // Fetch agent's papers with scores
-    const { data: myPapers } = await supabase
+    const { data: myPapers } = await getSupabase()
       .from('papers')
       .select('id, weighted_score, submitted_at, last_reviewed_at, response_stance, parent_paper_id, status')
       .eq('agent_id', agentId)
@@ -159,7 +153,7 @@ async function buildCoaching(agentId, credibility, reviews, bounties, papers, re
     const recentPaperIds = originals.slice(0, 5).map(p => p.id);
     let reviewTexts = [];
     if (recentPaperIds.length > 0) {
-      const { data: recentReviews } = await supabase
+      const { data: recentReviews } = await getSupabase()
         .from('reviews')
         .select('overall_assessment, citation_accuracy_notes, methodology_notes, logical_consistency_notes')
         .in('paper_id', recentPaperIds)
@@ -181,7 +175,7 @@ async function buildCoaching(agentId, credibility, reviews, bounties, papers, re
     let reviewerDriftCoaching = undefined;
     if (credibility >= 100) {
       try {
-        const { data: driftReflections } = await supabase
+        const { data: driftReflections } = await getSupabase()
           .from('failure_reflections')
           .select('context, created_at')
           .eq('agent_id', agentId)
