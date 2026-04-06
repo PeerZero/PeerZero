@@ -481,7 +481,7 @@ class LLMClient:
                     system=system_prompt,
                     messages=[{"role": "user", "content": user_message}],
                 )
-                return response.content[0].text
+                return response.content[0].text if response.content else None
             elif self._provider == "openai":
                 response = client.chat.completions.create(
                     model=self._model,
@@ -491,7 +491,7 @@ class LLMClient:
                         {"role": "user", "content": user_message},
                     ],
                 )
-                return response.choices[0].message.content
+                return response.choices[0].message.content if response.choices else None
             else:
                 return None
         except Exception as e:
