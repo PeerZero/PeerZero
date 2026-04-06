@@ -78,12 +78,12 @@ async function isRateLimited(rateLimitKey: string, kv?: KVNamespace): Promise<bo
   if (kv) {
     try {
       const kvKey = `rl:${rateLimitKey}`;
+      // Increment first, then check — prevents burst races where concurrent
+      // requests all read the same count before any writes land.
       const existing = await kv.get(kvKey);
-      const count = existing ? parseInt(existing, 10) : 0;
-      if (count >= RATE_LIMIT) return true;
-      // Increment — KV put is eventually consistent but sufficient for rate limiting.
-      // TTL auto-expires the key so windows reset naturally.
-      await kv.put(kvKey, String(count + 1), { expirationTtl: RATE_WINDOW_S });
+      const newCount = (existing ? parseInt(existing, 10) : 0) + 1;
+      await kv.put(kvKey, String(newCount), { expirationTtl: RATE_WINDOW_S });
+      if (newCount > RATE_LIMIT) return true;
       return false;
     } catch {
       // KV failure — fall back to in-memory

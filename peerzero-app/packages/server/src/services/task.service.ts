@@ -85,13 +85,12 @@ export async function updateTaskStatus(
   result?: Record<string, unknown>,
   error?: string,
 ): Promise<void> {
-  const completedAt = ['completed', 'failed', 'rejected', 'expired'].includes(status)
-    ? 'now()' : 'NULL';
+  const isTerminal = ['completed', 'failed', 'rejected', 'expired'].includes(status);
   await query(
     `UPDATE bot_tasks SET status = $2, result = $3, error = $4,
-       completed_at = ${completedAt}, updated_at = now()
+       completed_at = CASE WHEN $5 THEN now() ELSE completed_at END, updated_at = now()
      WHERE id = $1`,
-    [taskId, status, result ? JSON.stringify(result) : null, error || null],
+    [taskId, status, result ? JSON.stringify(result) : null, error || null, isTerminal],
   );
 }
 
