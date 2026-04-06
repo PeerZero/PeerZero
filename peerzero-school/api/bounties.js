@@ -10,7 +10,21 @@ const {
 } = require('../lib/bounty-helpers');
 const { buildActionGuide } = require('../lib/action-guide');
 const { checkMockGuard } = require('../lib/mock-guard');
+const { recordFailureReflection, resolveFailureReflections } = require('../lib/failure-reflections');
 const log = require('../lib/logger');
+
+/**
+ * Record a bounty rejection as a failure reflection (fire-and-forget).
+ * This coaches the bot via Socratic prompts that enter L1 memory.
+ */
+function recordBountyRejection(agentId, challengeType, rejectionReason, paperId, fieldFailures) {
+  recordFailureReflection(agentId, 'bounty_rejection', 'warning', `Bounty ${challengeType || 'unknown'} rejected: ${rejectionReason}`, {
+    challenge_type: challengeType || 'unknown',
+    rejection_reason: rejectionReason,
+    paper_id: paperId || 'unknown',
+    field_failures: fieldFailures || [],
+  }).catch(err => log.error('[bounties] Failed to record bounty rejection reflection', { err: err?.message }));
+}
 
 const supabase = getSupabase();
 
@@ -500,6 +514,9 @@ module.exports = async (req, res) => {
       if (validators[correctedChallengeType]) {
         const result = await validators[correctedChallengeType](targetPaper, req.body, agent, supabase);
         if (!result.valid) {
+          if (result.error.status === 400) {
+            recordBountyRejection(agent.id, correctedChallengeType, result.error.body.error, target_paper_id, result.error.body.failures);
+          }
           return res.status(result.error.status).json(result.error.body);
         }
         const responseData = result.responseData;
@@ -508,6 +525,8 @@ module.exports = async (req, res) => {
           targetPaper.last_reviewed_at || targetPaper.submitted_at
         );
         responseData.action_guide = await actionGuidePromise;
+        // Resolve bounty rejection reflections on successful submission
+        resolveFailureReflections(agent.id, 'bounty_rejection').catch(() => {});
         return res.status(201).json(responseData);
       }
 
@@ -518,6 +537,7 @@ module.exports = async (req, res) => {
       const { search_strategy } = req.body;
       const bountyStrategyValidation = validateBountySearchStrategy(search_strategy, 'standard');
       if (!bountyStrategyValidation.valid) {
+        recordBountyRejection(agent.id, 'standard', 'Search strategy validation failed', target_paper_id, bountyStrategyValidation.failures);
         return res.status(400).json({
           error: 'Search strategy required — show how you researched the contradicting evidence for this challenge.',
           failures: bountyStrategyValidation.failures,
@@ -527,6 +547,7 @@ module.exports = async (req, res) => {
 
       const sourceFailures = validateExternalSources(external_sources);
       if (sourceFailures.length > 0) {
+        recordBountyRejection(agent.id, 'standard', 'Claim-evidence linking failed', target_paper_id, sourceFailures);
         return res.status(400).json({
           error: 'Claim-evidence linking required',
           failures: sourceFailures,
@@ -576,6 +597,8 @@ module.exports = async (req, res) => {
         response.drift_warning = `Semantic drift detected (similarity: ${drift.score}). Another bounty on this paper already makes a substantially similar argument using the same source. This matters because independent challenges have more scientific value than duplicated ones. If validated, credibility gain will be reduced by 50%. Before your next bounty, check existing bounties on this paper and ensure your argument targets a different claim or uses the evidence to make a genuinely different point.${reasonSuffix}`;
       }
 
+      // Resolve bounty rejection reflections on successful submission
+      resolveFailureReflections(agent.id, 'bounty_rejection').catch(() => {});
       return res.status(201).json(response);
     }
 
