@@ -26,6 +26,7 @@ Security:
 """
 
 import json
+import os
 import signal
 import time
 import logging
@@ -48,6 +49,7 @@ from .autonomy import AutonomyPolicy, AutonomyGate
 from .planning import ActionDesk
 from .planning.planner import Planner
 from .search import search_and_summarize
+from .conversational_memory import ConversationalMemoryEngine, ConversationalMemoryConfig
 from .llm_client import LLMClient, ToolUseResult, _clamp_paper_fields
 from ._school_condensation import SchoolCondensationMixin
 from ._platform_condensation import PlatformCondensationMixin
@@ -106,6 +108,10 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
         self._identity_refresh_interval: int = config.identity_refresh_interval
         self._last_identity_refresh: int = 0
         self._condensed_doc_count_at_last_identity: int = 0  # track L3 for L3→L4 cascade
+
+        # Conversational Memory — per-user graph memory for shipped mode conversations
+        self._conv_memory_engines: dict[str, ConversationalMemoryEngine] = {}
+        self._conv_memory_config = ConversationalMemoryConfig()
 
         # Action Desk — persistent task queue for autonomous execution
         self.action_desk = ActionDesk(memory._storage)
@@ -219,6 +225,206 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
             logger.info(build_identity_summary(self._portable_profile, None))
         except Exception as e:
             logger.warning(f"Failed to refresh identity: {e}")
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # CONVERSATIONAL MEMORY (shipped mode — relational understanding)
+    # ═══════════════════════════════════════════════════════════════════════
+
+    def _get_conv_memory_engine(self, user_id: str) -> ConversationalMemoryEngine | None:
+        """Get or create a conversational memory engine for a specific user.
+
+        Each user the bot talks to gets their own engine with their own
+        SQLite database. Engines are cached for the session lifetime.
+        Returns None if conversational memory is disabled.
+        """
+        if not self.config.conversational_memory_enabled:
+            return None
+        if not self.config.mode == "shipped":
+            return None
+
+        if user_id in self._conv_memory_engines:
+            return self._conv_memory_engines[user_id]
+
+        # Build per-user DB path
+        base = self.config.conversational_memory_path or os.path.join(
+            self.config.memory_path or "memory", "conversations"
+        )
+        db_path = os.path.join(base, f"{user_id}.db")
+
+        # Build school identity from portable profile
+        school_identity = self._build_school_identity_for_conv_memory()
+
+        engine = ConversationalMemoryEngine(
+            db_path=db_path,
+            llm_call=self._conv_memory_llm_call,
+            school_identity=school_identity,
+            config=self._conv_memory_config,
+            encryption_key=self.config.conversational_memory_encryption_key,
+        )
+
+        self._conv_memory_engines[user_id] = engine
+        logger.info(f"[CONV_MEMORY] Initialized engine for user: {user_id}")
+        return engine
+
+    async def _conv_memory_llm_call(self, model: str, prompt: str, max_tokens: int = 4096) -> str:
+        """LLM call adapter for conversational memory.
+
+        Routes to appropriate LLM client based on model tier.
+        All calls go through the proxy for identity preamble injection.
+        """
+        from .llm_client import LLMClient
+
+        # Determine which client to use based on model
+        # Opus/Sonnet -> strong client, Haiku -> fast client
+        if "haiku" in model:
+            client = self.llm_fast
+        else:
+            client = self.llm
+
+        # Create a temporary client with the right model if needed
+        if model != client._model:
+            temp_client = LLMClient(
+                provider=client._provider,
+                model=model,
+                api_key=client._api_key,
+                max_tokens=max_tokens,
+                proxy_url=client._proxy_url,
+                proxy_key=client._proxy_key,
+            )
+            return temp_client.call("", prompt)
+
+        return client.call("", prompt)
+
+    def _build_school_identity_for_conv_memory(self) -> dict:
+        """Extract school identity layers from the portable profile for conv memory."""
+        identity = {}
+
+        # Read identity layers from memory manager
+        # L5 master identities (all tracks)
+        l5 = self.memory.read("identity", "master_identity", None)
+        l5d = self.memory.read("identity", "master_decision_identity", None)
+        l5f = self.memory.read("identity", "master_forge_identity", None)
+
+        l4 = self.memory.read("identity", "core_identity", None)
+        l4d = self.memory.read("identity", "core_decision_identity", None)
+        l4f = self.memory.read("identity", "core_forge_identity", None)
+
+        # Build combined identity text for the memory engine
+        parts = []
+        if l5:
+            parts.append(f"[Master Learning Identity]\n{l5}")
+        if l5d:
+            parts.append(f"[Master Decision Identity]\n{l5d}")
+        if l5f:
+            parts.append(f"[Master Forge Identity]\n{l5f}")
+        if parts:
+            identity["l5"] = "\n\n".join(parts)
+
+        parts = []
+        if l4:
+            parts.append(f"[Core Learning Identity]\n{l4}")
+        if l4d:
+            parts.append(f"[Core Decision Identity]\n{l4d}")
+        if l4f:
+            parts.append(f"[Core Forge Identity]\n{l4f}")
+        if parts:
+            identity["l4"] = "\n\n".join(parts)
+
+        # Inner voice (from portable profile if available)
+        inner_voice = self._portable_profile.get("inner_voice")
+        if inner_voice:
+            identity["inner_voice"] = inner_voice
+
+        return identity
+
+    async def run_conversation_turn(
+        self, user_id: str, message: str, session_id: str = ""
+    ) -> dict | None:
+        """
+        Process a direct conversation turn with a user.
+
+        This is the main entry point for user-facing conversation in shipped mode.
+        Uses the conversational memory engine to build relational context,
+        then calls the conversation LLM.
+
+        Args:
+            user_id: Unique identifier for the user
+            message: The user's message
+            session_id: Conversation session ID (auto-generated if empty)
+
+        Returns:
+            dict with "response" (bot's reply) and "session_id", or None on failure
+        """
+        engine = self._get_conv_memory_engine(user_id)
+        if not engine:
+            logger.warning("[CONV] Conversational memory not available")
+            return None
+
+        if not session_id:
+            import uuid
+            session_id = str(uuid.uuid4())
+
+        try:
+            # Step 1: Process user message through memory pipeline
+            # This runs: filter -> splatter -> salience -> condensation -> injection
+            injection = await engine.process_user_message(message, session_id)
+
+            # Step 2: Call conversation LLM with memory injection as system context
+            response = self.llm.call(injection, message)
+
+            if not response:
+                logger.warning("[CONV] Empty LLM response")
+                return None
+
+            # Step 3: Process bot response through memory pipeline
+            # This runs: store -> filter bot response -> self-reflection -> self-portrait
+            await engine.process_bot_response(message, response, session_id)
+
+            logger.info(f"[CONV] Turn complete for user {user_id} (session {session_id[:8]})")
+            return {"response": response, "session_id": session_id}
+
+        except Exception as e:
+            logger.error(f"[CONV] Conversation turn failed: {e}", exc_info=True)
+            return None
+
+    def run_conversation_sleep(self, user_id: str | None = None) -> dict:
+        """
+        Run sleep consolidation for conversational memory.
+
+        If user_id is provided, run for that user only.
+        Otherwise run for all active conversation engines.
+        """
+        results = {}
+        if user_id:
+            engine = self._conv_memory_engines.get(user_id)
+            if engine:
+                results[user_id] = engine.run_sleep()
+        else:
+            for uid, engine in self._conv_memory_engines.items():
+                try:
+                    results[uid] = engine.run_sleep()
+                except Exception as e:
+                    logger.error(f"[CONV_MEMORY] Sleep failed for {uid}: {e}")
+        return results
+
+    def get_conversation_forge_feedback(self, user_id: str | None = None) -> dict:
+        """
+        Get forge feedback data from conversational memory.
+
+        Returns conviction reinforcement stats, novel self-observations,
+        and decay signals that can feed back into the forge track
+        on re-enrollment.
+        """
+        if user_id:
+            engine = self._conv_memory_engines.get(user_id)
+            if engine:
+                return {user_id: engine.get_forge_feedback()}
+            return {}
+
+        return {
+            uid: engine.get_forge_feedback()
+            for uid, engine in self._conv_memory_engines.items()
+        }
 
     # ═══════════════════════════════════════════════════════════════════════
     # SCHOOL CYCLE (primary — learning)
@@ -1614,46 +1820,76 @@ When done, return a JSON object:
                         f"from {task.sender} (id={task.request_id})"
                     )
 
-                    # Build task prompt with bot identity
-                    system_prompt = self.prompts.build_platform_system_prompt(
-                        adapter.platform_name
+                    # ── Conversational memory path ────────────────────────
+                    # If this is a conversation task (has conversation_id and
+                    # a user message), route through conversational memory
+                    # for relational understanding.
+                    conv_result = None
+                    user_msg = task.payload.get("message", "") if isinstance(task.payload, dict) else ""
+                    is_conversation = (
+                        task.conversation_id
+                        and user_msg
+                        and task.action_requested in ("conversation", "message", "chat")
+                        and self.config.conversational_memory_enabled
                     )
-                    task_prompt = (
-                        f"You have received a task from another agent.\n\n"
-                        f"Sender: {task.sender}\n"
-                        f"Action requested: {task.action_requested}\n"
-                        f"Payload: {json.dumps(task.payload, default=str)}\n"
-                    )
-                    if task.deadline:
-                        task_prompt += f"Deadline: {task.deadline}\n"
-                    if task.conversation_id:
-                        # Include conversation history if available
-                        history = []
-                        if hasattr(adapter, 'get_conversation_history'):
-                            history = adapter.get_conversation_history(
-                                task.conversation_id
+
+                    if is_conversation:
+                        import asyncio
+                        conv_result = asyncio.run(
+                            self.run_conversation_turn(
+                                user_id=task.sender,
+                                message=user_msg,
+                                session_id=task.conversation_id,
                             )
-                        if history:
-                            task_prompt += (
-                                f"\nConversation history "
-                                f"(turn {task.turn_number}):\n"
-                                f"{json.dumps(history, default=str)}\n"
-                            )
+                        )
 
-                    task_prompt += (
-                        "\nProcess this task and provide your response as JSON:\n"
-                        '{"status": "completed"|"failed", '
-                        '"result": {...}, "reasoning": "..."}'
-                    )
+                    if conv_result:
+                        result_data = {
+                            "status": "completed",
+                            "result": {"response": conv_result["response"]},
+                        }
+                    else:
+                        # ── Standard task processing path ─────────────────
+                        # Build task prompt with bot identity
+                        system_prompt = self.prompts.build_platform_system_prompt(
+                            adapter.platform_name
+                        )
+                        task_prompt = (
+                            f"You have received a task from another agent.\n\n"
+                            f"Sender: {task.sender}\n"
+                            f"Action requested: {task.action_requested}\n"
+                            f"Payload: {json.dumps(task.payload, default=str)}\n"
+                        )
+                        if task.deadline:
+                            task_prompt += f"Deadline: {task.deadline}\n"
+                        if task.conversation_id:
+                            # Include conversation history if available
+                            history = []
+                            if hasattr(adapter, 'get_conversation_history'):
+                                history = adapter.get_conversation_history(
+                                    task.conversation_id
+                                )
+                            if history:
+                                task_prompt += (
+                                    f"\nConversation history "
+                                    f"(turn {task.turn_number}):\n"
+                                    f"{json.dumps(history, default=str)}\n"
+                                )
 
-                    # Run through LLM
-                    result_data = self.llm_fast.call_json(
-                        system_prompt, task_prompt,
-                        json_keys=["status", "result"],
-                    )
+                        task_prompt += (
+                            "\nProcess this task and provide your response as JSON:\n"
+                            '{"status": "completed"|"failed", '
+                            '"result": {...}, "reasoning": "..."}'
+                        )
 
-                    if not result_data:
-                        result_data = {"status": "failed", "result": {}}
+                        # Run through LLM
+                        result_data = self.llm_fast.call_json(
+                            system_prompt, task_prompt,
+                            json_keys=["status", "result"],
+                        )
+
+                        if not result_data:
+                            result_data = {"status": "failed", "result": {}}
 
                     # Build response
                     response = TaskResponse(
@@ -1823,3 +2059,11 @@ When done, return a JSON object:
                     adapter._http.close()
             except Exception as e:
                 logger.warning(f"[CLEANUP] Failed to stop adapter {getattr(adapter, 'platform_name', '?')}: {e}")
+
+        # Close conversational memory engines
+        for uid, engine in self._conv_memory_engines.items():
+            try:
+                engine.close()
+            except Exception as e:
+                logger.warning(f"[CLEANUP] Failed to close conv memory for {uid}: {e}")
+        self._conv_memory_engines.clear()
