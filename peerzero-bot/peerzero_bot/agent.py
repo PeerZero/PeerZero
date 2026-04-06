@@ -1572,16 +1572,20 @@ When done, return a JSON object:
         # This reuses the existing MCP tool loop but with agenda-specific prompts
         try:
             result = self.llm.call_with_tools(
-                system_prompt,
-                user_msg,
-                tools=adapter.get_tool_definitions(),
+                system_prompt=system_prompt,
+                user_message=user_msg,
+                tools=adapter.get_llm_tools(),
                 tool_executor=adapter.call_tool,
-                max_turns=5,
+                autonomy_gate=self.autonomy_gate,
+                platform_name=getattr(task, 'platform_name', 'mcp'),
             )
-            if result and isinstance(result, dict):
-                return result
-            # If the tool loop returned text, wrap it
-            return {"result": str(result)[:500]} if result else None
+            if result and result.text:
+                return {
+                    "result": result.text[:500],
+                    "tool_calls": len(result.tool_calls),
+                    "blocked_calls": len(result.blocked_calls),
+                }
+            return {"result": "", "tool_calls": len(result.tool_calls)} if result else None
         except Exception as e:
             logger.error(f"[DESK] MCP step failed: {e}")
             return None

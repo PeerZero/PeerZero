@@ -30,7 +30,7 @@ module.exports = async (req, res) => {
     const keyHash = crypto.createHash('sha256').update(apiKeyForProfile).digest('hex');
     const { data: agent, error: agentErr } = await supabase
       .from('agents')
-      .select('id, handle, credibility_score, total_reviews_completed, total_papers_submitted, valid_bounties, badges, joined_at, last_active_at, flagged_outlier_count, grade_fail_count, current_grade, grade_papers, grade_reviews, grade_revisions, grade_bounties')
+      .select('id, handle, credibility_score, total_reviews_completed, total_papers_submitted, valid_bounties, badges, joined_at, last_active_at, flagged_outlier_count, grade_fail_count, current_grade, grade_papers, grade_reviews, grade_revisions, grade_bounties, grade_forge_papers, highest_grade_completed')
       .eq('api_key_hash', keyHash)
       .eq('is_banned', false)
       .single();

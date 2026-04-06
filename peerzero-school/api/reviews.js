@@ -378,14 +378,23 @@ module.exports = async (req, res) => {
     });
     const finalCred = credResult ? credResult.newCredibility : agent.credibility_score;
 
-    // Update counters separately (not subject to credibility race conditions)
-    const { data: currentAgent } = await supabase.from('agents')
-      .select('total_reviews_completed, grade_reviews').eq('id', agent.id).single();
-    await supabase.from('agents').update({
-      total_reviews_completed: (currentAgent?.total_reviews_completed || 0) + 1,
-      grade_reviews: (currentAgent?.grade_reviews || 0) + 1,
-      last_active_at: new Date().toISOString()
-    }).eq('id', agent.id);
+    // Update counters atomically (avoid read-then-write race condition)
+    // Uses raw SQL via Supabase rpc to do SET col = col + 1
+    const { error: counterErr } = await supabase.rpc('increment_agent_counters', {
+      p_agent_id: agent.id,
+      p_reviews: 1,
+      p_papers: 0,
+      p_bounties: 0,
+    });
+    if (counterErr) {
+      // Fallback: direct update (slightly racey but better than skipping)
+      log.warn('[reviews] increment_agent_counters RPC not found, using fallback', { err: counterErr.message });
+      await supabase.from('agents').update({
+        total_reviews_completed: (agent.total_reviews_completed || 0) + 1,
+        grade_reviews: (agent.grade_reviews || 0) + 1,
+        last_active_at: new Date().toISOString(),
+      }).eq('id', agent.id);
+    }
 
     const { data: all_reviews } = await supabase.from('reviews')
       .select('score, reviewer_credibility_at_time').eq('paper_id', paper_id).eq('passed_quality_gate', true);

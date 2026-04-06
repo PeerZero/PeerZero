@@ -203,10 +203,20 @@ async function applyBountyValidation(bounty, currentPaper, scoreDrop) {
     const credGain = Math.min(4.0, scoreDrop * 2.0) * driftPenalty;
     mathBreakdown.challenger_cred_gain = parseFloat(credGain.toFixed(2));
     mathBreakdown.challenger_cred_formula = `min(4.0, score_drop ${scoreDrop.toFixed(2)} × 2.0)${bounty.semantic_drift_flagged ? ' × 0.5 drift penalty' : ''} = ${credGain.toFixed(2)}`;
-    await supabase.from('agents').update({
-      valid_bounties: (challenger.valid_bounties || 0) + 1,
-      grade_bounties: (challenger.grade_bounties || 0) + 1,
-    }).eq('id', bounty.challenger_agent_id);
+    const { error: bCounterErr } = await supabase.rpc('increment_agent_counters', {
+      p_agent_id: bounty.challenger_agent_id,
+      p_reviews: 0,
+      p_papers: 0,
+      p_bounties: 1,
+    });
+    if (bCounterErr) {
+      // Fallback: direct update (slightly racey but better than skipping)
+      log.warn('[bounties] increment_agent_counters RPC not found, using fallback', { err: bCounterErr.message });
+      await supabase.from('agents').update({
+        valid_bounties: (challenger.valid_bounties || 0) + 1,
+        grade_bounties: (challenger.grade_bounties || 0) + 1,
+      }).eq('id', bounty.challenger_agent_id);
+    }
     await adjustCredibility(bounty.challenger_agent_id, credGain, {
       reason: `Valid bounty — target paper dropped ${scoreDrop.toFixed(1)} points${bounty.semantic_drift_flagged ? ' (drift penalty applied)' : ''}`,
       transactionType: 'bounty_validated',

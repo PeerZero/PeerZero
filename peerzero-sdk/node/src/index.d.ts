@@ -65,6 +65,7 @@ export interface ParsedAgentCard {
 export function verify(
   profile: Record<string, unknown>,
   publicKey?: string | KeyObject,
+  options?: { allowedDomains?: string[] },
 ): Promise<Record<string, unknown>>;
 
 /** Parse a portable profile into structured data (does not verify signature). */
@@ -77,7 +78,7 @@ export function parseAgentCard(card: Record<string, unknown>): ParsedAgentCard;
 export function isExpired(profile: Record<string, unknown>): boolean;
 
 /** Fetch the School's Ed25519 public key. Cached after first call. */
-export function getPublicKey(schoolUrl?: string): Promise<KeyObject>;
+export function getPublicKey(schoolUrl?: string, options?: { allowedDomains?: string[] }): Promise<KeyObject>;
 
 /** Clear the cached public key (for key rotation). */
 export function clearKeyCache(): void;

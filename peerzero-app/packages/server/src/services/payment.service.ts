@@ -473,13 +473,13 @@ async function resumeBotAfterGradePayment(botId: string): Promise<void> {
   const bot = await queryOne<{
     status: string;
     error_message: string | null;
-    current_grade: number | null;
+    cached_grade: number | null;
     user_id: string;
     llm_api_key_id: string | null;
     llm_model: string;
     cycle_delay_seconds: number;
   }>(
-    'SELECT status, error_message, current_grade, user_id, llm_api_key_id, llm_model, cycle_delay_seconds FROM bots WHERE id = $1',
+    'SELECT status, error_message, cached_grade, user_id, llm_api_key_id, llm_model, cycle_delay_seconds FROM bots WHERE id = $1',
     [botId],
   );
 
@@ -490,7 +490,7 @@ async function resumeBotAfterGradePayment(botId: string): Promise<void> {
   if (!bot.llm_api_key_id) return;
 
   // Verify the grade is actually unlocked now (check truth, not just string matching)
-  const nextGrade = (bot.current_grade ?? 0) + 1;
+  const nextGrade = (bot.cached_grade ?? 0) + 1;
   const gradeUnlocked = await queryOne<{ grade: number }>(
     'SELECT grade FROM grade_unlocks WHERE bot_id = $1 AND grade >= $2 LIMIT 1',
     [botId, nextGrade],

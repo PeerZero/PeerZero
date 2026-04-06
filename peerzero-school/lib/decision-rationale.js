@@ -19,19 +19,14 @@
  *   - Server-side: stores, resolves, analyzes patterns (this file)
  */
 
-const { createClient } = require('@supabase/supabase-js');
+const { getSupabase } = require('./shared');
 const log = require('./logger');
-
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_KEY
-);
 
 // ── Store a decision rationale ───────────────────────────────────────────
 
 async function storeDecisionRationale(agentId, rationaleData) {
   try {
-    await supabase.from('decision_rationales').insert({
+    await getSupabase().from('decision_rationales').insert({
       agent_id: agentId,
       cycle_number: rationaleData.cycle_number,
       action_chosen: rationaleData.action_chosen,
@@ -53,7 +48,7 @@ async function storeDecisionRationale(agentId, rationaleData) {
 
 async function resolveDecisionRationale(agentId, actualOutcome) {
   try {
-    const { data: unresolved } = await supabase.from('decision_rationales')
+    const { data: unresolved } = await getSupabase().from('decision_rationales')
       .select('id')
       .eq('agent_id', agentId)
       .eq('resolved', false)
@@ -62,7 +57,7 @@ async function resolveDecisionRationale(agentId, actualOutcome) {
 
     if (!unresolved || unresolved.length === 0) return;
 
-    await supabase.from('decision_rationales')
+    await getSupabase().from('decision_rationales')
       .update({
         actual_outcome: actualOutcome,
         resolved: true,
@@ -77,7 +72,7 @@ async function resolveDecisionRationale(agentId, actualOutcome) {
 
 async function buildDecisionCoaching(agentId) {
   try {
-    const { data: rationales } = await supabase.from('decision_rationales')
+    const { data: rationales } = await getSupabase().from('decision_rationales')
       .select('action_chosen, alternatives_considered, expected_outcome, actual_outcome, pre_mortem, resolved')
       .eq('agent_id', agentId)
       .eq('resolved', true)

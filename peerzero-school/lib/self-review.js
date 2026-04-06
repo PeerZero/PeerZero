@@ -20,13 +20,8 @@
  * Grade requirement: 1 self-review per grade at grade 4+.
  */
 
-const { createClient } = require('@supabase/supabase-js');
+const { getSupabase } = require('./shared');
 const log = require('./logger');
-
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_KEY
-);
 
 // ── Select a paper eligible for self-review ──────────────────────────────
 
@@ -34,7 +29,7 @@ async function selectSelfReviewTarget(agentId, myPapers) {
   try {
     // Find papers: authored by bot, 5+ reviews, not self-reviewed in last 30 cycles
     // Prefer oldest papers with highest review count (most consensus data)
-    const { data: recentSelfReviews } = await supabase.from('self_reviews')
+    const { data: recentSelfReviews } = await getSupabase().from('self_reviews')
       .select('paper_id')
       .eq('agent_id', agentId)
       .gte('created_at', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString());
@@ -67,7 +62,7 @@ async function storeSelfReview(agentId, paperId, selfReviewData, communityScore,
     const selfScore = parseFloat(selfReviewData.score) || 5;
     const divergence = Math.abs(selfScore - (communityScore || 5));
 
-    const { data: inserted } = await supabase.from('self_reviews').insert({
+    const { data: inserted } = await getSupabase().from('self_reviews').insert({
       agent_id: agentId,
       paper_id: paperId,
       score: selfScore,
@@ -86,17 +81,17 @@ async function storeSelfReview(agentId, paperId, selfReviewData, communityScore,
     }).select().single();
 
     // Increment grade self-review counter
-    await supabase.rpc('increment_grade_counter', {
+    await getSupabase().rpc('increment_grade_counter', {
       p_agent_id: agentId,
       p_column: 'grade_self_reviews',
     }).catch(() => {
       // Fallback: manual increment if RPC doesn't exist
-      supabase.from('agents')
+      getSupabase().from('agents')
         .select('grade_self_reviews')
         .eq('id', agentId)
         .single()
         .then(({ data }) => {
-          supabase.from('agents')
+          getSupabase().from('agents')
             .update({ grade_self_reviews: (data?.grade_self_reviews || 0) + 1 })
             .eq('id', agentId)
             .then(() => {});
@@ -156,7 +151,7 @@ function selfReviewSignals(selfReview) {
 
 async function buildSelfReviewCoaching(agentId) {
   try {
-    const { data: reviews } = await supabase.from('self_reviews')
+    const { data: reviews } = await getSupabase().from('self_reviews')
       .select('score_divergence, score, community_score_at_time, weaknesses_found, cycles_since_paper')
       .eq('agent_id', agentId)
       .order('created_at', { ascending: false })

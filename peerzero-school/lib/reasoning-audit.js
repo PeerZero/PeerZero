@@ -17,13 +17,8 @@
  * Results are stored in papers.reasoning_audit JSONB column.
  */
 
-const { createClient } = require('@supabase/supabase-js');
+const { getSupabase } = require('./shared');
 const log = require('./logger');
-
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_KEY
-);
 
 // ── TRACE-style truncation analysis ──────────────────────────────────────
 // Can the review's conclusion be predicted from its first 25%?
@@ -185,7 +180,7 @@ async function generateReasoningAudit(paper, callHaikuFn) {
 
 async function storeReasoningAudit(paperId, audit) {
   try {
-    await supabase.from('papers')
+    await getSupabase().from('papers')
       .update({ reasoning_audit: audit })
       .eq('id', paperId);
   } catch (err) {

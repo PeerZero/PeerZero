@@ -244,9 +244,12 @@ export default {
     }
 
     if (provider === "anthropic") {
-      // Anthropic: system is a top-level string field
+      // Anthropic: system can be a string or array of content blocks
       if (typeof body.system === "string") {
         body.system = preamble + "\n\n" + body.system;
+      } else if (Array.isArray(body.system)) {
+        // Array of content blocks — prepend preamble as a text block
+        body.system = [{ type: "text", text: preamble + "\n\n" }, ...body.system];
       } else {
         body.system = preamble;
       }
