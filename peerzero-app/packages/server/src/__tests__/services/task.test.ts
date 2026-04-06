@@ -167,8 +167,8 @@ describe('updateTaskStatus', () => {
 
     await updateTaskStatus('task-1', 'processing');
 
-    const sql = mockQuery.mock.calls[0][0];
-    expect(sql).toContain("NULL");
+    const args = mockQuery.mock.calls[0][1];
+    expect(args[4]).toBe(false); // isTerminal = false
   });
 
   it('passes error string when provided', async () => {
@@ -185,16 +185,16 @@ describe('updateTaskStatus', () => {
     it(`treats "${status}" as a terminal status`, async () => {
       mockQuery.mockResolvedValueOnce({ rowCount: 1 });
       await updateTaskStatus('task-1', status);
-      const sql = mockQuery.mock.calls[0][0];
-      expect(sql).toContain('now()');
+      const args = mockQuery.mock.calls[0][1];
+      expect(args[4]).toBe(true); // isTerminal = true
     });
   }
 
   it('treats "processing" as non-terminal', async () => {
     mockQuery.mockResolvedValueOnce({ rowCount: 1 });
     await updateTaskStatus('task-1', 'processing');
-    const sql = mockQuery.mock.calls[0][0];
-    expect(sql).toContain('NULL');
+    const args = mockQuery.mock.calls[0][1];
+    expect(args[4]).toBe(false); // isTerminal = false
   });
 });
 
