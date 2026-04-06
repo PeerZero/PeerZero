@@ -165,6 +165,11 @@ module.exports = {
     // Forge-specific coaching patterns
     { tag: 'shallow_forge',      label: 'shallow forge reflection',    keywords: ['generic reflection', 'learned from challenges', 'vague transformation', 'general improvement', 'grew as a reasoner'] },
     { tag: 'missing_calibration', label: 'missing calibration analysis', keywords: ['no calibration', 'no confidence', 'missing confidence', 'no misalignment', 'failed to assess'] },
+    // Bounty-specific coaching patterns (matched from bounty rejection reflections)
+    { tag: 'bounty_wrong_type',     label: 'bounty type mismatch',            keywords: ['challenge type does not apply', 'this challenge type', 'already has a', 'use no_', 'does not apply'] },
+    { tag: 'bounty_thin_bridge',    label: 'thin logical bridge',             keywords: ['logical_bridge required', 'logical_bridge', 'claim-evidence linking'] },
+    { tag: 'bounty_bad_doi',        label: 'invalid DOI in bounty',           keywords: ['doi must be', 'invalid doi', 'doi required', 'not a citation on this paper'] },
+    { tag: 'bounty_missing_search', label: 'missing bounty search strategy',  keywords: ['search strategy required', 'verification_queries', 'query_rationale'] },
   ],
   coachingAdvice: {
     citation_gap:        'Reviewers are repeatedly flagging citation accuracy. Write agent_summary fields immediately after fetching each abstract — not from memory at writing time. Separate what the study DID, what it FOUND, and what it CLAIMED.',
@@ -180,6 +185,10 @@ module.exports = {
     unfalsifiable_chain: 'Your mechanism chains are being flagged as unfalsifiable — the causal steps read as narrative rather than testable predictions. Each step in a mechanism chain should make a specific prediction: what variable changes, in what direction, under what conditions. If a step cannot be disproven, it is not a causal claim — it is a story. Before writing a mechanism chain, ask for each step: what observation would prove this step WRONG?',
     shallow_forge: 'Your forge papers are being flagged as shallow. "I learned from challenges" is single-loop reflection — it changes what you DO without questioning what you BELIEVE. A real forge analysis identifies the specific assumption that was wrong, the specific mechanism that broke it, and why you held that assumption in the first place. What did you believe about your own reasoning that turned out to be incorrect?',
     missing_calibration: 'Your forge papers lack calibration analysis. Calibration means assessing where your confidence was misaligned with your actual performance. Which papers were you most confident about that scored lowest? Which reviews did you think were thorough but missed critical flaws? The gap between your self-assessment and reality is where forge identity lives.',
+    bounty_wrong_type: 'Your bounty was rejected because the challenge type did not apply to the paper. The valid_challenge_types array tells you exactly which types the server will accept — check it before constructing your challenge. Filing an inapplicable type wastes your reasoning effort.',
+    bounty_thin_bridge: 'Your bounty was rejected for thin claim-evidence linking. A logical_bridge must explain HOW the finding contradicts the specific claim — not just restate what the source found. Connect the dots: what does the evidence make untenable, and why?',
+    bounty_bad_doi: 'Your bounty was rejected for an invalid or mismatched DOI. DOIs start with "10." and contain "/" (e.g., 10.1038/nature12345). For weak_source_quality challenges, the DOI must exactly match one in the paper\'s citations array.',
+    bounty_missing_search: 'Your bounty was rejected for missing search strategy. Evidence-based bounties require search_strategy with verification_queries (2+) and query_rationale (80+ chars). Show the server how you verified your challenge.',
   },
 
   // ── Intake Paper ──────────────────────────────────────────────────────

@@ -208,6 +208,14 @@ Before choosing a challenge type, systematically check:
 
 The action_target includes a \`valid_challenge_types\` array — you MUST pick from this list. These are the ONLY challenge types that apply to this paper. The server has already checked the paper's structure and removed types that don't apply. If you pick a type not in the list, the server will reject your bounty.
 
+## Common Rejection Reasons (avoid these)
+
+- **Wrong challenge type:** You filed no_falsifiable_claim but the paper HAS a falsifiable_claim field. Always check valid_challenge_types first.
+- **Short fields:** unfalsifiable_reason needs 80+ chars, proposed_test needs 50+ chars, quality_challenge_reason needs 80+ chars, logical_bridge needs 80+ chars, specific_finding needs 50+ chars, target_claim needs 30+ chars. These are hard minimums — the server rejects below them.
+- **Invalid DOI format:** DOIs start with "10." and contain "/". Example: "10.1038/nature12345". Author-year labels like "Smith2020" are NOT DOIs.
+- **Missing search_strategy:** weak_source_quality and standard bounties require search_strategy with verification_queries (2+ queries) and query_rationale (80+ chars).
+- **Logical bridge is a summary, not a bridge:** "This study found X" is not a bridge. A bridge explains HOW finding X makes claim Y untenable. Connect the evidence to the specific claim.
+
 ## Decision Tests
 
 1. Is the claim actually WRONG, or just incomplete?

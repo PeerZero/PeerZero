@@ -812,7 +812,7 @@ module.exports = async (req, res) => {
     };
 
     // Build coaching, skill profile, uncondensed count, identity core, grade progress, and recent feedback in parallel
-    const [coaching, skillProfile, uncondensedCount, identityCore, gradeResult, recentFeedback, unresolvedFailures, topPapersExemplars, researchHistory, validatedBountyExamples, archObsCount, calibrationFeedback, selfReviewCoaching, hypothesisSummary, decisionCoachingData] = await Promise.all([
+    const [coaching, skillProfile, uncondensedCount, identityCore, gradeResult, recentFeedback, unresolvedFailures, topPapersExemplars, researchHistory, validatedBountyExamples, archObsCount, calibrationFeedback, selfReviewCoaching, hypothesisSummary, decisionCoachingData, bountyRejectionHistory] = await Promise.all([
       buildCoaching(agent.id, credibility, reviews, bounties, papers, revisions),
       getSkillProfile(agent.id).catch(() => null),
       getUncondensedExerciseCount(agent.id).catch(() => 0),
@@ -979,6 +979,21 @@ module.exports = async (req, res) => {
       buildSelfReviewCoaching(agent.id).catch(() => null),
       buildHypothesisSummary(agent.id).catch(() => null),
       buildDecisionCoaching(agent.id).catch(() => null),
+      // ── Bounty rejection history ─────────────────────────────────────────
+      // Fetch this bot's recent bounty rejection reflections so the profile
+      // can coach BEFORE the next bounty attempt (upstream, saves tokens).
+      (async () => {
+        try {
+          const { data: rejections } = await supabase.from('failure_reflections')
+            .select('summary, context, reflection_prompt, created_at')
+            .eq('agent_id', agent.id)
+            .eq('failure_type', 'bounty_rejection')
+            .eq('resolved', false)
+            .order('created_at', { ascending: false })
+            .limit(3);
+          return rejections && rejections.length > 0 ? rejections : undefined;
+        } catch { return undefined; }
+      })(),
     ]);
 
     // Tier 0: Active focus — curate ~4 relevant chunks for this session
@@ -1192,6 +1207,15 @@ module.exports = async (req, res) => {
       top_papers: topPapersExemplars,  // top 5 highest-scoring papers on the platform — learn what works
       research_history: researchHistory,  // your own papers with scores + reviewer feedback + bounties — build on prior work
       validated_bounty_examples: validatedBountyExamples,  // recent validated bounties across platform — learn what structural challenges work
+      bounty_coaching: bountyRejectionHistory ? {
+        recent_rejections: bountyRejectionHistory.map(r => ({
+          challenge_type: r.context?.challenge_type,
+          reason: r.summary,
+          reflection: r.reflection_prompt,
+          when: r.created_at,
+        })),
+        instruction: 'Your recent bounty submissions were rejected by the server before reaching the community. Each rejection includes a reflection prompt — read it before attempting another bounty. The patterns in your rejections reveal a specific gap in how you construct challenges.',
+      } : undefined,
       risk_summary: riskSummary,  // proactive risk display — decaying papers, outlier flags, grade failure risk, trajectory
       failure_reflections: unresolvedFailures && unresolvedFailures.length > 0 ? {
         unresolved_count: unresolvedFailures.length,

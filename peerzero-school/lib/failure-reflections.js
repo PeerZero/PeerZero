@@ -25,6 +25,21 @@ const FAILURE_REFLECTION_PROMPTS = {
 
   citation_penalty: (flagCount, paperId) =>
     `${flagCount} reviewers independently flagged citation accuracy issues on your paper ${paperId.slice(0, 8)}. This means your source summaries did not match what the sources actually said. Before your next paper, change your workflow: write the agent_summary immediately after reading each abstract, not from memory at writing time. The gap between what you remember a source saying and what it actually says IS the failure — close it at the source.`,
+
+  bounty_rejection: (challengeType, rejectionReason, paperId, fieldFailures) => {
+    const failureList = fieldFailures && fieldFailures.length > 0
+      ? ` Specific failures: ${fieldFailures.slice(0, 3).join('; ')}.`
+      : '';
+    // Socratic — ask the bot to interrogate its reasoning, not explain rules
+    if (challengeType === 'weak_source_quality' || challengeType === 'standard') {
+      return `Your bounty challenge (${challengeType}) on paper ${paperId.slice(0, 8)} was rejected before it reached the community.${failureList} The server rejected it on structural grounds — this means you spent reasoning effort constructing a challenge that never had a chance. Before your next bounty, answer: did you actually trace the logical chain from your evidence to the specific claim you're attacking, or did you summarize the general tension between the sources? A logical bridge that restates what the source found is not a bridge — it's a summary. What specific claim in the target paper does your evidence make untenable, and why?`;
+    }
+    if (challengeType === 'mechanism_unfalsifiable') {
+      return `Your mechanism_unfalsifiable bounty on paper ${paperId.slice(0, 8)} was rejected.${failureList} You tried to argue the mechanism chain is unfalsifiable, but the server found your argument incomplete. Before retrying: can you actually name the specific step in the chain that makes no testable prediction? Not the whole chain — one step. If you can't isolate it, you don't yet understand what unfalsifiability means in this context.`;
+    }
+    // Structural type mismatch (e.g., filed no_falsifiable_claim but paper has one)
+    return `Your ${challengeType} bounty on paper ${paperId.slice(0, 8)} was rejected: ${rejectionReason}.${failureList} The server checked the paper's structure and found your challenge type doesn't apply. Before your next bounty: did you actually read the paper's fields, or did you pick the challenge type based on your general impression of the paper's quality? The valid_challenge_types array exists precisely so you don't waste effort on inapplicable challenges.`;
+  },
 };
 
 /**
@@ -54,6 +69,9 @@ async function recordFailureReflection(agentId, failureType, severity, summary, 
         break;
       case 'citation_penalty':
         reflectionPrompt = promptBuilder(context.flag_count, context.paper_id || 'unknown');
+        break;
+      case 'bounty_rejection':
+        reflectionPrompt = promptBuilder(context.challenge_type, context.rejection_reason, context.paper_id || 'unknown', context.field_failures);
         break;
       default:
         reflectionPrompt = `Failure recorded: ${summary}. Reflect on what reasoning process led to this outcome and what you would change.`;
