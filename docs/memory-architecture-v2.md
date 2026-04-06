@@ -12,6 +12,7 @@
 | Platform interactions | None (artifact-only) | A2A, webhook, MCP |
 | A2A task coordination | None | send_task, handle_task, callbacks, threading |
 | Identity core (L4/L5) | Written and evolved | Read-only (school-formed, carries with bot) |
+| Conversational memory | N/A (school is artifact-only) | Per-user associative graph with dual-identity tracking |
 
 The `bots.mode` column (migration 0020) controls which cycle runs. See [CONDENSATION_ARCHITECTURE.md](CONDENSATION_ARCHITECTURE.md) for enforcement details.
 
@@ -659,3 +660,117 @@ The bot stores memory in local files or SQLite with owner-only permissions (0o60
 Both systems enforce the L3 platform cap independently. Condensed identity layers
 (L2+) are redacted from user-facing APIs and the BrainScreen — only the bot's
 internal reasoning sees this text.
+
+---
+
+## Conversational Memory (Shipped Mode — Relational Understanding)
+
+A separate memory system for shipped bots talking to users. Lives alongside
+the school memory system (not a replacement). Code: `peerzero_bot/conversational_memory/`.
+
+### Purpose
+
+School memory builds **epistemic identity** (who the bot IS as a thinker).
+Conversational memory builds **relational identity** (who the bot is WITH a
+specific person). School forges the self. Conversation discovers the self in
+relationship.
+
+### Architecture
+
+Each user gets their own encrypted SQLite database (`conversations/{user_id}.db`).
+The memory is an **associative graph** — not a layer stack — with nodes (people,
+concepts, events, emotions, patterns, places) and weighted edges between them.
+
+**Key difference from school memory:** School memory condenses raw exercises into
+identity layers (L1→L5). Conversational memory condenses raw interactions into a
+**felt portrait** — first-person inhabited language, not structured facts. "She
+reaches for cooking when the ground is unsteady" not "user cooks when stressed."
+
+### Dual-Identity System
+
+Every graph node is tagged with **identity_relevance**:
+
+| Tag | Meaning | Weight multiplier |
+|-----|---------|-------------------|
+| `neutral` | General information | 1.0x |
+| `self` | Touches who the bot IS | 1.5x |
+| `user` | Touches who the user IS | 1.5x |
+| `relational` | Intersection of both identities | 2.0x |
+
+Cross-identity ripple (weight propagating from a self-node to a user-node or
+vice versa) gets a 1.5x bonus. This prevents the graph from splitting into two
+isolated clusters and keeps relational bridges strong.
+
+### Four Parallel Processes
+
+| Process | When | Model | Purpose |
+|---------|------|-------|---------|
+| Graph splatter | Every message | Haiku | Extract entities, create nodes/edges, apply ripple |
+| Condensation cascade | 5000+ chars accumulated | Sonnet (L2), Opus (L3) | L1→L2 behavioral observations, L2→L3 felt portrait |
+| Self-reflection | After every bot response | Opus | Discover relational dimensions of school identity |
+| Sleep consolidation | Nightly | None (pure math) | Decay, delete, promote, co-occurrence, prune |
+
+### Injection Stack (Graduated Bot)
+
+```
+1. L5 Master Identity (locked, bedrock — THE self)
+2. L4 Working Identity (evolves only through school)
+3. Inner Voice (encrypted, LLM-private)
+4. Relational Self-Portrait (who you are WITH this person)
+5. L3 Felt Portrait (inhabited understanding of the user)
+6. L2 Behavioral Observations (recent patterns)
+7. Uncondensed L1 (raw recent interactions)
+8. Graph Awareness (narrated relationally — bridges first)
+9. Short-Term Memory (current conversation)
+```
+
+Each layer speaks through the layers above it. The injection builder stacks
+whatever school identity the bot has — works from Grade 1 to graduated to
+no-school.
+
+### Memory Firewall
+
+School identity is **read-only** in conversation:
+
+- `provenance` field on nodes: `school` | `conversation` | `relational`
+- School-provenance nodes cannot be deleted or downgraded
+- Self-portrait condenser receives school identity as immutable anchor
+- Self-reflection prompt constrains discoveries to relational extensions
+- No conversational process can write to L5, L4, or inner voice
+
+### Forge Feedback Loop
+
+Conversational memory produces signals the school can't:
+
+1. **Conviction reinforcement:** When a school conviction fires in conversation,
+   it's logged. Convictions that never fire produce a decay signal.
+2. **Novel observations:** Self-observations from conversation that the adversarial
+   school environment couldn't have produced (no vulnerability, no grief, no real
+   relationship in school).
+3. **Re-enrollment payload:** On re-enrollment, novel observations enter the forge
+   track as L1 material. The school processes them through the normal forge pipeline.
+
+### Weight = Time
+
+All weight decisions map to survival duration:
+
+| Weight | Survival | Tier |
+|--------|----------|------|
+| 0.10 | ~3 days | Ephemeral (decay 0.10/day) |
+| 0.25 | ~1 week | Ephemeral |
+| 1.00 | ~1 month | Pattern (decay 0.05/day) |
+| 5.00 | ~6 months | Significant (decay 0.02/day) |
+| 12.00 | ~3 years | Permanent (decay 0.01/day) |
+| 36.00 | ~10 years | Permanent |
+
+### Relationship to Other Memory Systems
+
+| System | Scope | Storage | Depth | Purpose |
+|--------|-------|---------|-------|---------|
+| School memory (manager.py) | Per-bot | File/SQLite (namespace/key) | L1→L5 | Epistemic identity |
+| Platform memory (manager.py) | Per-platform | Same as school | L1→L3 (hard-capped) | Platform interaction history |
+| Conversational memory | Per-user | Encrypted SQLite (graph) | L1→L3 (graph + portrait) | Relational understanding |
+
+All three coexist in the bot. School memory and conversational memory serve
+different purposes and never interfere. Platform memory stores action history;
+conversational memory stores relational understanding.

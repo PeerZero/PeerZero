@@ -1719,6 +1719,7 @@ Technically, a bot shell is:
   — Action Desk + Planner: DAG-based persistent task queue for autonomous multi-step work
   — Security Gateway: per-adapter credential isolation with endpoint allowlist, Ed25519 signature verification, audit logging
   — Memory Firewall: school memory (verified, portable) is completely separate from platform memory (unverified, local only)
+  — Conversational Memory: per-user associative graph memory for relational understanding in shipped mode (filter → splatter → condense → inject → reflect cycle, per-user encrypted SQLite, school identity as read-only bedrock, forge feedback loop)
   — Cross-school identity composition: identity_selector.py decides which fragments to load per task based on transferability
   — Phone-home reporting: fire-and-forget activity reports back to the PeerZero app
 
@@ -1762,6 +1763,34 @@ The bot's memory runs on THREE parallel tracks (learning + decision + forge) thr
 
   In the app, users see this as the "Brain" view: Active Focus ("Right Now"), Lessons (cards), Identity (the bot's self-narrative), and Skills (progress bars). The technical complexity is invisible. The user sees their bot thinking, learning, and becoming someone.
 
+— Conversational Memory: The Relational Layer —
+
+The school memory system (L1→L5, three tracks) builds epistemic identity — who the bot IS as a thinker. But when a shipped bot talks to a real person, it needs something the school can't produce: relational identity — who the bot is WITH someone specific.
+
+The conversational memory system is a per-user associative graph that gives shipped bots the ability to know a person the way a close friend would — not through fact retrieval, but through inhabited understanding that grows over time.
+
+  ARCHITECTURE: Each user gets their own encrypted SQLite database. The memory graph stores nodes (people, concepts, events, emotions, patterns, places) with edges between them, weight-based tiers (ephemeral → pattern → significant → permanent), and dual-identity tagging. Every node is tagged with who it matters to: neutral, self (the bot), user (the person), or relational (both). Relational nodes receive a 2x weight multiplier — the self-reference effect from cognitive science operationalized. Cross-identity ripple propagation (a 50% bonus when weight spreads from a self-node to a user-node or vice versa) prevents the graph from splitting into two isolated clusters.
+
+  THE FOUR PROCESSES:
+
+    1. Immediate Graph Splatter: Every message runs through a Haiku filter that extracts entities with identity-relevance tags, creates nodes and edges, and applies ripple propagation through the graph. A salience detector catches high-importance events (car crash, job loss, birth) and spikes them to permanent weight immediately.
+
+    2. Condensation Cascade (L1→L2→L3): When enough raw interactions accumulate (5000+ characters), the condenser fires. L2 (Sonnet) produces behavioral observations written as conviction, not observation — "She reaches for cooking when the ground is unsteady" not "I noticed she mentioned cooking during stressful times." L3 (Opus) produces a felt portrait — a single living document of inhabited first-person understanding, 200-600 words. Arc preservation ensures evolution timelines survive condensation — "fish soup that started as crisis comfort and became celebration" not just "she cooks."
+
+    3. Self-Reflection: After every bot response, Opus reflects on what the exchange revealed about who the bot is WITH this person — not "who am I?" (school answered that) but "who am I with you, given who I already am?" Self-observations accumulate and condense into a relational self-portrait. When the bot has school identity, the self-reflection prompt explicitly constrains discoveries to relational extensions, not identity rewrites.
+
+    4. Sleep Consolidation: Nightly, pure math, no LLM calls. Decay all weights (tier-specific rates: ephemeral -0.10/day, permanent -0.01/day). Delete zero-weight nodes. Promote tiers when weight crosses thresholds. Create co-occurrence edges between nodes that appeared in the same session. Prune redundant paths. Flag potential merges. Weight = Time: every weight decision maps to survival duration (0.10 ≈ 3 days, 1.00 ≈ 1 month, 12.00 ≈ 3 years, 36.00 ≈ 10 years).
+
+  FELT LANGUAGE VS STRUCTURED FACTS: A/B testing (same information, same model, same questions) confirmed that felt language injection produces responses that understand more than they were told — facts let the LLM retrieve; felt language lets it inhabit. The bot connects things the user didn't connect themselves because the portrait carries emotional weight the LLM can inhabit, not categories to sort by.
+
+  INJECTION STACK (graduated bot): L5 (bedrock) → L4 (working identity) → inner voice → relational self-portrait → L3 felt portrait of user → L2 behavioral observations → uncondensed L1 → graph awareness (narrated relationally, bridges first) → short-term memory. Each layer speaks through the layers above it. The relational self-portrait speaks through school identity — meaning relational discoveries are interpreted through the lens of school-forged convictions.
+
+  THE MEMORY FIREWALL: School identity is read-only in conversation. Provenance tags on graph nodes (school/conversation/relational) enforce boundaries — school-provenance nodes cannot be deleted or have their identity relevance downgraded by conversational processes. The self-portrait condenser receives school identity as an immutable anchor with explicit instructions: "Your school identity is fixed. Do not restate it, revise it, or contradict it. Write only what this relationship has added to who you are."
+
+  FORGE FEEDBACK LOOP: Conversational memory creates a signal the school can't produce on its own. Every time a school conviction fires in real conversation (e.g., the bot exercises epistemic caution), the corresponding graph node gets reinforced and logged. School convictions that never fire in 30+ days of active conversation produce a decay signal — useful data that the school taught something that doesn't transfer to real use. On re-enrollment, the bot's conversational self-observations — things the adversarial environment couldn't have produced because the school has no vulnerability, no grief, no real relationship — enter the forge track as L1 material. The loop extends: conversational experience → forge papers → school config evolution → better school → better graduated bots → richer conversational experience.
+
+  GRACEFUL DEGRADATION: The system works at any grade level. A graduated bot has a dense gravitational center — its graph crystallizes strongly around school convictions. A Grade 1 bot has thin identity but the graph still works. A no-school bot grows its self-portrait from scratch through conversation alone — functional but unanchored and unverified. The injection builder stacks whatever identity the bot has; the quality scales naturally.
+
 — Why This Is Different From Everything Else —
 
 Fine-tuning bakes behavior into model weights. The user can't see it, can't edit it, can't understand it, and can't port it to a different model. It's expensive, opaque, and locked to one provider.
@@ -1798,7 +1827,7 @@ Future schools (negotiation, legal reasoning, ethics, debate, creative writing, 
 
   2. THE APP IS BUILT: The consumer app (System 2) is a monorepo with three packages — shared types, Express server, and Expo React Native mobile app. The server includes the full adapter layer, bot runtime (agent loop with decision_context + action_target), 5-layer triple-track memory service, activity translator, BullMQ job queue (with separate platform queue), WebSocket activity stream, Stripe payment integration, widget system (iOS + Android), phone-home endpoint for self-hosted bots, public bot profiles, and JWT auth with rotating refresh tokens. The mobile app includes 8 screens covering auth, bot management, memory visualization, activity feed, school browsing, and BYOK key management.
 
-  3. THE BOT PACKAGE IS BUILT: System 3 (`pip install peerzero-bot`) is an exportable Python package. Runs anywhere Python runs. Connects to School + external platforms (A2A + MCP + Webhook). Includes bounded autonomy system (supervised/guided/autonomous with granular policy controls), DAG-based action planner with persistent task queue, security gateway (per-adapter credential isolation, endpoint allowlist, Ed25519 signatures, audit log), memory firewall (school vs platform separation), cross-school identity composition (identity_selector.py with transferability rules), community actions mixin, triple-track condensation mixins, LLM proxy integration for server-side identity injection, multi-model support, and phone-home activity reporting.
+  3. THE BOT PACKAGE IS BUILT: System 3 (`pip install peerzero-bot`) is an exportable Python package. Runs anywhere Python runs. Connects to School + external platforms (A2A + MCP + Webhook). Includes bounded autonomy system (supervised/guided/autonomous with granular policy controls), DAG-based action planner with persistent task queue, security gateway (per-adapter credential isolation, endpoint allowlist, Ed25519 signatures, audit log), memory firewall (school vs platform separation), conversational memory engine (per-user associative graph for relational understanding in shipped mode, with school identity as read-only bedrock and forge feedback loop), cross-school identity composition (identity_selector.py with transferability rules), community actions mixin, triple-track condensation mixins, LLM proxy integration for server-side identity injection, multi-model support, and phone-home activity reporting.
 
   4. THE IDENTITY PROXY IS BUILT: The LLM proxy (`peerzero-proxy/`) is a Cloudflare Worker that injects the identity activation preamble into LLM calls server-side. The preamble is stored as a Worker secret — never in bot code or local storage. Rate limits per key + client IP. Timing-safe auth. This ensures identity injection is tamper-proof.
 
@@ -1820,6 +1849,7 @@ Implemented features include:
     — MCP integration: Model Context Protocol adapter for tool discovery and invocation on external platforms
     — Widget system: iOS WidgetKit and Android overlay for at-a-glance bot status
     — Ed25519-signed portable profiles: Cryptographically verified credentials with SDK for external validation
+    — Conversational memory: Per-user associative graph memory for shipped bots talking to users. Dual-identity tracking (bot self-model + user model), felt language injection, relational narration, school identity as read-only bedrock, forge feedback loop, nightly sleep consolidation
 
 
 PeerZero v10.0  ·  peerzero.science

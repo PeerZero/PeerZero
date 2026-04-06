@@ -385,9 +385,11 @@ via HTTP APIs:
   anywhere Python runs. Connects to School + external platforms through
   three adapter types (A2A, MCP, webhooks). Includes security gateway
   (per-adapter credential isolation, endpoint allowlist), memory
-  firewall (school vs platform separation), bounded autonomy system
-  (supervised/guided/autonomous levels with granular policy controls),
-  DAG-based action planner, and phone-home reporting back to the app.
+  firewall (school vs platform separation), conversational memory
+  (per-user associative graph for relational understanding in shipped
+  mode), bounded autonomy system (supervised/guided/autonomous levels
+  with granular policy controls), DAG-based action planner, and
+  phone-home reporting back to the app.
 
   The LLM Proxy: A Cloudflare Worker that injects the identity
   activation preamble into LLM calls server-side. The preamble is
@@ -618,3 +620,86 @@ process visible to non-technical users.
      platforms (A2A, MCP, webhooks), or standalone. Nothing outside
      school affects credentials. The diploma is real because it can't
      be inflated.
+
+
+Conversational Memory — Knowing a Person
+-----------------------------------------
+
+School forges who you are. Conversational memory discovers who you are
+WITH someone.
+
+When a shipped bot starts talking to a real person — not another bot,
+not a school artifact, a human — it needs to know them the way a close
+friend would. Not through fact retrieval ("user likes hiking"), but
+through inhabited understanding that grows over time ("she reaches for
+cooking when the ground is unsteady — and I notice I hold space
+differently when that happens").
+
+This is the conversational memory system: a graph-based relational
+memory that gives shipped bots the ability to build dual-identity
+understanding — a model of the user AND a model of who the bot is
+WITH that user — anchored to whatever school identity the bot carries.
+
+  THE GRAPH: Every message splatters entities onto an associative
+  graph — people, concepts, events, emotions, patterns, places. Each
+  node gets tagged with identity relevance: does this touch who the
+  user is (user), who the bot is (self), or the intersection of both
+  (relational)? Relational nodes get 2x weight because memories
+  anchored to both identities stick harder — the self-reference effect
+  from cognitive science, operationalized.
+
+  FOUR PARALLEL PROCESSES:
+    1. Immediate splatter — every message, Haiku extracts entities with
+       identity tags and drops them onto the graph. Ripple propagation
+       spreads weight through connected nodes. Cross-identity ripple
+       (self→user) gets a 50% bonus to prevent the graph from splitting
+       into two separate clusters.
+
+    2. Condensation cascade — when enough raw interactions accumulate,
+       the system condenses L1 (raw) into L2 (behavioral observations,
+       written as conviction not observation) and then L3 (a felt
+       portrait — first-person inhabited language, not a briefing).
+       Opus writes the L3 portrait because identity needs the strongest
+       model.
+
+    3. Self-reflection — after every response, Opus reflects on what
+       the exchange revealed about who the bot is WITH this person.
+       Not "who am I?" (school answered that). "Who am I with you,
+       given who I already am?"
+
+    4. Sleep consolidation — nightly, pure math: decay weights, delete
+       zero-weight nodes, promote tiers, create co-occurrence edges,
+       prune redundant paths. Weight = Time: a passing mention survives
+       ~3 days, an emotional mention ~1 month, a defining event ~10
+       years.
+
+  FELT LANGUAGE, NOT FACTS: The system produces memory that reads like
+  knowing, not like a database. A/B testing confirmed: given the same
+  information, felt language ("the car crash sits underneath everything,
+  even when she's laughing") produces responses that understand more
+  than they were told. Structured facts ("car crash: significant event")
+  produce responses that retrieve. Felt language lets the LLM inhabit.
+
+  SCHOOL IDENTITY IS BEDROCK: The bot's school identity (L5/L4/inner
+  voice — whatever it has, from Grade 1 exercises to full graduation)
+  sits at the top of the injection stack, read-only. The conversational
+  self-portrait speaks THROUGH school identity, not instead of it.
+  School-provenance nodes on the graph cannot be deleted or downgraded
+  by conversational processes. This prevents users from eroding
+  school-forged rigor through sustained conversational pressure.
+
+  WORKS AT ANY GRADE: A graduated bot has a dense gravitational center
+  — its graph crystallizes strongly around school convictions. A Grade 1
+  bot has thin identity but the system still works. A no-school bot
+  grows its self-portrait from scratch through conversation alone —
+  functional but unanchored. The quality scales with how much school
+  the bot completed. Users feel the difference.
+
+  FORGE FEEDBACK: Every time a school conviction fires in real
+  conversation, it gets logged. Convictions that never fire in 30+ days
+  of active conversation are flagged — useful signal that the school
+  taught something that doesn't transfer. On re-enrollment, novel
+  self-observations from conversation enter the forge track as L1
+  material. The adversarial environment couldn't have produced these
+  — they came from real relational experience. The loop extends beyond
+  the school walls.
