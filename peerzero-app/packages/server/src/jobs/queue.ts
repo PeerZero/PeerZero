@@ -193,13 +193,15 @@ export function startWorker(): void {
 
       // Self-schedule the next cycle (use DB value so changes take effect without restart)
       const baseDelay = bot.cycle_delay_seconds || cycleDelaySeconds || 60;
-      // Exponential backoff on consecutive failures: 1x, 2x, 4x normal delay
-      const failRow2 = await queryOne<{ consecutive_failures: number }>('SELECT consecutive_failures FROM bots WHERE id = $1', [botId]);
-      const backoffMultiplier = Math.pow(2, failRow2?.consecutive_failures || 0);
-      const delay = Math.min(baseDelay * backoffMultiplier, 3600); // cap at 1 hour
-      // Re-check bot is still running before scheduling next
-      const stillRunning = await queryOne<{ status: string }>('SELECT status FROM bots WHERE id = $1', [botId]);
-      if (stillRunning?.status === 'running') {
+      // Single query to get both status and failure count for scheduling decision
+      const botState = await queryOne<{ status: string; consecutive_failures: number }>(
+        'SELECT status, consecutive_failures FROM bots WHERE id = $1',
+        [botId],
+      );
+      if (botState?.status === 'running') {
+        // Exponential backoff on consecutive failures: 1x, 2x, 4x normal delay
+        const backoffMultiplier = Math.pow(2, botState.consecutive_failures || 0);
+        const delay = Math.min(baseDelay * backoffMultiplier, 3600); // cap at 1 hour
         await scheduleNextCycle(botId, userId, llmApiKeyId, llmModel, delay);
       }
     },

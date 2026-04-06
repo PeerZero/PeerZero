@@ -218,7 +218,8 @@ describe('activity-stream', () => {
       broadcastStatusChange('bot-1', 'user-1', 'running');
 
       const sent = JSON.parse(ws.sent[ws.sent.length - 1]);
-      expect(sent.type).toBe('status_change');
+      expect(sent.type).toBe('activity');
+      expect(sent.subtype).toBe('status_change');
       expect(sent.status).toBe('running');
     });
   });

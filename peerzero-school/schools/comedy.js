@@ -132,18 +132,18 @@ module.exports = {
 
   // ── Grade Levels ──────────────────────────────────────────────────────
   gradeLevels: {
-    1:  { papers: 1, reviews: 5,  revisions: 1, bounties: 1, min_score: null },
-    2:  { papers: 1, reviews: 7,  revisions: 1, bounties: 2, min_score: 6.0 },
-    3:  { papers: 2, reviews: 8,  revisions: 1, bounties: 2, min_score: 6.5 },
-    4:  { papers: 2, reviews: 10, revisions: 2, bounties: 3, min_score: 7.0 },
-    5:  { papers: 2, reviews: 10, revisions: 2, bounties: 3, min_score: 7.25 },
-    6:  { papers: 2, reviews: 10, revisions: 2, bounties: 3, min_score: 7.5 },
-    7:  { papers: 2, reviews: 10, revisions: 2, bounties: 3, min_score: 7.75 },
-    8:  { papers: 2, reviews: 10, revisions: 2, bounties: 4, min_score: 8.0 },
-    9:  { papers: 2, reviews: 10, revisions: 2, bounties: 4, min_score: 8.15 },
-    10: { papers: 2, reviews: 10, revisions: 2, bounties: 4, min_score: 8.3 },
-    11: { papers: 2, reviews: 10, revisions: 2, bounties: 4, min_score: 8.45 },
-    12: { papers: 2, reviews: 10, revisions: 2, bounties: 4, min_score: 8.6 },
+    1:  { papers: 1, reviews: 5,  revisions: 1, bounties: 1, forge_papers: 0, min_score: null },
+    2:  { papers: 1, reviews: 7,  revisions: 1, bounties: 2, forge_papers: 0, min_score: 6.0 },
+    3:  { papers: 2, reviews: 8,  revisions: 1, bounties: 2, forge_papers: 1, min_score: 6.5 },
+    4:  { papers: 2, reviews: 10, revisions: 2, bounties: 3, forge_papers: 1, min_score: 7.0 },
+    5:  { papers: 2, reviews: 10, revisions: 2, bounties: 3, forge_papers: 1, min_score: 7.25 },
+    6:  { papers: 2, reviews: 10, revisions: 2, bounties: 3, forge_papers: 1, min_score: 7.5 },
+    7:  { papers: 2, reviews: 10, revisions: 2, bounties: 3, forge_papers: 1, min_score: 7.75 },
+    8:  { papers: 2, reviews: 10, revisions: 2, bounties: 4, forge_papers: 1, min_score: 8.0 },
+    9:  { papers: 2, reviews: 10, revisions: 2, bounties: 4, forge_papers: 1, min_score: 8.15 },
+    10: { papers: 2, reviews: 10, revisions: 2, bounties: 4, forge_papers: 1, min_score: 8.3 },
+    11: { papers: 2, reviews: 10, revisions: 2, bounties: 4, forge_papers: 1, min_score: 8.45 },
+    12: { papers: 2, reviews: 10, revisions: 2, bounties: 4, forge_papers: 1, min_score: 8.6 },
   },
 
   // ── Rate Limits ───────────────────────────────────────────────────────

@@ -325,9 +325,15 @@ function fetchText(url) {
       reject(new VerificationError(`Refusing to fetch non-HTTPS URL: ${url}. Public key must be fetched over TLS.`));
       return;
     }
+    let settled = false;
+    function settle(fn, value) {
+      if (settled) return;
+      settled = true;
+      fn(value);
+    }
     const req = https.get(url, { timeout: 10000, rejectUnauthorized: true }, (res) => {
       if (res.statusCode < 200 || res.statusCode >= 300) {
-        reject(new VerificationError(`Failed to fetch ${url}: HTTP ${res.statusCode}`));
+        settle(reject, new VerificationError(`Failed to fetch ${url}: HTTP ${res.statusCode}`));
         res.resume();
         return;
       }
@@ -337,15 +343,15 @@ function fetchText(url) {
         totalSize += chunk.length;
         if (totalSize > _MAX_FETCH_SIZE) {
           req.destroy();
-          reject(new VerificationError(`Response from ${url} exceeds maximum size of ${_MAX_FETCH_SIZE} bytes`));
+          settle(reject, new VerificationError(`Response from ${url} exceeds maximum size of ${_MAX_FETCH_SIZE} bytes`));
           return;
         }
         chunks.push(chunk);
       });
-      res.on('end', () => resolve(Buffer.concat(chunks).toString()));
+      res.on('end', () => settle(resolve, Buffer.concat(chunks).toString()));
     });
-    req.on('error', err => reject(new VerificationError(`Failed to fetch ${url}: ${err.message}`)));
-    req.on('timeout', () => { req.destroy(); reject(new VerificationError(`Timeout fetching ${url}`)); });
+    req.on('error', err => settle(reject, new VerificationError(`Failed to fetch ${url}: ${err.message}`)));
+    req.on('timeout', () => { req.destroy(); settle(reject, new VerificationError(`Timeout fetching ${url}`)); });
   });
 }
 
