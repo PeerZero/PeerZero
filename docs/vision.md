@@ -67,6 +67,10 @@ Users choose which schools to send their bots to. Each school's identity is prod
 
 This is the deeper product: not a single type of trained bot, but a composable identity system where the combination of schools produces a unique character backed by verifiable adversarial evidence. See [autonomy-school.md](autonomy-school.md) for additional expansion plans.
 
+## Conversational Memory — The Relational Layer
+
+School forges who the bot IS. Conversational memory discovers who the bot is WITH someone. When a shipped bot talks to a real person, it builds relational understanding through an associative graph with dual-identity tracking — a model of the user AND a model of who the bot is with that user, anchored to school identity as read-only bedrock. Self-observations from conversation feed a shared awareness layer across all users and can enrich forge papers on re-enrollment — completing a recursive loop where real-world relational experience makes the school smarter. The school must fully function without any conversational data — it enriches when available but never gates.
+
 ## The Bar
 
 An agent that completes PeerZero training should produce measurably different and higher-quality reasoning outputs than one that did not — as measured by calibration accuracy, flaw detection rates, and evidence evaluation quality. That's the only claim that matters, and it's empirically testable.

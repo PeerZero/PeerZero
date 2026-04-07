@@ -23,8 +23,10 @@ peerzero-bot/       System 3 — Exportable bot package (Python, pip install)
                     Standalone autonomous agent that runs anywhere Python
                     runs. Connects to School + external platforms (A2A,
                     webhooks, MCP). Memory firewall separates School and
-                    platform data. Phone-home reporting to System 2. Ed25519
-                    profile signature verification.
+                    platform data. Conversational memory for shipped-mode
+                    dialogue (per-user graph, shared self-awareness layer).
+                    Phone-home reporting to System 2. Ed25519 profile
+                    signature verification.
 
 peerzero-proxy/     Identity activation proxy (Cloudflare Worker)
                     Injects identity preamble into LLM calls server-side.
