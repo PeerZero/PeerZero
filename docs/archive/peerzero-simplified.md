@@ -645,7 +645,7 @@ the identity process visible to non-technical users.
      convictions, Ed25519-signed portable certificate. Any system that
      takes a prompt can load it. An SDK lets external platforms verify
      the credentials cryptographically.
-  6. Deploy anywhere via the exportable bot package — school, external
+  7. Deploy anywhere via the exportable bot package — school, external
      platforms (A2A, MCP, webhooks), or standalone. Nothing outside
      school affects credentials. The diploma is real because it can't
      be inflated.
@@ -680,16 +680,23 @@ WITH that user — anchored to whatever school identity the bot carries.
   FOUR PARALLEL PROCESSES:
     1. Immediate splatter — every message, Haiku extracts entities with
        identity tags and drops them onto the graph. Ripple propagation
-       spreads weight through connected nodes. Cross-identity ripple
-       (self→user) gets a 50% bonus to prevent the graph from splitting
-       into two separate clusters.
+       spreads weight through connected nodes (20% to parents, 10% to
+       grandparents). Cross-identity ripple (self→user) gets a 50%
+       bonus to prevent the graph from splitting into two separate
+       clusters. A salience detector catches high-importance events at
+       three severity levels: minor (5.0 weight, ~6 months), major
+       (12.0, ~3 years), defining (36.0, ~10 years). Bot's own
+       extracted observations get 0.5× weight to prevent self-echo.
 
-    2. Condensation cascade — when enough raw interactions accumulate,
-       the system condenses L1 (raw) into L2 (behavioral observations,
-       written as conviction not observation) and then L3 (a felt
-       portrait — first-person inhabited language, not a briefing).
-       Opus writes the L3 portrait because identity needs the strongest
-       model.
+    2. Condensation cascade — when 5000+ characters of raw interactions
+       accumulate (or immediately on salience events), the system
+       condenses L1 into L2 (behavioral observations, written as
+       conviction not observation — Sonnet for quality without cost)
+       and then L3 (a felt portrait — first-person inhabited language,
+       200-600 words, not a briefing — Opus because identity needs the
+       strongest model). Arc preservation ensures evolution timelines
+       survive condensation. Self-portrait condenses separately (min 3
+       self-observations, 100-400 words, Opus).
 
     3. Self-reflection — after every response, Opus reflects on what
        the exchange revealed about who the bot is WITH this person.
@@ -724,11 +731,25 @@ WITH that user — anchored to whatever school identity the bot carries.
   functional but unanchored. The quality scales with how much school
   the bot completed. Users feel the difference.
 
+  SHARED SELF-AWARENESS: A cross-user layer persists what the bot
+  learns about itself across ALL conversations (no user data — only
+  self-observations). Stored in a shared SQLite file, deduplicated via
+  60% word overlap merge. Tracks which school convictions fire across
+  how many users and how often. Injected into every conversation so
+  discoveries with one user carry into all others.
+
+  WILD vs OWNER: Non-owner conversations run constrained: 3× faster
+  decay, smaller graph (25 nodes vs 50), higher condensation bar
+  (8000 chars vs 5000). Still feeds shared self-awareness.
+
   FORGE FEEDBACK: Every time a school conviction fires in real
-  conversation, it gets logged. Convictions that never fire in 30+ days
-  of active conversation are flagged — useful signal that the school
-  taught something that doesn't transfer. On re-enrollment, novel
-  self-observations from conversation enter the forge track as L1
-  material. The adversarial environment couldn't have produced these
-  — they came from real relational experience. The loop extends beyond
+  conversation, it gets logged in a conviction_log table. Convictions
+  that never fire in 30+ days of active conversation are flagged —
+  useful signal that the school taught something that doesn't transfer.
+  On re-enrollment, `inject_conversational_awareness_into_school()`
+  extracts forge exercises from all conversation engines and stores
+  them as school L1 material. `get_conversational_awareness_for_forge()`
+  builds a summary (conviction transfer stats, novel self-observations,
+  self-portrait excerpt) for forge paper context. No user data enters
+  the school — only bot self-observations. The loop extends beyond
   the school walls.
