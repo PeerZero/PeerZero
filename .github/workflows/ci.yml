@@ -45,7 +45,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
+          python-version: '3.11'
       - run: pip install -e ".[dev]" 2>/dev/null || pip install -e .
       - run: python -m pytest tests/ -v
       - name: Run coverage report
@@ -132,7 +132,7 @@ jobs:
           cache-dependency-path: peerzero-sdk/node/package-lock.json
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
+          python-version: '3.11'
       - name: Node SDK tests
         run: cd peerzero-sdk/node && npm ci && npm test
       - name: Python SDK tests
@@ -153,7 +153,7 @@ jobs:
           cache-dependency-path: peerzero-school/package-lock.json
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
+          python-version: '3.11'
 
       - name: Audit school dependencies
         run: cd peerzero-school && npm ci --ignore-scripts && npm audit --audit-level=high
