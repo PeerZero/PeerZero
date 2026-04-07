@@ -31,7 +31,7 @@ All three systems share ZERO code and ZERO database access. They communicate onl
 - **`peerzero-sdk/`**: Verification SDK for external platforms (Node.js + Python).
 - **`docs/`**: Architecture documentation. See `docs/README.md` for index.
 - **`sketches/shell-bot/`**: Archived prototype that evolved into peerzero-bot. NOT deployed.
-- **`migrations/`**: Shared migration reference files.
+- **`migrations/`**: DEPRECATED — legacy reference files only. Active migrations live in `peerzero-school/migrations/` (025 files) and `peerzero-app/packages/server/src/db/migrations/` (023 files). Do not add new migrations here.
 
 ## ⚠️ Bot Architecture Rule — READ FIRST
 
