@@ -704,10 +704,11 @@ WITH that user — anchored to whatever school identity the bot carries.
        given who I already am?"
 
     4. Sleep consolidation — nightly, pure math: decay weights, delete
-       zero-weight nodes, promote tiers, create co-occurrence edges,
-       prune redundant paths. Weight = Time: a passing mention survives
-       ~3 days, an emotional mention ~1 month, a defining event ~10
-       years.
+       zero-weight nodes, delete orphan nodes (all edges gone for 14+
+       days — the node is isolated, nothing connects to it anymore),
+       promote tiers, create co-occurrence edges, prune redundant
+       paths. Weight = Time: a passing mention survives ~3 days, an
+       emotional mention ~1 month, a defining event ~10 years.
 
   FELT LANGUAGE, NOT FACTS: The system produces memory that reads like
   knowing, not like a database. A/B testing confirmed: given the same
@@ -739,7 +740,7 @@ WITH that user — anchored to whatever school identity the bot carries.
   discoveries with one user carry into all others.
 
   WILD vs OWNER: Non-owner conversations run constrained: 3× faster
-  decay, smaller graph (25 nodes vs 50), higher condensation bar
+  decay, smaller graph (250 nodes vs 500), higher condensation bar
   (8000 chars vs 5000). Still feeds shared self-awareness.
 
   FORGE FEEDBACK: Every time a school conviction fires in real

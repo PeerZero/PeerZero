@@ -58,7 +58,7 @@ class CondensationConfig:
 @dataclass
 class InjectionConfig:
     """Context budget for the injection stack."""
-    max_active_nodes: int = 50
+    max_active_nodes: int = 500
     min_node_weight: float = 0.05
     max_l2_observations: int = 20
     max_short_term_messages: int = 50
@@ -71,6 +71,7 @@ class SleepConfig:
     cron_schedule: str = "0 3 * * *"
     redundancy_pruning: bool = True
     merge_detection: bool = True
+    orphan_ttl_days: int = 14           # delete nodes with zero edges after N days
 
 
 @dataclass
@@ -83,7 +84,7 @@ class WildConversationConfig:
     shared self-awareness layer.
     """
     decay_multiplier: float = 3.0       # 3x faster decay than owner conversations
-    max_nodes: int = 25                 # smaller graph budget
+    max_nodes: int = 250                # smaller graph budget
     condensation_threshold: int = 8000  # higher bar before condensing (fewer turns)
     disable_l3_portrait: bool = False   # still build portraits (valuable for self-reflection)
     prune_after_days: int = 30          # prune entire wild conversation DB after N days inactive

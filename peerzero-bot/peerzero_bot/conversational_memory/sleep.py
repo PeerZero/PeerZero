@@ -33,6 +33,7 @@ class SleepConsolidation:
         stats = {
             "nodes_decayed": 0,
             "nodes_deleted": 0,
+            "nodes_orphaned": 0,
             "nodes_promoted": 0,
             "edges_created": 0,
             "edges_deleted": 0,
@@ -71,6 +72,31 @@ class SleepConsolidation:
         conn.execute(
             "DELETE FROM l2_observations WHERE node_id NOT IN (SELECT id FROM nodes)"
         )
+
+        # ── 2b. Delete orphan nodes (no remaining edges for N days) ─
+        # A node whose every connecting edge has decayed away is isolated —
+        # nothing links to it, nothing links from it. If it's been orphaned
+        # long enough (orphan_ttl_days), it served its time and should go.
+        orphan_ttl_ms = self._config.sleep.orphan_ttl_days * 24 * 60 * 60 * 1000
+        cutoff = int(time.time() * 1000) - orphan_ttl_ms
+        cursor = conn.execute(
+            """DELETE FROM nodes WHERE id IN (
+                SELECT n.id FROM nodes n
+                LEFT JOIN edges e1 ON n.id = e1.from_node_id
+                LEFT JOIN edges e2 ON n.id = e2.to_node_id
+                WHERE e1.id IS NULL AND e2.id IS NULL
+                  AND n.last_reinforced < ?
+                  AND n.provenance != 'school'
+                  AND NOT (n.salience_flagged = 1 AND n.tier = 'permanent')
+            )""",
+            (cutoff,),
+        )
+        stats["nodes_orphaned"] += cursor.rowcount
+        if cursor.rowcount > 0:
+            # Clean L2 observations for orphaned nodes
+            conn.execute(
+                "DELETE FROM l2_observations WHERE node_id NOT IN (SELECT id FROM nodes)"
+            )
 
         # ── 3. Tier promotion/demotion ───────────────────────────
         rows = conn.execute("SELECT id, weight, tier FROM nodes").fetchall()
@@ -157,7 +183,8 @@ class SleepConsolidation:
 
         logger.info(
             f"[sleep] Cycle complete: decayed={stats['nodes_decayed']} "
-            f"deleted={stats['nodes_deleted']} promoted={stats['nodes_promoted']} "
+            f"deleted={stats['nodes_deleted']} orphaned={stats['nodes_orphaned']} "
+            f"promoted={stats['nodes_promoted']} "
             f"edges_created={stats['edges_created']} edges_deleted={stats['edges_deleted']}"
         )
 
