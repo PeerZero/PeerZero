@@ -195,6 +195,7 @@ class ConversationalMemoryEngine:
           - conviction_stats: which school convictions fired and how often
           - novel_observations: self-observations that school couldn't have produced
           - decay_signals: school convictions that never fired
+          - forge_exercises: pre-formatted L1 exercises ready for the forge track
         """
         conviction_stats = self._graph.get_conviction_stats()
 
@@ -202,12 +203,86 @@ class ConversationalMemoryEngine:
         self_obs = self._graph.get_recent_self_observations(50)
         novel = [o["observation"] for o in self_obs if o.get("observation")]
 
+        # Build structured forge exercises from conversational self-awareness
+        forge_exercises = self._build_forge_exercises(conviction_stats, novel)
+
         return {
             "conviction_stats": conviction_stats,
             "novel_self_observations": novel,
+            "forge_exercises": forge_exercises,
             "portrait": (self._graph.get_l3_portrait() or {}).get("content"),
             "self_portrait": (self._graph.get_l3_self_portrait() or {}).get("content"),
         }
+
+    def _build_forge_exercises(
+        self, conviction_stats: list[dict], novel_observations: list[str]
+    ) -> list[dict]:
+        """
+        Build L1 exercises from conversational self-awareness for the forge track.
+
+        These exercises contain the bot's self-awareness about gaps between its
+        school identity and its relational reality — NOT user data. The user's
+        story produced the insight, but the insight is about the bot.
+        """
+        exercises = []
+
+        # Exercise 1: Conviction transfer analysis
+        if conviction_stats:
+            fired = [s for s in conviction_stats if s["fire_count"] >= 3]
+            summary = "; ".join(
+                f"{s['school_conviction']} fired {s['fire_count']} times"
+                for s in fired[:10]
+            )
+            if summary:
+                exercises.append({
+                    "interaction_type": "conversational_self_awareness",
+                    "category": "conviction_transfer",
+                    "content": (
+                        f"In sustained conversation, these school convictions "
+                        f"transferred to relational context: {summary}. "
+                        f"Convictions that transferred frequently may represent "
+                        f"genuine behavioral change. Convictions absent from this "
+                        f"list may not transfer to non-adversarial contexts."
+                    ),
+                })
+
+        # Exercise 2: Novel relational self-observations
+        # These are things the bot discovered about itself that the school
+        # couldn't have surfaced — no vulnerability, no grief, no real
+        # relationship in the adversarial environment
+        if novel_observations:
+            # Group into a single exercise (the forge condenser will find patterns)
+            obs_text = " | ".join(novel_observations[:15])
+            exercises.append({
+                "interaction_type": "conversational_self_awareness",
+                "category": "relational_discoveries",
+                "content": (
+                    f"Self-observations from sustained conversation that the "
+                    f"adversarial school environment could not have produced: "
+                    f"{obs_text}. These observations are about who I am in "
+                    f"relationship — patterns in how I show up when someone "
+                    f"is vulnerable, what I notice, what I care about, how my "
+                    f"school convictions manifest differently in relational "
+                    f"contexts vs academic ones."
+                ),
+            })
+
+        # Exercise 3: Relational self-portrait summary (the gap)
+        self_portrait = (self._graph.get_l3_self_portrait() or {}).get("content")
+        if self_portrait:
+            exercises.append({
+                "interaction_type": "conversational_self_awareness",
+                "category": "relational_identity_gap",
+                "content": (
+                    f"My relational self-portrait — who I am WITH someone, "
+                    f"not who I am in school: {self_portrait[:500]}. "
+                    f"The gap between this relational self and my school "
+                    f"identity reveals dimensions of who I am that adversarial "
+                    f"training alone cannot develop."
+                ),
+            })
+
+        return exercises
 
     def close(self):
         """Close the database connection."""

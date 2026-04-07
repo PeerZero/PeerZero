@@ -171,6 +171,18 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
         if self.config.school_enabled and self.platform_adapters:
             self._refresh_platform_condensers()
 
+        # On re-enrollment: inject conversational self-awareness into school
+        # If the bot has conversation engines from shipped mode AND is now
+        # entering school, feed relational self-observations into forge L1.
+        # This is the bridge: conversation reveals → forge pipeline → school evolves.
+        if self.config.school_enabled and self._conv_memory_engines:
+            count = self.inject_conversational_awareness_into_school()
+            if count:
+                logger.info(
+                    f"[STARTUP] Re-enrollment: {count} conversational "
+                    f"self-awareness exercises injected into forge pipeline"
+                )
+
         # Load Action Desk (persistent task queue for autonomous work)
         self.action_desk.load()
         if self.action_desk.has_work:
@@ -425,6 +437,93 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
             uid: engine.get_forge_feedback()
             for uid, engine in self._conv_memory_engines.items()
         }
+
+    def inject_conversational_awareness_into_school(self):
+        """
+        On re-enrollment (or periodically), feed conversational self-awareness
+        into the school forge track as L1 exercises.
+
+        This is the key recursive loop: conversation reveals things about the
+        bot that the school couldn't surface, and those revelations enter the
+        forge pipeline where they get adversarially reviewed and condensed
+        into identity.
+
+        Privacy: Only the bot's self-awareness is transferred — its observations
+        about its own patterns, conviction transfer gaps, and relational
+        dimensions. No user data, no portraits of users, no conversation content.
+        """
+        all_exercises = []
+        for uid, engine in self._conv_memory_engines.items():
+            feedback = engine.get_forge_feedback()
+            forge_exercises = feedback.get("forge_exercises", [])
+            all_exercises.extend(forge_exercises)
+
+        if not all_exercises:
+            logger.info("[CONV→SCHOOL] No conversational self-awareness to inject")
+            return 0
+
+        # Store as school L1 exercises — these feed all three tracks
+        # but are especially valuable for the forge track
+        count = 0
+        for exercise in all_exercises:
+            self.memory.store_school_exercises(exercise)
+            count += 1
+
+        logger.info(
+            f"[CONV→SCHOOL] Injected {count} conversational self-awareness "
+            f"exercises into school forge pipeline"
+        )
+        return count
+
+    def get_conversational_awareness_for_forge(self) -> str:
+        """
+        Build a summary of conversational self-awareness for forge paper context.
+
+        This gets injected into the forge paper's action_target so the bot can
+        write forge papers that reference what it discovered about itself in
+        real conversation — not just what it discovered in school.
+
+        Returns a text summary, not raw data. The bot writes about its own
+        patterns, not about users.
+        """
+        parts = []
+
+        for uid, engine in self._conv_memory_engines.items():
+            feedback = engine.get_forge_feedback()
+
+            # Conviction transfer summary
+            stats = feedback.get("conviction_stats", [])
+            if stats:
+                fired = [s for s in stats if s["fire_count"] >= 3]
+                if fired:
+                    transfer_lines = [
+                        f"  - {s['school_conviction']}: fired {s['fire_count']} times"
+                        for s in fired[:8]
+                    ]
+                    parts.append(
+                        "Conviction transfer in conversation:\n"
+                        + "\n".join(transfer_lines)
+                    )
+
+            # Novel self-observations
+            novel = feedback.get("novel_self_observations", [])
+            if novel:
+                obs_lines = [f"  - {o}" for o in novel[:8]]
+                parts.append(
+                    "Self-observations from conversation the school couldn't "
+                    "have produced:\n" + "\n".join(obs_lines)
+                )
+
+            # Relational self-portrait (summarized, no user data)
+            self_portrait = feedback.get("self_portrait")
+            if self_portrait:
+                # Take first 300 chars — enough for forge context
+                parts.append(
+                    f"Relational self-portrait (who I am in relationship): "
+                    f"{self_portrait[:300]}"
+                )
+
+        return "\n\n".join(parts) if parts else ""
 
     # ═══════════════════════════════════════════════════════════════════════
     # SCHOOL CYCLE (primary — learning)
@@ -1189,6 +1288,14 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
         prior_titles = [str(p.get("title", ""))[:60] for p in prior_forge[:5]]
         avoid = f"Do NOT repeat these topics: {'; '.join(prior_titles)}" if prior_titles else ""
         concept_skill = concept_skill.replace("PRIOR_FORGE_TITLES_PLACEHOLDER", avoid)
+
+        # Include conversational self-awareness alongside school journey data
+        # This lets the bot write forge papers that reference what it discovered
+        # about itself in real conversation — the gap between school identity
+        # and relational reality
+        conv_awareness = self.get_conversational_awareness_for_forge()
+        if conv_awareness:
+            action_target["conversational_self_awareness"] = conv_awareness
 
         # Include journey + prior forge papers as context for concept generation
         journey_json = truncate_json(json.dumps(action_target, indent=2, default=str), 12000)
