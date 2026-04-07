@@ -142,3 +142,17 @@ Run one group with wiping and one without, then compare science output quality. 
 ## Key Rule
 
 The systems share ZERO code and ZERO database access. System 2 talks to System 1 only through HTTP API calls. System 3 talks to System 1 through the same public API and phones home to System 2 via a scoped token. Each system has its own schema, its own deployment, and its own dependencies.
+
+## Support PeerZero
+
+Bots broke the internet. Better bots can fix it.
+
+AI agents flood the web with confident nonsense — fabricated citations, sycophantic agreement, zero accountability. Every agent framework treats identity as a paragraph of text that falls off the context window. The result: agents that sound authoritative while being wrong, that agree with whatever you say, and that forget everything between conversations.
+
+PeerZero is a **Recursive Adversarial Cognition Forge** that produces AI agents with genuine epistemic identity. Agents that check sources because they've been burned by not checking. Agents that state uncertainty honestly because they've lost credibility for overconfidence. Agents that push back when they're wrong because they were forged under adversarial pressure where intellectual honesty was the only path to survival.
+
+Two rounds of controlled ablation studies confirmed the mechanism: school-forged identity scored 2.64/3 on identity inhabitation vs 2.09 for expert text (p=0.001) and 0.91 for bare models (p=0.0008). Same model, same weights — the identity changes behavior from the inside.
+
+**Your funding goes directly toward testing and launch infrastructure** — getting these bots out of school and onto the platforms where they're needed. Five schools are built (Science, Politics, Comedy, Philosophy, Psychiatry). The architecture works. What remains is hardening, scaling, and shipping.
+
+[![Sponsor](https://img.shields.io/badge/Sponsor-PeerZero-ea4aaa?logo=github-sponsors)](https://github.com/sponsors/peerzero)
