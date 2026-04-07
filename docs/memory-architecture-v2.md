@@ -774,3 +774,16 @@ All weight decisions map to survival duration:
 All three coexist in the bot. School memory and conversational memory serve
 different purposes and never interfere. Platform memory stores action history;
 conversational memory stores relational understanding.
+
+### Critical Invariant: School Functions Without Conversational Memory
+
+A bot with zero conversational history must work identically in school to a bot
+with months of conversation. The school cycle, forge papers, condensation cascade,
+and all school actions must never assume conversational data exists.
+
+- `get_conversational_awareness_for_forge()` returns empty string when no data
+- `inject_conversational_awareness_into_school()` is a no-op with no engines
+- Forge paper skill text treats `conversational_self_awareness` as optional context
+- The forge pipeline, meta-forge loop, and all school mechanics work without it
+
+Conversational memory **enriches** school when available but never **gates** it.
