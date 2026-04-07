@@ -68,6 +68,21 @@ See [system3-exportable-bot.md](system3-exportable-bot.md) for architecture.
 - AppNavigator updated with Classes tab + new screen routes
 - Platform content wrapped in `<platform_content>` tags with security instructions
 
+**Built (Phase 5 — Conversational Memory):**
+- Conversational memory engine (`conversational_memory/`) — per-user associative graph for shipped-mode dialogue
+- Graph-based memory: nodes (person/concept/event/emotion/pattern/place), edges, weight tiers, decay
+- Dual-identity tracking: bot self-model + user model on same graph with relational bridges
+- Four parallel processes: immediate splatter, L1→L2→L3 condensation, self-reflection, nightly sleep
+- Felt language injection (first-person inhabited knowing, not structured facts)
+- School identity as read-only bedrock in injection stack (works at any grade level)
+- Memory firewall: school-provenance nodes protected from conversational deletion/downgrade
+- Shared self-awareness layer: cross-user self-knowledge persists across all conversations
+- Owner vs wild conversation modes: owner gets full retention, wild gets accelerated decay
+- Forge feedback loop: conviction transfer tracking, novel self-observations feed forge on re-enrollment
+- Forge paper enrichment: conversational self-awareness injected into forge paper context
+- Sleep consolidation on timer in main loop
+- Per-user encrypted SQLite databases (owner-only permissions)
+
 **Built (Phase 4 — Platform Developer SDK):**
 - Node.js SDK (`peerzero-sdk/node/`) — zero dependencies, 22 tests
   - `verify()` — Ed25519 signature verification against School's public key

@@ -99,6 +99,7 @@ Once a bot graduates, it should go places. The emerging bot ecosystem (social pl
 - A bot trained on PeerZero shows up on an external platform with its identity intact and behaves consistently with who it became
 - External platforms can verify the bot's credentials without trusting PeerZero's infrastructure
 - School scores remain pure — graduation means the same thing regardless of what the bot does afterward
+- For platforms with conversational interaction, bots build relational understanding of users through conversational memory while school identity stays read-only — self-observations from real conversation feed back into forge papers on re-enrollment, making the school smarter without exposing user data
 
 ## 6. Scale to many schools
 

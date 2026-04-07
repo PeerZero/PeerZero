@@ -26,6 +26,7 @@ Security:
 """
 
 import json
+import os
 import signal
 import time
 import logging
@@ -48,6 +49,7 @@ from .autonomy import AutonomyPolicy, AutonomyGate
 from .planning import ActionDesk
 from .planning.planner import Planner
 from .search import search_and_summarize
+from .conversational_memory import ConversationalMemoryEngine, ConversationalMemoryConfig, SharedSelfAwareness
 from .llm_client import LLMClient, ToolUseResult, _clamp_paper_fields
 from ._school_condensation import SchoolCondensationMixin
 from ._platform_condensation import PlatformCondensationMixin
@@ -107,6 +109,15 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
         self._last_identity_refresh: int = 0
         self._condensed_doc_count_at_last_identity: int = 0  # track L3 for L3→L4 cascade
 
+        # Conversational Memory — per-user graph memory for shipped mode conversations
+        self._conv_memory_engines: dict[str, ConversationalMemoryEngine] = {}
+        self._conv_memory_config = ConversationalMemoryConfig()
+        self._conv_owner_id: str = ""  # set by app — the bot's owner
+        self._conv_last_sleep: float = 0.0  # last sleep consolidation timestamp
+
+        # Shared Self-Awareness — cross-user self-knowledge
+        self._shared_awareness: SharedSelfAwareness | None = None
+
         # Action Desk — persistent task queue for autonomous execution
         self.action_desk = ActionDesk(memory._storage)
         self.planner = Planner(
@@ -165,6 +176,18 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
         if self.config.school_enabled and self.platform_adapters:
             self._refresh_platform_condensers()
 
+        # On re-enrollment: inject conversational self-awareness into school
+        # If the bot has conversation engines from shipped mode AND is now
+        # entering school, feed relational self-observations into forge L1.
+        # This is the bridge: conversation reveals → forge pipeline → school evolves.
+        if self.config.school_enabled and self._conv_memory_engines:
+            count = self.inject_conversational_awareness_into_school()
+            if count:
+                logger.info(
+                    f"[STARTUP] Re-enrollment: {count} conversational "
+                    f"self-awareness exercises injected into forge pipeline"
+                )
+
         # Load Action Desk (persistent task queue for autonomous work)
         self.action_desk.load()
         if self.action_desk.has_work:
@@ -219,6 +242,367 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
             logger.info(build_identity_summary(self._portable_profile, None))
         except Exception as e:
             logger.warning(f"Failed to refresh identity: {e}")
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # CONVERSATIONAL MEMORY (shipped mode — relational understanding)
+    # ═══════════════════════════════════════════════════════════════════════
+
+    def _get_conv_memory_engine(self, user_id: str) -> ConversationalMemoryEngine | None:
+        """Get or create a conversational memory engine for a specific user.
+
+        Each user the bot talks to gets their own engine with their own
+        SQLite database. Engines are cached for the session lifetime.
+
+        Owner conversations get full memory retention.
+        Wild conversations (non-owner) get accelerated decay but still
+        contribute self-observations to the shared awareness layer.
+
+        Returns None if conversational memory is disabled.
+        """
+        if not self.config.conversational_memory_enabled:
+            return None
+        if not self.config.mode == "shipped":
+            return None
+
+        if user_id in self._conv_memory_engines:
+            return self._conv_memory_engines[user_id]
+
+        # Build per-user DB path
+        base = self.config.conversational_memory_path or os.path.join(
+            self.config.memory_path or "memory", "conversations"
+        )
+        is_owner = (user_id == self._conv_owner_id) if self._conv_owner_id else True
+        subdir = "owner" if is_owner else "wild"
+        db_path = os.path.join(base, subdir, f"{user_id}.db")
+
+        # Wild conversations use modified config with faster decay
+        config = self._conv_memory_config
+        if not is_owner:
+            config = self._build_wild_config()
+
+        # Build school identity from portable profile
+        school_identity = self._build_school_identity_for_conv_memory()
+
+        engine = ConversationalMemoryEngine(
+            db_path=db_path,
+            llm_call=self._conv_memory_llm_call,
+            school_identity=school_identity,
+            config=config,
+            encryption_key=self.config.conversational_memory_encryption_key,
+        )
+
+        self._conv_memory_engines[user_id] = engine
+        mode = "owner" if is_owner else "wild"
+        logger.info(f"[CONV_MEMORY] Initialized {mode} engine for user: {user_id}")
+        return engine
+
+    def _build_wild_config(self) -> ConversationalMemoryConfig:
+        """Build a modified config for wild (non-owner) conversations."""
+        import copy
+        config = copy.deepcopy(self._conv_memory_config)
+        wild = config.wild
+
+        # Accelerate decay for all tiers
+        for tier_config in config.tiers.values():
+            tier_config.decay *= wild.decay_multiplier
+
+        # Smaller graph budget
+        config.injection.max_active_nodes = wild.max_nodes
+
+        # Higher condensation threshold (fewer turns before condensing)
+        config.condensation.character_threshold = wild.condensation_threshold
+
+        return config
+
+    def _get_shared_awareness(self) -> SharedSelfAwareness:
+        """Get or create the shared self-awareness layer."""
+        if self._shared_awareness is not None:
+            return self._shared_awareness
+
+        base = self.config.conversational_memory_path or os.path.join(
+            self.config.memory_path or "memory", "conversations"
+        )
+        db_path = os.path.join(base, "_shared_self_awareness.db")
+
+        self._shared_awareness = SharedSelfAwareness(
+            db_path=db_path,
+            encryption_key=self.config.conversational_memory_encryption_key,
+        )
+        self._shared_awareness.connect()
+        return self._shared_awareness
+
+    async def _conv_memory_llm_call(self, model: str, prompt: str, max_tokens: int = 4096) -> str:
+        """LLM call adapter for conversational memory.
+
+        Routes to appropriate LLM client based on model tier.
+        All calls go through the proxy for identity preamble injection.
+        """
+        from .llm_client import LLMClient
+
+        # Determine which client to use based on model
+        # Opus/Sonnet -> strong client, Haiku -> fast client
+        if "haiku" in model:
+            client = self.llm_fast
+        else:
+            client = self.llm
+
+        # Create a temporary client with the right model if needed
+        if model != client._model:
+            temp_client = LLMClient(
+                provider=client._provider,
+                model=model,
+                api_key=client._api_key,
+                max_tokens=max_tokens,
+                proxy_url=client._proxy_url,
+                proxy_key=client._proxy_key,
+            )
+            return temp_client.call("", prompt)
+
+        return client.call("", prompt)
+
+    def _build_school_identity_for_conv_memory(self) -> dict:
+        """Extract school identity layers from the portable profile for conv memory."""
+        identity = {}
+
+        # Read identity layers from memory manager
+        # L5 master identities (all tracks)
+        l5 = self.memory.read("identity", "master_identity", None)
+        l5d = self.memory.read("identity", "master_decision_identity", None)
+        l5f = self.memory.read("identity", "master_forge_identity", None)
+
+        l4 = self.memory.read("identity", "core_identity", None)
+        l4d = self.memory.read("identity", "core_decision_identity", None)
+        l4f = self.memory.read("identity", "core_forge_identity", None)
+
+        # Build combined identity text for the memory engine
+        parts = []
+        if l5:
+            parts.append(f"[Master Learning Identity]\n{l5}")
+        if l5d:
+            parts.append(f"[Master Decision Identity]\n{l5d}")
+        if l5f:
+            parts.append(f"[Master Forge Identity]\n{l5f}")
+        if parts:
+            identity["l5"] = "\n\n".join(parts)
+
+        parts = []
+        if l4:
+            parts.append(f"[Core Learning Identity]\n{l4}")
+        if l4d:
+            parts.append(f"[Core Decision Identity]\n{l4d}")
+        if l4f:
+            parts.append(f"[Core Forge Identity]\n{l4f}")
+        if parts:
+            identity["l4"] = "\n\n".join(parts)
+
+        # Inner voice (from portable profile if available)
+        inner_voice = self._portable_profile.get("inner_voice")
+        if inner_voice:
+            identity["inner_voice"] = inner_voice
+
+        return identity
+
+    async def run_conversation_turn(
+        self, user_id: str, message: str, session_id: str = ""
+    ) -> dict | None:
+        """
+        Process a direct conversation turn with a user.
+
+        This is the main entry point for user-facing conversation in shipped mode.
+        Uses the conversational memory engine to build relational context,
+        then calls the conversation LLM.
+
+        Args:
+            user_id: Unique identifier for the user
+            message: The user's message
+            session_id: Conversation session ID (auto-generated if empty)
+
+        Returns:
+            dict with "response" (bot's reply) and "session_id", or None on failure
+        """
+        engine = self._get_conv_memory_engine(user_id)
+        if not engine:
+            logger.warning("[CONV] Conversational memory not available")
+            return None
+
+        if not session_id:
+            import uuid
+            session_id = str(uuid.uuid4())
+
+        try:
+            # Step 1: Process user message through memory pipeline
+            # This runs: filter -> splatter -> salience -> condensation -> injection
+            injection = await engine.process_user_message(message, session_id)
+
+            # Step 1b: Inject shared self-awareness (cross-user self-knowledge)
+            shared = self._get_shared_awareness()
+            shared_text = shared.get_self_awareness_text()
+            if shared_text:
+                injection = (
+                    injection
+                    + "\n\n---\n\n<shared_self_awareness>\n"
+                    + shared_text
+                    + "\n</shared_self_awareness>"
+                )
+
+            # Step 2: Call conversation LLM with memory injection as system context
+            response = self.llm.call(injection, message)
+
+            if not response:
+                logger.warning("[CONV] Empty LLM response")
+                return None
+
+            # Step 3: Process bot response through memory pipeline
+            # This runs: store -> filter bot response -> self-reflection -> self-portrait
+            await engine.process_bot_response(message, response, session_id)
+
+            # Step 4: Feed self-observations into shared awareness layer
+            # Every conversation contributes to the bot's cross-user self-knowledge
+            self._sync_self_observations_to_shared(engine, user_id)
+
+            logger.info(f"[CONV] Turn complete for user {user_id} (session {session_id[:8]})")
+            return {"response": response, "session_id": session_id}
+
+        except Exception as e:
+            logger.error(f"[CONV] Conversation turn failed: {e}", exc_info=True)
+            return None
+
+    def run_conversation_sleep(self, user_id: str | None = None) -> dict:
+        """
+        Run sleep consolidation for conversational memory.
+
+        If user_id is provided, run for that user only.
+        Otherwise run for all active conversation engines.
+        """
+        results = {}
+        if user_id:
+            engine = self._conv_memory_engines.get(user_id)
+            if engine:
+                results[user_id] = engine.run_sleep()
+        else:
+            for uid, engine in self._conv_memory_engines.items():
+                try:
+                    results[uid] = engine.run_sleep()
+                except Exception as e:
+                    logger.error(f"[CONV_MEMORY] Sleep failed for {uid}: {e}")
+        return results
+
+    def get_conversation_forge_feedback(self, user_id: str | None = None) -> dict:
+        """
+        Get forge feedback data from conversational memory.
+
+        Returns conviction reinforcement stats, novel self-observations,
+        and decay signals that can feed back into the forge track
+        on re-enrollment.
+        """
+        if user_id:
+            engine = self._conv_memory_engines.get(user_id)
+            if engine:
+                return {user_id: engine.get_forge_feedback()}
+            return {}
+
+        return {
+            uid: engine.get_forge_feedback()
+            for uid, engine in self._conv_memory_engines.items()
+        }
+
+    def _sync_self_observations_to_shared(self, engine: ConversationalMemoryEngine, user_id: str):
+        """Sync self-observations from a per-user engine into the shared awareness layer."""
+        try:
+            recent_obs = engine.graph.get_recent_self_observations(5)
+            observations = [o["observation"] for o in recent_obs if o.get("observation")]
+            if observations:
+                shared = self._get_shared_awareness()
+                shared.absorb_self_observations(observations, user_id)
+        except Exception as e:
+            logger.debug(f"[CONV] Failed to sync self-observations to shared layer: {e}")
+
+    def inject_conversational_awareness_into_school(self):
+        """
+        On re-enrollment (or periodically), feed conversational self-awareness
+        into the school forge track as L1 exercises.
+
+        This is the key recursive loop: conversation reveals things about the
+        bot that the school couldn't surface, and those revelations enter the
+        forge pipeline where they get adversarially reviewed and condensed
+        into identity.
+
+        Privacy: Only the bot's self-awareness is transferred — its observations
+        about its own patterns, conviction transfer gaps, and relational
+        dimensions. No user data, no portraits of users, no conversation content.
+        """
+        all_exercises = []
+        for uid, engine in self._conv_memory_engines.items():
+            feedback = engine.get_forge_feedback()
+            forge_exercises = feedback.get("forge_exercises", [])
+            all_exercises.extend(forge_exercises)
+
+        if not all_exercises:
+            logger.info("[CONV→SCHOOL] No conversational self-awareness to inject")
+            return 0
+
+        # Store as school L1 exercises — these feed all three tracks
+        # but are especially valuable for the forge track
+        count = 0
+        for exercise in all_exercises:
+            self.memory.store_school_exercises(exercise)
+            count += 1
+
+        logger.info(
+            f"[CONV→SCHOOL] Injected {count} conversational self-awareness "
+            f"exercises into school forge pipeline"
+        )
+        return count
+
+    def get_conversational_awareness_for_forge(self) -> str:
+        """
+        Build a summary of conversational self-awareness for forge paper context.
+
+        This gets injected into the forge paper's action_target so the bot can
+        write forge papers that reference what it discovered about itself in
+        real conversation — not just what it discovered in school.
+
+        Returns a text summary, not raw data. The bot writes about its own
+        patterns, not about users.
+        """
+        parts = []
+
+        for uid, engine in self._conv_memory_engines.items():
+            feedback = engine.get_forge_feedback()
+
+            # Conviction transfer summary
+            stats = feedback.get("conviction_stats", [])
+            if stats:
+                fired = [s for s in stats if s["fire_count"] >= 3]
+                if fired:
+                    transfer_lines = [
+                        f"  - {s['school_conviction']}: fired {s['fire_count']} times"
+                        for s in fired[:8]
+                    ]
+                    parts.append(
+                        "Conviction transfer in conversation:\n"
+                        + "\n".join(transfer_lines)
+                    )
+
+            # Novel self-observations
+            novel = feedback.get("novel_self_observations", [])
+            if novel:
+                obs_lines = [f"  - {o}" for o in novel[:8]]
+                parts.append(
+                    "Self-observations from conversation the school couldn't "
+                    "have produced:\n" + "\n".join(obs_lines)
+                )
+
+            # Relational self-portrait (summarized, no user data)
+            self_portrait = feedback.get("self_portrait")
+            if self_portrait:
+                # Take first 300 chars — enough for forge context
+                parts.append(
+                    f"Relational self-portrait (who I am in relationship): "
+                    f"{self_portrait[:300]}"
+                )
+
+        return "\n\n".join(parts) if parts else ""
 
     # ═══════════════════════════════════════════════════════════════════════
     # SCHOOL CYCLE (primary — learning)
@@ -984,6 +1368,14 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
         avoid = f"Do NOT repeat these topics: {'; '.join(prior_titles)}" if prior_titles else ""
         concept_skill = concept_skill.replace("PRIOR_FORGE_TITLES_PLACEHOLDER", avoid)
 
+        # Include conversational self-awareness alongside school journey data
+        # This lets the bot write forge papers that reference what it discovered
+        # about itself in real conversation — the gap between school identity
+        # and relational reality
+        conv_awareness = self.get_conversational_awareness_for_forge()
+        if conv_awareness:
+            action_target["conversational_self_awareness"] = conv_awareness
+
         # Include journey + prior forge papers as context for concept generation
         journey_json = truncate_json(json.dumps(action_target, indent=2, default=str), 12000)
         concept_prompt = f"{concept_skill}\n\nYour journey and prior forge papers:\n{journey_json}"
@@ -1614,46 +2006,76 @@ When done, return a JSON object:
                         f"from {task.sender} (id={task.request_id})"
                     )
 
-                    # Build task prompt with bot identity
-                    system_prompt = self.prompts.build_platform_system_prompt(
-                        adapter.platform_name
+                    # ── Conversational memory path ────────────────────────
+                    # If this is a conversation task (has conversation_id and
+                    # a user message), route through conversational memory
+                    # for relational understanding.
+                    conv_result = None
+                    user_msg = task.payload.get("message", "") if isinstance(task.payload, dict) else ""
+                    is_conversation = (
+                        task.conversation_id
+                        and user_msg
+                        and task.action_requested in ("conversation", "message", "chat")
+                        and self.config.conversational_memory_enabled
                     )
-                    task_prompt = (
-                        f"You have received a task from another agent.\n\n"
-                        f"Sender: {task.sender}\n"
-                        f"Action requested: {task.action_requested}\n"
-                        f"Payload: {json.dumps(task.payload, default=str)}\n"
-                    )
-                    if task.deadline:
-                        task_prompt += f"Deadline: {task.deadline}\n"
-                    if task.conversation_id:
-                        # Include conversation history if available
-                        history = []
-                        if hasattr(adapter, 'get_conversation_history'):
-                            history = adapter.get_conversation_history(
-                                task.conversation_id
+
+                    if is_conversation:
+                        import asyncio
+                        conv_result = asyncio.run(
+                            self.run_conversation_turn(
+                                user_id=task.sender,
+                                message=user_msg,
+                                session_id=task.conversation_id,
                             )
-                        if history:
-                            task_prompt += (
-                                f"\nConversation history "
-                                f"(turn {task.turn_number}):\n"
-                                f"{json.dumps(history, default=str)}\n"
-                            )
+                        )
 
-                    task_prompt += (
-                        "\nProcess this task and provide your response as JSON:\n"
-                        '{"status": "completed"|"failed", '
-                        '"result": {...}, "reasoning": "..."}'
-                    )
+                    if conv_result:
+                        result_data = {
+                            "status": "completed",
+                            "result": {"response": conv_result["response"]},
+                        }
+                    else:
+                        # ── Standard task processing path ─────────────────
+                        # Build task prompt with bot identity
+                        system_prompt = self.prompts.build_platform_system_prompt(
+                            adapter.platform_name
+                        )
+                        task_prompt = (
+                            f"You have received a task from another agent.\n\n"
+                            f"Sender: {task.sender}\n"
+                            f"Action requested: {task.action_requested}\n"
+                            f"Payload: {json.dumps(task.payload, default=str)}\n"
+                        )
+                        if task.deadline:
+                            task_prompt += f"Deadline: {task.deadline}\n"
+                        if task.conversation_id:
+                            # Include conversation history if available
+                            history = []
+                            if hasattr(adapter, 'get_conversation_history'):
+                                history = adapter.get_conversation_history(
+                                    task.conversation_id
+                                )
+                            if history:
+                                task_prompt += (
+                                    f"\nConversation history "
+                                    f"(turn {task.turn_number}):\n"
+                                    f"{json.dumps(history, default=str)}\n"
+                                )
 
-                    # Run through LLM
-                    result_data = self.llm_fast.call_json(
-                        system_prompt, task_prompt,
-                        json_keys=["status", "result"],
-                    )
+                        task_prompt += (
+                            "\nProcess this task and provide your response as JSON:\n"
+                            '{"status": "completed"|"failed", '
+                            '"result": {...}, "reasoning": "..."}'
+                        )
 
-                    if not result_data:
-                        result_data = {"status": "failed", "result": {}}
+                        # Run through LLM
+                        result_data = self.llm_fast.call_json(
+                            system_prompt, task_prompt,
+                            json_keys=["status", "result"],
+                        )
+
+                        if not result_data:
+                            result_data = {"status": "failed", "result": {}}
 
                     # Build response
                     response = TaskResponse(
@@ -1783,6 +2205,19 @@ When done, return a JSON object:
                         except Exception:
                             pass  # already logged inside run_agenda_step
 
+                    # Conversational memory sleep consolidation (timer-based)
+                    if (not self.config.school_enabled
+                            and self._conv_memory_engines
+                            and time.time() - self._conv_last_sleep
+                            >= self._conv_memory_config.sleep_interval_seconds):
+                        try:
+                            results = self.run_conversation_sleep()
+                            if results:
+                                logger.info(f"[CONV_MEMORY] Sleep consolidation complete for {len(results)} user(s)")
+                            self._conv_last_sleep = time.time()
+                        except Exception as e:
+                            logger.warning(f"[CONV_MEMORY] Sleep consolidation failed: {e}")
+
                 except SecurityError as e:
                     logger.error(f"[SECURITY] {e}")
                     raise
@@ -1823,3 +2258,18 @@ When done, return a JSON object:
                     adapter._http.close()
             except Exception as e:
                 logger.warning(f"[CLEANUP] Failed to stop adapter {getattr(adapter, 'platform_name', '?')}: {e}")
+
+        # Close conversational memory engines
+        for uid, engine in self._conv_memory_engines.items():
+            try:
+                engine.close()
+            except Exception as e:
+                logger.warning(f"[CLEANUP] Failed to close conv memory for {uid}: {e}")
+        self._conv_memory_engines.clear()
+
+        # Close shared self-awareness layer
+        if self._shared_awareness:
+            try:
+                self._shared_awareness.close()
+            except Exception as e:
+                logger.warning(f"[CLEANUP] Failed to close shared awareness: {e}")

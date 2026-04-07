@@ -160,6 +160,13 @@ class BotConfig:
     llm_proxy_enabled: bool = True
     llm_proxy_key: str = ""  # From PEERZERO_PROXY_KEY env var
 
+    # ── Conversational Memory ────────────────────────────────────────────
+    # Graph-based relational memory for shipped bots talking to users.
+    # Creates per-user SQLite databases with associative memory graphs.
+    conversational_memory_enabled: bool = True  # enable for shipped mode conversation
+    conversational_memory_path: str = ""        # base dir for per-user DBs (default: memory_path/conversations)
+    conversational_memory_encryption_key: str = ""  # from CONVERSATIONAL_MEMORY_KEY env var
+
     # ── Security ──────────────────────────────────────────────────────────
     audit_log: bool = True
 
@@ -367,6 +374,9 @@ class BotConfig:
         self.llm_fast_api_key = os.environ.get("LLM_FAST_API_KEY", self.llm_fast_api_key)
         self.peerzero_app_token = os.environ.get("PEERZERO_APP_TOKEN", self.peerzero_app_token)
         self.llm_proxy_key = os.environ.get("PEERZERO_PROXY_KEY", self.llm_proxy_key)
+        self.conversational_memory_encryption_key = os.environ.get(
+            "CONVERSATIONAL_MEMORY_KEY", self.conversational_memory_encryption_key
+        )
 
         # Platform-specific keys from env: MOLTBOOK_API_KEY, DEBATE_API_KEY, etc.
         for platform in self.platforms:

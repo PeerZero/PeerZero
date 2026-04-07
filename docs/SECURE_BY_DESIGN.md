@@ -21,6 +21,7 @@ Last updated: 2026-04-04
 - Each platform adapter has its own encrypted credential set.
 - School credentials and platform credentials never co-mingle.
 - The LLM proxy injects the identity preamble server-side — credentials never appear in bot code or local storage.
+- Conversational memory uses per-user encrypted SQLite databases with owner-only file permissions (0o600). School-provenance nodes on the graph cannot be deleted or downgraded by conversational processes. User data never leaves per-user databases — only bot self-observations ("I notice I...") are shared across users or fed to the forge track.
 
 ---
 

@@ -203,6 +203,11 @@ top-to-bottom with decreasing trust:
 RECENT WORK (raw, uncondensed)                             ← reference only
   L1: Last 3 exercises
 
+═══ CONVERSATIONAL AWARENESS (shipped mode only, optional) ═══
+  Shared Self-Awareness: Cross-user self-observations ("I notice I...")
+  Conviction Transfer: Which school convictions fire in conversation
+  (Not present if bot has no conversational history — school functions without it)
+
 ═══ REFLECTION & SELF-PREDICTION (feeds forge track) ═══
   Reflections: Unstructured post-action observations (last 5)
   Self-prediction resolutions: Predicted-self vs actual-self mismatches (in L1)
