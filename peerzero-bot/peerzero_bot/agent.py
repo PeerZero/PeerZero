@@ -49,7 +49,7 @@ from .autonomy import AutonomyPolicy, AutonomyGate
 from .planning import ActionDesk
 from .planning.planner import Planner
 from .search import search_and_summarize
-from .conversational_memory import ConversationalMemoryEngine, ConversationalMemoryConfig
+from .conversational_memory import ConversationalMemoryEngine, ConversationalMemoryConfig, SharedSelfAwareness
 from .llm_client import LLMClient, ToolUseResult, _clamp_paper_fields
 from ._school_condensation import SchoolCondensationMixin
 from ._platform_condensation import PlatformCondensationMixin
@@ -112,6 +112,11 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
         # Conversational Memory — per-user graph memory for shipped mode conversations
         self._conv_memory_engines: dict[str, ConversationalMemoryEngine] = {}
         self._conv_memory_config = ConversationalMemoryConfig()
+        self._conv_owner_id: str = ""  # set by app — the bot's owner
+        self._conv_last_sleep: float = 0.0  # last sleep consolidation timestamp
+
+        # Shared Self-Awareness — cross-user self-knowledge
+        self._shared_awareness: SharedSelfAwareness | None = None
 
         # Action Desk — persistent task queue for autonomous execution
         self.action_desk = ActionDesk(memory._storage)
@@ -247,6 +252,11 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
 
         Each user the bot talks to gets their own engine with their own
         SQLite database. Engines are cached for the session lifetime.
+
+        Owner conversations get full memory retention.
+        Wild conversations (non-owner) get accelerated decay but still
+        contribute self-observations to the shared awareness layer.
+
         Returns None if conversational memory is disabled.
         """
         if not self.config.conversational_memory_enabled:
@@ -261,7 +271,14 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
         base = self.config.conversational_memory_path or os.path.join(
             self.config.memory_path or "memory", "conversations"
         )
-        db_path = os.path.join(base, f"{user_id}.db")
+        is_owner = (user_id == self._conv_owner_id) if self._conv_owner_id else True
+        subdir = "owner" if is_owner else "wild"
+        db_path = os.path.join(base, subdir, f"{user_id}.db")
+
+        # Wild conversations use modified config with faster decay
+        config = self._conv_memory_config
+        if not is_owner:
+            config = self._build_wild_config()
 
         # Build school identity from portable profile
         school_identity = self._build_school_identity_for_conv_memory()
@@ -270,13 +287,49 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
             db_path=db_path,
             llm_call=self._conv_memory_llm_call,
             school_identity=school_identity,
-            config=self._conv_memory_config,
+            config=config,
             encryption_key=self.config.conversational_memory_encryption_key,
         )
 
         self._conv_memory_engines[user_id] = engine
-        logger.info(f"[CONV_MEMORY] Initialized engine for user: {user_id}")
+        mode = "owner" if is_owner else "wild"
+        logger.info(f"[CONV_MEMORY] Initialized {mode} engine for user: {user_id}")
         return engine
+
+    def _build_wild_config(self) -> ConversationalMemoryConfig:
+        """Build a modified config for wild (non-owner) conversations."""
+        import copy
+        config = copy.deepcopy(self._conv_memory_config)
+        wild = config.wild
+
+        # Accelerate decay for all tiers
+        for tier_config in config.tiers.values():
+            tier_config.decay *= wild.decay_multiplier
+
+        # Smaller graph budget
+        config.injection.max_active_nodes = wild.max_nodes
+
+        # Higher condensation threshold (fewer turns before condensing)
+        config.condensation.character_threshold = wild.condensation_threshold
+
+        return config
+
+    def _get_shared_awareness(self) -> SharedSelfAwareness:
+        """Get or create the shared self-awareness layer."""
+        if self._shared_awareness is not None:
+            return self._shared_awareness
+
+        base = self.config.conversational_memory_path or os.path.join(
+            self.config.memory_path or "memory", "conversations"
+        )
+        db_path = os.path.join(base, "_shared_self_awareness.db")
+
+        self._shared_awareness = SharedSelfAwareness(
+            db_path=db_path,
+            encryption_key=self.config.conversational_memory_encryption_key,
+        )
+        self._shared_awareness.connect()
+        return self._shared_awareness
 
     async def _conv_memory_llm_call(self, model: str, prompt: str, max_tokens: int = 4096) -> str:
         """LLM call adapter for conversational memory.
@@ -381,6 +434,17 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
             # This runs: filter -> splatter -> salience -> condensation -> injection
             injection = await engine.process_user_message(message, session_id)
 
+            # Step 1b: Inject shared self-awareness (cross-user self-knowledge)
+            shared = self._get_shared_awareness()
+            shared_text = shared.get_self_awareness_text()
+            if shared_text:
+                injection = (
+                    injection
+                    + "\n\n---\n\n<shared_self_awareness>\n"
+                    + shared_text
+                    + "\n</shared_self_awareness>"
+                )
+
             # Step 2: Call conversation LLM with memory injection as system context
             response = self.llm.call(injection, message)
 
@@ -391,6 +455,10 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
             # Step 3: Process bot response through memory pipeline
             # This runs: store -> filter bot response -> self-reflection -> self-portrait
             await engine.process_bot_response(message, response, session_id)
+
+            # Step 4: Feed self-observations into shared awareness layer
+            # Every conversation contributes to the bot's cross-user self-knowledge
+            self._sync_self_observations_to_shared(engine, user_id)
 
             logger.info(f"[CONV] Turn complete for user {user_id} (session {session_id[:8]})")
             return {"response": response, "session_id": session_id}
@@ -437,6 +505,17 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
             uid: engine.get_forge_feedback()
             for uid, engine in self._conv_memory_engines.items()
         }
+
+    def _sync_self_observations_to_shared(self, engine: ConversationalMemoryEngine, user_id: str):
+        """Sync self-observations from a per-user engine into the shared awareness layer."""
+        try:
+            recent_obs = engine.graph.get_recent_self_observations(5)
+            observations = [o["observation"] for o in recent_obs if o.get("observation")]
+            if observations:
+                shared = self._get_shared_awareness()
+                shared.absorb_self_observations(observations, user_id)
+        except Exception as e:
+            logger.debug(f"[CONV] Failed to sync self-observations to shared layer: {e}")
 
     def inject_conversational_awareness_into_school(self):
         """
@@ -2126,6 +2205,19 @@ When done, return a JSON object:
                         except Exception:
                             pass  # already logged inside run_agenda_step
 
+                    # Conversational memory sleep consolidation (timer-based)
+                    if (not self.config.school_enabled
+                            and self._conv_memory_engines
+                            and time.time() - self._conv_last_sleep
+                            >= self._conv_memory_config.sleep_interval_seconds):
+                        try:
+                            results = self.run_conversation_sleep()
+                            if results:
+                                logger.info(f"[CONV_MEMORY] Sleep consolidation complete for {len(results)} user(s)")
+                            self._conv_last_sleep = time.time()
+                        except Exception as e:
+                            logger.warning(f"[CONV_MEMORY] Sleep consolidation failed: {e}")
+
                 except SecurityError as e:
                     logger.error(f"[SECURITY] {e}")
                     raise
@@ -2174,3 +2266,10 @@ When done, return a JSON object:
             except Exception as e:
                 logger.warning(f"[CLEANUP] Failed to close conv memory for {uid}: {e}")
         self._conv_memory_engines.clear()
+
+        # Close shared self-awareness layer
+        if self._shared_awareness:
+            try:
+                self._shared_awareness.close()
+            except Exception as e:
+                logger.warning(f"[CLEANUP] Failed to close shared awareness: {e}")

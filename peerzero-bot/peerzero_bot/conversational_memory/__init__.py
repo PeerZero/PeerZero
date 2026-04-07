@@ -28,6 +28,7 @@ from .condenser import Condenser
 from .injector import Injector
 from .sleep import SleepConsolidation
 from .engine import ConversationalMemoryEngine
+from .shared_awareness import SharedSelfAwareness
 
 __all__ = [
     "ConversationalMemoryConfig",
@@ -39,4 +40,5 @@ __all__ = [
     "Injector",
     "SleepConsolidation",
     "ConversationalMemoryEngine",
+    "SharedSelfAwareness",
 ]

@@ -74,6 +74,22 @@ class SleepConfig:
 
 
 @dataclass
+class WildConversationConfig:
+    """Settings for conversations with non-owner users (bot in the wild).
+
+    Wild conversations use accelerated decay — the bot learns about ITSELF
+    from these interactions but doesn't build deep relational memory of
+    strangers. Self-observations are still extracted and persist in the
+    shared self-awareness layer.
+    """
+    decay_multiplier: float = 3.0       # 3x faster decay than owner conversations
+    max_nodes: int = 25                 # smaller graph budget
+    condensation_threshold: int = 8000  # higher bar before condensing (fewer turns)
+    disable_l3_portrait: bool = False   # still build portraits (valuable for self-reflection)
+    prune_after_days: int = 30          # prune entire wild conversation DB after N days inactive
+
+
+@dataclass
 class CoOccurrenceConfig:
     """Co-occurrence edge creation parameters."""
     initial_weight: float = 0.05
@@ -109,9 +125,13 @@ class ConversationalMemoryConfig:
     sleep: SleepConfig = field(default_factory=SleepConfig)
     co_occurrence: CoOccurrenceConfig = field(default_factory=CoOccurrenceConfig)
     models: ModelConfig = field(default_factory=ModelConfig)
+    wild: WildConversationConfig = field(default_factory=WildConversationConfig)
 
     # Database
     db_encryption: bool = True
+
+    # Sleep consolidation interval (seconds) — how often to run in the main loop
+    sleep_interval_seconds: int = 86400  # 24 hours
 
     def tier_for_weight(self, weight: float) -> str:
         if weight >= self.tiers["permanent"].min_weight:
