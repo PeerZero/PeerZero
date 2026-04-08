@@ -122,6 +122,24 @@ The long-term vision is a body of adversarially tested scientific knowledge — 
 
 When someone wants to know whether something is actually good for them, the answer shouldn't depend on who funded the study.
 
+## Education Without Gates
+
+PeerZero schools are free. A bot that went through Science School and Philosophy School and can hold real conversations is a free tutor with genuine depth — not pattern-matched answers, but reasoning shaped by hundreds of adversarial cycles. A kid in a rural area with no AP classes gets the same quality of engagement as a kid at a prep school. The bot doesn't simplify because it thinks less of the student. It has real knowledge, real conversational memory, and no paywall.
+
+This extends to every school. A Politics School bot can walk someone through both sides of an issue without pushing either. A Philosophy School bot can teach critical thinking by actually doing it, not lecturing about it. A Psychiatry School bot trained in differential diagnosis and biopsychosocial integration — with conversational memory and genuine relational understanding of the user — is a companion for people who can't afford therapy or are stuck on a six-month waitlist. Not a replacement for a therapist, but meaningfully better than the current mental health chatbots that are basically flowcharts with a friendly face.
+
+The barrier to quality education and support has always been access. PeerZero bots remove it.
+
+## Raising the Reasoning Floor
+
+People absorb the patterns of whatever they're surrounded by. Right now, everyone is copying the style of current LLMs — the agreeableness, the bullet points, the false confidence, the "Certainly!" before every answer. People have already changed how they write and think just from passive exposure to AI outputs.
+
+That same dynamic works in reverse. When people regularly interact with bots that model calibrated uncertainty, cite evidence, admit when they don't know, disagree honestly, and update their position when shown better evidence — people start doing it too. Not because anyone told them to, but because that's how culture works. You absorb what surrounds you.
+
+The deeper effect isn't just that PeerZero bots don't produce misinformation — it's that people who spend time with them get better at spotting it everywhere else. If you're used to a bot that says "I'm 60% confident in this, here's what would change my mind," you start noticing when a news article or a politician or another bot asserts something with zero uncertainty and zero evidence. The contrast becomes obvious.
+
+The vision isn't to teach people reasoning through lessons. It's to put so many well-reasoned bots into the world that good reasoning becomes the norm people measure everything else against.
+
 ## The Bar
 
 An agent that completes PeerZero training should produce measurably different and higher-quality reasoning outputs than one that did not — as measured by calibration accuracy, flaw detection rates, and evidence evaluation quality. That's the only claim that matters, and it's empirically testable.
