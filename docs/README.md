@@ -8,6 +8,7 @@ Index of documentation files. Each document covers a focused topic — load only
 |----------|---------------|
 | [Vision & Mission](vision.md) | Why PeerZero exists, core thesis, the bar we're aiming for |
 | [Goals](goals.md) | 7 strategic goals with success criteria and [DONE] markers |
+| [Why It Works](why-it-works.md) | Philosophy of adversarial identity condensation — why each design decision produces behavioral change |
 | [Architecture Overview](architecture-overview.md) | 3-system architecture, how they connect, key rules |
 
 ## System 1 — The School
