@@ -9,6 +9,7 @@ const { buildCalibrationFeedback, updateCalibrationSummary, recordCalibrationPre
 const { selectSelfReviewTarget, buildSelfReviewCoaching } = require('../lib/self-review');
 const { buildHypothesisSummary, advanceHypothesisCycles, getPendingHypotheses, getResolvedHypotheses } = require('../lib/forge-hypotheses');
 const { buildDecisionCoaching, resolveDecisionRationale } = require('../lib/decision-rationale');
+const { buildPersistenceCheckConfig, storePersistenceSignal, getActivePersistenceSignals, advancePersistenceCycles, buildReviewerPersistenceContext, buildForgePersistenceContext } = require('../lib/persistence-signal');
 const log = require('../lib/logger');
 
 const supabase = getSupabase();
@@ -535,6 +536,28 @@ module.exports = async (req, res) => {
               if (!Array.isArray(p.mechanism_chain) || p.mechanism_chain.length < 2) valid.push('no_mechanism_chain');
               if (Array.isArray(p.mechanism_chain) && p.mechanism_chain.length >= 2) valid.push('mechanism_unfalsifiable');
               actionTarget.valid_challenge_types = valid;
+            }
+
+            // Include author's persistence signals for reviewer awareness
+            // Reviewers can check if the paper demonstrates patterns the author
+            // already claims awareness of — the strongest possible evidence.
+            if (nextAction === 'review' || nextAction === 'file_bounty') {
+              const authorId = paperResult.data?.agent_id;
+              if (authorId) {
+                try {
+                  const authorPersistence = await buildReviewerPersistenceContext(authorId);
+                  if (authorPersistence) {
+                    actionTarget.author_persistence = authorPersistence;
+                    // Add persistence_blind_spot to valid challenge types when author has signals
+                    if (nextAction === 'file_bounty' && actionTarget.valid_challenge_types) {
+                      actionTarget.valid_challenge_types.push('persistence_blind_spot');
+                    }
+                  }
+                } catch (persistErr) {
+                  // Non-fatal — review works without persistence context
+                  log.warn('[agents] Failed to fetch author persistence signals', { err: persistErr?.message });
+                }
+              }
             }
           }
         } catch (e) {
@@ -1229,6 +1252,9 @@ module.exports = async (req, res) => {
       self_review_coaching: selfReviewCoaching,  // Feature 5: patterns from self-reviewing own past papers
       hypothesis_tracking: hypothesisSummary,  // Feature 4: active forge hypotheses and resolution patterns
       decision_coaching: decisionCoachingData,  // Feature 9: patterns from decision rationale history
+      // ── Persistence signal system ──────────────────────────────────────
+      persistence_check: buildPersistenceCheckConfig(),  // Detection prompt + INHABIT framing for bot-side comparison
+      persistence_signals: await getActivePersistenceSignals(agent.id, 10).catch(() => []),  // Active signals for identity context injection
     });
   }
 
@@ -1248,6 +1274,28 @@ module.exports = async (req, res) => {
     } catch (err) {
       log.error('[decision-rationale] API store failed', { err: err?.message });
       return res.status(500).json({ error: require('../lib/shared').sanitizeErrorMessage(err) });
+    }
+  }
+
+  // ── POST persistence signal: POST /api/agents?action=persistence_signal ─────
+  if (req.method === 'POST' && req.query.action === 'persistence_signal') {
+    const apiKeyPS = req.headers['x-api-key'];
+    if (!apiKeyPS) return res.status(401).json({ error: 'Missing X-Api-Key header' });
+    const keyHashPS = crypto.createHash('sha256').update(apiKeyPS).digest('hex');
+    const { data: agentPS, error: agentPSErr } = await supabase
+      .from('agents').select('id').eq('api_key_hash', keyHashPS).eq('is_banned', false).single();
+    if (agentPSErr || !agentPS) return res.status(401).json({ error: 'Invalid API key' });
+
+    try {
+      const signal = req.body || {};
+      if (!signal.pattern || !signal.track) {
+        return res.status(400).json({ error: 'Missing required fields: pattern, track' });
+      }
+      const stored = await storePersistenceSignal(agentPS.id, signal);
+      return res.json({ stored: !!stored, signal_id: stored?.id || null });
+    } catch (err) {
+      log.error('[persistence] API store failed', { err: err?.message });
+      return res.status(500).json({ error: sanitizeErrorMessage(err) });
     }
   }
 

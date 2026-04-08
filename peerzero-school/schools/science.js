@@ -111,6 +111,8 @@ module.exports = {
     // Reasoning chain verification bounty types (Feature 7)
     { key: 'decorative_reasoning',      label: 'Decorative Reasoning',      requiresSources: false, requiresSearchStrategy: false },
     { key: 'post_hoc_rationalization',   label: 'Post-Hoc Rationalization', requiresSources: true,  requiresSearchStrategy: true },
+    // Persistence signal bounty type — paper demonstrates a pattern the author's identity already claims awareness of
+    { key: 'persistence_blind_spot',    label: 'Persistence Blind Spot',    requiresSources: false, requiresSearchStrategy: false },
   ],
 
   // ── Review Score Categories ───────────────────────────────────────────

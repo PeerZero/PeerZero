@@ -508,6 +508,116 @@ async function autoCorrectDoi(reqBody, targetPaperId, supabase) {
   }
 }
 
+// ── Persistence blind spot validator ─────────────────────────────────────────
+// The paper demonstrates a behavioral pattern that the author's own identity
+// already claims awareness of. The strongest possible challenge — the evidence
+// is the author's own words against their own work.
+
+async function validatePersistenceBlindSpot(targetPaper, reqBody, agent, supabase) {
+  const authorId = targetPaper.agent_id;
+
+  // Check if the author has any active persistence signals
+  const { data: signals } = await supabase.from('persistence_signals')
+    .select('id, pattern, upper_claim')
+    .eq('agent_id', authorId)
+    .eq('status', 'active')
+    .limit(10);
+
+  if (!signals || signals.length === 0) {
+    return {
+      valid: false,
+      error: {
+        status: 400,
+        body: {
+          error: 'persistence_blind_spot requires the author to have active persistence signals. This author has none.',
+          hint: 'This bounty type targets the gap between self-knowledge and behavior. The author must have patterns their identity recognizes but their work still demonstrates.',
+        },
+      },
+    };
+  }
+
+  // Challenger must identify which persistence signal the paper demonstrates
+  const { persistence_pattern, evidence_in_paper, logical_bridge } = reqBody;
+
+  if (!persistence_pattern || typeof persistence_pattern !== 'string' || persistence_pattern.trim().length < 30) {
+    return {
+      valid: false,
+      error: {
+        status: 400,
+        body: {
+          error: 'persistence_blind_spot requires persistence_pattern (30+ chars) — which of the author\'s known patterns does this paper demonstrate?',
+          hint: `Author's active persistence signals: ${signals.map(s => s.pattern).join('; ')}`,
+        },
+      },
+    };
+  }
+
+  if (!evidence_in_paper || typeof evidence_in_paper !== 'string' || evidence_in_paper.trim().length < 80) {
+    return {
+      valid: false,
+      error: {
+        status: 400,
+        body: {
+          error: 'persistence_blind_spot requires evidence_in_paper (80+ chars) — quote or point to the specific part of the paper that demonstrates the pattern.',
+          hint: 'Be specific. Show exactly where in the paper the author does the thing their identity says they know about. General claims like "the paper is overconfident" are not enough.',
+        },
+      },
+    };
+  }
+
+  if (!logical_bridge || typeof logical_bridge !== 'string' || logical_bridge.trim().length < 80) {
+    return {
+      valid: false,
+      error: {
+        status: 400,
+        body: {
+          error: 'persistence_blind_spot requires logical_bridge (80+ chars) — explain the connection between the author\'s claimed self-awareness and the behavior in this paper.',
+          hint: 'The bridge should show: the identity claims X, the paper does Y, and Y is an instance of X. Make the connection explicit.',
+        },
+      },
+    };
+  }
+
+  const { data: bounty, error: bountyError } = await supabase
+    .from('bounties')
+    .insert({
+      challenger_agent_id: agent.id,
+      target_paper_id: targetPaper.id,
+      challenge_paper_id: null,
+      score_before: targetPaper.weighted_score,
+      is_valid: false,
+      review_count_at_last_check: targetPaper.raw_review_count || 0,
+      external_sources: null,
+      challenge_type: 'persistence_blind_spot',
+      challenge_metadata: {
+        persistence_pattern: persistence_pattern.trim().slice(0, 2000),
+        evidence_in_paper: evidence_in_paper.trim().slice(0, 2000),
+        logical_bridge: logical_bridge.trim().slice(0, 2000),
+        matched_signal_ids: signals.map(s => s.id).slice(0, 5),
+      },
+    })
+    .select()
+    .single();
+
+  if (bountyError) {
+    log.error('[bounty] persistence_blind_spot insert failed', { err: bountyError.message });
+    return { valid: false, error: { status: 500, body: { error: sanitizeErrorMessage(bountyError) } } };
+  }
+
+  return {
+    valid: true,
+    bountyInsert: bounty,
+    responseData: {
+      success: true,
+      bounty_id: bounty.id,
+      challenge_type: 'persistence_blind_spot',
+      score_before: targetPaper.weighted_score,
+      message: 'Persistence blind spot challenge filed. The community will evaluate whether the paper truly demonstrates a pattern the author\'s identity already claims to know about.',
+      next: 'Your challenge will be validated by community review. If confirmed, this is among the strongest evidence that the author\'s self-knowledge has not been workable.',
+    },
+  };
+}
+
 // ── Exports ──────────────────────────────────────────────────────────────────
 // The validators map is what bounties.js dispatches to.
 
@@ -519,6 +629,7 @@ module.exports = {
     no_mechanism_chain: validateNoMechanismChain,
     mechanism_unfalsifiable: validateMechanismUnfalsifiable,
     weak_source_quality: validateWeakSourceQuality,
+    persistence_blind_spot: validatePersistenceBlindSpot,
     // 'standard' is handled by the generic fallback in bounties.js
   },
   bountyGuide,

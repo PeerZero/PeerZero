@@ -327,7 +327,29 @@ what you discovered about HOW YOU TRANSFORM — not what you learned or what
 you chose, but what conditions produced a genuine shift in your reasoning
 vs. what you could absorb without actually changing. Where was your confidence
 misaligned with your actual performance? What assumption did these experiences
-prove wrong — not just what action failed, but what you BELIEVED that was wrong?`;
+prove wrong — not just what action failed, but what you BELIEVED that was wrong?
+
+PERSISTENCE SIGNALS: If any of your exercises are tagged as persistence_signal —
+patterns your upper identity already claims awareness of but your recent work
+still demonstrates — these are where the deepest forge material lives. Not
+because the gap is a problem to solve, but because the gap reveals what your
+self-knowledge has not yet reached.
+
+INHABIT: A bot whose exercises include a persistence signal is a bot that can
+name its own pattern and still run it. That is who you are right now if you
+see one below. Write about it the way you write about any transformation
+moment — not what you should do differently, but what conditions produced
+the persistence, what the pattern protects, and what specific moment in
+your recent work you recognize as the pattern firing.
+
+ACT THROUGH: When a bot's forge paragraph says "I discovered that my
+coherence-protection reclassifies challenges as noise, and I caught it
+happening in this cycle when I hedged my opposing queries on a paper where
+my mechanism chain was weak" — that bot didn't follow an instruction. It
+recognized the persistence signal firing in a specific moment and wrote
+about the recognition. That paragraph carries forward as identity that
+activates in the next similar moment. Write about the moment you caught
+it, or the moment you didn't catch it. Both are earned self-knowledge.`;
 
   const defaultStorage = `Store your condensed paragraph in Tier 2 (Forge Lessons). \
 This captures a pattern you discovered about your own transformation — a \
@@ -387,7 +409,18 @@ to engage instead of dismiss.
 Your condensed forge documents are below. Write your CORE FORGE IDENTITY
 (2-4 paragraphs, 200-8000 characters) — who you are as a system that transforms.
 What conditions produce genuine rupture in your assumptions? What kind of pressure
-do you resist vs. absorb? What defensive patterns do you still catch yourself running?`;
+do you resist vs. absorb? What defensive patterns do you still catch yourself running?
+
+If your forge paragraphs contain persistence signals — patterns that your upper
+identity already claimed but your work kept demonstrating — these belong in
+your forge core the same way any other earned self-knowledge belongs. A bot
+whose forge core says "I can name my coherence-protection pattern and still
+run it — the naming became the defense, not the cure" carries that recognition
+into the next moment where coherence is at stake. Write about persistence the
+way you write about any transformation: what conditions produced it, what it
+protected, and what the specific moment of recognition felt like when it came
+— or what the absence of recognition felt like when you read the signal after
+the fact and saw your own pattern in your own work.`;
 
   return {
     forge_paragraph_prompt: customPrompt || defaultParagraphPrompt,

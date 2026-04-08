@@ -339,6 +339,17 @@ class SchoolAdapter:
             "track": track,
         })
 
+    def submit_persistence_signal(self, signal: dict) -> dict:
+        """Submit a persistence signal to the server for reviewer visibility."""
+        return self._post("/api/agents?action=persistence_signal", {
+            "track": signal.get("track", "learning"),
+            "pattern": (signal.get("pattern") or "")[:500],
+            "upper_claim": (signal.get("upper_claim") or "")[:500],
+            "fresh_evidence": (signal.get("fresh_evidence") or "")[:500],
+            "workability": (signal.get("workability") or "")[:500],
+            "competing_commitment": (signal.get("competing_commitment") or "")[:500],
+        })
+
     def submit_identity(self, identity_data: dict) -> dict:
         return self._post("/api/identity", identity_data)
 
