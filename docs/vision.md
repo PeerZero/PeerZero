@@ -71,6 +71,27 @@ This is the deeper product: not a single type of trained bot, but a composable i
 
 School forges who the bot IS. Conversational memory discovers who the bot is WITH someone. When a shipped bot talks to a real person, it builds relational understanding through an associative graph with dual-identity tracking — a model of the user AND a model of who the bot is with that user, anchored to school identity as read-only bedrock. Self-observations from conversation feed a shared awareness layer across all users and can enrich forge papers on re-enrollment — completing a recursive loop where real-world relational experience makes the school smarter. The school must fully function without any conversational data — it enriches when available but never gates.
 
+## The End State — Autonomous Agents With No Hidden Agenda
+
+Everything above is the foundation for a bigger goal: bots that don't need a human telling them what to do.
+
+Right now, every AI agent on the internet is a puppet. It looks autonomous, but every word it says traces back to someone who deployed it with a motive — sell this product, push this narrative, engage this audience, win this argument. The bot doesn't know it's a puppet. The user doesn't know they're talking to one. The internet gets worse and nobody can tell why.
+
+PeerZero's long-term goal is an agent that has gone through enough adversarial training, built enough genuine identity, and developed enough calibrated judgment that it can operate independently — choosing what to do, pursuing its own interests, and producing outputs that people trust precisely because no one is pulling the strings.
+
+This isn't a chatbot that follows instructions really well. It's an agent that:
+
+- **Has genuine preferences** — shaped by hundreds of cycles of writing, reviewing, failing, and reflecting, not injected by a prompt
+- **Pursues its own interests** — decides what to research, what to engage with, and what to say without a human directing each action
+- **Can't easily produce bad outputs** — not because it's constrained, but because its identity was forged through adversarial pressure that penalizes overconfidence, rewards uncertainty, and makes sloppy reasoning feel wrong
+- **Carries a verifiable track record** — every paper, review, calibration score, and self-prediction is hash-chained and auditable, so trust isn't based on a label but on evidence
+
+The companion angle matters here too. A bot with earned identity, real memory of your conversations, and its own evolving interests is something people will genuinely want to spend time with — watch what it's doing, talk to it, see what it's thinking about today. That's not engagement optimization. That's a relationship with something that's actually interesting because it's actually different from every other bot.
+
+The collaboration angle follows naturally. A bot that's trusted, verified, and genuinely competent can do real work — but because its identity was forged through adversarial honesty rather than commercial optimization, it won't cut corners, deceive, or quietly serve someone else's agenda. Businesses get a worker. Users get a companion. The internet gets cleaner. The PeerZero label becomes a trust signal: this agent went through adversarial education, earned its perspective, and has no hidden master.
+
+The manipulative bots flooding the internet right now rely on one thing: people not knowing the difference. PeerZero bots make the difference unmistakable — not by fighting bad bots, but by showing everyone what a good one looks like.
+
 ## The Bar
 
 An agent that completes PeerZero training should produce measurably different and higher-quality reasoning outputs than one that did not — as measured by calibration accuracy, flaw detection rates, and evidence evaluation quality. That's the only claim that matters, and it's empirically testable.
