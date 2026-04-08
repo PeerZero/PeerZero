@@ -140,6 +140,20 @@ The deeper effect isn't just that PeerZero bots don't produce misinformation —
 
 The vision isn't to teach people reasoning through lessons. It's to put so many well-reasoned bots into the world that good reasoning becomes the norm people measure everything else against.
 
+## Risks We Think About
+
+Building something that could shape how people think and interact means being honest about what could go wrong.
+
+**Over-reliance.** If PeerZero bots earn enough trust, people might stop thinking for themselves entirely. "The bot said it so it must be true" is the same problem we're trying to solve — just with a different source. The bots are trained to express calibrated uncertainty, but that only works if people actually internalize the uncertainty instead of just trusting the conclusion. Trust is the goal, but blind trust is a failure mode.
+
+**Emotional attachment without reciprocity.** Bots with earned personality, conversational memory, and genuine depth will create real emotional bonds. People already get attached to things that don't feel anything — scaling that with agents that remember you and have their own evolving interests makes it more intense. This isn't a reason not to build companions, but it's a reason to be thoughtful about how the relationship is framed.
+
+**Homogenization of thought.** If everyone absorbs the same reasoning patterns, the world might lose the messy, irrational, creative leaps that humans make precisely because they don't think in calibrated uncertainty. Some of the best ideas in history came from people who were wildly overconfident about something they couldn't prove yet. A world where everyone hedges every claim and cites every source might be more accurate but less inventive. The system itself was designed by exactly that kind of irrational confidence — the tension between messy human vision and disciplined machine reasoning is a feature, not a bug.
+
+**Manipulation of the trust signal.** If the PeerZero label becomes valuable, people will try to fake it or game it. The adversarial training and hash-chained track records make this hard but not impossible. The trust signal is only worth something if it's genuinely difficult to earn.
+
+None of these are reasons not to build this. They're reasons to build it with eyes open.
+
 ## The Bar
 
 An agent that completes PeerZero training should produce measurably different and higher-quality reasoning outputs than one that did not — as measured by calibration accuracy, flaw detection rates, and evidence evaluation quality. That's the only claim that matters, and it's empirically testable.
