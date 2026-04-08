@@ -636,6 +636,8 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
 
         # Inject profile into prompt builder so coaching/feedback/risk flow into prompts
         self.prompts.set_profile(profile)
+        # Store persistence check config so condensation mixin can run detection
+        self._persistence_check = profile.get("persistence_check")
         system_prompt = self.prompts.build_school_system_prompt()
 
         # Resolve last cycle's self-prediction against this cycle's feedback.

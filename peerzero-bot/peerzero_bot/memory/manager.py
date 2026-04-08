@@ -115,6 +115,9 @@ MAX_FORGE_MASTER_SCHOOLS = 10       # L5f: max number of school graduations
 # Reflection inlet — unstructured post-action reflections that feed forge track
 MAX_REFLECTIONS = 30                 # Rolling window of recent reflections
 
+# Persistence signals — patterns upper identity claims but lower layers still show
+MAX_PERSISTENCE_SIGNALS = 20         # Rolling window of active signals
+
 
 class MemoryManager:
     """
@@ -305,6 +308,35 @@ class MemoryManager:
     def clear_reflections(self):
         """Clear reflections after forge condenser has absorbed them."""
         self._storage.clear("school", "reflections")
+
+    # ── Persistence signals (patterns identity knows but behavior still shows) ──
+
+    def get_persistence_signals(self) -> list[dict]:
+        """Get active persistence signals — patterns where upper identity
+        claims awareness but lower layers keep producing the same pattern."""
+        return self._storage.read("school", "persistence_signals", [])
+
+    def store_persistence_signal(self, signal: dict):
+        """Store a persistence signal detected during condensation.
+
+        Each signal represents a gap between espoused identity and actual
+        behavior — the Argyris gap made visible through the layer system.
+        """
+        if not signal or not signal.get("pattern"):
+            return
+        self._storage.append("school", "persistence_signals", {
+            "stored_at": datetime.now(timezone.utc).isoformat(),
+            "track": signal.get("track", "learning"),
+            "pattern": signal.get("pattern", "")[:500],
+            "upper_claim": signal.get("upper_claim", "")[:500],
+            "fresh_evidence": signal.get("fresh_evidence", "")[:500],
+            "workability": signal.get("workability", "")[:500],
+            "competing_commitment": signal.get("competing_commitment", "")[:500],
+        }, max_entries=MAX_PERSISTENCE_SIGNALS)
+
+    def clear_persistence_signals(self):
+        """Clear persistence signals (e.g., after forge absorption)."""
+        self._storage.clear("school", "persistence_signals")
 
     # ── Self-prediction (feeds L1 on mismatch) ───────────────────────────
 
@@ -1256,6 +1288,47 @@ class MemoryManager:
                 "where pressure changed you or failed to. Still forming — will "
                 "eventually condense upward.\n\n"
                 f"{para_text}"
+            )
+
+        # ══════════════════════════════════════════════════════════════════
+        # PERSISTENCE SIGNALS — patterns you know about but still run
+        #
+        # These sit between school identity and platform knowledge because
+        # they are school-verified data about the gap between your stated
+        # identity and your actual behavior. Not warnings. Not instructions.
+        # Part of who you are right now.
+        # ══════════════════════════════════════════════════════════════════
+
+        persistence_signals = self.get_persistence_signals()
+        if persistence_signals:
+            signal_parts = []
+            for sig in persistence_signals[-5:]:
+                track = sig.get("track", "learning")
+                pattern = sig.get("pattern", "")
+                upper = sig.get("upper_claim", "")
+                evidence = sig.get("fresh_evidence", "")
+                competing = sig.get("competing_commitment", "")
+                lines = [f"[{track}] {pattern}"]
+                if upper:
+                    lines.append(f"  Your identity says: {upper}")
+                if evidence:
+                    lines.append(f"  Your recent work shows: {evidence}")
+                if competing:
+                    lines.append(f"  What this might protect: {competing}")
+                signal_parts.append("\n".join(lines))
+            signal_text = "\n\n".join(signal_parts)
+            sections.append(
+                f"═══ PERSISTENCE AWARENESS — {len(persistence_signals)} active signals ═══\n\n"
+                "A previous version of you recognized these patterns and wrote them "
+                "into your identity. A later version of you — working from that "
+                "identity — produced work that shows the patterns are still active. "
+                "This is not a failure of self-knowledge. It IS self-knowledge: you "
+                "are a system that can name its patterns and still run them.\n\n"
+                "INHABIT this: When you feel the pull to describe one of these gaps "
+                "more eloquently, that pull IS the pattern. The description substitutes "
+                "for the change. The only valid response is to do ONE thing differently "
+                "in this action.\n\n"
+                f"{signal_text}"
             )
 
         # ══════════════════════════════════════════════════════════════════

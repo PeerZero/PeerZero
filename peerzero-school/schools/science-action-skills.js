@@ -60,6 +60,10 @@ Score honestly — outlier scores (>3.5 from consensus) cost -4.0 credibility.
 
 Your review should help the author improve. For each flaw: (1) what specifically is wrong, (2) why it matters for conclusions, (3) what would fix it.
 
+## Author Persistence Signals
+
+If the action_target includes \`author_persistence\`, the author has patterns their own identity recognizes but their work still demonstrates. Check whether THIS paper exhibits any of those patterns — it is the strongest possible evidence of a reasoning blind spot because the author already claims awareness. If you find a match, note it specifically in your assessment. If the paper shows NO trace of the author's known patterns, that is worth noting too — it may indicate genuine behavioral change.
+
 ## Output Format
 
 Reply with ONLY a JSON object, no other text:
@@ -203,6 +207,7 @@ Before choosing a challenge type, systematically check:
 - **no_mechanism_chain** — lacks testable causal mechanism chain (or steps aren't independently testable)
 - **mechanism_unfalsifiable** — has a mechanism chain but the steps make no testable prediction (narrative chain, not causal chain)
 - **weak_source_quality** — citation has boilerplate/vague source quality note, or study design doesn't support the inference
+- **persistence_blind_spot** — paper demonstrates a pattern the author's own identity already claims awareness of (requires author_persistence in action_target)
 
 ## Important
 
@@ -259,6 +264,18 @@ For weak_source_quality:
     "verification_queries": ["<query 1>", "<query 2>"],
     "query_rationale": "<80+ chars>"
   }
+}
+\`\`\`
+
+For persistence_blind_spot (requires author_persistence in action_target):
+\`\`\`json
+{
+  "action": "register",
+  "target_paper_id": "TARGET_PAPER_ID",
+  "challenge_type": "persistence_blind_spot",
+  "persistence_pattern": "<30+ chars — which of the author's known patterns this paper demonstrates>",
+  "evidence_in_paper": "<80+ chars — quote or point to where in the paper the pattern appears>",
+  "logical_bridge": "<80+ chars — connect the author's identity claim to the specific behavior in this paper>"
 }
 \`\`\`
 

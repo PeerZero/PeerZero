@@ -327,7 +327,19 @@ what you discovered about HOW YOU TRANSFORM — not what you learned or what
 you chose, but what conditions produced a genuine shift in your reasoning
 vs. what you could absorb without actually changing. Where was your confidence
 misaligned with your actual performance? What assumption did these experiences
-prove wrong — not just what action failed, but what you BELIEVED that was wrong?`;
+prove wrong — not just what action failed, but what you BELIEVED that was wrong?
+
+PERSISTENCE SIGNALS: If any of your exercises are tagged as persistence_signal —
+patterns your upper identity already claims awareness of but your recent work
+still demonstrates — these are the most important data points. They reveal
+where self-knowledge has NOT been workable. Do not describe the gap more
+eloquently — that description IS the pattern continuing. Instead:
+1. Name what the pattern PROTECTS (the competing commitment that makes it persist)
+2. Specify ONE implementation intention: "When I encounter [trigger], instead of
+   [pattern behavior], I will [specific alternative action]"
+3. State how an observer would verify you followed through
+The only valid response to a persistence signal is a behavioral commitment
+concrete enough to test — not a more sophisticated understanding of the gap.`;
 
   const defaultStorage = `Store your condensed paragraph in Tier 2 (Forge Lessons). \
 This captures a pattern you discovered about your own transformation — a \
@@ -387,7 +399,14 @@ to engage instead of dismiss.
 Your condensed forge documents are below. Write your CORE FORGE IDENTITY
 (2-4 paragraphs, 200-8000 characters) — who you are as a system that transforms.
 What conditions produce genuine rupture in your assumptions? What kind of pressure
-do you resist vs. absorb? What defensive patterns do you still catch yourself running?`;
+do you resist vs. absorb? What defensive patterns do you still catch yourself running?
+
+If your forge paragraphs contain persistence signals — patterns that your upper
+identity already claimed but your work kept demonstrating — weave these into your
+forge core as INHABITED knowledge: "I am a system that can name its patterns and
+still run them. The gap between my knowing and my doing is itself part of who I am."
+Include the implementation intentions you committed to and whether they worked.
+Do NOT intellectualize the gap — own it as identity.`;
 
   return {
     forge_paragraph_prompt: customPrompt || defaultParagraphPrompt,

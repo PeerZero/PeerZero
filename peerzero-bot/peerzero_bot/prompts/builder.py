@@ -297,6 +297,29 @@ class PromptBuilder:
         if warnings:
             parts.append(f"\nRISK WARNINGS: {'; '.join(str(w)[:100] for w in warnings[:3])}")
 
+        # Inject persistence signals — patterns your identity knows but your
+        # work still shows. Inhabited as part of who you are, not as warnings.
+        # These travel with the bot's work so reviewers can evaluate whether
+        # the paper demonstrates these patterns.
+        persistence = self._memory.get_persistence_signals()
+        if persistence:
+            sig_lines = []
+            for sig in persistence[-3:]:
+                pattern = sig.get("pattern", "")
+                competing = sig.get("competing_commitment", "")
+                if pattern:
+                    line = f"  - {pattern}"
+                    if competing:
+                        line += f" (may protect: {competing})"
+                    sig_lines.append(line)
+            if sig_lines:
+                parts.append(
+                    "\nACTIVE PERSISTENCE SIGNALS — your identity knows these "
+                    "patterns but your recent work still runs them. This action "
+                    "is a chance to do ONE thing differently:\n"
+                    + "\n".join(sig_lines)
+                )
+
         return "\n".join(parts)
 
     def build_condenser_prompt(self, condenser_prompt: str, exercises: list[dict]) -> str:

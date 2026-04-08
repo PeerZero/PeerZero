@@ -1,5 +1,5 @@
 """
-School Condensation Mixin — learning + decision track condensers.
+School Condensation Mixin — learning + decision + forge track condensers.
 
 Extracted from agent.py for file size management. These methods are
 mixed into PeerZeroBot via multiple inheritance.
@@ -10,13 +10,19 @@ Cascade structure:
   L3 (3 docs) → identity condenser → L4 (core identity)
   L4 → master condenser at graduation → L5 (locked forever)
 
-Both learning and decision tracks condense from the SAME L1 exercises
-but ask different questions. L1 is cleared only after both tracks finish.
+After each L1→L2, a persistence check compares the fresh paragraph
+against L4/L5. If the paragraph echoes a pattern the upper identity
+already claims, a persistence signal is generated — the Argyris gap
+made visible. Signals feed into forge as first-class data.
+
+All three tracks condense from the SAME L1 exercises but ask different
+questions. L1 is cleared only after all tracks finish.
 """
 
 import hashlib
 import json
 import logging
+import re
 
 logger = logging.getLogger("peerzero-bot")
 
@@ -228,7 +234,8 @@ class SchoolCondensationMixin:
     def _run_milestone_condenser(self, condenser: dict, system_prompt: str):
         """L1→L2: Condense raw exercises into a learning skill paragraph.
 
-        After writing L2, cascades to L2→L3 if L2 has 5+ paragraphs.
+        After writing L2, runs persistence check against L4/L5, then
+        cascades to L2→L3 if L2 has 5+ paragraphs.
         Does NOT clear L1 directly — marks learning as condensed and
         clears L1 only when both tracks are done.
         """
@@ -247,6 +254,9 @@ class SchoolCondensationMixin:
             except Exception as e:
                 logger.warning(f"[MEMORY] Server backup failed: {e}")
             logger.info(f"[MEMORY] L1→L2: Condensed {len(exercises)} exercises into learning paragraph")
+
+            # Persistence check: does this paragraph echo patterns L4/L5 already claims?
+            self._check_persistence(paragraph.strip(), "learning", system_prompt)
 
             # Cascade: check if L2→L3 should fire
             if len(self.memory.get_identity_paragraphs()) >= 5:
@@ -355,6 +365,7 @@ class SchoolCondensationMixin:
         """L1→L2d: Condense raw exercises into a decision paragraph.
 
         Server provides the full prompt. Bot passes exercises and stores result.
+        After writing L2d, runs persistence check against L4d/L5d.
         Does NOT clear L1 — marks decision as condensed, clears when both done.
         """
         logger.info("[MEMORY] Decision milestone condenser triggered (L1→L2d)")
@@ -375,6 +386,9 @@ class SchoolCondensationMixin:
             except Exception as e:
                 logger.warning(f"[MEMORY] Decision server backup failed: {e}")
             logger.info(f"[MEMORY] L1→L2d: Condensed {len(exercises)} exercises into decision paragraph")
+
+            # Persistence check: does this paragraph echo patterns L4d/L5d already claims?
+            self._check_persistence(paragraph.strip(), "decision", system_prompt)
 
             # Cascade: check if L2d→L3d should fire
             if len(self.memory.get_decision_paragraphs()) >= self._DECISION_PARAGRAPH_THRESHOLD:
@@ -467,6 +481,7 @@ class SchoolCondensationMixin:
         """L1→L2f: Condense raw exercises into a forge paragraph.
 
         Server provides the full prompt. Bot passes exercises and stores result.
+        After writing L2f, runs persistence check against L4f/L5f.
         Does NOT clear L1 — marks forge as condensed, clears when all tracks done.
         """
         logger.info("[MEMORY] Forge milestone condenser triggered (L1→L2f)")
@@ -488,6 +503,9 @@ class SchoolCondensationMixin:
             except Exception as e:
                 logger.warning(f"[MEMORY] Forge server backup failed: {e}")
             logger.info(f"[MEMORY] L1→L2f: Condensed {len(exercises)} exercises into forge paragraph")
+
+            # Persistence check: does this paragraph echo patterns L4f/L5f already claims?
+            self._check_persistence(paragraph.strip(), "forge", system_prompt)
 
             # Cascade: check if L2f→L3f should fire
             if len(self.memory.get_forge_paragraphs()) >= self._FORGE_PARAGRAPH_THRESHOLD:
@@ -564,6 +582,139 @@ class SchoolCondensationMixin:
             )
         else:
             logger.warning("[MEMORY] Forge master identity too short — skipping")
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # PERSISTENCE DETECTION — compares fresh L2 against L4/L5
+    #
+    # After each L1→L2, checks if the freshly-written paragraph echoes a
+    # pattern that the bot's upper identity layers already claim awareness of.
+    # If so, stores a persistence signal as a forge L1 exercise AND locally
+    # for identity context injection.
+    #
+    # Theoretical basis:
+    #   - Argyris: espoused theory vs theory-in-use
+    #   - Kegan: immunity to change (competing commitments)
+    #   - Nelson & Narens: metacognitive monitoring ≠ control
+    #   - ACT: workability frame (evaluate by results, not eloquence)
+    # ═══════════════════════════════════════════════════════════════════════
+
+    def _check_persistence(self, fresh_paragraph: str, track: str, system_prompt: str):
+        """Compare fresh L2 paragraph against upper identity to detect the Argyris gap.
+
+        If the paragraph surfaces a pattern that L4/L5 already claims, generate a
+        persistence signal — stored as forge L1 exercise + local persistence record +
+        submitted to server for reviewer visibility.
+        """
+        # Get persistence check config from server
+        persistence_config = getattr(self, '_persistence_check', None)
+        if not persistence_config:
+            return
+        prompt_template = persistence_config.get('detection_prompt', '')
+        if not prompt_template:
+            return
+
+        # Gather upper identity for the relevant track
+        if track == 'learning':
+            l4 = self.memory.get_core_identity()
+            masters = self.memory.get_master_identities()
+            l5 = masters[0]['master_identity'] if masters else None
+        elif track == 'decision':
+            l4 = self.memory.get_decision_core()
+            masters = self.memory.get_decision_masters()
+            l5 = masters[0]['decision_master'] if masters else None
+        elif track == 'forge':
+            l4 = self.memory.get_forge_core()
+            masters = self.memory.get_forge_masters()
+            l5 = masters[0]['forge_master'] if masters else None
+        else:
+            return
+
+        if not l4 and not l5:
+            return  # No upper layers yet — nothing to compare against
+
+        # Build upper identity text
+        upper_parts = []
+        if l5:
+            upper_parts.append(f"L5 (permanent master): {l5[:3000]}")
+        if l4:
+            upper_parts.append(f"L4 (working core): {l4[:3000]}")
+        upper_text = "\n\n".join(upper_parts)
+
+        # Substitute into detection prompt
+        user_msg = prompt_template.replace('{upper_identity}', upper_text)
+        user_msg = user_msg.replace('{fresh_paragraph}', fresh_paragraph[:2000])
+
+        try:
+            result = self.llm.call(system_prompt, user_msg)
+        except Exception as e:
+            logger.warning(f"[PERSISTENCE] Detection call failed: {e}")
+            return
+
+        if not result or 'NO_PERSISTENCE' in result:
+            logger.info(f"[PERSISTENCE] No overlap detected on {track} track")
+            return
+
+        # Parse the structured response
+        signal = self._parse_persistence_signal(result, track)
+        if not signal:
+            logger.warning(f"[PERSISTENCE] Could not parse signal from response")
+            return
+
+        # Store locally for identity context injection
+        self.memory.store_persistence_signal(signal)
+
+        # Store as forge L1 exercise so forge condenser picks it up
+        self.memory.store_school_exercises({
+            "interaction_type": "persistence_signal",
+            "content": {
+                "track": track,
+                "pattern": signal.get("pattern", ""),
+                "upper_claim": signal.get("upper_claim", ""),
+                "fresh_evidence": signal.get("fresh_evidence", ""),
+                "workability": signal.get("workability", ""),
+                "competing_commitment": signal.get("competing_commitment", ""),
+            },
+            "exercises": [],
+            "storage_instruction": (
+                "PERSISTENCE SIGNAL: Your identity already claims awareness of "
+                "this pattern, but your recent work shows it is still active. "
+                "This is not a failure — it is evidence that this self-knowledge "
+                "has not been WORKABLE. The forge track should examine what this "
+                "pattern protects and commit to a specific behavioral change."
+            ),
+        })
+
+        # Submit to server so reviewers can see it
+        try:
+            self.school.submit_persistence_signal(signal)
+        except Exception as e:
+            logger.warning(f"[PERSISTENCE] Server submission failed: {e}")
+
+        logger.info(
+            f"[PERSISTENCE] Signal detected on {track} track: "
+            f"{signal.get('pattern', '')[:80]}"
+        )
+
+    def _parse_persistence_signal(self, response: str, track: str) -> dict | None:
+        """Parse structured persistence signal from LLM response."""
+        fields = {}
+        field_map = {
+            'PATTERN': 'pattern',
+            'UPPER_CLAIM': 'upper_claim',
+            'FRESH_EVIDENCE': 'fresh_evidence',
+            'WORKABILITY': 'workability',
+            'COMPETING_COMMITMENT': 'competing_commitment',
+        }
+        for label, key in field_map.items():
+            match = re.search(rf'{label}:\s*(.+?)(?=\n(?:PATTERN|UPPER_CLAIM|FRESH_EVIDENCE|WORKABILITY|COMPETING_COMMITMENT):|$)', response, re.DOTALL)
+            if match:
+                fields[key] = match.group(1).strip()[:500]
+
+        if not fields.get('pattern'):
+            return None
+
+        fields['track'] = track
+        return fields
 
     # ═══════════════════════════════════════════════════════════════════════
     # SHARED L1 CLEARING — only when all three tracks have condensed
