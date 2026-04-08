@@ -77,7 +77,7 @@ const PROVIDER_URLS = {
   openai: "https://api.openai.com/v1/chat/completions",
 };
 
-const ANTHROPIC_VERSION = "2023-06-01";
+const ANTHROPIC_VERSION = "2024-10-22";
 
 /**
  * Build a handler that behaves identically to the Worker export default.fetch
@@ -477,7 +477,7 @@ describe("PeerZero LLM Proxy", () => {
 
       const sentHeaders = fetchCalls[0].init.headers;
       assert.equal(sentHeaders["x-api-key"], "sk-ant-test-key-123");
-      assert.equal(sentHeaders["anthropic-version"], "2023-06-01");
+      assert.equal(sentHeaders["anthropic-version"], "2024-10-22");
     });
 
     it("passes through anthropic-beta header when present", async () => {

@@ -26,6 +26,9 @@ peerzero-proxy/     Identity Activation Proxy (Cloudflare Worker)
                     ("you wrote this, inhabit it") server-side. No directives
                     or operational rules — identity scars drive behavior.
                     Preamble stored as Worker secret (INHABIT_FRAME only).
+                    Supports Anthropic prompt caching — identity layers sent
+                    as content blocks with cache_control markers for 80-90%
+                    token cost reduction on stable identity content.
 
 peerzero-sdk/       Platform Developer SDK (Node.js + Python)
                     External platforms verify bot credentials, parse

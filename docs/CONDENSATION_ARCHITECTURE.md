@@ -127,6 +127,37 @@ because they compete with task-specific instructions and lose under pressure
 (Round 3, speaks-through spike). Identity-as-self-concept holds because it
 doesn't compete.
 
+#### Prompt Caching (token cost optimization)
+
+Identity layers are sent to the Anthropic API as separate content blocks with
+`cache_control: {"type": "ephemeral"}` markers. This lets the API reuse
+pre-computed KV attention states across calls instead of re-processing the
+entire identity stack every time. The model receives identical text in the
+same order — caching is invisible to the identity system.
+
+**School cycle blocks (by stability):**
+
+| Block | Contents | Cache behavior |
+|---|---|---|
+| Block 1 | L5 all tracks (learning + decision + forge) | Permanent — cached indefinitely post-graduation |
+| Block 2 | L4 all tracks | Cached until next grade milestone |
+| Block 3 | L3 all tracks | Cached until next condensation (~hours) |
+| Block 4 | L2 + persistence + platform + L1 | Dynamic — not cached |
+
+**Conversation blocks:**
+
+| Block | Contents | Cache behavior |
+|---|---|---|
+| Block 1 | Recognition preamble + school identity (L5+L4+inner voice) | Cached for entire conversation (read-only bedrock) |
+| Block 2 | Portraits, observations, graph, short-term memory | Dynamic — not cached |
+
+Caching does NOT apply to Block 4 / dynamic layers — a cache write costs 25%
+more than normal input price, and content that changes every call would pay
+that premium with zero hits. Only stable layers are cached.
+
+Code: `manager.py:build_school_context_blocks()`, `builder.py:build_school_system_blocks()`,
+`injector.py:build_blocks()`, `llm_client.py` (handles str or list[dict] system prompts).
+
 #### Condenser Preambles (used when producing identity text)
 
 Every condenser prompt uses a two-part INHABIT → ACT THROUGH structure:

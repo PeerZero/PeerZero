@@ -46,7 +46,9 @@ const PROVIDER_URLS: Record<string, string> = {
   openai: "https://api.openai.com/v1/chat/completions",
 };
 
-const ANTHROPIC_VERSION = "2023-06-01";
+// Prompt caching (cache_control on content blocks) requires 2024-10-22+.
+// If Anthropic rejects cache_control with an older version, bump this.
+const ANTHROPIC_VERSION = "2024-10-22";
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
