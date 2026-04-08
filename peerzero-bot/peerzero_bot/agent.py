@@ -430,20 +430,30 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
             session_id = str(uuid.uuid4())
 
         try:
-            # Step 1: Process user message through memory pipeline
-            # This runs: filter -> splatter -> salience -> condensation -> injection
-            injection = await engine.process_user_message(message, session_id)
+            # Step 1: Process user message through memory pipeline.
+            # Use content blocks when on Anthropic — school identity bedrock
+            # gets cached across turns (never changes during conversation).
+            use_blocks = getattr(self.config, "llm_provider", "") == "anthropic"
+            injection = await engine.process_user_message(message, session_id, use_blocks=use_blocks)
 
             # Step 1b: Inject shared self-awareness (cross-user self-knowledge)
             shared = self._get_shared_awareness()
             shared_text = shared.get_self_awareness_text()
             if shared_text:
-                injection = (
-                    injection
-                    + "\n\n---\n\n<shared_self_awareness>\n"
+                shared_block = (
+                    "\n\n---\n\n<shared_self_awareness>\n"
                     + shared_text
                     + "\n</shared_self_awareness>"
                 )
+                if isinstance(injection, list):
+                    # Append to last (dynamic) block
+                    if injection:
+                        injection[-1] = dict(injection[-1])
+                        injection[-1]["text"] = injection[-1].get("text", "") + shared_block
+                    else:
+                        injection = [{"type": "text", "text": shared_block.strip()}]
+                else:
+                    injection = injection + shared_block
 
             # Step 2: Call conversation LLM with memory injection as system context
             response = self.llm.call(injection, message)
