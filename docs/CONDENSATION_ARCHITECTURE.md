@@ -158,6 +158,31 @@ that premium with zero hits. Only stable layers are cached.
 Code: `manager.py:build_school_context_blocks()`, `builder.py:build_school_system_blocks()`,
 `injector.py:build_blocks()`, `llm_client.py` (handles str or list[dict] system prompts).
 
+**Follow-up items:**
+
+1. **Ablation test on stability-first block layout.** `build_school_context_blocks()` groups
+   identity by stability level (all L5s together, all L4s together, etc.) instead of by track
+   (all learning together, all decision together). The identity content is byte-for-byte identical
+   but the structural framing around it is adapted. Run the existing ablation methodology
+   (same probes, same scoring) comparing `build_school_context()` (track-first) vs
+   `build_school_context_blocks()` (stability-first) to confirm inhabitation scores hold.
+   Expectation: identical — the model cares about identity content and "speaks through"
+   references, not section headers. But verify, don't assume.
+
+2. **Identity selector for multi-school context bloat.** `identity_selector.py` is currently
+   deferred because loading all identity layers is safer with 1 school. A bot graduated from
+   3+ schools with full L5+L4+L3 across all three tracks per school will carry a heavy token
+   load even with caching. The selector needs to come online before bots routinely attend 5+
+   schools. Caching reduces the cost of carrying it all, but doesn't eliminate the context
+   window pressure. Revisit when multi-school bots are active in production.
+
+3. **Conversational memory pipeline overhead.** The per-message pipeline (filter → salience →
+   condensation → self-reflection) fires multiple LLM calls per user message. Caching helps
+   the main conversation call but doesn't reduce pipeline overhead. For chatty users sending
+   many messages per minute, monitor whether the pipeline calls become a cost or latency
+   bottleneck. Potential mitigations: batch filter+salience into one call, skip self-reflection
+   on rapid-fire messages, or add a debounce on condensation triggers.
+
 #### Condenser Preambles (used when producing identity text)
 
 Every condenser prompt uses a two-part INHABIT → ACT THROUGH structure:
@@ -203,6 +228,12 @@ hypothesis is that identity scars do the work and the directive preamble
 was inert, but this has not been isolated in controlled testing. Priority:
 run the Round 10B test suite with INHABIT_FRAME only vs MEMORY_PREAMBLE +
 INHABIT_FRAME vs INHABIT_FRAME + identity vs bare.
+
+Additionally, the prompt caching layout (`build_school_context_blocks()`)
+groups identity by stability level instead of by track. This changes the
+structural framing but not the identity content. Needs ablation to confirm
+inhabitation scores are unaffected. See "Follow-up items" under Prompt
+Caching above.
 
 ## Memory Context Assembly
 
