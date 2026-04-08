@@ -248,7 +248,12 @@ export default {
       if (typeof body.system === "string") {
         body.system = preamble + "\n\n" + body.system;
       } else if (Array.isArray(body.system)) {
-        // Array of content blocks — prepend preamble as a text block
+        // Array of content blocks (prompt caching mode).
+        // Prepend preamble as its own block. The preamble alone is too
+        // small for a cache breakpoint (~200 tokens, min is 1024), but
+        // it becomes part of the cached prefix when the NEXT block has
+        // cache_control set. Bot-provided cache_control on subsequent
+        // blocks is passed through unchanged.
         body.system = [{ type: "text", text: preamble + "\n\n" }, ...body.system];
       } else {
         body.system = preamble;

@@ -50,6 +50,40 @@ class PromptBuilder:
             parts.append(self._skill_md)
         return "\n\n===\n\n".join(parts)
 
+    def build_school_system_blocks(self) -> list[dict]:
+        """Build system prompt as content blocks for Anthropic prompt caching.
+
+        Returns list of dicts ready for the Anthropic messages API:
+          [{"type": "text", "text": "...", "cache_control": {"type": "ephemeral"}}, ...]
+
+        Blocks are ordered by stability (most stable first) so cache
+        breakpoints maximize hit rates. SKILL.md gets its own cached block
+        since it's stable for the entire school session.
+
+        Falls back to a single uncached block if no identity blocks exist.
+        """
+        memory_blocks = self._memory.build_school_context_blocks()
+
+        result: list[dict] = []
+
+        for mb in memory_blocks:
+            block: dict = {"type": "text", "text": mb["text"]}
+            if mb.get("cache"):
+                block["cache_control"] = {"type": "ephemeral"}
+            result.append(block)
+
+        # SKILL.md is stable for the entire session (changes only when
+        # SCHOOL_TYPE changes). Cache it as its own block.
+        if self._skill_md:
+            skill_block: dict = {"type": "text", "text": self._skill_md}
+            if len(self._skill_md) >= 4000:
+                skill_block["cache_control"] = {"type": "ephemeral"}
+            result.append(skill_block)
+
+        # Fallback: if no blocks produced, return empty list
+        # (caller should fall back to string prompt)
+        return result
+
     def set_profile(self, profile: dict):
         """Store the current cycle's profile for use in prompts."""
         self._profile = profile

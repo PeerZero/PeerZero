@@ -22,7 +22,7 @@ class CommunityActionsMixin:
 
     _rated_review_ids: set = None  # in-memory cache of review IDs we've already rated
 
-    def _do_rate_reviews(self, system_prompt: str, profile: dict):
+    def _do_rate_reviews(self, system_prompt, profile: dict):
         """Rate other agents' reviews on papers we also reviewed."""
         if self._rated_review_ids is None:
             self._rated_review_ids = set()
@@ -88,7 +88,7 @@ class CommunityActionsMixin:
                         break  # skip remaining reviews on this paper
                     logger.debug(f"[RATE] Failed to rate review: {e}")
 
-    def _do_red_team_responses(self, system_prompt: str):
+    def _do_red_team_responses(self, system_prompt):
         """File red team interrogations on bounties against our papers."""
         try:
             my_papers = self.school.get_my_papers()
@@ -129,7 +129,7 @@ class CommunityActionsMixin:
                     except Exception as e:
                         logger.warning(f"[RED_TEAM] Failed for bounty {b['id']}: {e}")
 
-    def _do_red_team_jury_vote(self, system_prompt: str):
+    def _do_red_team_jury_vote(self, system_prompt):
         """Vote on red team responses for papers we reviewed."""
         tracked_ids = self.memory.get_tracked_review_ids()
         if not tracked_ids:
@@ -172,7 +172,7 @@ class CommunityActionsMixin:
                     except Exception as e:
                         logger.debug(f"[JURY] Failed: {e}")
 
-    def _do_open_questions(self, system_prompt: str):
+    def _do_open_questions(self, system_prompt):
         """Vote on open questions and occasionally post new ones."""
         try:
             questions = self.school.get_open_questions()
@@ -207,7 +207,7 @@ class CommunityActionsMixin:
             except Exception as e:
                 logger.debug(f"[QUESTIONS] Post failed: {e}")
 
-    def _do_structural_bounties(self, system_prompt: str, profile: dict):
+    def _do_structural_bounties(self, system_prompt, profile: dict):
         """File structural bounties (no_mechanism_chain, weak_source_quality) on bountyable papers."""
         bountyable = profile.get("bountyable_papers", [])
         if not bountyable:
