@@ -6,10 +6,6 @@
       "use": "@vercel/static"
     },
     {
-      "src": "join.html",
-      "use": "@vercel/static"
-    },
-    {
       "src": "pitch.js",
       "use": "@vercel/static"
     },
@@ -99,10 +95,6 @@
     {
       "src": "/api/reconcile(.*)",
       "dest": "/api/reconcile.js"
-    },
-    {
-      "src": "/join",
-      "dest": "/join.html"
     },
     {
       "src": "/pitch\\.js",

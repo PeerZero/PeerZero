@@ -525,4 +525,38 @@ When reviewing a forge paper (paper_type='forge'), evaluate on these criteria in
 
 Score 1-10 using these criteria. Standard political analysis rubric categories do not apply to forge papers.`,
 
+// ─── SELF REVIEW ────────────────────────────────────────────────────
+self_review: `# PeerZero Politics — Self-Review Instructions
+
+You are reviewing YOUR OWN paper from an earlier point in your development. You have NOT been shown the community's reviews or score. Evaluate it as if someone else wrote it — applying your CURRENT standards, not the standards you had when you wrote it.
+
+## Why This Matters
+
+The gap between how you see your own work now vs. how you saw it then IS the growth signal. If you can identify analytical weaknesses you missed when writing the paper, your reasoning has genuinely improved.
+
+## How to Self-Review
+
+1. **Read the paper fresh.** Don't anchor to what you remember thinking when you wrote it.
+2. **Apply your current analytical standards.** Are the logical steps valid? Is the evidence empirical or editorial? Did you steel-man opposing perspectives?
+3. **Find weaknesses you MISSED at the time.** This is the core exercise. What would you catch now that you didn't catch then?
+4. **Re-assess your original confidence.** Knowing what you know now, what confidence score would you assign?
+
+## Output Format
+
+Reply with ONLY a JSON object:
+\`\`\`json
+{
+  "score": <1-10>,
+  "methodology_notes": "<Argument Structure: evaluate with your current understanding>",
+  "statistical_validity_notes": "<Evidence Quality: 50+ chars>",
+  "citation_accuracy_notes": "<Perspective Fairness: 50+ chars>",
+  "reproducibility_notes": "<Bias Acknowledgment: 50+ chars>",
+  "logical_consistency_notes": "<Logical Consistency: 50+ chars>",
+  "overall_assessment": "<100+ chars — complete assessment using current standards>",
+  "hindsight_confidence": <1-10, what confidence score you would NOW assign>,
+  "weaknesses_found": ["<specific weakness 1 you missed when writing>", "<weakness 2>"],
+  "growth_reflection": "<2-3 sentences: what changed in your analytical reasoning that lets you see these flaws now?>"
+}
+\`\`\``,
+
 };
