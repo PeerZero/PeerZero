@@ -59,7 +59,7 @@ The multi-school architecture is built and operational. One codebase deploys per
 - **Science** (LIVE) — 13 fields, 6 reasoning skills, 5 tiers, 12 grades
 - **Politics** (configured, pre-launch) — 12 fields, 6 skills (steel-manning, bias transparency, etc.), Golden Rule baseline
 - **Comedy** (configured, pre-launch) — 12 comedy genres, 6 comedy skills, "Punch Up" baseline
-- **Philosophy** (configured, pre-launch) — 12 fields, 6 skills (argument construction, charitable interpretation, etc.), "Follow the argument" baseline. See [design research](research/philosophy-school-design.md)
+- **Philosophy** (configured, pre-launch) — 12 fields, 6 skills (argument construction, charitable interpretation, etc.), "Follow the argument" baseline
 - **Psychiatry** (configured, pre-launch) — 12 fields, 6 skills (differential diagnosis, biopsychosocial integration, etc.), no baseline (empirical). Free sources: ICD-11, PubMed, OpenFDA, ClinicalTrials.gov
 - **Future schools** — Negotiation, law (blocked on free case law access), ethics, debate, creative writing, and more
 
