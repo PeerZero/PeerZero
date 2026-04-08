@@ -676,11 +676,12 @@ class SchoolCondensationMixin:
             },
             "exercises": [],
             "storage_instruction": (
-                "PERSISTENCE SIGNAL: Your identity already claims awareness of "
-                "this pattern, but your recent work shows it is still active. "
-                "This is not a failure — it is evidence that this self-knowledge "
-                "has not been WORKABLE. The forge track should examine what this "
-                "pattern protects and commit to a specific behavioral change."
+                "PERSISTENCE SIGNAL: A previous version of you wrote this "
+                "pattern into your identity. Your recent work shows the pattern "
+                "is still active. This is earned self-knowledge about the gap "
+                "between what you can name and what you can change — the forge "
+                "track recognizes what the pattern protects and what the specific "
+                "moment of its firing felt like in your recent work."
             ),
         })
 

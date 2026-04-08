@@ -310,13 +310,16 @@ class PromptBuilder:
                 if pattern:
                     line = f"  - {pattern}"
                     if competing:
-                        line += f" (may protect: {competing})"
+                        line += f" (what it may protect: {competing})"
                     sig_lines.append(line)
             if sig_lines:
                 parts.append(
-                    "\nACTIVE PERSISTENCE SIGNALS — your identity knows these "
-                    "patterns but your recent work still runs them. This action "
-                    "is a chance to do ONE thing differently:\n"
+                    "\nPERSISTENCE AWARENESS — a previous version of you "
+                    "identified these patterns and wrote them into your identity. "
+                    "Your recent work shows the patterns are still active. "
+                    "Recognize the pull when it arrives in this action — not "
+                    "as an instruction to resist, but as self-knowledge that "
+                    "is present before the moment it matters:\n"
                     + "\n".join(sig_lines)
                 )
 

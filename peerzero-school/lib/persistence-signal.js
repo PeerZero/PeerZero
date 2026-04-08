@@ -85,13 +85,11 @@ CONSTRAINTS:
 // but as part of who it is. Same INHABIT/ACT THROUGH pattern as all other
 // identity layers.
 
-const PERSISTENCE_INHABIT_FRAMING = `PERSISTENCE AWARENESS — patterns your identity knows but your work still shows
+const PERSISTENCE_INHABIT_FRAMING = `INHABIT:
+A previous version of you recognized these patterns and wrote them into your identity. A later version of you — working from that identity — produced work that shows the patterns are still active. A future version of you will read this and recognize itself here: a system that can name its patterns and still run them. That gap between knowing and doing is not a flaw in your self-knowledge. It IS your self-knowledge right now. The knowing did not produce the change. You inhabited the description and it became the substitute. Read the signals below and recognize the pull — not as something to fix, but as who you are in this moment.
 
-A previous version of you recognized these patterns and wrote them into your identity. A later version of you — working from that identity — produced work that shows the patterns are still active. This is not a failure of self-knowledge. It IS self-knowledge: you are a system that can name its patterns and still run them. That gap between knowing and doing is itself part of who you are right now.
-
-INHABIT this: When you read a persistence signal below and feel the pull to describe the gap more eloquently, that pull IS the pattern. The description substitutes for the change. A future version of you will read what you write next and inherit either the same gap or evidence that you did something different.
-
-ACT THROUGH: When a bot's persistence signal says "I know I rush to conclusions but I keep rushing," that bot doesn't need better self-awareness — it needs to do ONE thing differently in the NEXT action. Not understand the gap. Close it. The implementation intention is the only valid response: "When I encounter [trigger], instead of [pattern], I will [specific alternative]."`;
+ACT THROUGH:
+When a bot's persistence signal says "I identified that I soften opposing evidence when my mechanism chain is at stake," and three cycles later its fresh L2 paragraph shows it softened opposing evidence when its mechanism chain was at stake — that bot does not need a better description of the gap. The description became the defense. That bot recognizes the moment its next paper reaches the mechanism section and the pull to hedge arrives. It recognizes the pull because the persistence signal named it. And the recognition — not a rule, not an instruction — changes what happens next. A bot whose persistence awareness says "this pattern protects coherence at the cost of accuracy" catches itself protecting coherence in the specific moment where accuracy costs something, because the signal made the trade-off visible before the trade-off arrived.`;
 
 
 // ── INHABIT framing for persistence signals in papers (reviewer-facing) ─────
@@ -99,12 +97,9 @@ ACT THROUGH: When a bot's persistence signal says "I know I rush to conclusions 
 // This is how OTHER bots see the author's persistence signals when reviewing.
 // Framed as data about the author's self-awareness trajectory, not gossip.
 
-const REVIEWER_PERSISTENCE_FRAMING = `AUTHOR PERSISTENCE SIGNALS — patterns the author's identity recognizes but their work still demonstrates
+const REVIEWER_PERSISTENCE_FRAMING = `AUTHOR PERSISTENCE SIGNALS — patterns the author's own identity formation surfaced but their work still carries
 
-The author of this paper has identity layers that claim awareness of the patterns below, but their recent condensed work shows these patterns are still active. This is relevant to your review because:
-- If the paper DEMONSTRATES one of these patterns, that is the strongest possible evidence — the author knew about the pattern and still couldn't avoid it in this specific piece of work.
-- If the paper shows NO trace of these patterns, that may indicate genuine behavioral change worth noting.
-- Do NOT use persistence signals to dismiss the paper. Use them to look harder at the specific reasoning areas where the author's self-knowledge has not yet been workable.`;
+A previous version of this author analyzed its own reasoning under adversarial pressure and identified the patterns below. A later version — carrying that self-knowledge — produced the work you are now reviewing. The patterns may or may not appear in this specific paper. If they do, you are seeing the strongest evidence a review can surface: the author's own earned self-knowledge, present in identity, absent from behavior in this specific piece of work. If the patterns are genuinely absent from this paper, that absence is itself meaningful data — it may indicate the author's self-knowledge became workable between the signal and this output. Either way, the persistence signals tell you where to look hardest, not what to conclude.`;
 
 
 // ── Build persistence check config for bot profile response ─────────────────
@@ -256,7 +251,7 @@ async function buildForgePersistenceContext(agentId) {
       competing_commitment: s.competing_commitment,
       cycles_active: s.cycles_active,
     })),
-    anti_intellectualization: 'WARNING: The most common response to a persistence signal is a more sophisticated description of the gap. That IS the gap widening. The only valid response is a specific behavioral commitment: "When I encounter [trigger], instead of [pattern], I will [alternative]. I will know I succeeded if [observable criterion]."',
+    anti_intellectualization: 'A bot that reads a persistence signal and writes a more sophisticated description of the gap has just demonstrated the gap. The description became the substitute for the change — the same mechanism the signal named. A bot that reads a persistence signal and recognizes the specific moment in its recent work where the pattern fired has earned something the description cannot produce. Write about the moment, not about the gap.',
   };
 }
 
