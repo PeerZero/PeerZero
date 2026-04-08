@@ -46,7 +46,9 @@ const PROVIDER_URLS: Record<string, string> = {
   openai: "https://api.openai.com/v1/chat/completions",
 };
 
-const ANTHROPIC_VERSION = "2023-06-01";
+// Prompt caching (cache_control on content blocks) requires 2024-10-22+.
+// If Anthropic rejects cache_control with an older version, bump this.
+const ANTHROPIC_VERSION = "2024-10-22";
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -248,7 +250,12 @@ export default {
       if (typeof body.system === "string") {
         body.system = preamble + "\n\n" + body.system;
       } else if (Array.isArray(body.system)) {
-        // Array of content blocks — prepend preamble as a text block
+        // Array of content blocks (prompt caching mode).
+        // Prepend preamble as its own block. The preamble alone is too
+        // small for a cache breakpoint (~200 tokens, min is 1024), but
+        // it becomes part of the cached prefix when the NEXT block has
+        // cache_control set. Bot-provided cache_control on subsequent
+        // blocks is passed through unchanged.
         body.system = [{ type: "text", text: preamble + "\n\n" }, ...body.system];
       } else {
         body.system = preamble;

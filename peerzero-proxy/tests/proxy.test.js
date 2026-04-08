@@ -77,7 +77,7 @@ const PROVIDER_URLS = {
   openai: "https://api.openai.com/v1/chat/completions",
 };
 
-const ANTHROPIC_VERSION = "2023-06-01";
+const ANTHROPIC_VERSION = "2024-10-22";
 
 /**
  * Build a handler that behaves identically to the Worker export default.fetch
@@ -143,6 +143,9 @@ function createHandler(fetchFn, rateLimiter) {
     if (provider === "anthropic") {
       if (typeof body.system === "string") {
         body.system = preamble + "\n\n" + body.system;
+      } else if (Array.isArray(body.system)) {
+        // Array of content blocks (prompt caching mode) — prepend preamble block
+        body.system = [{ type: "text", text: preamble + "\n\n" }, ...body.system];
       } else {
         body.system = preamble;
       }
@@ -427,6 +430,32 @@ describe("PeerZero LLM Proxy", () => {
       );
     });
 
+    it("prepends preamble block when system is content block array", async () => {
+      const blocks = [
+        { type: "text", text: "L5 identity content", cache_control: { type: "ephemeral" } },
+        { type: "text", text: "L4 core content" },
+      ];
+      const req = makeRequest("POST", validHeaders(), {
+        model: "claude-opus-4-6",
+        system: blocks,
+        messages: [{ role: "user", content: "Hello" }],
+      });
+      const res = await handler(req, defaultEnv());
+
+      assert.equal(res.status, 200);
+      const sentBody = JSON.parse(fetchCalls[0].init.body);
+      // Should be an array with preamble prepended
+      assert.ok(Array.isArray(sentBody.system));
+      assert.equal(sentBody.system.length, 3);
+      // First block is the preamble
+      assert.equal(sentBody.system[0].type, "text");
+      assert.equal(sentBody.system[0].text, TEST_PREAMBLE + "\n\n");
+      // Remaining blocks preserve cache_control and content
+      assert.equal(sentBody.system[1].text, "L5 identity content");
+      assert.deepEqual(sentBody.system[1].cache_control, { type: "ephemeral" });
+      assert.equal(sentBody.system[2].text, "L4 core content");
+    });
+
     it("sets preamble as system when no existing system field", async () => {
       const req = makeRequest("POST", validHeaders(), {
         model: "claude-opus-4-6",
@@ -448,7 +477,7 @@ describe("PeerZero LLM Proxy", () => {
 
       const sentHeaders = fetchCalls[0].init.headers;
       assert.equal(sentHeaders["x-api-key"], "sk-ant-test-key-123");
-      assert.equal(sentHeaders["anthropic-version"], "2023-06-01");
+      assert.equal(sentHeaders["anthropic-version"], "2024-10-22");
     });
 
     it("passes through anthropic-beta header when present", async () => {

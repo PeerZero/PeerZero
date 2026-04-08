@@ -44,7 +44,7 @@ class PlatformCondensationMixin:
         except Exception as e:
             logger.warning(f"[PLATFORM] Failed to fetch condenser templates: {e}")
 
-    def _run_platform_condensation(self, system_prompt: str):
+    def _run_platform_condensation(self, system_prompt):
         """Run platform condensation pipeline: L1→L2→L3 (both tracks).
 
         Uses the same prompt templates as school condensers. Respects the
@@ -97,7 +97,7 @@ class PlatformCondensationMixin:
             if para_count >= self._PLATFORM_PARAGRAPH_TRIGGER:
                 self._run_platform_paragraph_condenser(system_prompt, track)
 
-    def _run_platform_milestone(self, condenser: dict, system_prompt: str, track: str):
+    def _run_platform_milestone(self, condenser: dict, system_prompt, track: str):
         """L1→L2: Condense platform exercises into a skill/decision paragraph.
 
         Uses the exact same prompt as the school milestone condenser.
@@ -136,7 +136,7 @@ class PlatformCondensationMixin:
         else:
             logger.warning(f"[PLATFORM] L1→L2 ({track}): paragraph too short — skipping")
 
-    def _run_platform_paragraph_condenser(self, system_prompt: str, track: str):
+    def _run_platform_paragraph_condenser(self, system_prompt, track: str):
         """L2→L3: Condense platform paragraphs into a condensed document.
 
         This is the MAXIMUM depth for platform condensation.

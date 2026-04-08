@@ -145,12 +145,25 @@ class LLMClient:
             return self._session_token
         return ""
 
-    def _proxy_call(self, system_prompt: str, messages: list,
+    @staticmethod
+    def _system_as_string(system_prompt) -> str:
+        """Convert system prompt (str or list of content blocks) to plain string."""
+        if isinstance(system_prompt, str):
+            return system_prompt
+        # List of content blocks — join text fields
+        return "\n\n===\n\n".join(
+            block.get("text", "") for block in system_prompt
+            if isinstance(block, dict) and block.get("text")
+        )
+
+    def _proxy_call(self, system_prompt, messages: list,
                     tools: list | None = None, tool_choice: dict | None = None) -> dict:
         """Route an LLM request through the PeerZero proxy.
 
-        The proxy injects the identity activation preamble server-side,
-        so the preamble never exists on the user's machine.
+        system_prompt can be a string (legacy) or list of content block dicts
+        (for prompt caching). When a list is provided for Anthropic, blocks are
+        sent as-is — the proxy prepends its preamble block and passes through
+        any cache_control markers.
 
         Uses session tokens when available to avoid sending the full LLM key
         on every request. Falls back to key auth if session exchange fails.
@@ -172,6 +185,7 @@ class LLMClient:
 
         # Build provider-native request body
         if self._provider == "anthropic":
+            # system can be a string or array of content blocks (for caching)
             body: dict = {
                 "model": self._model,
                 "max_tokens": self._max_tokens,
@@ -183,10 +197,12 @@ class LLMClient:
             if tool_choice:
                 body["tool_choice"] = tool_choice
         elif self._provider == "openai":
+            # OpenAI doesn't support content block arrays — flatten to string
+            system_str = self._system_as_string(system_prompt)
             body = {
                 "model": self._model,
                 "max_tokens": self._max_tokens,
-                "messages": [{"role": "system", "content": system_prompt}] + messages,
+                "messages": [{"role": "system", "content": system_str}] + messages,
             }
             if tools:
                 body["tools"] = tools
@@ -246,8 +262,13 @@ class LLMClient:
                 parts.append(block.get("text", ""))
         return "\n".join(parts) if parts else ""
 
-    def call(self, system_prompt: str, user_message: str) -> str:
+    def call(self, system_prompt, user_message: str) -> str:
         """Call the LLM with retry on transient failures. Returns response text.
+
+        system_prompt: str or list of content block dicts (for prompt caching).
+        When a list is provided, blocks may include cache_control markers for
+        Anthropic's prompt caching. The Anthropic SDK and proxy both accept
+        system as an array of content blocks natively.
 
         For Anthropic, automatically includes server-side tools (web search)
         so the identity can drive the parent LLM to verify claims. The bot
@@ -322,11 +343,13 @@ class LLMClient:
                     return self._extract_text_from_content(response.content)
 
                 elif self._provider == "openai":
+                    # OpenAI doesn't support content block arrays — flatten
+                    system_str = self._system_as_string(system_prompt)
                     response = client.chat.completions.create(
                         model=self._model,
                         max_tokens=self._max_tokens,
                         messages=[
-                            {"role": "system", "content": system_prompt},
+                            {"role": "system", "content": system_str},
                             {"role": "user", "content": user_message},
                         ],
                     )
@@ -369,8 +392,10 @@ class LLMClient:
         "skip": {"type": "boolean"},
     }
 
-    def call_json(self, system_prompt: str, user_message: str, json_keys: list[str] | None = None) -> dict | None:
+    def call_json(self, system_prompt, user_message: str, json_keys: list[str] | None = None) -> dict | None:
         """Call LLM and force JSON output via tool_use (Anthropic) or json mode (OpenAI).
+
+        system_prompt: str or list of content block dicts (for prompt caching).
 
         For Anthropic: uses tool_use with tool_choice=tool to guarantee valid JSON.
         Server-side tools (web search) are included alongside submit_result so
@@ -399,7 +424,18 @@ class LLMClient:
         # Phase 1: Tool use (Anthropic only — works in both direct and proxy mode)
         if self._provider == "anthropic":
             try:
-                system_with_tool = system_prompt + "\n\nUse the submit_result tool to return your output. Do not write text outside the tool call."
+                tool_instruction = "\n\nUse the submit_result tool to return your output. Do not write text outside the tool call."
+                if isinstance(system_prompt, list):
+                    # Append instruction to the last content block (dynamic layer)
+                    system_with_tool = list(system_prompt)  # shallow copy
+                    if system_with_tool:
+                        last = dict(system_with_tool[-1])  # copy last block
+                        last["text"] = last.get("text", "") + tool_instruction
+                        system_with_tool[-1] = last
+                    else:
+                        system_with_tool = [{"type": "text", "text": tool_instruction.strip()}]
+                else:
+                    system_with_tool = system_prompt + tool_instruction
 
                 if self._proxy_url:
                     # Proxy mode: send tool_use request through proxy
@@ -453,8 +489,10 @@ class LLMClient:
             logger.warning(f"[LLM] call_json fallback failed: {e}")
             return None
 
-    def call_best_effort(self, system_prompt: str, user_message: str) -> str | None:
+    def call_best_effort(self, system_prompt, user_message: str) -> str | None:
         """Call the LLM once with no retries.  Returns None on any failure.
+
+        system_prompt: str or list of content block dicts (for prompt caching).
 
         Used for non-critical work (identity reflection, private block) where
         blocking the cycle with retries is worse than skipping.
@@ -475,6 +513,7 @@ class LLMClient:
             # ── Direct mode ─────────────────────────────────────────
             client = self._get_client()
             if self._provider == "anthropic":
+                # SDK accepts system as str or list of content blocks
                 response = client.messages.create(
                     model=self._model,
                     max_tokens=self._max_tokens,
@@ -483,11 +522,12 @@ class LLMClient:
                 )
                 return response.content[0].text if response.content else None
             elif self._provider == "openai":
+                system_str = self._system_as_string(system_prompt)
                 response = client.chat.completions.create(
                     model=self._model,
                     max_tokens=self._max_tokens,
                     messages=[
-                        {"role": "system", "content": system_prompt},
+                        {"role": "system", "content": system_str},
                         {"role": "user", "content": user_message},
                     ],
                 )
@@ -501,7 +541,7 @@ class LLMClient:
 
     def call_with_tools(
         self,
-        system_prompt: str,
+        system_prompt,
         user_message: str,
         tools: list[dict],
         tool_executor: "callable",
@@ -807,8 +847,9 @@ class LLMClient:
                 },
             })
 
+        system_str = self._system_as_string(system_prompt)
         messages = [
-            {"role": "system", "content": system_prompt},
+            {"role": "system", "content": system_str},
             {"role": "user", "content": user_message},
         ]
         result = ToolUseResult()

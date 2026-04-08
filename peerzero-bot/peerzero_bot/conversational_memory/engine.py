@@ -75,10 +75,13 @@ class ConversationalMemoryEngine:
     def config(self) -> ConversationalMemoryConfig:
         return self._config
 
-    async def process_user_message(self, message: str, session_id: str) -> str:
+    async def process_user_message(self, message: str, session_id: str, use_blocks: bool = False):
         """
         Process a user message through the full memory pipeline.
-        Returns the injection string for the conversation LLM call.
+
+        Returns the injection for the conversation LLM call:
+          - str (default): flat injection string
+          - list[dict] (use_blocks=True): content blocks for prompt caching
 
         Steps:
           1. Store in short-term + L1
@@ -117,6 +120,8 @@ class ConversationalMemoryEngine:
         await self._condenser.check_and_run()
 
         # Step 5: Build injection
+        if use_blocks:
+            return self._injector.build_blocks(session_id)
         return self._injector.build(session_id)
 
     async def process_bot_response(

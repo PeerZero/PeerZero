@@ -131,7 +131,7 @@ class SchoolCondensationMixin:
             ),
         })
 
-    def _process_inline_condensers(self, memory_prompts: dict, system_prompt: str):
+    def _process_inline_condensers(self, memory_prompts: dict, system_prompt):
         """Process condensers from inline memory prompts (post-action).
 
         Runs ALL THREE tracks (learning → decision → forge) SEQUENTIALLY.
@@ -154,7 +154,7 @@ class SchoolCondensationMixin:
         if memory_prompts.get("forge_condenser"):
             self._run_forge_milestone_condenser(memory_prompts["forge_condenser"], system_prompt)
 
-    def _process_post_action_triggers(self, profile: dict, system_prompt: str, grade: int = 1):
+    def _process_post_action_triggers(self, profile: dict, system_prompt, grade: int = 1):
         """Process condensers from profile triggers (post-action).
 
         Three tracks fire SEQUENTIALLY (learning → decision → forge):
@@ -231,7 +231,7 @@ class SchoolCondensationMixin:
     # LEARNING TRACK CONDENSERS
     # ═══════════════════════════════════════════════════════════════════════
 
-    def _run_milestone_condenser(self, condenser: dict, system_prompt: str):
+    def _run_milestone_condenser(self, condenser: dict, system_prompt):
         """L1→L2: Condense raw exercises into a learning skill paragraph.
 
         After writing L2, runs persistence check against L4/L5, then
@@ -264,7 +264,7 @@ class SchoolCondensationMixin:
 
     _PARAGRAPH_CONDENSER_THRESHOLD = 5  # L2 entries before condensing to L3
 
-    def _run_paragraph_condenser(self, system_prompt: str):
+    def _run_paragraph_condenser(self, system_prompt):
         """L2→L3: Condense learning skill paragraphs into a condensed identity document.
 
         After writing L3, cascades to L3→L4 if L3 has 3+ docs.
@@ -290,7 +290,7 @@ class SchoolCondensationMixin:
 
     _IDENTITY_CONDENSER_THRESHOLD = 3  # L3 docs before condensing to L4
 
-    def _run_identity_condenser(self, system_prompt: str):
+    def _run_identity_condenser(self, system_prompt):
         """L3→L4: Condense learning identity documents into core reasoning identity."""
         docs = self.memory.get_condensed_docs()
         if len(docs) < self._IDENTITY_CONDENSER_THRESHOLD:
@@ -308,7 +308,7 @@ class SchoolCondensationMixin:
         else:
             logger.warning("[MEMORY] L3→L4 learning core identity too short — skipping")
 
-    def _run_master_condenser(self, condenser: dict, system_prompt: str, grade: int):
+    def _run_master_condenser(self, condenser: dict, system_prompt, grade: int):
         """L4→L5: Grade 12 graduation condensation (learning track).
 
         The bot distills EVERYTHING — condensed docs, skill paragraphs,
@@ -361,7 +361,7 @@ class SchoolCondensationMixin:
     _DECISION_PARAGRAPH_THRESHOLD = 5   # L2d entries before condensing to L3d
     _DECISION_DOC_THRESHOLD = 3         # L3d docs before condensing to L4d
 
-    def _run_decision_milestone_condenser(self, condenser: dict, system_prompt: str):
+    def _run_decision_milestone_condenser(self, condenser: dict, system_prompt):
         """L1→L2d: Condense raw exercises into a decision paragraph.
 
         Server provides the full prompt. Bot passes exercises and stores result.
@@ -394,7 +394,7 @@ class SchoolCondensationMixin:
             if len(self.memory.get_decision_paragraphs()) >= self._DECISION_PARAGRAPH_THRESHOLD:
                 self._run_decision_paragraph_condenser(server_prompt, system_prompt)
 
-    def _run_decision_paragraph_condenser(self, server_prompt: str, system_prompt: str):
+    def _run_decision_paragraph_condenser(self, server_prompt: str, system_prompt):
         """L2d→L3d: Condense decision paragraphs into a decision document."""
         paragraphs = self.memory.get_decision_paragraphs()
         if len(paragraphs) < self._DECISION_PARAGRAPH_THRESHOLD:
@@ -415,7 +415,7 @@ class SchoolCondensationMixin:
         else:
             logger.warning("[MEMORY] L2d→L3d decision doc too short — skipping")
 
-    def _run_decision_identity_condenser(self, server_prompt: str, system_prompt: str):
+    def _run_decision_identity_condenser(self, server_prompt: str, system_prompt):
         """L3d→L4d: Condense decision documents into decision core identity."""
         docs = self.memory.get_decision_docs()
         if len(docs) < self._DECISION_DOC_THRESHOLD:
@@ -433,7 +433,7 @@ class SchoolCondensationMixin:
         else:
             logger.warning("[MEMORY] L3d→L4d decision core identity too short — skipping")
 
-    def _run_decision_master_condenser(self, condenser: dict, system_prompt: str, grade: int):
+    def _run_decision_master_condenser(self, condenser: dict, system_prompt, grade: int):
         """L4d→L5d: Graduation condensation for decision track.
 
         Distills all decision layers into permanent master decision identity.
@@ -477,7 +477,7 @@ class SchoolCondensationMixin:
     _FORGE_PARAGRAPH_THRESHOLD = 5   # L2f entries before condensing to L3f
     _FORGE_DOC_THRESHOLD = 3         # L3f docs before condensing to L4f
 
-    def _run_forge_milestone_condenser(self, condenser: dict, system_prompt: str):
+    def _run_forge_milestone_condenser(self, condenser: dict, system_prompt):
         """L1→L2f: Condense raw exercises into a forge paragraph.
 
         Server provides the full prompt. Bot passes exercises and stores result.
@@ -511,7 +511,7 @@ class SchoolCondensationMixin:
             if len(self.memory.get_forge_paragraphs()) >= self._FORGE_PARAGRAPH_THRESHOLD:
                 self._run_forge_paragraph_condenser(server_prompt, system_prompt)
 
-    def _run_forge_paragraph_condenser(self, server_prompt: str, system_prompt: str):
+    def _run_forge_paragraph_condenser(self, server_prompt: str, system_prompt):
         """L2f→L3f: Condense forge paragraphs into a forge document."""
         paragraphs = self.memory.get_forge_paragraphs()
         if len(paragraphs) < self._FORGE_PARAGRAPH_THRESHOLD:
@@ -532,7 +532,7 @@ class SchoolCondensationMixin:
         else:
             logger.warning("[MEMORY] L2f→L3f forge doc too short — skipping")
 
-    def _run_forge_identity_condenser(self, server_prompt: str, system_prompt: str):
+    def _run_forge_identity_condenser(self, server_prompt: str, system_prompt):
         """L3f→L4f: Condense forge documents into forge core identity."""
         docs = self.memory.get_forge_docs()
         if len(docs) < self._FORGE_DOC_THRESHOLD:
@@ -550,7 +550,7 @@ class SchoolCondensationMixin:
         else:
             logger.warning("[MEMORY] L3f→L4f forge core identity too short — skipping")
 
-    def _run_forge_master_condenser(self, condenser: dict, system_prompt: str, grade: int):
+    def _run_forge_master_condenser(self, condenser: dict, system_prompt, grade: int):
         """L4f→L5f: Graduation condensation for forge track.
 
         Distills all forge layers into permanent master forge identity.
@@ -598,7 +598,7 @@ class SchoolCondensationMixin:
     #   - ACT: workability frame (evaluate by results, not eloquence)
     # ═══════════════════════════════════════════════════════════════════════
 
-    def _check_persistence(self, fresh_paragraph: str, track: str, system_prompt: str):
+    def _check_persistence(self, fresh_paragraph: str, track: str, system_prompt):
         """Compare fresh L2 paragraph against upper identity to detect the Argyris gap.
 
         If the paragraph surfaces a pattern that L4/L5 already claims, generate a

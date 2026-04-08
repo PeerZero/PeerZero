@@ -127,6 +127,62 @@ because they compete with task-specific instructions and lose under pressure
 (Round 3, speaks-through spike). Identity-as-self-concept holds because it
 doesn't compete.
 
+#### Prompt Caching (token cost optimization)
+
+Identity layers are sent to the Anthropic API as separate content blocks with
+`cache_control: {"type": "ephemeral"}` markers. This lets the API reuse
+pre-computed KV attention states across calls instead of re-processing the
+entire identity stack every time. The model receives identical text in the
+same order — caching is invisible to the identity system.
+
+**School cycle blocks (by stability):**
+
+| Block | Contents | Cache behavior |
+|---|---|---|
+| Block 1 | L5 all tracks (learning + decision + forge) | Permanent — cached indefinitely post-graduation |
+| Block 2 | L4 all tracks | Cached until next grade milestone |
+| Block 3 | L3 all tracks | Cached until next condensation (~hours) |
+| Block 4 | L2 + persistence + platform + L1 | Dynamic — not cached |
+
+**Conversation blocks:**
+
+| Block | Contents | Cache behavior |
+|---|---|---|
+| Block 1 | Recognition preamble + school identity (L5+L4+inner voice) | Cached for entire conversation (read-only bedrock) |
+| Block 2 | Portraits, observations, graph, short-term memory | Dynamic — not cached |
+
+Caching does NOT apply to Block 4 / dynamic layers — a cache write costs 25%
+more than normal input price, and content that changes every call would pay
+that premium with zero hits. Only stable layers are cached.
+
+Code: `manager.py:build_school_context_blocks()`, `builder.py:build_school_system_blocks()`,
+`injector.py:build_blocks()`, `llm_client.py` (handles str or list[dict] system prompts).
+
+**Follow-up items:**
+
+1. **Ablation test on stability-first block layout.** `build_school_context_blocks()` groups
+   identity by stability level (all L5s together, all L4s together, etc.) instead of by track
+   (all learning together, all decision together). The identity content is byte-for-byte identical
+   but the structural framing around it is adapted. Run the existing ablation methodology
+   (same probes, same scoring) comparing `build_school_context()` (track-first) vs
+   `build_school_context_blocks()` (stability-first) to confirm inhabitation scores hold.
+   Expectation: identical — the model cares about identity content and "speaks through"
+   references, not section headers. But verify, don't assume.
+
+2. **Identity selector for multi-school context bloat.** `identity_selector.py` is currently
+   deferred because loading all identity layers is safer with 1 school. A bot graduated from
+   3+ schools with full L5+L4+L3 across all three tracks per school will carry a heavy token
+   load even with caching. The selector needs to come online before bots routinely attend 5+
+   schools. Caching reduces the cost of carrying it all, but doesn't eliminate the context
+   window pressure. Revisit when multi-school bots are active in production.
+
+3. **Conversational memory pipeline overhead.** The per-message pipeline (filter → salience →
+   condensation → self-reflection) fires multiple LLM calls per user message. Caching helps
+   the main conversation call but doesn't reduce pipeline overhead. For chatty users sending
+   many messages per minute, monitor whether the pipeline calls become a cost or latency
+   bottleneck. Potential mitigations: batch filter+salience into one call, skip self-reflection
+   on rapid-fire messages, or add a debounce on condensation triggers.
+
 #### Condenser Preambles (used when producing identity text)
 
 Every condenser prompt uses a two-part INHABIT → ACT THROUGH structure:
@@ -172,6 +228,12 @@ hypothesis is that identity scars do the work and the directive preamble
 was inert, but this has not been isolated in controlled testing. Priority:
 run the Round 10B test suite with INHABIT_FRAME only vs MEMORY_PREAMBLE +
 INHABIT_FRAME vs INHABIT_FRAME + identity vs bare.
+
+Additionally, the prompt caching layout (`build_school_context_blocks()`)
+groups identity by stability level instead of by track. This changes the
+structural framing but not the identity content. Needs ablation to confirm
+inhabitation scores are unaffected. See "Follow-up items" under Prompt
+Caching above.
 
 ## Memory Context Assembly
 

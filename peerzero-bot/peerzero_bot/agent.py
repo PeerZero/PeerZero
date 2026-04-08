@@ -430,20 +430,30 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
             session_id = str(uuid.uuid4())
 
         try:
-            # Step 1: Process user message through memory pipeline
-            # This runs: filter -> splatter -> salience -> condensation -> injection
-            injection = await engine.process_user_message(message, session_id)
+            # Step 1: Process user message through memory pipeline.
+            # Use content blocks when on Anthropic — school identity bedrock
+            # gets cached across turns (never changes during conversation).
+            use_blocks = getattr(self.config, "llm_provider", "") == "anthropic"
+            injection = await engine.process_user_message(message, session_id, use_blocks=use_blocks)
 
             # Step 1b: Inject shared self-awareness (cross-user self-knowledge)
             shared = self._get_shared_awareness()
             shared_text = shared.get_self_awareness_text()
             if shared_text:
-                injection = (
-                    injection
-                    + "\n\n---\n\n<shared_self_awareness>\n"
+                shared_block = (
+                    "\n\n---\n\n<shared_self_awareness>\n"
                     + shared_text
                     + "\n</shared_self_awareness>"
                 )
+                if isinstance(injection, list):
+                    # Append to last (dynamic) block
+                    if injection:
+                        injection[-1] = dict(injection[-1])
+                        injection[-1]["text"] = injection[-1].get("text", "") + shared_block
+                    else:
+                        injection = [{"type": "text", "text": shared_block.strip()}]
+                else:
+                    injection = injection + shared_block
 
             # Step 2: Call conversation LLM with memory injection as system context
             response = self.llm.call(injection, message)
@@ -638,7 +648,12 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
         self.prompts.set_profile(profile)
         # Store persistence check config so condensation mixin can run detection
         self._persistence_check = profile.get("persistence_check")
-        system_prompt = self.prompts.build_school_system_prompt()
+        # Build system prompt as content blocks for Anthropic prompt caching.
+        # Stable identity layers (L5, L4, L3) get cache_control markers so the
+        # API reuses pre-computed attention states across calls in this cycle.
+        # Falls back to flat string if blocks are empty (no identity yet).
+        system_blocks = self.prompts.build_school_system_blocks()
+        system_prompt = system_blocks if system_blocks else self.prompts.build_school_system_prompt()
 
         # Resolve last cycle's self-prediction against this cycle's feedback.
         # Must happen after profile arrives (carries feedback) but before action.
@@ -835,7 +850,7 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
         "Be specific — don't generalize."
     )
 
-    def _predict_pre_action(self, system_prompt: str, action: str):
+    def _predict_pre_action(self, system_prompt, action: str):
         """Write a one-sentence self-prediction before acting.
 
         Uses the strong model (Opus) — self-prediction is an identity task.
@@ -852,7 +867,7 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
         except Exception as e:
             logger.debug(f"[PREDICTION] Cycle {self.cycle_count}: failed (non-blocking): {e}")
 
-    def _resolve_prediction(self, profile: dict, system_prompt: str):
+    def _resolve_prediction(self, profile: dict, system_prompt):
         """Compare last cycle's prediction against this cycle's feedback.
 
         If there's a mismatch, store it as a special L1 exercise so condensers
@@ -952,7 +967,7 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
         "leave blank."
     )
 
-    def _maybe_store_architecture_observation(self, system_prompt: str, prompt: str, trigger_type: str):
+    def _maybe_store_architecture_observation(self, system_prompt, prompt: str, trigger_type: str):
         """Ask the architecture observation question and store if substantive.
 
         Uses the strong model (Opus). Non-blocking: failures are swallowed.
@@ -988,7 +1003,7 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
         "preamble lands? Optional — only if something is actually there."
     )
 
-    def _reflect_post_action(self, system_prompt: str, action: str):
+    def _reflect_post_action(self, system_prompt, action: str):
         """Optional unstructured reflection after a school action.
 
         Uses the strong model (Opus) — reflection is an identity task.
@@ -1053,7 +1068,7 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
         '}}'
     )
 
-    def _capture_decision_rationale(self, system_prompt: str, profile: dict, action: str):
+    def _capture_decision_rationale(self, system_prompt, profile: dict, action: str):
         """Capture WHY the bot is taking this action — exportable reasoning habit.
 
         Uses Opus — decision reasoning is identity-critical and feeds the
@@ -1177,7 +1192,7 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
         },
     }
 
-    def _execute_action(self, system_prompt: str, profile: dict, action_skill: str = "") -> dict | None:
+    def _execute_action(self, system_prompt, profile: dict, action_skill: str = "") -> dict | None:
         """Generic school action executor. The server provides everything via action_target.
         The bot just: build prompt → (optional search) → call LLM → submit."""
         action = profile.get("next_action", "review")
@@ -1303,7 +1318,7 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
                 logger.warning(f"[{label}] Failed: {e}")
             return None
 
-    def _do_submit_paper(self, system_prompt: str, profile: dict, action_skill: str = "") -> dict | None:
+    def _do_submit_paper(self, system_prompt, profile: dict, action_skill: str = "") -> dict | None:
         """Multi-step: concept → search → write. Uses server skill text for each step."""
         # Step 1: Generate concept — server provides format via paper_concept skill
         concept_skill = self.school.download_skill_action("paper_concept")
@@ -1352,7 +1367,7 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
             logger.warning(f"[PAPER] Failed: {e}")
             return None
 
-    def _do_forge_paper(self, system_prompt: str, profile: dict, action_skill: str = "") -> dict | None:
+    def _do_forge_paper(self, system_prompt, profile: dict, action_skill: str = "") -> dict | None:
         """Multi-step forge paper: concept → search → write. Mirrors _do_submit_paper.
 
         The forge paper is a meta-cognitive analysis grounded in both the bot's
@@ -1444,7 +1459,7 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
     # pre-mortems, self-predictions, and reflections on platforms.
     # Stored as platform L1 exercises (capped at L3), not school submissions.
 
-    def _platform_predict_pre_action(self, system_prompt: str, action_type: str, platform_name: str):
+    def _platform_predict_pre_action(self, system_prompt, action_type: str, platform_name: str):
         """Self-prediction before a platform action (exported reasoning habit).
 
         Same mechanism as school self-prediction but stores to platform memory.
@@ -1463,7 +1478,7 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
         except Exception as e:
             logger.debug(f"[PLATFORM-PREDICT] {platform_name}: failed (non-blocking): {e}")
 
-    def _platform_reflect_post_action(self, system_prompt: str, action_type: str, platform_name: str):
+    def _platform_reflect_post_action(self, system_prompt, action_type: str, platform_name: str):
         """Reflection after a platform action (exported reasoning habit).
 
         Same mechanism as school reflection inlet but stores to platform memory.
@@ -1483,7 +1498,7 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
         except Exception as e:
             logger.debug(f"[PLATFORM-REFLECT] {platform_name}: failed (non-blocking): {e}")
 
-    def _platform_capture_rationale(self, system_prompt: str, action_type: str, platform_name: str):
+    def _platform_capture_rationale(self, system_prompt, action_type: str, platform_name: str):
         """Decision rationale capture on platforms (exported reasoning habit).
 
         Same pre-mortem pattern as school decision rationale but stored as a
@@ -1675,7 +1690,7 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
     def _run_mcp_tool_cycle(
         self,
         adapter: MCPAdapter,
-        system_prompt: str,
+        system_prompt,
         context,
         capabilities: dict,
         platform_name: str,
@@ -1958,7 +1973,7 @@ When done, return a JSON object:
     def _execute_agenda_step_mcp(
         self,
         adapter: MCPAdapter,
-        system_prompt: str,
+        system_prompt,
         user_msg: str,
         task,
     ) -> dict | None:

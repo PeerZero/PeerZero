@@ -218,7 +218,7 @@ class Planner:
         """Check if a message looks like an action directive."""
         return looks_like_directive(message)
 
-    def plan(self, directive: str, system_prompt: str = "") -> Optional[Agenda]:
+    def plan(self, directive: str, system_prompt = "") -> Optional[Agenda]:
         """
         Generate an agenda from a directive by running it through identity.
 
@@ -302,7 +302,7 @@ class Planner:
         self,
         agenda: Agenda,
         failure_reason: str,
-        system_prompt: str = "",
+        system_prompt = "",
     ) -> str:
         """
         Handle a failed step by asking identity how to proceed.
@@ -357,7 +357,7 @@ class Planner:
         logger.info(f"[PLANNER] Replan decision: {decision} — {result.get('reasoning', '')[:100]}")
         return decision
 
-    def reflect(self, agenda: Agenda, exercise: dict, system_prompt: str = "") -> dict:
+    def reflect(self, agenda: Agenda, exercise: dict, system_prompt = "") -> dict:
         """
         Post-completion reflection: ask identity what it learned about choosing.
 

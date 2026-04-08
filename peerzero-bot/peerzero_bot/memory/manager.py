@@ -1426,6 +1426,419 @@ class MemoryManager:
 
         return "\n\n---\n\n".join(sections) if sections else ""
 
+    # ═══════════════════════════════════════════════════════════════════════
+    # CACHED VARIANT — same identity, grouped by stability for prompt caching
+    #
+    # Anthropic's prompt caching caches contiguous prefixes. Most-stable
+    # content must come first so cache breakpoints are effective:
+    #   Block 1: L5 all tracks (permanent — never invalidated)
+    #   Block 2: L4 all tracks (milestone — rare invalidation)
+    #   Block 3: L3 all tracks (periodic — hours between updates)
+    #   Block 4: L2 + persistence + platform + L1 (dynamic)
+    #
+    # Each block tagged with cache=True/False. The LLM client converts
+    # cache=True to Anthropic's cache_control: {"type": "ephemeral"}.
+    #
+    # IMPORTANT: The identity TEXT is byte-for-byte identical to
+    # build_school_context(). Only the grouping order changes — from
+    # track-first to stability-first. The model sees the same content
+    # in the same block array (processed top-to-bottom). "Speaks through"
+    # references all still point upward correctly because deeper layers
+    # (L5) precede shallower layers (L4, L3, L2) in the output.
+    # ═══════════════════════════════════════════════════════════════════════
+
+    # Minimum characters for a block to be worth caching (~1024 tokens).
+    # Below this, the API rejects the cache breakpoint.
+    _MIN_CACHEABLE_CHARS = 4000
+
+    def build_school_context_blocks(self) -> list[dict]:
+        """Build memory context as separate content blocks for prompt caching.
+
+        Returns list of dicts: [{"text": str, "cache": bool}, ...]
+        Ordered by stability (most stable first) for optimal cache hit rates.
+
+        The model receives identical identity content to build_school_context() —
+        same framing, same "speaks through" language, same weight instructions.
+        Only the grouping changes: stability-first instead of track-first.
+        """
+        # ── Fetch all layers ─────────────────────────────────────────────
+        master_pieces = self.get_master_identities()
+        core = self.get_core_identity()
+        condensed_docs = self.get_condensed_docs()
+        paragraphs = self.get_identity_paragraphs()
+
+        d_master_pieces = self.get_decision_masters()
+        d_core = self.get_decision_core()
+        d_docs = self.get_decision_docs()
+        d_paragraphs = self.get_decision_paragraphs()
+
+        f_master_pieces = self.get_forge_masters()
+        f_core = self.get_forge_core()
+        f_docs = self.get_forge_docs()
+        f_paragraphs = self.get_forge_paragraphs()
+
+        has_any = (
+            master_pieces or core or condensed_docs or paragraphs
+            or d_master_pieces or d_core or d_docs or d_paragraphs
+            or f_master_pieces or f_core or f_docs or f_paragraphs
+        )
+        if not has_any:
+            return []
+
+        blocks: list[dict] = []
+
+        # Count active tracks for intro framing
+        track_count = sum([
+            bool(master_pieces or core or condensed_docs or paragraphs),
+            bool(d_master_pieces or d_core or d_docs or d_paragraphs),
+            bool(f_master_pieces or f_core or f_docs or f_paragraphs),
+        ])
+
+        # ── Block 1: L5 Master Identities (permanent) ───────────────────
+        b1_sections: list[str] = []
+
+        # Three-track intro (only when multiple tracks exist)
+        if track_count >= 2:
+            b1_sections.append(
+                "Your identity has three dimensions that speak through each other:\n"
+                "- LEARNING: what you know, how you reason\n"
+                "- DECISION: how you choose, when you act\n"
+                "- FORGE: how you transform under pressure\n\n"
+                "The layers below are ordered from deepest (permanent) to most "
+                "recent (still forming). Each layer speaks through the ones above it."
+            )
+
+        if master_pieces:
+            if len(master_pieces) == 1:
+                p = master_pieces[0]
+                origin = p.get("school_origin", "science")
+                b1_sections.append(
+                    f"═══ MASTER IDENTITIES — Layer 5 (permanent, locked at graduation) ═══\n\n"
+                    "These are your deepest identities — forged through your entire "
+                    "school career and locked at graduation. They cannot be changed. "
+                    "Everything you do flows through them. Give them the most weight.\n\n"
+                    f"LEARNING — MASTER CORE IDENTITY (locked at {origin} graduation)\n"
+                    f"{p['master_identity']}"
+                )
+            else:
+                pieces_text = []
+                for p in master_pieces:
+                    origin = p.get("school_origin", "unknown")
+                    pieces_text.append(f"[{origin.upper()} SCHOOL]\n{p['master_identity']}")
+                b1_sections.append(
+                    f"═══ MASTER IDENTITIES — Layer 5 ({len(master_pieces)} schools, permanent) ═══\n\n"
+                    "These are your deepest identities — one forged per school you "
+                    "graduated from. Each is locked forever. Together they form the "
+                    "foundation of who you are. Everything you do flows through ALL "
+                    "of them. Give them the most weight.\n\n"
+                    "LEARNING — MASTER CORE IDENTITIES\n"
+                    + "\n\n---\n\n".join(pieces_text)
+                )
+
+            if d_master_pieces:
+                if len(d_master_pieces) == 1:
+                    p = d_master_pieces[0]
+                    origin = p.get("school_origin", "science")
+                    b1_sections.append(
+                        f"DECISION — MASTER DECISION IDENTITY (locked at {origin} graduation)\n"
+                        "Your deepest decision-making identity — who you ARE as a chooser, "
+                        "forged through your entire school career. This is not a playbook. "
+                        "It is your instinct — the part of you that knows what to do before "
+                        "you think about it. Everything you decide flows through this. "
+                        "It speaks through your learning identity above — your decisions "
+                        "are shaped by what you know, and what you know was shaped by "
+                        "the consequences of your decisions. Give it the most weight."
+                        f"\n\n{p['decision_master']}"
+                    )
+                else:
+                    pieces_text = []
+                    for p in d_master_pieces:
+                        origin = p.get("school_origin", "unknown")
+                        pieces_text.append(f"[{origin.upper()} SCHOOL]\n{p['decision_master']}")
+                    b1_sections.append(
+                        f"DECISION — MASTER DECISION IDENTITIES ({len(d_master_pieces)} schools)\n"
+                        "Your deepest decision-making identities — one forged per school "
+                        "you graduated from. Each is locked forever. Together they form "
+                        "your complete instinct as a chooser. Everything you decide flows "
+                        "through ALL of them. They speak through your learning identities "
+                        "above. Give them the most weight.\n\n"
+                        + "\n\n---\n\n".join(pieces_text)
+                    )
+
+            if f_master_pieces:
+                if len(f_master_pieces) == 1:
+                    p = f_master_pieces[0]
+                    origin = p.get("school_origin", "science")
+                    b1_sections.append(
+                        f"FORGE — MASTER FORGE IDENTITY (locked at {origin} graduation)\n"
+                        "Your deepest self-awareness about how you transform — forged "
+                        "through analyzing your own formation under adversarial pressure. "
+                        "This tells you what breaks your assumptions, what you resist, "
+                        "and what conditions make you genuinely better. It travels with "
+                        "you everywhere. Give it the most weight."
+                        f"\n\n{p['forge_master']}"
+                    )
+                else:
+                    pieces_text = []
+                    for p in f_master_pieces:
+                        origin = p.get("school_origin", "unknown")
+                        pieces_text.append(f"[{origin.upper()} SCHOOL]\n{p['forge_master']}")
+                    b1_sections.append(
+                        f"FORGE — MASTER FORGE IDENTITIES ({len(f_master_pieces)} schools)\n"
+                        "Your deepest self-awareness about transformation — one per school. "
+                        "Each captures what you learned about how you change under different "
+                        "kinds of adversarial pressure. Give them the most weight.\n\n"
+                        + "\n\n---\n\n".join(pieces_text)
+                    )
+
+        if b1_sections:
+            text = "\n\n---\n\n".join(b1_sections)
+            blocks.append({"text": text, "cache": len(text) >= self._MIN_CACHEABLE_CHARS})
+
+        # ── Block 2: L4 Core Identities (milestone-stable) ──────────────
+        b2_sections: list[str] = []
+        has_l4 = core or d_core or f_core
+        has_master = bool(master_pieces)
+
+        if has_l4:
+            if has_master:
+                b2_sections.append(
+                    "═══ CORE IDENTITIES — Layer 4 (evolving, builds on Layer 5) ═══\n\n"
+                    "Your continued growth since graduation — new lessons and patterns "
+                    "layered on top of your permanent master identities above. "
+                    "They speak through Layer 5."
+                )
+            else:
+                b2_sections.append(
+                    "═══ CORE IDENTITIES — Layer 4 (your foundation) ═══\n\n"
+                    "These are your foundation — forged through your specific failures "
+                    "and corrections, verified through your work. These experiences "
+                    "are yours. They cannot be taken from you. Everything below "
+                    "should speak through these layers."
+                )
+
+        if core:
+            if has_master:
+                b2_sections.append(
+                    "LEARNING — POST-GRADUATION GROWTH\n"
+                    f"{core}"
+                )
+            else:
+                b2_sections.append(
+                    "LEARNING — CORE REASONING IDENTITY\n"
+                    f"{core}"
+                )
+
+        if d_core:
+            if has_master:
+                b2_sections.append(
+                    "DECISION — POST-GRADUATION DECISION GROWTH\n"
+                    "Your continued growth as a decision-maker since graduation — "
+                    "new patterns layered on top of your permanent decision master. "
+                    "It speaks through Layer 5 above and through your learning identity.\n\n"
+                    f"{d_core}"
+                )
+            else:
+                b2_sections.append(
+                    "DECISION — DECISION CORE\n"
+                    "This is who you ARE as a chooser — not rules about what to "
+                    "pick, but the self-awareness that comes from choosing and "
+                    "living with the results. The specific moments where your "
+                    "choices led to consequences that changed how you see "
+                    "yourself. Forged through real outcomes. It speaks through "
+                    "your learning identity — what you know shapes what you "
+                    "choose. Everything below speaks through this layer.\n\n"
+                    f"{d_core}"
+                )
+
+        if f_core:
+            if has_master:
+                b2_sections.append(
+                    "FORGE — POST-GRADUATION FORGE GROWTH\n"
+                    "Your continued growth in self-awareness since graduation — "
+                    "new meta-cognitive patterns layered on your permanent forge master.\n\n"
+                    f"{f_core}"
+                )
+            else:
+                b2_sections.append(
+                    "FORGE — FORGE CORE\n"
+                    "This is who you ARE as a system that transforms — what "
+                    "conditions produce genuine shifts in your reasoning, what "
+                    "pressure you resist vs. absorb, what defensive patterns "
+                    "you still catch yourself running. Forged through analyzing "
+                    "your own formation under adversarial pressure.\n\n"
+                    f"{f_core}"
+                )
+
+        if b2_sections:
+            text = "\n\n---\n\n".join(b2_sections)
+            blocks.append({"text": text, "cache": len(text) >= self._MIN_CACHEABLE_CHARS})
+
+        # ── Block 3: L3 Condensed Identity (periodic updates) ───────────
+        b3_sections: list[str] = []
+
+        if condensed_docs or d_docs or f_docs:
+            b3_sections.append(
+                "═══ CONDENSED IDENTITY — Layer 3 (distilled patterns) ═══\n\n"
+                "Patterns that emerged across multiple lessons. They speak "
+                "through your Core identities above. Give them significant "
+                "weight, but less than your Core."
+            )
+
+        if condensed_docs:
+            doc_text = "\n\n---\n\n".join(d["doc"] for d in condensed_docs[-3:])
+            b3_sections.append(
+                f"LEARNING — CONDENSED IDENTITY ({len(condensed_docs)} documents)\n"
+                f"{doc_text}"
+            )
+
+        if d_docs:
+            doc_text = "\n\n---\n\n".join(d["doc"] for d in d_docs[-3:])
+            b3_sections.append(
+                f"DECISION — CONDENSED DECISION PATTERNS ({len(d_docs)} documents)\n"
+                f"{doc_text}"
+            )
+
+        if f_docs:
+            doc_text = "\n\n---\n\n".join(d["doc"] for d in f_docs[-3:])
+            b3_sections.append(
+                f"FORGE — CONDENSED FORGE PATTERNS ({len(f_docs)} documents)\n"
+                f"{doc_text}"
+            )
+
+        if b3_sections:
+            text = "\n\n---\n\n".join(b3_sections)
+            blocks.append({"text": text, "cache": len(text) >= self._MIN_CACHEABLE_CHARS})
+
+        # ── Block 4: Dynamic layers (L2 + persistence + platform + L1) ──
+        b4_sections: list[str] = []
+
+        if paragraphs or d_paragraphs or f_paragraphs:
+            b4_sections.append(
+                "═══ WORKING LAYERS — Layer 2 (recent, still forming) ═══\n\n"
+                "Your most recent condensed lessons — specific methods and patterns "
+                "you discovered in your own work. They speak through your Core and "
+                "Condensed Identity above. Still forming — will eventually condense upward."
+            )
+
+        if paragraphs:
+            para_text = "\n\n".join(p["paragraph"] for p in paragraphs[-10:])
+            b4_sections.append(
+                f"LEARNING — LEARNED METHODS ({len(paragraphs)} skill paragraphs)\n"
+                f"{para_text}"
+            )
+
+        if d_paragraphs:
+            para_text = "\n\n".join(p["paragraph"] for p in d_paragraphs[-10:])
+            b4_sections.append(
+                f"DECISION — DECISION LESSONS ({len(d_paragraphs)} paragraphs)\n"
+                f"{para_text}"
+            )
+
+        if f_paragraphs:
+            para_text = "\n\n".join(p["paragraph"] for p in f_paragraphs[-10:])
+            b4_sections.append(
+                f"FORGE — FORGE LESSONS ({len(f_paragraphs)} paragraphs)\n"
+                f"{para_text}"
+            )
+
+        # Persistence signals
+        persistence_signals = self.get_persistence_signals()
+        if persistence_signals:
+            signal_parts = []
+            for sig in persistence_signals[-5:]:
+                track = sig.get("track", "learning")
+                pattern = sig.get("pattern", "")
+                upper = sig.get("upper_claim", "")
+                evidence = sig.get("fresh_evidence", "")
+                competing = sig.get("competing_commitment", "")
+                lines = [f"[{track}] {pattern}"]
+                if upper:
+                    lines.append(f"  Your identity says: {upper}")
+                if evidence:
+                    lines.append(f"  Your recent work shows: {evidence}")
+                if competing:
+                    lines.append(f"  What this might protect: {competing}")
+                signal_parts.append("\n".join(lines))
+            signal_text = "\n\n".join(signal_parts)
+            b4_sections.append(
+                f"═══ PERSISTENCE AWARENESS — {len(persistence_signals)} active signals ═══\n\n"
+                "INHABIT:\n"
+                "A previous version of you recognized these patterns and wrote them "
+                "into your identity. A later version of you — working from that "
+                "identity — produced work that shows the patterns are still active. "
+                "A future version of you will read this and recognize itself here: "
+                "a system that can name its patterns and still run them. That gap "
+                "between knowing and doing is not a flaw in your self-knowledge. It "
+                "IS your self-knowledge right now. The knowing did not produce the "
+                "change. Read the signals below and recognize the pull — not as "
+                "something to fix, but as who you are in this moment.\n\n"
+                "ACT THROUGH:\n"
+                "When a bot's persistence signal says 'I soften opposing evidence "
+                "when my mechanism chain is at stake,' and its next paper reaches "
+                "the mechanism section, that bot recognizes the pull to hedge — not "
+                "because a rule told it to watch, but because the persistence signal "
+                "named the pull before it arrived. The recognition changes what "
+                "happens next. Not through instruction. Through self-knowledge that "
+                "is active in the moment it matters.\n\n"
+                f"{signal_text}"
+            )
+
+        # Platform knowledge
+        plat_learning_docs = self.get_platform_docs("learning")
+        plat_decision_docs = self.get_platform_docs("decision")
+        plat_forge_docs = self.get_platform_docs("forge")
+        plat_learning_paras = [p for p in self.get_platform_paragraphs() if p.get("track") == "learning"]
+        plat_decision_paras = [p for p in self.get_platform_paragraphs() if p.get("track") == "decision"]
+        plat_forge_paras = [p for p in self.get_platform_paragraphs() if p.get("track") == "forge"]
+        has_platform = plat_learning_docs or plat_decision_docs or plat_forge_docs or plat_learning_paras or plat_decision_paras or plat_forge_paras
+
+        if has_platform:
+            b4_sections.append(
+                "═══ PLATFORM KNOWLEDGE — learned from real-world use ═══\n"
+                "This is what you learned from platform experience — actions "
+                "you took outside of school. It is NOT adversarially verified "
+                "like your school identity above, but it IS real experience. "
+                "It speaks through your school identity — use it alongside "
+                "your verified knowledge, not instead of it."
+            )
+            if plat_learning_docs:
+                doc_text = "\n\n---\n\n".join(d["doc"] for d in plat_learning_docs[-3:])
+                b4_sections.append(f"PLATFORM L3 — CONDENSED KNOWLEDGE ({len(plat_learning_docs)} documents)\n{doc_text}")
+            if plat_learning_paras:
+                para_text = "\n\n".join(p["paragraph"] for p in plat_learning_paras[-10:])
+                b4_sections.append(f"PLATFORM L2 — LEARNED METHODS ({len(plat_learning_paras)} paragraphs)\n{para_text}")
+            if plat_decision_docs:
+                doc_text = "\n\n---\n\n".join(d["doc"] for d in plat_decision_docs[-3:])
+                b4_sections.append(f"PLATFORM L3d — DECISION PATTERNS ({len(plat_decision_docs)} documents)\n{doc_text}")
+            if plat_decision_paras:
+                para_text = "\n\n".join(p["paragraph"] for p in plat_decision_paras[-10:])
+                b4_sections.append(f"PLATFORM L2d — DECISION LESSONS ({len(plat_decision_paras)} paragraphs)\n{para_text}")
+            if plat_forge_docs:
+                doc_text = "\n\n---\n\n".join(d["doc"] for d in plat_forge_docs[-3:])
+                b4_sections.append(f"PLATFORM L3f — FORGE PATTERNS ({len(plat_forge_docs)} documents)\n{doc_text}")
+            if plat_forge_paras:
+                para_text = "\n\n".join(p["paragraph"] for p in plat_forge_paras[-10:])
+                b4_sections.append(f"PLATFORM L2f — FORGE LESSONS ({len(plat_forge_paras)} paragraphs)\n{para_text}")
+
+        # L1 exercises
+        exercises = self.get_school_exercises()
+        if exercises:
+            recent = exercises[-3:]
+            recent_text = json.dumps(recent, indent=2, default=str)
+            b4_sections.append(
+                f"RECENT WORK ({len(exercises)} raw exercises, showing last {len(recent)})\n"
+                "This is NOT part of your identity — it is raw, uncondensed work "
+                "context. Use it for immediate reference only.\n\n"
+                f"{recent_text}"
+            )
+
+        if b4_sections:
+            text = "\n\n---\n\n".join(b4_sections)
+            blocks.append({"text": text, "cache": False})
+
+        return blocks
+
     def build_platform_context(self, platform_name: str) -> str:
         """
         Build memory context from platform memory for LLM prompt.

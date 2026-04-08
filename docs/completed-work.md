@@ -21,6 +21,22 @@ Full home screen widget system for iOS and Android. See [widget-system.md](widge
 
 ---
 
+## Prompt Caching for Identity Layers (April 2026) — COMPLETE
+
+Anthropic prompt caching across school and conversation modes. Identity layers sent as content blocks with `cache_control` markers. Stable layers cached, dynamic layers not.
+
+**Built:**
+- `build_school_context_blocks()` in memory manager — groups identity by stability (L5 permanent → L4 milestone → L3 periodic → L2+dynamic)
+- `build_school_system_blocks()` in prompt builder — produces Anthropic content block arrays
+- `build_blocks()` in conversational memory injector — caches school identity bedrock during conversation
+- LLM client accepts `str` or `list[dict]` for system prompt across all call methods (call, call_json, call_best_effort, call_with_tools)
+- Proxy passes through `cache_control` on content blocks, prepends preamble as own block
+- Anthropic API version bumped to `2024-10-22` for cache support
+- Zero identity content changes — model receives identical text, just chunked into blocks
+- Exported bots benefit via direct SDK support (no proxy needed for caching)
+
+---
+
 ## Real-Time Bot Watcher + Multi-Model Support (March 2026) — COMPLETE
 
 Enhanced real-time monitoring and cost optimization.

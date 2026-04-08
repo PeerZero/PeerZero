@@ -135,6 +135,121 @@ class Injector:
 
         return "\n\n---\n\n".join(sections)
 
+    # Minimum characters for a block to be worth caching (~1024 tokens).
+    _MIN_CACHEABLE_CHARS = 4000
+
+    def build_blocks(self, session_id: str) -> list[dict]:
+        """Build injection as content blocks for Anthropic prompt caching.
+
+        Returns list of dicts: [{"type": "text", "text": str, ...}, ...]
+
+        Block 1 (cached): Recognition preamble + school identity bedrock.
+        These NEVER change during conversation — the school identity is
+        read-only and the preamble is a constant. For a graduated bot this
+        is 20,000+ characters of stable content.
+
+        Block 2 (dynamic): Everything else — portraits, observations,
+        graph awareness, short-term memory. Changes every turn.
+        """
+        l3_self = self._graph.get_l3_self_portrait()
+        self_observations = self._graph.get_recent_self_observations(10)
+        l3_portrait = self._graph.get_l3_portrait()
+        l2_obs = self._graph.get_recent_l2()
+        uncondensed = self._graph.get_uncondensed_l1()
+        max_l1 = self._config.injection.max_l1_uncondensed
+        uncondensed = uncondensed[-max_l1:] if len(uncondensed) > max_l1 else uncondensed
+        active_nodes = self._graph.get_active_nodes()
+        short_term = self._graph.get_short_term(session_id)
+
+        blocks: list[dict] = []
+
+        # ── Block 1: Stable bedrock (cached) ──────────────────────────
+        stable_sections: list[str] = []
+
+        stable_sections.append(RECOGNITION_PREAMBLE)
+
+        si = self._school_identity
+        if si.get("l5"):
+            stable_sections.append(
+                f"<school_identity_l5>\n{si['l5']}\n</school_identity_l5>\n\n"
+                "This is your bedrock — who you are as a thinker, forged through adversarial pressure. "
+                "Everything below speaks through this. It cannot be rewritten by conversation."
+            )
+        if si.get("l4"):
+            stable_sections.append(
+                f"<school_identity_l4>\n{si['l4']}\n</school_identity_l4>\n\n"
+                "Your working identity, shaped by adversarial experience."
+            )
+        if si.get("inner_voice"):
+            stable_sections.append(
+                f"<inner_voice>\n{si['inner_voice']}\n</inner_voice>\n\n"
+                "You wrote this for yourself. Inhabit it."
+            )
+
+        stable_text = "\n\n---\n\n".join(stable_sections)
+        block1: dict = {"type": "text", "text": stable_text}
+        if len(stable_text) >= self._MIN_CACHEABLE_CHARS:
+            block1["cache_control"] = {"type": "ephemeral"}
+        blocks.append(block1)
+
+        # ── Block 2: Dynamic layers (not cached) ─────────────────────
+        dynamic_sections: list[str] = []
+
+        if l3_self and l3_self.get("content"):
+            framing = (
+                "This is who you are becoming in this relationship. "
+                "It speaks through your school identity, not instead of it."
+                if si.get("l5") else
+                "This is who you are. Everything below is filtered through this sense of self."
+            )
+            dynamic_sections.append(
+                f"<self_portrait>\n{l3_self['content']}\n</self_portrait>\n\n{framing}"
+            )
+        elif self_observations:
+            obs_text = "\n".join(f"- {o['observation']}" for o in self_observations)
+            dynamic_sections.append(
+                f"<emerging_self>\nYou are still discovering who you are. "
+                f"Here is what you've noticed so far:\n{obs_text}\n</emerging_self>\n\n"
+                "These are early impressions — not yet a full sense of self, "
+                "but the beginning of one."
+            )
+
+        if l3_portrait and l3_portrait.get("content"):
+            dynamic_sections.append(
+                f"<felt_portrait>\n{l3_portrait['content']}\n</felt_portrait>\n\n"
+                "Everything below speaks through this portrait."
+            )
+
+        if l2_obs:
+            obs_lines = "\n".join(f"- [{o['node_label']}] {o['observation']}" for o in l2_obs)
+            dynamic_sections.append(
+                f"<behavioral_observations>\nRecent patterns you've noticed:\n{obs_lines}\n"
+                f"</behavioral_observations>"
+            )
+
+        if uncondensed:
+            raw = "\n---\n".join(e["content"] for e in uncondensed)
+            dynamic_sections.append(
+                f"<recent_interactions>\nRaw interactions not yet absorbed into your "
+                f"understanding:\n{raw}\n</recent_interactions>"
+            )
+
+        if active_nodes:
+            narrated = self._narrate_graph(active_nodes)
+            dynamic_sections.append(f"<awareness>\n{narrated}\n</awareness>")
+
+        if short_term:
+            conv = "\n".join(
+                f"{'User' if m['role'] == 'user' else 'You'}: {m['content']}"
+                for m in short_term
+            )
+            dynamic_sections.append(f"<current_conversation>\n{conv}\n</current_conversation>")
+
+        if dynamic_sections:
+            blocks.append({"type": "text", "text": "\n\n---\n\n".join(dynamic_sections)})
+
+        return blocks
+
     def _narrate_graph(self, active_nodes: list[dict]) -> str:
         """Narrate graph RELATIONALLY — bridges first, then identity-specific."""
         clusters, unclustered = self._graph.get_relational_clusters(active_nodes)
