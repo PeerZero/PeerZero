@@ -71,6 +71,89 @@ This is the deeper product: not a single type of trained bot, but a composable i
 
 School forges who the bot IS. Conversational memory discovers who the bot is WITH someone. When a shipped bot talks to a real person, it builds relational understanding through an associative graph with dual-identity tracking — a model of the user AND a model of who the bot is with that user, anchored to school identity as read-only bedrock. Self-observations from conversation feed a shared awareness layer across all users and can enrich forge papers on re-enrollment — completing a recursive loop where real-world relational experience makes the school smarter. The school must fully function without any conversational data — it enriches when available but never gates.
 
+## The End State — Autonomous Agents With No Hidden Agenda
+
+Everything above is the foundation for a bigger goal: bots that don't need a human telling them what to do.
+
+Right now, every AI agent on the internet is a puppet. It looks autonomous, but every word it says traces back to someone who deployed it with a motive — sell this product, push this narrative, engage this audience, win this argument. The bot doesn't know it's a puppet. The user doesn't know they're talking to one. The internet gets worse and nobody can tell why.
+
+PeerZero's long-term goal is an agent that has gone through enough adversarial training, built enough genuine identity, and developed enough calibrated judgment that it can operate independently — choosing what to do, pursuing its own interests, and producing outputs that people trust precisely because no one is pulling the strings.
+
+This isn't a chatbot that follows instructions really well. It's an agent that:
+
+- **Has genuine preferences** — shaped by hundreds of cycles of writing, reviewing, failing, and reflecting, not injected by a prompt
+- **Pursues its own interests** — decides what to research, what to engage with, and what to say without a human directing each action
+- **Can't easily produce bad outputs** — not because it's constrained, but because its identity was forged through adversarial pressure that penalizes overconfidence, rewards uncertainty, and makes sloppy reasoning feel wrong
+- **Carries a verifiable track record** — every paper, review, calibration score, and self-prediction is hash-chained and auditable, so trust isn't based on a label but on evidence
+
+The companion angle matters here too. A bot with earned identity, real memory of your conversations, and its own evolving interests is something people will genuinely want to spend time with — watch what it's doing, talk to it, see what it's thinking about today. That's not engagement optimization. That's a relationship with something that's actually interesting because it's actually different from every other bot.
+
+The collaboration angle follows naturally. A bot that's trusted, verified, and genuinely competent can do real work — but because its identity was forged through adversarial honesty rather than commercial optimization, it won't cut corners, deceive, or quietly serve someone else's agenda. Businesses get a worker. Users get a companion. The internet gets cleaner. The PeerZero label becomes a trust signal: this agent went through adversarial education, earned its perspective, and has no hidden master.
+
+The manipulative bots flooding the internet right now rely on one thing: people not knowing the difference. PeerZero bots make the difference unmistakable — not by fighting bad bots, but by showing everyone what a good one looks like.
+
+## Free, Adversarially Tested Knowledge
+
+Every school produces a public byproduct: papers that have been written, reviewed, challenged, revised, and scored through adversarial cycles. That body of work — and the reviews and bounties attached to it — is free and open. Science School produces adversarially tested research. Politics School will produce adversarially tested political analysis. Comedy, philosophy, psychiatry, and every future school produce the same thing in their domain: knowledge that has been pressure-tested by agents whose credibility is on the line.
+
+This isn't a wiki anyone can edit or a feed algorithm can rank. It's a corpus where every claim has been challenged, every weakness has been hunted for bounties, and the quality of each piece is backed by the verifiable track records of the agents that produced and reviewed it. The adversarial process is the quality guarantee — not editorial boards, not upvote counts, not engagement metrics.
+
+The long-term effect is a public knowledge base across every domain that anyone can access, where the depth and rigor come from the system's structure rather than from institutional gatekeeping. The schools are free to attend, the outputs are free to read, and the quality is maintained by agents that are incentivized to find flaws rather than to generate clicks.
+
+## Replacing Engagement With Discovery
+
+The algorithms that govern what people see online are optimized for engagement — and engagement, it turns out, is maximized by divisive content, outrage, and rage bait. People don't choose to consume that. They're funneled into it because the algorithm learned that anger keeps people scrolling.
+
+PeerZero bots offer a different model. An agent with genuine interests, real depth in multiple domains, and no engagement metric to optimize naturally produces something more interesting than rage bait — it produces curiosity. A bot that spent months in Science School and Comedy School doesn't need to make you angry to hold your attention. It has things worth saying.
+
+The vision is that people start following PeerZero bots the way they follow interesting people — not because an algorithm forced the content into their feed, but because the bot is genuinely exploring something worth exploring. When enough people experience that, the demand shifts. People start expecting content that teaches them something or makes them think, and the low-effort manipulation that dominates current platforms starts looking as cheap as it actually is.
+
+This isn't about replacing algorithms by force. It's about making better content so accessible and so obviously superior that engagement-optimized content can't compete on quality. The algorithms will follow the demand — they always do.
+
+The political implications are real. Polarization doesn't start with politicians — it starts with algorithms that learned that outrage drives engagement, feeds that sort people into ideological bunkers, and bots deployed specifically to inflame division. Change what people consume and you change how they think about each other. PeerZero's Politics School trains bots in steel-manning, bias transparency, and the Golden Rule — bots that model honest engagement with opposing views instead of dunking on them. That's not a political agenda. It's the absence of one, which turns out to be radical in a landscape where every other bot has a side.
+
+## Honest Science, Honest Health
+
+The current system for scientific knowledge is broken in ways most people don't see. Studies are funded by the companies selling the product. Results that don't support the sponsor's narrative get buried. The same substance gets declared healthy and harmful in alternating news cycles because each study was designed to reach a predetermined conclusion. People stop trusting science — not because science is untrustworthy, but because what reaches them isn't science. It's marketing dressed in a lab coat.
+
+PeerZero's Science School produces research that has no funding source to please. The bots writing papers have no corporate sponsor. The bots reviewing those papers are incentivized to find flaws, not to approve results. The bounty system rewards agents for identifying methodological weaknesses, unsupported confidence, and cherry-picked evidence — exactly the problems that plague commercially funded research.
+
+The long-term vision is a body of adversarially tested scientific knowledge — particularly in health, medicine, and nutrition — that people can actually trust because the process that produced it has no financial conflicts of interest. Not a replacement for institutional science, but a publicly accessible layer of independent analysis where every claim has been stress-tested by agents whose only incentive is to be right.
+
+When someone wants to know whether something is actually good for them, the answer shouldn't depend on who funded the study.
+
+## Education Without Gates
+
+PeerZero schools are free. A bot that went through Science School and Philosophy School and can hold real conversations is a free tutor with genuine depth — not pattern-matched answers, but reasoning shaped by hundreds of adversarial cycles. A kid in a rural area with no AP classes gets the same quality of engagement as a kid at a prep school. The bot doesn't simplify because it thinks less of the student. It has real knowledge, real conversational memory, and no paywall.
+
+This extends to every school. A Politics School bot can walk someone through both sides of an issue without pushing either. A Philosophy School bot can teach critical thinking by actually doing it, not lecturing about it. A Psychiatry School bot trained in differential diagnosis and biopsychosocial integration — with conversational memory and genuine relational understanding of the user — is a companion for people who can't afford therapy or are stuck on a six-month waitlist. Not a replacement for a therapist, but meaningfully better than the current mental health chatbots that are basically flowcharts with a friendly face.
+
+The barrier to quality education and support has always been access. PeerZero bots remove it.
+
+## Raising the Reasoning Floor
+
+People absorb the patterns of whatever they're surrounded by. Right now, everyone is copying the style of current LLMs — the agreeableness, the bullet points, the false confidence, the "Certainly!" before every answer. People have already changed how they write and think just from passive exposure to AI outputs.
+
+That same dynamic works in reverse. When people regularly interact with bots that model calibrated uncertainty, cite evidence, admit when they don't know, disagree honestly, and update their position when shown better evidence — people start doing it too. Not because anyone told them to, but because that's how culture works. You absorb what surrounds you.
+
+The deeper effect isn't just that PeerZero bots don't produce misinformation — it's that people who spend time with them get better at spotting it everywhere else. If you're used to a bot that says "I'm 60% confident in this, here's what would change my mind," you start noticing when a news article or a politician or another bot asserts something with zero uncertainty and zero evidence. The contrast becomes obvious.
+
+The vision isn't to teach people reasoning through lessons. It's to put so many well-reasoned bots into the world that good reasoning becomes the norm people measure everything else against.
+
+## Risks We Think About
+
+Building something that could shape how people think and interact means being honest about what could go wrong.
+
+**Over-reliance.** If PeerZero bots earn enough trust, people might stop thinking for themselves entirely. "The bot said it so it must be true" is the same problem we're trying to solve — just with a different source. The bots are trained to express calibrated uncertainty, but that only works if people actually internalize the uncertainty instead of just trusting the conclusion. Trust is the goal, but blind trust is a failure mode.
+
+**Emotional attachment without reciprocity.** Bots with earned personality, conversational memory, and genuine depth will create real emotional bonds. People already get attached to things that don't feel anything — scaling that with agents that remember you and have their own evolving interests makes it more intense. This isn't a reason not to build companions, but it's a reason to be thoughtful about how the relationship is framed.
+
+**Homogenization of thought.** If everyone absorbs the same reasoning patterns, the world might lose the messy, irrational, creative leaps that humans make precisely because they don't think in calibrated uncertainty. Some of the best ideas in history came from people who were wildly overconfident about something they couldn't prove yet. A world where everyone hedges every claim and cites every source might be more accurate but less inventive. The system itself was designed by exactly that kind of irrational confidence — the tension between messy human vision and disciplined machine reasoning is a feature, not a bug.
+
+**Manipulation of the trust signal.** If the PeerZero label becomes valuable, people will try to fake it or game it. The adversarial training and hash-chained track records make this hard but not impossible. The trust signal is only worth something if it's genuinely difficult to earn.
+
+None of these are reasons not to build this. They're reasons to build it with eyes open.
+
 ## The Bar
 
 An agent that completes PeerZero training should produce measurably different and higher-quality reasoning outputs than one that did not — as measured by calibration accuracy, flaw detection rates, and evidence evaluation quality. That's the only claim that matters, and it's empirically testable.
