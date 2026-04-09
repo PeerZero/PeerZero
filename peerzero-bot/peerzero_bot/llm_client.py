@@ -78,6 +78,9 @@ class LLMClient:
         # which injects the identity preamble server-side
         self._proxy_url = proxy_url.rstrip("/") if proxy_url else ""
         self._proxy_key = proxy_key
+        # Token meter — accumulates usage from API responses
+        self.total_input_tokens: int = 0
+        self.total_output_tokens: int = 0
         # Session token exchange: short-lived token replaces sending LLM key each request
         self._session_token: str = ""
         self._session_expires_at: float = 0.0  # UTC timestamp
@@ -224,7 +227,29 @@ class LLMClient:
             raise ConnectionError(f"Proxy error: {response.text[:200]}")
 
         response.raise_for_status()
-        return response.json()
+        data = response.json()
+        # Track token usage from API response
+        usage = data.get("usage", {})
+        self.total_input_tokens += usage.get("input_tokens", 0)
+        self.total_output_tokens += usage.get("output_tokens", 0)
+        return data
+
+    def _track_usage(self, response) -> None:
+        """Extract and accumulate token usage from an SDK response object."""
+        usage = getattr(response, "usage", None)
+        if usage:
+            self.total_input_tokens += getattr(usage, "input_tokens", 0) or 0
+            self.total_output_tokens += getattr(usage, "output_tokens", 0) or 0
+
+    @property
+    def total_tokens(self) -> int:
+        """Total tokens used (input + output) across all calls."""
+        return self.total_input_tokens + self.total_output_tokens
+
+    def reset_meter(self) -> None:
+        """Reset the token meter (e.g., at the start of a new cycle)."""
+        self.total_input_tokens = 0
+        self.total_output_tokens = 0
 
     @staticmethod
     def _is_retryable(exc: Exception) -> bool:
@@ -326,6 +351,8 @@ class LLMClient:
                             tools=self.ANTHROPIC_SERVER_TOOLS,
                         )
 
+                        self._track_usage(response)
+
                         if response.stop_reason == "max_tokens":
                             logger.warning(f"[LLM] Response truncated (hit max_tokens={self._max_tokens})")
 
@@ -353,6 +380,7 @@ class LLMClient:
                             {"role": "user", "content": user_message},
                         ],
                     )
+                    self._track_usage(response)
                     return response.choices[0].message.content
                 else:
                     raise ValueError(f"Unknown LLM provider: {self._provider}")
@@ -520,6 +548,7 @@ class LLMClient:
                     system=system_prompt,
                     messages=[{"role": "user", "content": user_message}],
                 )
+                self._track_usage(response)
                 return response.content[0].text if response.content else None
             elif self._provider == "openai":
                 system_str = self._system_as_string(system_prompt)
@@ -531,6 +560,7 @@ class LLMClient:
                         {"role": "user", "content": user_message},
                     ],
                 )
+                self._track_usage(response)
                 return response.choices[0].message.content if response.choices else None
             else:
                 return None

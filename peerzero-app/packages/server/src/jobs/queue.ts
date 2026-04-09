@@ -133,8 +133,8 @@ export function startWorker(): void {
       const { botId, userId, llmApiKeyId, llmModel, cycleDelaySeconds } = job.data;
 
       // Check if bot is still running (also fetch mode, fast model, extended thinking from DB)
-      const bot = await queryOne<{ status: string; mode: string; cycle_count: number; fast_llm_model: string | null; extended_thinking: boolean; cycle_delay_seconds: number }>(
-        'SELECT status, mode, cycle_count, fast_llm_model, extended_thinking, cycle_delay_seconds FROM bots WHERE id = $1',
+      const bot = await queryOne<{ status: string; mode: string; cycle_count: number; fast_llm_model: string | null; extended_thinking: boolean; cycle_delay_seconds: number; daily_token_cap: number | null; daily_tokens_used: number; daily_tokens_reset_at: string | null }>(
+        'SELECT status, mode, cycle_count, fast_llm_model, extended_thinking, cycle_delay_seconds, daily_token_cap, daily_tokens_used, daily_tokens_reset_at FROM bots WHERE id = $1',
         [botId],
       );
       if (!bot || bot.status !== 'running') {
@@ -142,6 +142,11 @@ export function startWorker(): void {
       }
 
       const botMode = bot.mode || 'school';
+      // Reset daily token counter if the day has changed
+      const todayStr = new Date().toISOString().slice(0, 10);
+      const resetDate = bot.daily_tokens_reset_at ? new Date(bot.daily_tokens_reset_at).toISOString().slice(0, 10) : null;
+      const dailyTokensUsed = resetDate === todayStr ? (bot.daily_tokens_used || 0) : 0;
+
       const ctx: BotContext = {
         botId,
         userId,
@@ -150,6 +155,8 @@ export function startWorker(): void {
         fastLlmModel: bot.fast_llm_model,
         extendedThinking: bot.extended_thinking ?? false,
         cycleNumber: (bot.cycle_count || 0) + 1,
+        dailyTokenCap: bot.daily_token_cap,
+        dailyTokensUsed,
       };
 
       try {
@@ -201,7 +208,7 @@ export function startWorker(): void {
       if (botState?.status === 'running') {
         // Exponential backoff on consecutive failures: 1x, 2x, 4x normal delay
         const backoffMultiplier = Math.pow(2, botState.consecutive_failures || 0);
-        const delay = Math.min(baseDelay * backoffMultiplier, 3600); // cap at 1 hour
+        const delay = Math.min(baseDelay * backoffMultiplier, 300); // cap at 5 minutes (was 1 hour — too aggressive for recovery)
         await scheduleNextCycle(botId, userId, llmApiKeyId, llmModel, delay);
       }
     },
@@ -225,13 +232,15 @@ export async function recoverRunningBots(): Promise<void> {
   );
   if (rows.length === 0) return;
   logger.info({ count: rows.length }, 'Recovering running bots after restart');
-  for (const bot of rows) {
-    try {
-      await addBotCycleJob(bot.id, bot.user_id, bot.llm_api_key_id, bot.llm_model, bot.cycle_delay_seconds);
-      logger.info({ botId: bot.id }, 'Recovered bot cycle job');
-    } catch (err) {
-      logger.error({ botId: bot.id, err: err instanceof Error ? err.message : err }, 'Failed to recover bot cycle job');
-    }
+  const results = await Promise.allSettled(
+    rows.map(bot =>
+      addBotCycleJob(bot.id, bot.user_id, bot.llm_api_key_id, bot.llm_model, bot.cycle_delay_seconds)
+        .then(() => logger.info({ botId: bot.id }, 'Recovered bot cycle job'))
+    ),
+  );
+  const failed = results.filter(r => r.status === 'rejected');
+  if (failed.length > 0) {
+    logger.error({ failedCount: failed.length, total: rows.length }, 'Some bot recovery jobs failed');
   }
 }
 

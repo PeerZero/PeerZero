@@ -32,7 +32,15 @@ ENVIRONMENT = "production"
 # Example: ALLOWED_ORIGINS = "https://app.peerzero.com,https://bot.peerzero.com"
 # ALLOWED_ORIGINS = ""
 
-# TODO: Rate limiting is currently per-isolate (in-memory). Cloudflare Workers
-# distribute across multiple isolates, so an attacker can partially bypass limits
-# by round-robining requests. Migrate to Durable Objects or KV-backed rate
-# limiting for global enforcement. See src/index.ts rate limiting section.
+# ── Durable Objects ──────────────────────────────────────────────────────────
+# Global rate limiting via Durable Objects. Each unique rate-limit key (proxy key
+# hash + client IP) maps to one DO instance — single-writer, globally consistent.
+
+[durable_objects]
+bindings = [
+  { name = "RATE_LIMITER", class_name = "RateLimiter" },
+]
+
+[[migrations]]
+tag = "v1"
+new_classes = ["RateLimiter"]

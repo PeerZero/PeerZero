@@ -157,6 +157,8 @@ const BASE_CTX: BotContext = {
   fastLlmModel: null,
   extendedThinking: false,
   cycleNumber: 1,
+  dailyTokenCap: null,
+  dailyTokensUsed: 0,
 };
 
 function makeProfile(overrides: Partial<SchoolProfile> = {}): SchoolProfile {

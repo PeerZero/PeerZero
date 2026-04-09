@@ -36,7 +36,7 @@ import httpx
 
 from .config import BotConfig
 from .memory import MemoryManager
-from .adapters.school import SchoolAdapter, extract_json
+from .adapters.school import SchoolAdapter, CircuitOpenError, extract_json
 from .adapters.base import PlatformAction, TaskMessage, TaskResponse
 from .utils import sanitize_untrusted, safe_error_msg, truncate_json
 from .adapters.mcp import MCPAdapter
@@ -126,6 +126,21 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
             prompts=prompts,
             memory=memory,
         )
+
+        self._cleaned_up = False
+
+    # ── Context manager & explicit close ──────────────────────────────────
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self._cleanup()
+        return False  # Don't suppress exceptions
+
+    def close(self):
+        """Explicitly release all resources. Called automatically when used as a context manager."""
+        self._cleanup()
 
     # ═══════════════════════════════════════════════════════════════════════
     # STARTUP
@@ -265,7 +280,21 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
             return None
 
         if user_id in self._conv_memory_engines:
-            return self._conv_memory_engines[user_id]
+            # Touch for LRU tracking (move to end of dict ordering)
+            engine = self._conv_memory_engines.pop(user_id)
+            self._conv_memory_engines[user_id] = engine
+            return engine
+
+        # Evict least-recently-used engines if at capacity (prevent file descriptor exhaustion)
+        MAX_CONV_ENGINES = 50
+        while len(self._conv_memory_engines) >= MAX_CONV_ENGINES:
+            evict_uid, evict_engine = next(iter(self._conv_memory_engines.items()))
+            try:
+                evict_engine.close()
+            except Exception:
+                pass
+            del self._conv_memory_engines[evict_uid]
+            logger.debug(f"[CONV_MEMORY] Evicted LRU engine for user: {evict_uid}")
 
         # Build per-user DB path
         base = self.config.conversational_memory_path or os.path.join(
@@ -632,7 +661,14 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
         logger.info(f"{'='*60}")
 
         # Step 1: Get profile
-        profile = self.school.get_profile()
+        try:
+            profile = self.school.get_profile()
+        except CircuitOpenError as e:
+            logger.warning(
+                f"[{handle}] School server unavailable (circuit breaker OPEN) — "
+                f"skipping cycle {self.cycle_count}. {e}"
+            )
+            return
         next_action = profile.get("next_action", "review")
         cred = profile.get("credibility_score", "?")
         dc = profile.get("decision_context", {})
@@ -814,10 +850,21 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
     # ── Helpers ─────────────────────────────────────────────────────────
 
     def _submit_with_retry(self, label: str, submit_fn, *args, max_retries: int = 3):
-        """Call submit_fn(*args) with retry on transient HTTP errors (5xx, timeouts)."""
+        """Call submit_fn(*args) with retry on transient HTTP errors (5xx, timeouts).
+
+        If the circuit breaker is OPEN, raises CircuitOpenError immediately
+        without burning any retry budget — the server is known to be down.
+        """
         for attempt in range(max_retries):
             try:
                 return submit_fn(*args)
+            except CircuitOpenError:
+                # Server is known to be down — don't retry, surface immediately
+                logger.warning(
+                    f"[{label}] Circuit breaker is OPEN — skipping action "
+                    f"(school server unavailable)"
+                )
+                raise
             except Exception as e:
                 status = getattr(getattr(e, "response", None), "status_code", None)
                 is_transient = status in (500, 502, 503, 429) or isinstance(e, (ConnectionError, TimeoutError))
@@ -1301,6 +1348,9 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
             if action == "review":
                 self.memory.add_tracked_review_id(paper_id)
             return result
+        except CircuitOpenError:
+            logger.warning(f"[{label}] Skipped — school server unavailable (circuit breaker OPEN)")
+            return None
         except Exception as e:
             status = getattr(getattr(e, "response", None), "status_code", None)
             if status == 409:
@@ -1363,6 +1413,9 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
             result = self._submit_with_retry("PAPER", self.school.submit_paper, paper_data)
             logger.info(f"[PAPER] Submitted — id={result.get('paper_id')}, credibility={result.get('your_new_credibility', '?')}")
             return result
+        except CircuitOpenError:
+            logger.warning("[PAPER] Skipped — school server unavailable (circuit breaker OPEN)")
+            return None
         except Exception as e:
             logger.warning(f"[PAPER] Failed: {e}")
             return None
@@ -1436,6 +1489,9 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
             result = self._submit_with_retry("FORGE", self.school.submit_paper, paper_data)
             logger.info(f"[FORGE] Submitted — id={result.get('paper_id')}, credibility={result.get('your_new_credibility', '?')}")
             return result
+        except CircuitOpenError:
+            logger.warning("[FORGE] Skipped — school server unavailable (circuit breaker OPEN)")
+            return None
         except Exception as e:
             logger.warning(f"[FORGE] Failed: {e}")
             return None
@@ -2261,7 +2317,10 @@ When done, return a JSON object:
             logger.info("[STOP] Bot stopped. Identity saved.")
 
     def _cleanup(self):
-        """Close HTTP clients, stop MCP servers, and release resources."""
+        """Close HTTP clients, stop MCP servers, and release resources. Idempotent."""
+        if self._cleaned_up:
+            return
+        self._cleaned_up = True
         try:
             if hasattr(self, 'school') and hasattr(self.school, '_http'):
                 self.school._http.close()

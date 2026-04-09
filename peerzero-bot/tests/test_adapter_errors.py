@@ -7,7 +7,7 @@ import httpx
 import pytest
 
 from peerzero_bot.security import SecurityGateway, SecurityError
-from peerzero_bot.adapters.school import SchoolAdapter, extract_json
+from peerzero_bot.adapters.school import SchoolAdapter, extract_json, CircuitOpenError
 from peerzero_bot.adapters.a2a import A2AAdapter
 from peerzero_bot.adapters.webhook import WebhookAdapter
 from peerzero_bot.adapters.base import PlatformAction
@@ -148,6 +148,10 @@ class TestExtractJsonMalformed:
 class TestSchoolAdapterHTTPErrors:
     """SchoolAdapter._get and _post should propagate httpx errors."""
 
+    def setup_method(self):
+        """Reset the shared circuit breaker between tests so failures don't leak."""
+        SchoolAdapter._circuit_breaker.reset()
+
     def test_get_http_status_error(self):
         adapter = _make_school()
         adapter._http = MagicMock()
@@ -221,6 +225,9 @@ class TestSchoolAdapterHTTPErrors:
 class TestSchoolDownloadSkillMd:
     """download_skill_md should handle unexpected content types."""
 
+    def setup_method(self):
+        SchoolAdapter._circuit_breaker.reset()
+
     def test_json_response_converted_to_string(self):
         """If server returns JSON instead of markdown, it should still work."""
         adapter = _make_school()
@@ -282,6 +289,9 @@ class TestSchoolDownloadSkillMd:
 
 class TestSecurityGatewayBlocking:
     """SecurityGateway should block paths not in the allowlist."""
+
+    def setup_method(self):
+        SchoolAdapter._circuit_breaker.reset()
 
     def test_school_blocked_path(self):
         gateway = SecurityGateway()
@@ -612,6 +622,9 @@ class TestWebhookInvalidEvents:
 
 class TestSchoolAdapterGracefulDegradation:
     """Methods with try/except should degrade gracefully on errors."""
+
+    def setup_method(self):
+        SchoolAdapter._circuit_breaker.reset()
 
     def test_download_skill_action_returns_empty_on_error(self):
         """download_skill_action should return '' on HTTP failure."""

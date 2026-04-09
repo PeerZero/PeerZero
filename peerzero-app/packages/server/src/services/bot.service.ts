@@ -112,7 +112,8 @@ export async function getBotDetail(userId: string, botId: string): Promise<BotDe
             b.school_id, b.school_agent_handle, b.llm_api_key_id, b.llm_model, b.fast_llm_model, b.extended_thinking,
             b.cycle_delay_seconds, b.cached_next_action, b.cached_profile,
             b.error_message, b.created_at, b.cache_updated_at,
-            b.is_public, b.public_slug
+            b.is_public, b.public_slug,
+            b.daily_token_cap, b.daily_tokens_used, b.daily_tokens_reset_at
      FROM bots b
      LEFT JOIN schools s ON s.id = b.school_id
      WHERE b.id = $1 AND b.user_id = $2`,
@@ -168,6 +169,7 @@ export async function updateBot(userId: string, botId: string, updates: Partial<
   cycle_delay_seconds: number;
   is_public: boolean;
   mode: 'school' | 'shipped';
+  daily_token_cap: number | null;
 }>) {
   // Build SET clause dynamically
   const sets: string[] = [];
@@ -217,6 +219,13 @@ export async function updateBot(userId: string, botId: string, updates: Partial<
         sets.push(`public_slug = $${idx++}`); params.push(slug);
       }
     }
+  }
+
+  if (updates.daily_token_cap !== undefined) {
+    if (updates.daily_token_cap !== null && (updates.daily_token_cap < 10000 || updates.daily_token_cap > 100000000)) {
+      throw new AppError(400, 'daily_token_cap must be null (unlimited) or between 10,000 and 100,000,000');
+    }
+    sets.push(`daily_token_cap = $${idx++}`); params.push(updates.daily_token_cap);
   }
 
   if (sets.length === 0) return;

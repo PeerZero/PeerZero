@@ -61,6 +61,8 @@ const BASE_CTX: BotContext = {
   fastLlmModel: 'claude-haiku-4-5-20251001',
   extendedThinking: false,
   cycleNumber: 10,
+  dailyTokenCap: null,
+  dailyTokensUsed: 0,
 };
 
 function makePendingTask(overrides: Record<string, unknown> = {}) {

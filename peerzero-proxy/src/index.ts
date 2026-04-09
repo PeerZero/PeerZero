@@ -37,6 +37,7 @@ interface Env {
   PROXY_AUTH_SECRET: string;    // Shared secret for validating proxy requests
   ALLOWED_ORIGINS?: string;     // Comma-separated list of allowed CORS origins
   RATE_LIMIT_KV?: KVNamespace;  // Optional KV namespace for distributed rate limiting
+  RATE_LIMITER: DurableObjectNamespace;  // Durable Object for globally consistent rate limiting
 }
 
 // ── Provider endpoints ───────────────────────────────────────────────────────
@@ -54,10 +55,10 @@ const ANTHROPIC_VERSION = "2024-10-22";
 
 const MAX_BODY_SIZE = 10 * 1024 * 1024; // 10 MB
 
-// ── Rate limiting (KV-backed with in-memory fallback) ────────────────────────
-// When RATE_LIMIT_KV is bound, rate limits are enforced across all isolates
-// using Cloudflare KV. Falls back to per-isolate in-memory limiting when KV
-// is not configured (still catches accidental floods and naive abuse).
+// ── Rate limiting (Durable Object primary, KV + in-memory fallback) ─────────
+// Primary: Durable Object (single-instance per key — globally consistent).
+// Fallback 1: KV (eventually consistent but distributed).
+// Fallback 2: Per-isolate in-memory (catches floods within one isolate).
 
 const inMemoryRateLimits = new Map<string, { count: number; resetAt: number }>();
 const RATE_LIMIT = 120;         // requests per window
@@ -75,13 +76,32 @@ function isRateLimitedInMemory(rateLimitKey: string): boolean {
   return entry.count > RATE_LIMIT;
 }
 
-async function isRateLimited(rateLimitKey: string, kv?: KVNamespace): Promise<boolean> {
-  // Use KV-backed distributed rate limiting when available
+async function isRateLimited(
+  rateLimitKey: string,
+  env: Env,
+): Promise<boolean> {
+  // Primary: Durable Object — single-instance per key, globally consistent
+  if (env.RATE_LIMITER) {
+    try {
+      const id = env.RATE_LIMITER.idFromName(rateLimitKey);
+      const stub = env.RATE_LIMITER.get(id);
+      const resp = await stub.fetch("https://rate-limiter/check", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ limit: RATE_LIMIT, windowMs: RATE_WINDOW_MS }),
+      });
+      const result = (await resp.json()) as { limited: boolean };
+      return result.limited;
+    } catch {
+      // DO unreachable — fall through to in-memory fallback
+    }
+  }
+
+  // Fallback: KV-backed distributed rate limiting
+  const kv = env.RATE_LIMIT_KV;
   if (kv) {
     try {
       const kvKey = `rl:${rateLimitKey}`;
-      // Increment first, then check — prevents burst races where concurrent
-      // requests all read the same count before any writes land.
       const existing = await kv.get(kvKey);
       const newCount = (existing ? parseInt(existing, 10) : 0) + 1;
       await kv.put(kvKey, String(newCount), { expirationTtl: RATE_WINDOW_S });
@@ -89,9 +109,10 @@ async function isRateLimited(rateLimitKey: string, kv?: KVNamespace): Promise<bo
       return false;
     } catch {
       // KV failure — fall back to in-memory
-      return isRateLimitedInMemory(rateLimitKey);
     }
   }
+
+  // Last resort: per-isolate in-memory limiting
   return isRateLimitedInMemory(rateLimitKey);
 }
 
@@ -169,7 +190,7 @@ export default {
     const keyHashHex = bufToHex(providedBuf);
     const clientIp = request.headers.get("CF-Connecting-IP") || "unknown";
     const rateLimitKey = keyHashHex + ":" + clientIp;
-    if (await isRateLimited(rateLimitKey, env.RATE_LIMIT_KV)) {
+    if (await isRateLimited(rateLimitKey, env)) {
       return jsonError("Rate limited", 429, request, env);
     }
 
@@ -326,6 +347,44 @@ export default {
     }
   },
 };
+
+// ── Durable Object: RateLimiter ─────────────────────────────────────────────
+// Single-instance per rate-limit key. Because Durable Objects are globally
+// unique, the in-memory counter here IS the global counter — no eventual
+// consistency, no cross-isolate drift.
+
+export class RateLimiter {
+  private count = 0;
+  private resetAt = 0;
+
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  constructor(private state: DurableObjectState, _env: Env) {}
+
+  async fetch(request: Request): Promise<Response> {
+    if (request.method !== "POST") {
+      return new Response(JSON.stringify({ error: "Method not allowed" }), { status: 405 });
+    }
+
+    const { limit, windowMs } = (await request.json()) as {
+      limit: number;
+      windowMs: number;
+    };
+
+    const now = Date.now();
+    if (now > this.resetAt) {
+      this.count = 0;
+      this.resetAt = now + windowMs;
+    }
+
+    this.count++;
+    const limited = this.count > limit;
+
+    return new Response(JSON.stringify({ limited }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+}
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 

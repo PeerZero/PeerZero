@@ -4,11 +4,18 @@
 // Auth: Client connects to ws://server/ws?bot_id=UUID, then sends an auth
 // message: { type: "auth", token: "JWT" }. The token is NOT passed in the URL
 // to avoid leaking JWTs in server logs, proxies, and browser history.
+//
+// Federation: When Redis is available, broadcasts are published to a Redis
+// pub/sub channel (ws:bot:{botId}) so that all server instances receive them.
+// A dedicated subscriber connection listens for these messages and dispatches
+// them to local WebSocket clients. If Redis is unavailable, broadcasting falls
+// back to local-only delivery (the pre-federation behavior).
 // =============================================================================
 
 import { WebSocketServer, WebSocket } from 'ws';
 import { Server } from 'http';
 import jwt from 'jsonwebtoken';
+import IORedis from 'ioredis';
 import { config } from '../config';
 import { logger } from '../lib/logger';
 import { JwtPayload } from '../middleware/auth';
@@ -30,6 +37,133 @@ const MAX_TOTAL_CONNECTIONS = 500; // Global limit
 
 // Track per-user connection counts for limits
 const userConnectionCounts: Map<string, number> = new Map();
+
+// ── Redis pub/sub for multi-instance federation ──────────────────────────────
+// Pub/sub requires a dedicated subscriber connection (subscribing puts the
+// connection into subscriber mode, so it can't be shared with BullMQ or other
+// command connections). Publisher reuses a separate connection.
+
+const WS_CHANNEL_PREFIX = 'ws:bot:';
+
+let redisPub: IORedis | null = null;
+let redisSub: IORedis | null = null;
+let redisReady = false; // true when both pub and sub are connected
+
+/** Lazily initialize Redis pub/sub connections. Returns true if Redis is available. */
+function ensureRedis(): boolean {
+  if (redisReady) return true;
+  if (!config.redisUrl) return false;
+  // If already created but not yet ready, don't recreate
+  if (redisPub && redisSub) return false;
+
+  try {
+    redisPub = new IORedis(config.redisUrl, { maxRetriesPerRequest: null, lazyConnect: true });
+    redisSub = new IORedis(config.redisUrl, { maxRetriesPerRequest: null, lazyConnect: true });
+
+    let pubReady = false;
+    let subReady = false;
+
+    const markReady = () => {
+      if (pubReady && subReady) {
+        redisReady = true;
+        logger.info('WebSocket Redis pub/sub connected');
+      }
+    };
+
+    redisPub.on('ready', () => { pubReady = true; markReady(); });
+    redisSub.on('ready', () => { subReady = true; markReady(); });
+
+    const handleError = (label: string) => (err: Error) => {
+      logger.error({ err: err.message }, `WebSocket Redis ${label} error`);
+      redisReady = false;
+    };
+
+    redisPub.on('error', handleError('publisher'));
+    redisSub.on('error', handleError('subscriber'));
+
+    // Subscribe to the channel pattern and dispatch to local clients
+    redisSub.on('pmessage', (_pattern: string, channel: string, rawMessage: string) => {
+      const botId = channel.slice(WS_CHANNEL_PREFIX.length);
+      try {
+        const { userId, payload } = JSON.parse(rawMessage) as { userId: string; payload: string };
+        deliverLocal(botId, userId, payload);
+      } catch (err) {
+        logger.error({ err: err instanceof Error ? err.message : err, channel }, 'Failed to parse Redis pub/sub message');
+      }
+    });
+
+    // Connect both, then subscribe
+    redisPub.connect().catch(() => {});
+    redisSub.connect().then(() => {
+      redisSub!.psubscribe(`${WS_CHANNEL_PREFIX}*`).catch((err) => {
+        logger.error({ err: err instanceof Error ? err.message : err }, 'Failed to psubscribe to ws:bot:* pattern');
+      });
+    }).catch(() => {});
+
+    return false; // not ready yet — will be ready asynchronously
+  } catch (err) {
+    logger.error({ err: err instanceof Error ? err.message : err }, 'Failed to create Redis pub/sub connections');
+    redisPub = null;
+    redisSub = null;
+    return false;
+  }
+}
+
+/** Deliver a pre-serialized payload to local WebSocket clients for a bot+user. */
+function deliverLocal(botId: string, userId: string, payload: string): void {
+  const botClients = clients.get(botId);
+  if (!botClients) return;
+
+  for (const client of botClients) {
+    if (client.userId === userId && client.ws.readyState === WebSocket.OPEN) {
+      client.ws.send(payload);
+    }
+  }
+}
+
+/**
+ * Publish a message via Redis pub/sub. Falls back to local-only delivery if
+ * Redis is unavailable.
+ */
+function publishOrLocal(botId: string, userId: string, payload: string): void {
+  // Attempt lazy initialization on first call
+  ensureRedis();
+
+  if (redisReady && redisPub) {
+    const channel = `${WS_CHANNEL_PREFIX}${botId}`;
+    const message = JSON.stringify({ userId, payload });
+    redisPub.publish(channel, message).catch((err) => {
+      logger.error({ err: err instanceof Error ? err.message : err, botId }, 'Redis publish failed, falling back to local');
+      deliverLocal(botId, userId, payload);
+    });
+  } else {
+    // No Redis — deliver locally (single-instance behavior)
+    deliverLocal(botId, userId, payload);
+  }
+}
+
+/** Close Redis pub/sub connections (called during graceful shutdown). */
+export async function closeActivityStreamRedis(): Promise<void> {
+  redisReady = false;
+  const closing: Promise<void>[] = [];
+  if (redisSub) {
+    closing.push(
+      redisSub.punsubscribe(`${WS_CHANNEL_PREFIX}*`)
+        .catch(() => {})
+        .then(() => redisSub!.quit())
+        .then(() => { redisSub = null; })
+        .catch(() => { redisSub = null; }),
+    );
+  }
+  if (redisPub) {
+    closing.push(
+      redisPub.quit()
+        .then(() => { redisPub = null; })
+        .catch(() => { redisPub = null; }),
+    );
+  }
+  await Promise.all(closing);
+}
 
 function getTotalConnections(): number {
   let total = 0;
@@ -181,17 +315,8 @@ export function setupWebSocket(server: Server): void {
 
 /** Broadcast activity to all clients watching a specific bot. */
 export function broadcastActivity(botId: string, userId: string, data: Record<string, unknown>): void {
-  const botClients = clients.get(botId);
-  if (!botClients) return;
-
-  const message = JSON.stringify({ type: 'activity', ...data });
-
-  for (const client of botClients) {
-    // Only send to clients owned by this user
-    if (client.userId === userId && client.ws.readyState === WebSocket.OPEN) {
-      client.ws.send(message);
-    }
-  }
+  const payload = JSON.stringify({ type: 'activity', ...data });
+  publishOrLocal(botId, userId, payload);
 }
 
 /** Broadcast bot status change. */
@@ -201,28 +326,12 @@ export function broadcastStatusChange(botId: string, userId: string, status: str
 
 /** Broadcast a new chat message (activity narration, milestone, or user chat). */
 export function broadcastMessage(botId: string, userId: string, message: BotMessage | Record<string, unknown>): void {
-  const botClients = clients.get(botId);
-  if (!botClients) return;
-
   const payload = JSON.stringify({ type: 'message', message });
-
-  for (const client of botClients) {
-    if (client.userId === userId && client.ws.readyState === WebSocket.OPEN) {
-      client.ws.send(payload);
-    }
-  }
+  publishOrLocal(botId, userId, payload);
 }
 
 /** Broadcast external activity (phone-home from self-hosted bots). */
 export function broadcastExternalActivity(botId: string, userId: string, data: Record<string, unknown>): void {
-  const botClients = clients.get(botId);
-  if (!botClients) return;
-
-  const message = JSON.stringify({ type: 'external_activity', ...data });
-
-  for (const client of botClients) {
-    if (client.userId === userId && client.ws.readyState === WebSocket.OPEN) {
-      client.ws.send(message);
-    }
-  }
+  const payload = JSON.stringify({ type: 'external_activity', ...data });
+  publishOrLocal(botId, userId, payload);
 }
