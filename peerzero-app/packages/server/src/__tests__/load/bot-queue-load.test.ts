@@ -110,6 +110,8 @@ function makeBotCtx(i: number): BotContext {
     fastLlmModel: null,
     extendedThinking: false,
     cycleNumber: 1,
+  dailyTokenCap: null,
+  dailyTokensUsed: 0,
   };
 }
 

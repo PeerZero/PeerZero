@@ -17,7 +17,7 @@ import { closePool } from './db/client';
 import { runMigrations } from './db/auto-migrate';
 import { startWorker, stopWorker, recoverRunningBots } from './jobs/queue';
 import { startPlatformWorker, stopPlatformWorker } from './jobs/platform-queue';
-import { setupWebSocket } from './websocket/activity-stream';
+import { setupWebSocket, closeActivityStreamRedis } from './websocket/activity-stream';
 import { purgeExpiredAuditLogs } from './services/audit.service';
 
 // Routes
@@ -143,6 +143,7 @@ async function shutdown() {
   logger.info('Shutting down...');
   await stopWorker();
   await stopPlatformWorker();
+  await closeActivityStreamRedis();
   await closeRateLimitRedis();
   await closePhoneHomeRedis();
   await closeAuthRedis();

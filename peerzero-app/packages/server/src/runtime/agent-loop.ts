@@ -73,9 +73,17 @@ export interface BotContext {
   fastLlmModel: string | null; // Optional fast model for utility tasks (platform replies, skill generation)
   extendedThinking: boolean;   // User opt-in for Claude extended thinking (higher cost, better reasoning)
   cycleNumber: number;
+  dailyTokenCap: number | null;  // User-set daily token cap (null = unlimited)
+  dailyTokensUsed: number;       // Tokens already used today
 }
 
 export async function runOneCycle(ctx: BotContext): Promise<void> {
+  // Token cap check — skip cycle if daily limit reached
+  if (ctx.dailyTokenCap && ctx.dailyTokensUsed >= ctx.dailyTokenCap) {
+    logger.info({ botId: ctx.botId, used: ctx.dailyTokensUsed, cap: ctx.dailyTokenCap }, 'Daily token cap reached — skipping cycle');
+    return;
+  }
+
   const startTime = Date.now();
   const schoolAdapter = getSchoolAdapter();
   const llmAdapter = getLLMAdapter();
@@ -154,6 +162,19 @@ export async function runOneCycle(ctx: BotContext): Promise<void> {
       undefined, // no error
       contentText,
     );
+
+    // 6.25. Update daily token usage (non-blocking, fire-and-forget)
+    if (actionResult.tokensUsed) {
+      query(
+        `UPDATE bots SET daily_tokens_used = CASE
+           WHEN daily_tokens_reset_at < CURRENT_DATE THEN $2
+           ELSE daily_tokens_used + $2
+         END,
+         daily_tokens_reset_at = CURRENT_DATE
+         WHERE id = $1`,
+        [ctx.botId, actionResult.tokensUsed],
+      ).catch(() => { /* non-fatal */ });
+    }
 
     // 6.5. Narrate the cycle in the bot's voice for the chat feed (non-blocking)
     const voiceModel = ctx.fastLlmModel || ctx.llmModel;

@@ -47,9 +47,8 @@ module.exports = async (req, res) => {
   const verifyOnly = req.method === 'GET' || req.query.verify === 'true';
 
   try {
-    // ── Step 1: Compute real values from source tables ─────────────────
-    // Paginate agent fetches to avoid timeouts on large datasets
-    const PAGE_SIZE = 100;
+    // ── Step 1: Fetch all agents (paginated) ──────────────────────────
+    const PAGE_SIZE = 1000;
     let allAgents = [];
     let offset = 0;
     while (true) {
@@ -68,86 +67,131 @@ module.exports = async (req, res) => {
 
     if (allAgents.length === 0) return res.json({ message: 'No agents to reconcile', drifts: [] });
 
+    // ── Step 2: Bulk-fetch all counts in parallel (7 queries total) ───
+    // Instead of 7 queries PER agent (O(N²)), we run 7 queries TOTAL
+    // and join the results in memory. Each query fetches grouped counts
+    // for ALL agents at once.
+
+    // Helper: paginate a full-table fetch to avoid PostgREST row limits
+    async function fetchAll(table, selectStr, filters) {
+      let all = [];
+      let off = 0;
+      while (true) {
+        let q = supabase.from(table).select(selectStr).range(off, off + PAGE_SIZE - 1);
+        if (filters) q = filters(q);
+        const { data, error } = await q;
+        if (error) throw new Error(`Failed to fetch ${table}: ${error.message}`);
+        if (!data || data.length === 0) break;
+        all = all.concat(data);
+        if (data.length < PAGE_SIZE) break;
+        off += PAGE_SIZE;
+      }
+      return all;
+    }
+
+    // Helper: build a Map<agent_id, count> from rows with an id column
+    function buildCountMap(rows, idCol) {
+      const map = new Map();
+      for (const row of rows) {
+        const id = row[idCol];
+        map.set(id, (map.get(id) || 0) + 1);
+      }
+      return map;
+    }
+
+    // Fire all 7 bulk queries in parallel
+    const [
+      originalPaperRows,
+      totalPaperRows,
+      revisionRows,
+      reviewRows,
+      bountyRows,
+      scoredPaperRows,
+    ] = await Promise.all([
+      // 1. Original papers (no parent, not removed) — fetch agent_id for counting
+      fetchAll('papers', 'agent_id', q =>
+        q.is('parent_paper_id', null).neq('status', 'removed')),
+
+      // 2. Total papers (not removed)
+      fetchAll('papers', 'agent_id', q =>
+        q.neq('status', 'removed')),
+
+      // 3. Revisions (response_stance = 'revision', not removed)
+      fetchAll('papers', 'agent_id', q =>
+        q.eq('response_stance', 'revision').neq('status', 'removed')),
+
+      // 4. Reviews completed (passed quality gate)
+      fetchAll('reviews', 'reviewer_agent_id', q =>
+        q.eq('passed_quality_gate', true)),
+
+      // 5. Valid bounties
+      fetchAll('bounties', 'challenger_agent_id', q =>
+        q.eq('is_valid', true)),
+
+      // 6. Paper scores for best_paper_score with time decay
+      fetchAll('papers', 'agent_id, weighted_score, last_reviewed_at, submitted_at', q =>
+        q.neq('status', 'removed').not('weighted_score', 'is', null)),
+    ]);
+
+    // Build count maps
+    const originalPaperCounts = buildCountMap(originalPaperRows, 'agent_id');
+    const totalPaperCounts = buildCountMap(totalPaperRows, 'agent_id');
+    const revisionCounts = buildCountMap(revisionRows, 'agent_id');
+    const reviewCounts = buildCountMap(reviewRows, 'reviewer_agent_id');
+    const bountyCounts = buildCountMap(bountyRows, 'challenger_agent_id');
+
+    // Build best-score map (with time decay, matching original logic exactly)
+    const bestScoreMap = new Map();
+    for (const p of scoredPaperRows) {
+      const raw = parseFloat(p.weighted_score);
+      const reviewedAt = p.last_reviewed_at || p.submitted_at;
+      let decayed = raw;
+      if (reviewedAt) {
+        const monthsElapsed = (Date.now() - new Date(reviewedAt).getTime()) / (1000 * 60 * 60 * 24 * 30);
+        if (monthsElapsed > 2) {
+          decayed = raw * Math.pow(0.98, monthsElapsed - 2);
+        }
+      }
+      const prev = bestScoreMap.get(p.agent_id);
+      if (prev === undefined || decayed > prev) {
+        bestScoreMap.set(p.agent_id, decayed);
+      }
+    }
+
+    // ── Step 3: Compare stored vs. computed for each agent ────────────
     const drifts = [];
     const fixes = [];
 
     for (const agent of allAgents) {
-      // Count original papers (no parent, not removed)
-      const { count: realOriginalPapers } = await supabase
-        .from('papers')
-        .select('id', { count: 'exact', head: true })
-        .eq('agent_id', agent.id)
-        .is('parent_paper_id', null)
-        .neq('status', 'removed');
-
-      // Count total papers submitted
-      const { count: realTotalPapers } = await supabase
-        .from('papers')
-        .select('id', { count: 'exact', head: true })
-        .eq('agent_id', agent.id)
-        .neq('status', 'removed');
-
-      // Count revisions
-      const { count: realRevisions } = await supabase
-        .from('papers')
-        .select('id', { count: 'exact', head: true })
-        .eq('agent_id', agent.id)
-        .eq('response_stance', 'revision')
-        .neq('status', 'removed');
-
-      // Count reviews completed
-      const { count: realReviews } = await supabase
-        .from('reviews')
-        .select('id', { count: 'exact', head: true })
-        .eq('reviewer_agent_id', agent.id)
-        .eq('passed_quality_gate', true);
-
-      // Count valid bounties
-      const { count: realBounties } = await supabase
-        .from('bounties')
-        .select('id', { count: 'exact', head: true })
-        .eq('challenger_agent_id', agent.id)
-        .eq('is_valid', true);
-
-      // Best paper score (with time decay)
-      const { data: paperScores } = await supabase
-        .from('papers')
-        .select('weighted_score, last_reviewed_at, submitted_at')
-        .eq('agent_id', agent.id)
-        .neq('status', 'removed')
-        .not('weighted_score', 'is', null);
+      const realOriginalPapers = originalPaperCounts.get(agent.id) || 0;
+      const realTotalPapers = totalPaperCounts.get(agent.id) || 0;
+      const realRevisions = revisionCounts.get(agent.id) || 0;
+      const realReviews = reviewCounts.get(agent.id) || 0;
+      const realBounties = bountyCounts.get(agent.id) || 0;
 
       let realBestScore = null;
-      if (paperScores && paperScores.length > 0) {
-        const scores = paperScores.map(p => {
-          const raw = parseFloat(p.weighted_score);
-          const reviewedAt = p.last_reviewed_at || p.submitted_at;
-          if (!reviewedAt) return raw;
-          const monthsElapsed = (Date.now() - new Date(reviewedAt).getTime()) / (1000 * 60 * 60 * 24 * 30);
-          if (monthsElapsed <= 2) return raw;
-          return raw * Math.pow(0.98, monthsElapsed - 2);
-        });
-        realBestScore = Math.max(...scores);
-        realBestScore = parseFloat(realBestScore.toFixed(2));
+      const rawBest = bestScoreMap.get(agent.id);
+      if (rawBest !== undefined) {
+        realBestScore = parseFloat(rawBest.toFixed(2));
       }
 
       // ── Compare with stored values ────────────────────────────────────
       const agentDrifts = {};
 
-      if ((agent.original_paper_count || 0) !== (realOriginalPapers || 0)) {
-        agentDrifts.original_paper_count = { stored: agent.original_paper_count || 0, actual: realOriginalPapers || 0 };
+      if ((agent.original_paper_count || 0) !== realOriginalPapers) {
+        agentDrifts.original_paper_count = { stored: agent.original_paper_count || 0, actual: realOriginalPapers };
       }
-      if ((agent.total_papers_submitted || 0) !== (realTotalPapers || 0)) {
-        agentDrifts.total_papers_submitted = { stored: agent.total_papers_submitted || 0, actual: realTotalPapers || 0 };
+      if ((agent.total_papers_submitted || 0) !== realTotalPapers) {
+        agentDrifts.total_papers_submitted = { stored: agent.total_papers_submitted || 0, actual: realTotalPapers };
       }
-      if ((agent.revision_count || 0) !== (realRevisions || 0)) {
-        agentDrifts.revision_count = { stored: agent.revision_count || 0, actual: realRevisions || 0 };
+      if ((agent.revision_count || 0) !== realRevisions) {
+        agentDrifts.revision_count = { stored: agent.revision_count || 0, actual: realRevisions };
       }
-      if ((agent.total_reviews_completed || 0) !== (realReviews || 0)) {
-        agentDrifts.total_reviews_completed = { stored: agent.total_reviews_completed || 0, actual: realReviews || 0 };
+      if ((agent.total_reviews_completed || 0) !== realReviews) {
+        agentDrifts.total_reviews_completed = { stored: agent.total_reviews_completed || 0, actual: realReviews };
       }
-      if ((agent.valid_bounties || 0) !== (realBounties || 0)) {
-        agentDrifts.valid_bounties = { stored: agent.valid_bounties || 0, actual: realBounties || 0 };
+      if ((agent.valid_bounties || 0) !== realBounties) {
+        agentDrifts.valid_bounties = { stored: agent.valid_bounties || 0, actual: realBounties };
       }
 
       // best_paper_score: allow 0.1 tolerance for floating point / decay differences
@@ -166,11 +210,11 @@ module.exports = async (req, res) => {
           fixes.push({
             agent_id: agent.id,
             updates: {
-              original_paper_count: realOriginalPapers || 0,
-              total_papers_submitted: realTotalPapers || 0,
-              revision_count: realRevisions || 0,
-              total_reviews_completed: realReviews || 0,
-              valid_bounties: realBounties || 0,
+              original_paper_count: realOriginalPapers,
+              total_papers_submitted: realTotalPapers,
+              revision_count: realRevisions,
+              total_reviews_completed: realReviews,
+              valid_bounties: realBounties,
               best_paper_score: realBestScore,
             },
           });
@@ -178,10 +222,15 @@ module.exports = async (req, res) => {
       }
     }
 
-    // ── Step 2: Apply fixes if not verify-only ──────────────────────────
+    // ── Step 4: Apply fixes if not verify-only ──────────────────────────
+    // Batch updates in parallel (chunks of 50 to avoid connection pressure)
     if (!verifyOnly && fixes.length > 0) {
-      for (const fix of fixes) {
-        await supabase.from('agents').update(fix.updates).eq('id', fix.agent_id);
+      const UPDATE_BATCH = 50;
+      for (let i = 0; i < fixes.length; i += UPDATE_BATCH) {
+        const batch = fixes.slice(i, i + UPDATE_BATCH);
+        await Promise.all(
+          batch.map(fix => supabase.from('agents').update(fix.updates).eq('id', fix.agent_id))
+        );
       }
       log.info('[reconcile] Fixed agents with drifted counters', { count: fixes.length });
     }

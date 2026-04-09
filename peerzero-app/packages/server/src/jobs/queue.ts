@@ -133,8 +133,8 @@ export function startWorker(): void {
       const { botId, userId, llmApiKeyId, llmModel, cycleDelaySeconds } = job.data;
 
       // Check if bot is still running (also fetch mode, fast model, extended thinking from DB)
-      const bot = await queryOne<{ status: string; mode: string; cycle_count: number; fast_llm_model: string | null; extended_thinking: boolean; cycle_delay_seconds: number }>(
-        'SELECT status, mode, cycle_count, fast_llm_model, extended_thinking, cycle_delay_seconds FROM bots WHERE id = $1',
+      const bot = await queryOne<{ status: string; mode: string; cycle_count: number; fast_llm_model: string | null; extended_thinking: boolean; cycle_delay_seconds: number; daily_token_cap: number | null; daily_tokens_used: number; daily_tokens_reset_at: string | null }>(
+        'SELECT status, mode, cycle_count, fast_llm_model, extended_thinking, cycle_delay_seconds, daily_token_cap, daily_tokens_used, daily_tokens_reset_at FROM bots WHERE id = $1',
         [botId],
       );
       if (!bot || bot.status !== 'running') {
@@ -142,6 +142,11 @@ export function startWorker(): void {
       }
 
       const botMode = bot.mode || 'school';
+      // Reset daily token counter if the day has changed
+      const todayStr = new Date().toISOString().slice(0, 10);
+      const resetDate = bot.daily_tokens_reset_at ? new Date(bot.daily_tokens_reset_at).toISOString().slice(0, 10) : null;
+      const dailyTokensUsed = resetDate === todayStr ? (bot.daily_tokens_used || 0) : 0;
+
       const ctx: BotContext = {
         botId,
         userId,
@@ -150,6 +155,8 @@ export function startWorker(): void {
         fastLlmModel: bot.fast_llm_model,
         extendedThinking: bot.extended_thinking ?? false,
         cycleNumber: (bot.cycle_count || 0) + 1,
+        dailyTokenCap: bot.daily_token_cap,
+        dailyTokensUsed,
       };
 
       try {

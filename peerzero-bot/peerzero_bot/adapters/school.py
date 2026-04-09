@@ -24,6 +24,179 @@ from ..security import SecurityGateway, SecurityError, ProfileVerifier, Credenti
 logger = logging.getLogger("peerzero-bot.school")
 
 
+# ── Circuit Breaker ──────────────────────────────────────────────────────────
+
+
+class CircuitOpenError(Exception):
+    """Raised when the circuit breaker is OPEN and requests are blocked.
+
+    Callers should catch this to skip the action gracefully instead of
+    burning retry budget. The breaker will probe automatically after
+    the cooldown period.
+    """
+
+    def __init__(self, remaining_seconds: float = 0.0):
+        self.remaining_seconds = remaining_seconds
+        super().__init__(
+            f"Circuit breaker is OPEN — school server unavailable. "
+            f"Next probe in {remaining_seconds:.0f}s."
+        )
+
+
+class _CircuitState:
+    CLOSED = "CLOSED"
+    OPEN = "OPEN"
+    HALF_OPEN = "HALF_OPEN"
+
+
+class CircuitBreaker:
+    """Class-level circuit breaker shared across all SchoolAdapter instances.
+
+    Three states:
+      CLOSED    — normal operation, tracking consecutive failures.
+      OPEN      — all requests fail immediately with CircuitOpenError.
+                  After cooldown_seconds, transitions to HALF_OPEN.
+      HALF_OPEN — allows one probe request through. If success_threshold
+                  consecutive successes occur, transitions to CLOSED.
+                  Any failure sends it back to OPEN.
+
+    Only 5xx HTTP errors, connection errors, and timeouts count as failures.
+    4xx errors (client bugs) do NOT trip the breaker.
+
+    Thread-safe via threading.Lock.
+    """
+
+    def __init__(
+        self,
+        failure_threshold: int = 5,
+        cooldown_seconds: float = 120.0,
+        success_threshold: int = 2,
+    ):
+        self._failure_threshold = failure_threshold
+        self._cooldown_seconds = cooldown_seconds
+        self._success_threshold = success_threshold
+
+        self._state = _CircuitState.CLOSED
+        self._consecutive_failures = 0
+        self._consecutive_successes = 0
+        self._opened_at: float = 0.0  # monotonic timestamp when OPEN was entered
+        self._lock = threading.Lock()
+
+    @property
+    def state(self) -> str:
+        """Current breaker state (for monitoring / tests)."""
+        with self._lock:
+            # Check for automatic OPEN -> HALF_OPEN transition
+            if self._state == _CircuitState.OPEN:
+                elapsed = time.monotonic() - self._opened_at
+                if elapsed >= self._cooldown_seconds:
+                    self._state = _CircuitState.HALF_OPEN
+                    self._consecutive_successes = 0
+                    logger.info(
+                        f"[CIRCUIT_BREAKER] OPEN \u2192 HALF_OPEN (cooldown elapsed after {elapsed:.0f}s)"
+                    )
+            return self._state
+
+    def check(self) -> None:
+        """Check if a request is allowed. Raises CircuitOpenError if not.
+
+        Must be called BEFORE making the HTTP request. In HALF_OPEN state,
+        only one concurrent probe is allowed (the lock serializes access).
+        """
+        with self._lock:
+            if self._state == _CircuitState.CLOSED:
+                return  # always allowed
+
+            if self._state == _CircuitState.OPEN:
+                elapsed = time.monotonic() - self._opened_at
+                if elapsed < self._cooldown_seconds:
+                    remaining = self._cooldown_seconds - elapsed
+                    raise CircuitOpenError(remaining)
+                # Cooldown elapsed — transition to HALF_OPEN
+                self._state = _CircuitState.HALF_OPEN
+                self._consecutive_successes = 0
+                logger.info(
+                    f"[CIRCUIT_BREAKER] OPEN \u2192 HALF_OPEN (cooldown elapsed, allowing probe)"
+                )
+                return  # allow the probe
+
+            if self._state == _CircuitState.HALF_OPEN:
+                return  # probes are allowed
+
+    def record_success(self) -> None:
+        """Record a successful request."""
+        with self._lock:
+            if self._state == _CircuitState.CLOSED:
+                self._consecutive_failures = 0
+                return
+
+            if self._state == _CircuitState.HALF_OPEN:
+                self._consecutive_successes += 1
+                if self._consecutive_successes >= self._success_threshold:
+                    old_state = self._state
+                    self._state = _CircuitState.CLOSED
+                    self._consecutive_failures = 0
+                    self._consecutive_successes = 0
+                    logger.info(
+                        f"[CIRCUIT_BREAKER] {old_state} \u2192 CLOSED "
+                        f"({self._success_threshold} consecutive successes)"
+                    )
+                else:
+                    logger.debug(
+                        f"[CIRCUIT_BREAKER] HALF_OPEN probe success "
+                        f"({self._consecutive_successes}/{self._success_threshold})"
+                    )
+
+    def record_failure(self) -> None:
+        """Record a failure (5xx, connection error, timeout)."""
+        with self._lock:
+            if self._state == _CircuitState.HALF_OPEN:
+                # Probe failed — go back to OPEN
+                self._state = _CircuitState.OPEN
+                self._opened_at = time.monotonic()
+                self._consecutive_successes = 0
+                logger.warning(
+                    "[CIRCUIT_BREAKER] HALF_OPEN \u2192 OPEN (probe failed)"
+                )
+                return
+
+            # CLOSED state — increment failures
+            self._consecutive_failures += 1
+            if self._consecutive_failures >= self._failure_threshold:
+                self._state = _CircuitState.OPEN
+                self._opened_at = time.monotonic()
+                logger.warning(
+                    f"[CIRCUIT_BREAKER] CLOSED \u2192 OPEN "
+                    f"({self._consecutive_failures} consecutive failures)"
+                )
+
+    def reset(self) -> None:
+        """Force-reset to CLOSED state (for testing)."""
+        with self._lock:
+            self._state = _CircuitState.CLOSED
+            self._consecutive_failures = 0
+            self._consecutive_successes = 0
+            self._opened_at = 0.0
+
+
+def _is_circuit_breaker_failure(exc: Exception) -> bool:
+    """Determine if an exception should count as a circuit breaker failure.
+
+    Only server errors (5xx), connection errors, and timeouts trip the breaker.
+    Client errors (4xx) do NOT — they indicate a bug in the request, not
+    server unavailability.
+    """
+    # httpx.HTTPStatusError carries a response with status_code
+    if isinstance(exc, httpx.HTTPStatusError):
+        return exc.response.status_code >= 500
+    # Connection and timeout errors always count
+    if isinstance(exc, (httpx.ConnectError, httpx.ConnectTimeout, httpx.ReadTimeout,
+                        httpx.WriteTimeout, httpx.PoolTimeout, httpx.TimeoutException,
+                        ConnectionError, TimeoutError, OSError)):
+        return True
+    return False
+
+
 def extract_json(text: str) -> dict | None:
     """Extract JSON from LLM output. Handles pure JSON, code fences, embedded.
 
@@ -174,6 +347,16 @@ class SchoolAdapter:
     Handles all School API calls with credential isolation.
     """
 
+    # Class-level circuit breaker — shared across ALL SchoolAdapter instances.
+    # When the school server is down, one bot's failures prevent all bots from
+    # hammering the server with retries. The breaker probes automatically after
+    # the cooldown period.
+    _circuit_breaker = CircuitBreaker(
+        failure_threshold=5,
+        cooldown_seconds=120.0,
+        success_threshold=2,
+    )
+
     def __init__(self, school_url: str, api_key: str, gateway: SecurityGateway, credential_store: CredentialStore | None = None):
         self._url = school_url.rstrip("/")
         self._gateway = gateway
@@ -202,6 +385,7 @@ class SchoolAdapter:
 
     def _get(self, path: str, params: dict = None):
         """GET request to School with auth."""
+        self._circuit_breaker.check()  # raises CircuitOpenError if OPEN
         if not self._rate_limiter.acquire():
             logger.warning("[SCHOOL] Rate limit exceeded (10 req/s) — throttling request")
             # Brief sleep to allow token refill, then retry once
@@ -211,8 +395,14 @@ class SchoolAdapter:
         self._gateway.validate_school_request(path)
         url = f"{self._url}{path}"
         headers = {"X-Api-Key": self._get_api_key()}
-        response = self._http.get(url, headers=headers, params=params)
-        response.raise_for_status()
+        try:
+            response = self._http.get(url, headers=headers, params=params)
+            response.raise_for_status()
+        except Exception as exc:
+            if _is_circuit_breaker_failure(exc):
+                self._circuit_breaker.record_failure()
+            raise
+        self._circuit_breaker.record_success()
         content_type = response.headers.get("content-type", "")
         if "text/markdown" in content_type or "text/plain" in content_type:
             return response.text
@@ -220,6 +410,7 @@ class SchoolAdapter:
 
     def _post(self, path: str, data: dict):
         """POST request to School with auth."""
+        self._circuit_breaker.check()  # raises CircuitOpenError if OPEN
         if not self._rate_limiter.acquire():
             logger.warning("[SCHOOL] Rate limit exceeded (10 req/s) — throttling request")
             time.sleep(0.2)
@@ -231,8 +422,14 @@ class SchoolAdapter:
             "X-Api-Key": self._get_api_key(),
             "Content-Type": "application/json",
         }
-        response = self._http.post(url, headers=headers, json=data)
-        response.raise_for_status()
+        try:
+            response = self._http.post(url, headers=headers, json=data)
+            response.raise_for_status()
+        except Exception as exc:
+            if _is_circuit_breaker_failure(exc):
+                self._circuit_breaker.record_failure()
+            raise
+        self._circuit_breaker.record_success()
         return response.json()
 
     # ── School-specific methods ───────────────────────────────────────────
