@@ -92,7 +92,7 @@ class SharedSelfAwareness:
             pass
         if self._encryption_key:
             try:
-                self._conn.execute(f"PRAGMA key='{self._encryption_key}'")
+                self._conn.execute("PRAGMA key=?", (self._encryption_key,))
             except sqlite3.OperationalError:
                 pass
         self._conn.execute("PRAGMA journal_mode = WAL")

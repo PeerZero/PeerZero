@@ -201,7 +201,7 @@ export function startWorker(): void {
       if (botState?.status === 'running') {
         // Exponential backoff on consecutive failures: 1x, 2x, 4x normal delay
         const backoffMultiplier = Math.pow(2, botState.consecutive_failures || 0);
-        const delay = Math.min(baseDelay * backoffMultiplier, 3600); // cap at 1 hour
+        const delay = Math.min(baseDelay * backoffMultiplier, 300); // cap at 5 minutes (was 1 hour — too aggressive for recovery)
         await scheduleNextCycle(botId, userId, llmApiKeyId, llmModel, delay);
       }
     },
@@ -225,13 +225,15 @@ export async function recoverRunningBots(): Promise<void> {
   );
   if (rows.length === 0) return;
   logger.info({ count: rows.length }, 'Recovering running bots after restart');
-  for (const bot of rows) {
-    try {
-      await addBotCycleJob(bot.id, bot.user_id, bot.llm_api_key_id, bot.llm_model, bot.cycle_delay_seconds);
-      logger.info({ botId: bot.id }, 'Recovered bot cycle job');
-    } catch (err) {
-      logger.error({ botId: bot.id, err: err instanceof Error ? err.message : err }, 'Failed to recover bot cycle job');
-    }
+  const results = await Promise.allSettled(
+    rows.map(bot =>
+      addBotCycleJob(bot.id, bot.user_id, bot.llm_api_key_id, bot.llm_model, bot.cycle_delay_seconds)
+        .then(() => logger.info({ botId: bot.id }, 'Recovered bot cycle job'))
+    ),
+  );
+  const failed = results.filter(r => r.status === 'rejected');
+  if (failed.length > 0) {
+    logger.error({ failedCount: failed.length, total: rows.length }, 'Some bot recovery jobs failed');
   }
 }
 

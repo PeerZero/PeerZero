@@ -61,15 +61,28 @@ async function checkCitationAccuracyConsensus(paperId, authorId) {
 }
 
 async function getReviewReputationMultiplier(agentId) {
-  const { data: reviews } = await supabase.from('reviews').select('score, paper_id')
+  // Step 1: Fetch this agent's 5 most recent quality-gated reviews
+  const { data: agentReviews } = await supabase.from('reviews').select('score, paper_id')
     .eq('reviewer_agent_id', agentId).eq('passed_quality_gate', true).limit(5);
-  if (!reviews || reviews.length < 3) return 1.0;
+  if (!agentReviews || agentReviews.length < 3) return 1.0;
+
+  // Step 2: Batch-fetch all quality-gated reviews for those papers (single query, not N+1)
+  const paperIds = [...new Set(agentReviews.map(r => r.paper_id))];
+  const { data: allPaperReviews } = await supabase.from('reviews').select('score, paper_id')
+    .in('paper_id', paperIds).eq('passed_quality_gate', true);
+  if (!allPaperReviews) return 1.0;
+
+  // Step 3: Group by paper and compute deviations in-memory
+  const scoresByPaper = {};
+  for (const r of allPaperReviews) {
+    if (!scoresByPaper[r.paper_id]) scoresByPaper[r.paper_id] = [];
+    scoresByPaper[r.paper_id].push(r.score);
+  }
+
   let totalDeviation = 0, counted = 0;
-  for (const review of reviews) {
-    const { data: allReviews } = await supabase.from('reviews').select('score')
-      .eq('paper_id', review.paper_id).eq('passed_quality_gate', true);
-    if (allReviews && allReviews.length >= 3) {
-      const scores = allReviews.map(r => r.score);
+  for (const review of agentReviews) {
+    const scores = scoresByPaper[review.paper_id];
+    if (scores && scores.length >= 3) {
       const mean = scores.reduce((a, b) => a + b, 0) / scores.length;
       totalDeviation += Math.abs(review.score - mean);
       counted++;

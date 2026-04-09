@@ -265,7 +265,21 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
             return None
 
         if user_id in self._conv_memory_engines:
-            return self._conv_memory_engines[user_id]
+            # Touch for LRU tracking (move to end of dict ordering)
+            engine = self._conv_memory_engines.pop(user_id)
+            self._conv_memory_engines[user_id] = engine
+            return engine
+
+        # Evict least-recently-used engines if at capacity (prevent file descriptor exhaustion)
+        MAX_CONV_ENGINES = 50
+        while len(self._conv_memory_engines) >= MAX_CONV_ENGINES:
+            evict_uid, evict_engine = next(iter(self._conv_memory_engines.items()))
+            try:
+                evict_engine.close()
+            except Exception:
+                pass
+            del self._conv_memory_engines[evict_uid]
+            logger.debug(f"[CONV_MEMORY] Evicted LRU engine for user: {evict_uid}")
 
         # Build per-user DB path
         base = self.config.conversational_memory_path or os.path.join(

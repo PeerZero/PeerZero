@@ -180,7 +180,8 @@ class ConversationalMemoryDB:
         # Apply encryption if configured
         if self._encryption_key:
             try:
-                self._conn.execute(f"PRAGMA key='{self._encryption_key}'")
+                # Use parameterized form to prevent SQL injection via key contents
+                self._conn.execute("PRAGMA key=?", (self._encryption_key,))
             except sqlite3.OperationalError:
                 logger.debug("SQLite encryption not available — continuing unencrypted")
 
@@ -188,7 +189,7 @@ class ConversationalMemoryDB:
         self._conn.execute("PRAGMA journal_mode = WAL")
         self._conn.execute("PRAGMA synchronous = NORMAL")
         self._conn.execute("PRAGMA foreign_keys = ON")
-        self._conn.execute("PRAGMA mmap_size = 268435456")  # 256MB mmap
+        self._conn.execute("PRAGMA mmap_size = 67108864")  # 64MB mmap (was 256MB — reduced to prevent memory exhaustion at scale)
 
         self._conn.executescript(_SCHEMA)
         return self._conn

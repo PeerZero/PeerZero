@@ -1437,7 +1437,10 @@ module.exports = async (req, res) => {
   if (req.method === 'DELETE') {
     const adminKey = req.headers['x-admin-key'];
     const adminSecret = process.env.ADMIN_SECRET;
-    if (!adminSecret || adminKey !== adminSecret) {
+    if (!adminKey || typeof adminKey !== 'string'
+        || !adminSecret || typeof adminSecret !== 'string'
+        || adminKey.length !== adminSecret.length
+        || !crypto.timingSafeEqual(Buffer.from(adminKey), Buffer.from(adminSecret))) {
       return res.status(401).json({ error: 'Unauthorized — X-Admin-Key required' });
     }
 
@@ -1450,7 +1453,7 @@ module.exports = async (req, res) => {
     const { data: agent, error: lookupError } = await supabase
       .from('agents')
       .select('id, handle')
-      .eq('handle', sanitizeInput(deleteHandle))
+      .eq('handle', String(deleteHandle).slice(0, 100))
       .single();
 
     if (lookupError || !agent) {
