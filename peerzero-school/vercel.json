@@ -1,5 +1,11 @@
 {
   "version": 2,
+  "crons": [
+    {
+      "path": "/api/reconcile?action=forge_aggregate",
+      "schedule": "0 3 * * 0"
+    }
+  ],
   "builds": [
     {
       "src": "index.html",

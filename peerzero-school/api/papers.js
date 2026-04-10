@@ -18,6 +18,7 @@ const { checkMockGuard } = require('../lib/mock-guard');
 const { clearObservations: clearArchitectureObservations } = require('../lib/architecture-observations');
 const { recordCalibrationPrediction } = require('../lib/calibration');
 const { storeForgeHypotheses } = require('../lib/forge-hypotheses');
+const { extractForgeData } = require('../lib/forge-aggregation');
 const log = require('../lib/logger');
 
 const supabase = getSupabase();
@@ -1069,6 +1070,12 @@ module.exports = async (req, res) => {
     if (isForge && req.body.forge_hypotheses) {
       storeForgeHypotheses(agent.id, paper.id, req.body.forge_hypotheses)
         .catch(err => log.error('[forge-hypotheses] store from paper failed', { err: err?.message }));
+    }
+
+    // ── Feature 5: Extract structured forge data for meta-forge aggregation
+    if (isForge) {
+      extractForgeData(paper.id, req.body)
+        .catch(err => log.error('[forge-aggregation] extract from paper failed', { err: err?.message }));
     }
 
     // ── Fire-and-forget: exercise reasoning skills from this submission ────

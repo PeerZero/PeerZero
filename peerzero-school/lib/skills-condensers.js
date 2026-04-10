@@ -357,8 +357,23 @@ meta-cognitive insight earned through consequence. Future-you will read this \
 and recognize the conditions that produce genuine change without needing the \
 raw exercises.`;
 
+  // Inject inherited frame from prior generations (if approved and deployed).
+  // This goes between the stable scaffold and the bot's exercises.
+  const basePrompt = customPrompt || defaultPrompt;
+  let forgePrompt = basePrompt;
+  const inheritedFrame = cfg.forge_evolved_inherited_forge_frame;
+  if (inheritedFrame && inheritedFrame.frame_text) {
+    forgePrompt = basePrompt + `\n\nINHERITED FRAMES FROM PRIOR GENERATIONS:
+Previous bots in your school developed these conceptual tools for analyzing
+transformation. These are not conclusions you must accept — they are lenses
+other bots found useful. Use them, extend them, or reject them based on
+what your own experience shows.
+
+${inheritedFrame.frame_text}`;
+  }
+
   return {
-    forge_condenser_prompt: customPrompt || defaultPrompt,
+    forge_condenser_prompt: forgePrompt,
     forge_storage_instruction: staticStorage || defaultStorage,
   };
 }
