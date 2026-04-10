@@ -1,8 +1,19 @@
 // =============================================================================
-// Reconciliation endpoint — verifies and fixes denormalized agent counters
+// Admin endpoint — reconciliation + meta-forge aggregation
 //
-// GET  /api/reconcile?verify=true   → shows drift without fixing (dry run)
-// POST /api/reconcile               → fixes all drifted counters
+// Reconciliation:
+//   GET  /api/reconcile?verify=true   → shows drift without fixing (dry run)
+//   POST /api/reconcile               → fixes all drifted counters
+//
+// Forge aggregation (action= param):
+//   POST /api/reconcile?action=forge_aggregate       → trigger aggregation run
+//   GET  /api/reconcile?action=forge_runs             → list runs
+//   GET  /api/reconcile?action=forge_run&run_id=X     → get run + proposals
+//   POST /api/reconcile?action=forge_review           → approve/reject proposal
+//   POST /api/reconcile?action=forge_rollback         → rollback applied change
+//   GET  /api/reconcile?action=forge_history           → config evolution history
+//   GET  /api/reconcile?action=forge_inherited         → preview inherited context
+//   POST /api/reconcile?action=forge_extract_frames    → run meta-condenser
 //
 // Protected by admin secret (X-Admin-Key header).
 // Designed to be called by a cron job (daily) or manually for debugging.
@@ -12,6 +23,16 @@ const crypto = require('crypto');
 const { getSupabase, setCorsHeaders, isCsrfRejected, isRateLimited } = require('../lib/shared');
 const { checkMockGuard } = require('../lib/mock-guard');
 const log = require('../lib/logger');
+const {
+  runAggregation,
+  listRuns,
+  getRunProposals,
+  reviewProposal,
+  rollbackProposal,
+  getHistory,
+  buildInheritedContext,
+  extractInheritedFrames,
+} = require('../lib/forge-aggregation');
 
 const supabase = getSupabase();
 
@@ -33,17 +54,109 @@ module.exports = async (req, res) => {
     return res.status(403).json({ error: 'Forbidden — origin not allowed' });
   }
 
-  // Admin-only: require a secret key to prevent public access
-  // Uses constant-time comparison to prevent timing attacks
+  // Auth: accept either X-Admin-Key header or Vercel cron Bearer token.
+  // Vercel crons send Authorization: Bearer <CRON_SECRET> automatically.
   const adminKey = req.headers['x-admin-key'];
   const adminSecret = process.env.ADMIN_SECRET;
-  if (!adminKey || typeof adminKey !== 'string'
-      || !adminSecret || typeof adminSecret !== 'string'
-      || adminKey.length !== adminSecret.length
-      || !crypto.timingSafeEqual(Buffer.from(adminKey), Buffer.from(adminSecret))) {
-    return res.status(401).json({ error: 'Unauthorized — X-Admin-Key required' });
+  const authHeader = req.headers['authorization'] || '';
+  const cronSecret = process.env.CRON_SECRET;
+  const bearerToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
+
+  const isAdminKeyValid = adminKey && typeof adminKey === 'string'
+    && adminSecret && typeof adminSecret === 'string'
+    && adminKey.length === adminSecret.length
+    && crypto.timingSafeEqual(Buffer.from(adminKey), Buffer.from(adminSecret));
+
+  const isCronValid = bearerToken && typeof bearerToken === 'string'
+    && cronSecret && typeof cronSecret === 'string'
+    && bearerToken.length === cronSecret.length
+    && crypto.timingSafeEqual(Buffer.from(bearerToken), Buffer.from(cronSecret));
+
+  if (!isAdminKeyValid && !isCronValid) {
+    return res.status(401).json({ error: 'Unauthorized — X-Admin-Key or cron token required' });
+  }
+  const triggeredBy = isCronValid ? 'cron' : 'admin';
+
+  const action = req.query.action;
+
+  // ── Forge aggregation routes ───────────────────────────────────────────
+  if (action && action.startsWith('forge_')) {
+    try {
+      // POST/GET: Trigger aggregation run (GET for Vercel cron compatibility)
+      if ((req.method === 'POST' || req.method === 'GET') && action === 'forge_aggregate') {
+        const result = await runAggregation(triggeredBy);
+        return res.status(200).json({ success: true, ...result });
+      }
+
+      // POST: Review a proposal
+      if (req.method === 'POST' && action === 'forge_review') {
+        const { proposal_id, decision, notes } = req.body || {};
+        if (!proposal_id || !decision) {
+          return res.status(400).json({ error: 'proposal_id and decision required' });
+        }
+        const result = await reviewProposal(proposal_id, decision, 'admin', notes);
+        return res.status(200).json({ success: true, ...result });
+      }
+
+      // POST: Rollback an applied change
+      if (req.method === 'POST' && action === 'forge_rollback') {
+        const { history_id } = req.body || {};
+        if (!history_id) return res.status(400).json({ error: 'history_id required' });
+        const result = await rollbackProposal(history_id, 'admin');
+        return res.status(200).json({ success: true, ...result });
+      }
+
+      // POST: Run meta-condenser to extract inherited frames
+      if (req.method === 'POST' && action === 'forge_extract_frames') {
+        const { generation } = req.body || {};
+        if (!generation) return res.status(400).json({ error: 'generation number required' });
+        const result = await extractInheritedFrames(parseInt(generation));
+        return res.status(200).json({ success: true, result });
+      }
+
+      // GET: List runs
+      if (req.method === 'GET' && action === 'forge_runs') {
+        const { status, limit, offset } = req.query;
+        const runs = await listRuns({
+          status,
+          limit: Math.min(parseInt(limit) || 20, 100),
+          offset: parseInt(offset) || 0,
+        });
+        return res.status(200).json({ runs });
+      }
+
+      // GET: Get specific run + proposals
+      if (req.method === 'GET' && action === 'forge_run') {
+        const { run_id } = req.query;
+        if (!run_id) return res.status(400).json({ error: 'run_id required' });
+        const result = await getRunProposals(run_id);
+        return res.status(200).json(result);
+      }
+
+      // GET: Config evolution history
+      if (req.method === 'GET' && action === 'forge_history') {
+        const { generation, limit } = req.query;
+        const history = await getHistory({
+          generation: generation ? parseInt(generation) : undefined,
+          limit: Math.min(parseInt(limit) || 50, 200),
+        });
+        return res.status(200).json({ history });
+      }
+
+      // GET: Preview inherited context
+      if (req.method === 'GET' && action === 'forge_inherited') {
+        const ctx = await buildInheritedContext();
+        return res.status(200).json({ inherited_context: ctx });
+      }
+
+      return res.status(400).json({ error: `Unknown forge action: ${action}` });
+    } catch (err) {
+      log.error('[forge-aggregation] endpoint error', { err: err?.message, action });
+      return res.status(500).json({ error: err?.message || 'Internal error' });
+    }
   }
 
+  // ── Reconciliation ─────────────────────────────────────────────────────
   const verifyOnly = req.method === 'GET' || req.query.verify === 'true';
 
   try {

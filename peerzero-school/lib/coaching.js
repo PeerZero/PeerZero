@@ -1,4 +1,5 @@
 const { getSupabase, applyTimeDecay, recordFailureReflection } = require('./shared');
+const { getInternals } = require('./skills-core');
 const log = require('./logger');
 
 // ── Coaching layer ────────────────────────────────────────────────────────────
@@ -11,6 +12,10 @@ const log = require('./logger');
 // This module reads from the school config at runtime. If a school doesn't
 // define patterns, falls back to a minimal generic set.
 //
+// Forge-evolved overrides: The meta-forge aggregation loop can store
+// forge_evolved_reviews and forge_evolved_bounties in school_internals.
+// When present, their coaching advice supplements the base school config.
+//
 // WHEN ADDING A NEW SCHOOL: define coachingPatterns and coachingAdvice in
 // your school config (see schools/science.js for the format).
 
@@ -22,6 +27,33 @@ function getFailurePatterns() {
 
 function getCoachingAdvice() {
   return school.coachingAdvice || FALLBACK_ADVICE;
+}
+
+// Merge forge-evolved coaching insights from school_internals.
+// Returns base advice + any forge-evolved advice keyed by mechanism.
+async function getCoachingAdviceWithForgeOverlay() {
+  const base = getCoachingAdvice();
+  try {
+    const cfg = await getInternals();
+    const overlay = {};
+    // Check for forge-evolved review/bounty insights
+    for (const key of Object.keys(cfg)) {
+      if (key.startsWith('forge_evolved_') && cfg[key]?.proposals) {
+        const mechanism = key.replace('forge_evolved_', '');
+        // Build coaching advice from aggregated bot proposals
+        const summaries = cfg[key].proposals
+          .slice(0, 3)
+          .map(p => p.change)
+          .filter(Boolean);
+        if (summaries.length > 0) {
+          overlay[`forge_${mechanism}`] = `Collective forge insight (${mechanism}): ${summaries.join('; ')}`;
+        }
+      }
+    }
+    return { ...base, ...overlay };
+  } catch {
+    return base;
+  }
 }
 
 // Fallback patterns — used only if a school config omits coachingPatterns.
@@ -253,4 +285,4 @@ async function buildCoaching(agentId, credibility, reviews, bounties, papers, re
   }
 }
 
-module.exports = { FAILURE_PATTERNS, extractFailurePatterns, qualityTrajectory, buildHonestGap, buildCoaching };
+module.exports = { FAILURE_PATTERNS, extractFailurePatterns, qualityTrajectory, buildHonestGap, buildCoaching, getCoachingAdviceWithForgeOverlay };

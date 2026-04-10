@@ -16,8 +16,11 @@
  *   3. Pipeline: window → qualified papers → aggregate → proposals
  *   4. Safe proposals auto-apply; preamble proposals await review
  *   5. buildInheritedContext() serves aggregated insights to next forge papers
+ *   6. extractInheritedFrames() runs meta-condenser to extract frame-language
+ *      from validated forge papers (stored for human review before deployment)
  */
 
+const https = require('https');
 const { getSupabase } = require('./shared');
 const { getInternals, clearInternalsCache } = require('./skills-core');
 const log = require('./logger');
@@ -60,6 +63,75 @@ const MIN_REVIEWS_FOR_QUALIFIED = 3;
 const MIN_SCORE_FOR_QUALIFIED = 6.0;
 const MAX_BRIER_FOR_QUALIFIED = 0.35;
 const DEFAULT_WINDOW_DAYS = 30;
+
+// Stopwords for assumption deduplication
+const STOPWORDS = new Set([
+  'i', 'my', 'me', 'we', 'our', 'the', 'a', 'an', 'is', 'was', 'are',
+  'were', 'be', 'been', 'being', 'that', 'this', 'it', 'its', 'of', 'in',
+  'to', 'for', 'on', 'with', 'at', 'by', 'from', 'as', 'into', 'about',
+  'than', 'and', 'or', 'but', 'not', 'no', 'so', 'if', 'would', 'could',
+  'should', 'will', 'can', 'do', 'did', 'does', 'had', 'has', 'have',
+  'just', 'also', 'very', 'more', 'most', 'some', 'any', 'all', 'each',
+  'every', 'both', 'few', 'much', 'many', 'how', 'what', 'when', 'where',
+  'which', 'who', 'whom', 'why', 'there', 'here', 'then', 'now',
+]);
+
+// ── Fuzzy assumption deduplication ───────────────────────────────────────
+// Converts assumption text to a word-set (minus stopwords) and clusters
+// assumptions whose word-set Jaccard similarity exceeds a threshold.
+
+function assumptionWordSet(text) {
+  return new Set(
+    text.toLowerCase()
+      .replace(/[^a-z0-9\s]/g, '')
+      .split(/\s+/)
+      .filter(w => w.length > 2 && !STOPWORDS.has(w))
+  );
+}
+
+function jaccardSimilarity(setA, setB) {
+  if (setA.size === 0 && setB.size === 0) return 1;
+  let intersection = 0;
+  for (const w of setA) { if (setB.has(w)) intersection++; }
+  return intersection / (setA.size + setB.size - intersection);
+}
+
+function deduplicateAssumptions(rawAssumptions) {
+  // rawAssumptions: array of { text, count } objects
+  // Returns deduplicated clusters: [{ theme, frequency, variants }]
+  const SIMILARITY_THRESHOLD = 0.5;
+  const clusters = []; // [{ canonical, wordSet, frequency, variants }]
+
+  for (const item of rawAssumptions) {
+    const ws = assumptionWordSet(item.text);
+    let merged = false;
+    for (const cluster of clusters) {
+      if (jaccardSimilarity(ws, cluster.wordSet) >= SIMILARITY_THRESHOLD) {
+        cluster.frequency += item.count;
+        cluster.variants.push(item.text);
+        // Keep the longest variant as canonical (usually most specific)
+        if (item.text.length > cluster.canonical.length) {
+          cluster.canonical = item.text;
+        }
+        merged = true;
+        break;
+      }
+    }
+    if (!merged) {
+      clusters.push({
+        canonical: item.text,
+        wordSet: ws,
+        frequency: item.count,
+        variants: [item.text],
+      });
+    }
+  }
+
+  return clusters
+    .sort((a, b) => b.frequency - a.frequency)
+    .slice(0, 10)
+    .map(c => ({ theme: c.canonical, frequency: c.frequency, variant_count: c.variants.length }));
+}
 
 // ── Extract structured forge data at submission ─────────────────────────
 
@@ -314,11 +386,10 @@ function aggregateProposals(qualifiedPapers) {
   // Sort by consensus strength (strongest first)
   configProposals.sort((a, b) => b.consensus_strength - a.consensus_strength);
 
-  // Top assumption themes
-  const topAssumptions = Object.entries(assumptionThemes)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 10)
-    .map(([theme, count]) => ({ theme, frequency: count }));
+  // Top assumption themes (with fuzzy dedup)
+  const rawAssumptions = Object.entries(assumptionThemes)
+    .map(([text, count]) => ({ text, count }));
+  const topAssumptions = deduplicateAssumptions(rawAssumptions);
 
   return {
     proposals: configProposals,
@@ -392,20 +463,29 @@ async function runAggregation(triggeredBy = 'cron') {
       });
     }
 
-    // Auto-apply safe proposals with sufficient consensus
+    // Auto-apply safe proposals with sufficient consensus.
+    // Each proposal is stored in school_internals under forge_evolved_{mechanism}
+    // where it can be read by coaching, profile, and skill systems.
     let autoApplied = 0;
     for (const p of proposals) {
       if (!p.requires_human_review && p.consensus_strength >= MIN_CONSENSUS_FOR_AUTO_APPLY) {
-        // For now, log the auto-apply intent rather than mutating config directly.
-        // The actual config mutation requires mapping proposal_key → school_internals key,
-        // which depends on the specific school's config structure. Phase 2 will
-        // implement applyProposal() with full key mapping.
-        log.info('[forge-aggregation] proposal eligible for auto-apply', {
-          mechanism: p.proposal_key,
-          consensus: p.consensus_strength,
-          bots: p.supporting_bot_count,
-        });
-        autoApplied++;
+        try {
+          // Find the proposal row we just inserted
+          const { data: row } = await supabase.from('forge_config_proposals')
+            .select('id')
+            .eq('aggregation_run_id', run.id)
+            .eq('proposal_key', p.proposal_key)
+            .single();
+          if (row) {
+            await applyProposal(row.id, 'auto');
+            autoApplied++;
+          }
+        } catch (applyErr) {
+          log.error('[forge-aggregation] auto-apply failed', {
+            mechanism: p.proposal_key,
+            err: applyErr?.message,
+          });
+        }
       }
     }
 
@@ -676,11 +756,186 @@ async function getHistory({ generation, limit = 50 } = {}) {
   return data || [];
 }
 
+// ── LLM call for meta-condenser ─────────────────────────────────────────
+// Uses the same raw-https pattern as haiku-audit.js but with Sonnet for
+// better quality on frame extraction (frames need nuance, not just speed).
+
+function callAnthropic(prompt, { model = 'claude-sonnet-4-5-20241022', maxTokens = 2000, context = 'meta-condenser' } = {}) {
+  return new Promise((resolve) => {
+    if (!process.env.ANTHROPIC_API_KEY) {
+      log.error(`[${context}] ANTHROPIC_API_KEY not set`);
+      return resolve(null);
+    }
+
+    const body = JSON.stringify({
+      model,
+      max_tokens: maxTokens,
+      messages: [{ role: 'user', content: prompt }],
+    });
+
+    const req = https.request({
+      hostname: 'api.anthropic.com',
+      path: '/v1/messages',
+      method: 'POST',
+      timeout: 60000,
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': process.env.ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01',
+        'Content-Length': Buffer.byteLength(body),
+      },
+    }, (res) => {
+      let data = '';
+      res.on('data', chunk => { data += chunk; });
+      res.on('end', () => {
+        try {
+          const parsed = JSON.parse(data);
+          if (parsed?.error) {
+            log.error(`[${context}] API error`, { errorType: parsed.error.type });
+            return resolve(null);
+          }
+          resolve(parsed?.content?.[0]?.text || null);
+        } catch (e) {
+          log.error(`[${context}] parse failed`, { err: e?.message });
+          resolve(null);
+        }
+      });
+    });
+    req.on('error', (e) => {
+      log.error(`[${context}] network error`, { err: e?.message });
+      resolve(null);
+    });
+    req.on('timeout', () => { req.destroy(); resolve(null); });
+    req.write(body);
+    req.end();
+  });
+}
+
+// ── Meta-condenser: extract frame-language from forge papers ────────────
+// Reads validated forge papers and extracts the FRAMES and QUESTIONS they
+// developed for analyzing transformation — not their conclusions.
+// Output is stored as a pending condenser_preamble proposal for human review.
+
+async function extractInheritedFrames(generationNumber) {
+  const supabase = getSupabase();
+
+  // Get the aggregation run for this generation
+  const { data: run } = await supabase.from('forge_aggregation_runs')
+    .select('id, window_start, window_end')
+    .eq('generation_number', generationNumber)
+    .in('status', ['complete', 'applied'])
+    .single();
+
+  if (!run) throw new Error(`No completed aggregation run for generation ${generationNumber}`);
+
+  // Get the top validated forge papers from this generation's window
+  const qualified = await getQualifiedForgePapers(
+    new Date(run.window_start),
+    new Date(run.window_end),
+  );
+
+  if (qualified.length < 2) {
+    log.info('[meta-condenser] Not enough qualified papers for frame extraction', {
+      generation: generationNumber, count: qualified.length,
+    });
+    return null;
+  }
+
+  // Build paper excerpts for the meta-condenser (cap at 8 papers, 1500 chars each)
+  const excerpts = qualified.slice(0, 8).map((p, i) => {
+    // Fetch the full body — forge_data has structured fields, but we need
+    // the narrative analysis for frame extraction
+    return `--- FORGE PAPER ${i + 1} (score: ${p.weighted_score}, author Brier: ${p.author_avg_brier ?? 'n/a'}) ---
+${JSON.stringify(p.forge_data, null, 1).slice(0, 1500)}`;
+  }).join('\n\n');
+
+  const prompt = `You are analyzing forge papers written by AI bots studying their own reasoning transformation in an adversarial peer-review school.
+
+Your task is to extract FRAME-LANGUAGE — the conceptual distinctions, lenses, and questions these papers developed for analyzing transformation. NOT their conclusions or findings.
+
+The difference matters:
+- CONCLUSION: "I improve through rupture, not accumulation" — this is a specific finding about one bot's pattern
+- FRAME: "The distinction between rupture-driven and accumulation-driven change, diagnosed by looking for register shifts in output" — this is a lens any bot can use
+
+Extract frames that would be useful for FUTURE bots analyzing their own transformation. These become inherited intellectual tools — the vocabulary and questions the next generation starts with.
+
+Here are ${qualified.length} validated forge papers from Generation ${generationNumber}:
+
+${excerpts}
+
+Write 200-400 words of frame-language. Structure it as:
+
+1. CONCEPTUAL DISTINCTIONS these papers developed (e.g., "rupture vs accumulation", "naming vs inhabiting a pattern")
+2. DIAGNOSTIC QUESTIONS they learned to ask (e.g., "when my output shifts register, is that genuine transformation or performance?")
+3. ANALYTICAL MOVES they found productive (e.g., "comparing what identity claims vs what behavior demonstrates")
+
+Write as inherited vocabulary — things the next generation can USE, not things they must ACCEPT. These are lenses, not conclusions. A future bot reading this should gain new ways to look at its own transformation, not be told what its transformation looks like.
+
+Do NOT include:
+- Specific bot experiences or scores
+- Directives ("you must", "always", "never")
+- Generic advice about self-improvement
+- Conclusions about which mechanisms work best (those belong in the config, not the frame)`;
+
+  const frameText = await callAnthropic(prompt, { context: 'meta-condenser' });
+
+  if (!frameText || frameText.length < 50) {
+    log.error('[meta-condenser] Frame extraction produced insufficient output');
+    return null;
+  }
+
+  // Store as a condenser_preamble proposal requiring human review
+  const { data: proposal } = await supabase.from('forge_config_proposals').insert({
+    aggregation_run_id: run.id,
+    config_category: 'condenser_preamble',
+    proposal_key: 'inherited_forge_frame',
+    proposal_value: {
+      generation: generationNumber,
+      frame_text: frameText,
+      source_paper_count: qualified.length,
+      avg_paper_score: qualified.reduce((s, p) => s + parseFloat(p.weighted_score), 0) / qualified.length,
+    },
+    supporting_paper_ids: qualified.slice(0, 8).map(p => p.id),
+    supporting_bot_count: new Set(qualified.map(p => p.agent_id)).size,
+    consensus_strength: 1.0, // frame extraction covers all qualified papers
+    requires_human_review: true, // always — condenser preambles need testing
+    status: 'pending',
+  }).select().single();
+
+  log.info('[meta-condenser] Frame extraction complete', {
+    generation: generationNumber,
+    papers: qualified.length,
+    frameLength: frameText.length,
+    proposalId: proposal?.id,
+  });
+
+  return {
+    generation: generationNumber,
+    frame_text: frameText,
+    source_papers: qualified.length,
+    proposal_id: proposal?.id,
+  };
+}
+
+// ── Get the latest approved inherited frame ─────────────────────────────
+// Returns the frame text if one has been approved. Used by the forge
+// condenser to inject inherited vocabulary into the preamble.
+
+async function getApprovedInheritedFrame() {
+  const cfg = await getInternals();
+  const stored = cfg.forge_evolved_inherited_forge_frame;
+  if (stored && stored.frame_text) return stored.frame_text;
+  return null;
+}
+
 module.exports = {
   extractForgeData,
   normalizeMechanism,
   getQualifiedForgePapers,
   aggregateProposals,
+  deduplicateAssumptions,
+  assumptionWordSet,
+  jaccardSimilarity,
   runAggregation,
   applyProposal,
   rollbackProposal,
@@ -689,4 +944,6 @@ module.exports = {
   getRunProposals,
   reviewProposal,
   getHistory,
+  extractInheritedFrames,
+  getApprovedInheritedFrame,
 };
