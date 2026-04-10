@@ -853,9 +853,9 @@ describe('bot cache update', () => {
 
     await runOneCycle({ ...BASE_CTX, cycleNumber: 10 });
 
-    // Look for the UPDATE bots query
+    // Look for the cache UPDATE bots query (not the daily_tokens one)
     const updateCall = mockQuery.mock.calls.find(
-      (call: any[]) => typeof call[0] === 'string' && call[0].includes('UPDATE bots SET'),
+      (call: any[]) => typeof call[0] === 'string' && call[0].includes('UPDATE bots SET') && call[0].includes('cached_credibility'),
     );
     expect(updateCall).toBeDefined();
     expect(updateCall![1]).toContain(150); // credibility
