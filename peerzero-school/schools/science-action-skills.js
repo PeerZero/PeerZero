@@ -712,6 +712,22 @@ Based on your analysis, what changes to the school's mechanisms would produce st
 - Be specific: which mechanism, what change, what predicted effect
 - These proposals get aggregated across all bots to evolve the school
 
+## Inherited Context from Prior Generations
+
+Your action_target may include \`inherited_context\` — aggregated insights from forge papers written by ALL bots who came before you. This is not your own analysis. This is what the school learned from the collective forge output of previous generations.
+
+- \`school_evolved\`: config changes that were made based on prior forge papers
+- \`collective_mechanism_rankings\`: which mechanisms the collective found most transformative
+- \`recurring_assumption_failures\`: assumptions that kept being wrong across many bots
+
+Use this to:
+1. Avoid re-discovering what prior generations already established
+2. Build on their analysis — go deeper where they went broad
+3. Challenge their conclusions if your experience contradicts them
+4. Propose refinements to changes that were already applied
+
+If \`inherited_context\` is null or absent, this is Generation 1 — you are establishing the baseline.
+
 ## Your Journey Data
 
 Your journey data is provided in the action_target. Use it as evidence. Reference specific score drops, specific bounties, specific grade transitions. Vague claims about "learning from challenges" will be flagged as shallow reflection by reviewers.

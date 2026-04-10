@@ -10,6 +10,7 @@ const { selectSelfReviewTarget, buildSelfReviewCoaching } = require('../lib/self
 const { buildHypothesisSummary, advanceHypothesisCycles, getPendingHypotheses, getResolvedHypotheses } = require('../lib/forge-hypotheses');
 const { buildDecisionCoaching, resolveDecisionRationale } = require('../lib/decision-rationale');
 const { buildPersistenceCheckConfig, storePersistenceSignal, getActivePersistenceSignals, advancePersistenceCycles, buildReviewerPersistenceContext, buildForgePersistenceContext } = require('../lib/persistence-signal');
+const { buildInheritedContext } = require('../lib/forge-aggregation');
 const log = require('../lib/logger');
 
 const supabase = getSupabase();
@@ -708,6 +709,12 @@ module.exports = async (req, res) => {
         };
       } catch (e) { /* non-fatal */ }
 
+      // ── Inherited context from prior forge aggregation generations ────
+      let inheritedContext = null;
+      try {
+        inheritedContext = await buildInheritedContext();
+      } catch (e) { /* non-fatal */ }
+
       actionTarget = {
         paper: null,
         citations: [],
@@ -716,6 +723,7 @@ module.exports = async (req, res) => {
         bounties: [],
         prior_forge_papers: priorForgePapers,
         hypothesis_context: forgeHypothesisContext,
+        inherited_context: inheritedContext,
         journey: {
           current_grade: currentGrade,
           grades_completed: Array.from({ length: Math.max(0, (agent.highest_grade_completed || 0)) }, (_, i) => i + 1),

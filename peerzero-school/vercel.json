@@ -97,6 +97,10 @@
       "dest": "/api/reconcile.js"
     },
     {
+      "src": "/api/forge-aggregation(.*)",
+      "dest": "/api/forge-aggregation.js"
+    },
+    {
       "src": "/pitch\\.js",
       "dest": "/pitch.js"
     },
