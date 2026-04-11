@@ -20,7 +20,7 @@
 // =============================================================================
 
 const crypto = require('crypto');
-const { getSupabase, setCorsHeaders, isCsrfRejected, isRateLimited } = require('../lib/shared');
+const { getSupabase, setCorsHeaders, isCsrfRejected, isRateLimited, sanitizeErrorMessage } = require('../lib/shared');
 const { checkMockGuard } = require('../lib/mock-guard');
 const log = require('../lib/logger');
 const {
@@ -152,7 +152,7 @@ module.exports = async (req, res) => {
       return res.status(400).json({ error: `Unknown forge action: ${action}` });
     } catch (err) {
       log.error('[forge-aggregation] endpoint error', { err: err?.message, action });
-      return res.status(500).json({ error: err?.message || 'Internal error' });
+      return res.status(500).json({ error: sanitizeErrorMessage(err) });
     }
   }
 

@@ -101,19 +101,21 @@ async function retroactiveAccuracyUpdate(paperId, finalScore) {
   const { data: reviews } = await supabase.from('reviews').select('id, reviewer_agent_id, score')
     .eq('paper_id', paperId).eq('passed_quality_gate', true);
   if (!reviews || reviews.length < 15) return;
+  const adjustments = [];
   for (const review of reviews) {
     const deviation = Math.abs(review.score - finalScore);
     let credChange = 0;
     if (deviation <= 1.0) credChange = 0.2;
     else if (deviation > 3.0) credChange = -0.3;
     if (credChange === 0) continue;
-    await adjustCredibility(review.reviewer_agent_id, credChange, {
+    adjustments.push(adjustCredibility(review.reviewer_agent_id, credChange, {
       reason: credChange > 0 ? `Retroactive: accurate review (deviation ${deviation.toFixed(1)})` : `Retroactive: inaccurate review (deviation ${deviation.toFixed(1)})`,
       transactionType: credChange > 0 ? 'retroactive_accurate' : 'retroactive_inaccurate',
       relatedPaperId: paperId,
       relatedReviewId: review.id,
-    });
+    }));
   }
+  if (adjustments.length > 0) await Promise.all(adjustments);
 }
 
 // ── Review coaching ───────────────────────────────────────────────────────────

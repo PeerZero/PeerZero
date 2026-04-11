@@ -43,6 +43,8 @@ async function checkSemanticDrift(targetPaperId, newSources, challengerAgentId) 
   let haikuVerdict = null;
   let driftStats = { doiOverlaps: 0, haikuCalls: 0, haikuFailures: 0, jaccardFallbacks: 0 };
 
+  // Collect DOI matches first, then batch Haiku calls in parallel
+  const doiMatches = [];
   for (const existing of existingBounties) {
     // Skip comparing against the same agent's own previous bounties —
     // one bounty per agent per paper is already enforced elsewhere
@@ -66,35 +68,38 @@ async function checkSemanticDrift(targetPaperId, newSources, challengerAgentId) 
           continue;
         }
 
-        // Borderline or high similarity — ask Haiku for semantic judgment
-        driftStats.doiOverlaps++;
-        const verdict = await callHaikuDriftJudge(newSource, existingSource);
-        driftStats.haikuCalls++;
+        doiMatches.push({ newSource, existingSource, similarity });
+      }
+    }
+  }
 
-        if (verdict) {
-          // Haiku responded — use its judgment
-          if (verdict.same_argument && verdict.confidence >= 0.7) {
-            const effectiveScore = Math.min(1, similarity + (verdict.confidence * 0.3));
-            if (effectiveScore > maxSimilarity) {
-              maxSimilarity = effectiveScore;
-              haikuVerdict = verdict;
-            }
-            log.info('[drift] Haiku: same argument', { confidence: verdict.confidence, reason: verdict.reason });
-          } else {
-            // Haiku says different argument — not flagged regardless of token overlap
-            log.info('[drift] Haiku: different argument', { confidence: verdict.confidence, reason: verdict.reason });
+  // Batch all Haiku drift calls in parallel instead of sequential awaits
+  driftStats.doiOverlaps = doiMatches.length;
+  if (doiMatches.length > 0) {
+    const verdicts = await Promise.all(doiMatches.map(m => callHaikuDriftJudge(m.newSource, m.existingSource)));
+    driftStats.haikuCalls = doiMatches.length;
+    for (let i = 0; i < doiMatches.length; i++) {
+      const { similarity } = doiMatches[i];
+      const verdict = verdicts[i];
+      if (verdict) {
+        if (verdict.same_argument && verdict.confidence >= 0.7) {
+          const effectiveScore = Math.min(1, similarity + (verdict.confidence * 0.3));
+          if (effectiveScore > maxSimilarity) {
+            maxSimilarity = effectiveScore;
+            haikuVerdict = verdict;
           }
+          log.info('[drift] Haiku: same argument', { confidence: verdict.confidence, reason: verdict.reason });
         } else {
-          // Haiku failed — fall back to Jaccard-only with stricter threshold (0.6)
-          // Lower than the Haiku path because we can't verify semantic equivalence
-          driftStats.haikuFailures++;
-          driftStats.jaccardFallbacks++;
-          if (similarity > 0.6) {
-            if (similarity > maxSimilarity) maxSimilarity = similarity;
-            log.info('[drift] Haiku unavailable, Jaccard fallback — flagged', { jaccard: similarity.toFixed(3) });
-          } else {
-            log.info('[drift] Haiku unavailable, Jaccard fallback — cleared', { jaccard: similarity.toFixed(3) });
-          }
+          log.info('[drift] Haiku: different argument', { confidence: verdict.confidence, reason: verdict.reason });
+        }
+      } else {
+        driftStats.haikuFailures++;
+        driftStats.jaccardFallbacks++;
+        if (similarity > 0.6) {
+          if (similarity > maxSimilarity) maxSimilarity = similarity;
+          log.info('[drift] Haiku unavailable, Jaccard fallback — flagged', { jaccard: similarity.toFixed(3) });
+        } else {
+          log.info('[drift] Haiku unavailable, Jaccard fallback — cleared', { jaccard: similarity.toFixed(3) });
         }
       }
     }
@@ -556,6 +561,12 @@ module.exports = async (req, res) => {
         });
       }
 
+      if (!Array.isArray(external_sources) || external_sources.length === 0) {
+        return res.status(400).json({ error: 'external_sources must be a non-empty array' });
+      }
+      if (external_sources.length > 50) {
+        return res.status(400).json({ error: 'external_sources limited to 50 items' });
+      }
       const sourceFailures = validateExternalSources(external_sources);
       if (sourceFailures.length > 0) {
         recordBountyRejection(agent.id, 'standard', 'Claim-evidence linking failed', target_paper_id, sourceFailures);

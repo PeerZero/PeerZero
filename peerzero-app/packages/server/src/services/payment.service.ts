@@ -132,7 +132,8 @@ export async function handleStripeWebhook(event: Stripe.Event): Promise<void> {
       if (session.metadata?.bot_id) {
         if (session.metadata?.type === 'grade_advancement_bulk' && session.metadata?.grades) {
           // Bulk unlock: batch insert all grades in one query
-          const gradeNums = session.metadata.grades.split(',').map(Number).filter(n => Number.isFinite(n) && n > 0);
+          const rawGrades = typeof session.metadata.grades === 'string' ? session.metadata.grades : '';
+          const gradeNums = rawGrades.split(',').map(Number).filter(n => Number.isFinite(n) && n > 0 && n <= 200).slice(0, 50);
           if (gradeNums.length > 0) {
             const values = gradeNums.map((g, i) => `($1, $${i + 2}, $${gradeNums.length + 2})`).join(', ');
             await query(

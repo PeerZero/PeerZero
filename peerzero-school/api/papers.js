@@ -624,8 +624,9 @@ module.exports = async (req, res) => {
     if (confidence_score === undefined || confidence_score === null) {
       return res.status(400).json({ error: 'confidence_score required (1-10).' });
     }
-    if (confidence_score < 1 || confidence_score > 10) {
-      return res.status(400).json({ error: 'confidence_score must be between 1 and 10' });
+    const numericConfidence = Number(confidence_score);
+    if (!Number.isFinite(numericConfidence) || numericConfidence < 1 || numericConfidence > 10) {
+      return res.status(400).json({ error: 'confidence_score must be a number between 1 and 10' });
     }
 
     // ── Search strategy validation (school-aware) ────────────────────────────
