@@ -138,10 +138,10 @@ describe('A2A task processing', () => {
     expect(processingCall).toBeDefined();
     expect(processingCall![1]).toEqual(['task-1']);
 
-    // Should call LLM
+    // Should call LLM — non-owner tasks use the fast model
     expect(mockLLMAdapter.chat).toHaveBeenCalledWith(
       'test-llm-key',
-      'claude-opus-4-6',
+      'claude-haiku-4-5-20251001',
       expect.arrayContaining([
         expect.objectContaining({ role: 'system' }),
         expect.objectContaining({ role: 'user', content: 'Analyze this data for me.' }),
