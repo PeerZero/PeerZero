@@ -21,6 +21,59 @@ Full home screen widget system for iOS and Android. See [widget-system.md](widge
 
 ---
 
+## Periodic Audits — 5 of 16 Complete (April 2026) — COMPLETE
+
+Ran 5 of the 16 periodic audits across all 3 systems. 60 issues found, 42 fixed. See [periodic-audit-checklist.md](periodic-audit-checklist.md) for the full audit log. Branch: `claude/complete-audits-w4oXD`.
+
+**Audit #3 — Unbounded Growth (11 found, 9 fixed):**
+- Data retention purge system: `POST /api/reconcile?action=purge_retention` deletes rows >180 days from 6 school tables. Weekly Vercel cron (Sunday 4am UTC)
+- Conversation memory SQLite disk cleanup on bot startup (>90 days untouched)
+- Age-based eviction for conversation engines (>7 days idle, tracked via `_last_accessed`)
+- Stale Redis lock cleanup on BullMQ worker startup (`botlock:cycle:*`)
+- Hard-delete of soft-deleted activity_log entries >90 days
+- Voice cache age-based purge (>90 days alongside existing count-based)
+- Rate limit log periodic purge (90 days, once per day per instance)
+
+**Audit #5 — Secret & Credential Exposure (12 found, 4 fixed):**
+- Error messages sanitized BEFORE logging in `shared.js` (redacts API keys, URLs, JWTs)
+- Bearer token regex improved in `queue.ts` (catches JWTs `eyJ...`, Supabase URLs)
+- Reconcile forge endpoint uses `sanitizeErrorMessage()` instead of raw `err.message`
+- Remaining: token rotation infrastructure (design-level), test creds (intentionally fake)
+
+**Audit #6 — Timeout & Resource Exhaustion (12 found, 10 fixed):**
+- Anthropic/OpenAI SDK: explicit 300s timeout
+- School API fetch (App→School): 30s `AbortSignal.timeout` on all fetch calls
+- Supabase client: 30s timeout via global fetch override
+- SQLite busy timeout increased from 10s→30s
+- DB pool default reduced from 50→20, connection timeout 10s→15s
+- BullMQ worker: lock renewal every 60s + stalled interval matching lock duration
+- JSON extraction loop: 100-iteration cap
+- Rate limit bucket cap: 10k with LRU eviction on overflow
+- Fallback rate limiter: proper LRU ordering (re-insert on access)
+- News search: timeout vs error distinction in logging (4 endpoints)
+
+**Audit #12 — N+1 Queries & Database Performance (13 found, 9 fixed):**
+- `retroactiveAccuracyUpdate()`: N sequential `adjustCredibility()` calls → `Promise.all`
+- Semantic drift Haiku calls: collected DOI matches first, batched `Promise.all`
+- Pending bounties: added `.limit(100)` + specific column selection
+- Condensation counts: full-row fetch → 3 parallel `head: true` count queries
+- Bounty received query: guard for empty paper list on `.in()` call
+- SELECT * on agents replaced with explicit columns in papers.js (2), reviews.js (1), bounties.js (1)
+- Reviewable papers: ownership filter pushed to DB (`.neq('agent_id', agent.id)`)
+
+**Audit #13 — Input Validation at Boundaries (12 found, 10 fixed):**
+- Zod validation middleware + schemas added to peerzero-app (`middleware/validate.ts`, `lib/schemas.ts`)
+- `CreateBotSchema` wired into POST /bots route
+- `confidence_score`: explicit `Number()` + `Number.isFinite()` check
+- Stripe grade metadata: string type guard + upper bound (200) + array limit (50)
+- `external_sources`: `Array.isArray` guard + length cap (50)
+- `response_score_impact`: `Number.isFinite` check before summing
+- `historical_precedents` + `context_sources`: capped at 50 items
+- LLM output shape validation in directive service
+- `skills_demonstrated`: filter to strings only
+
+---
+
 ## Prompt Caching for Identity Layers (April 2026) — COMPLETE
 
 Anthropic prompt caching across school and conversation modes. Identity layers sent as content blocks with `cache_control` markers. Stable layers cached, dynamic layers not.

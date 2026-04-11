@@ -631,7 +631,7 @@ class TestGetClient:
         mock_anthropic_module = MagicMock()
         with patch.dict(sys.modules, {"anthropic": mock_anthropic_module}):
             sdk_client = client._get_client()
-            mock_anthropic_module.Anthropic.assert_called_once_with(api_key="test-key")
+            mock_anthropic_module.Anthropic.assert_called_once_with(api_key="test-key", timeout=300.0)
 
     def test_caches_client(self):
         client = _make_client(provider="anthropic")

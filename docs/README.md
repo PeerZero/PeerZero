@@ -65,7 +65,8 @@ Index of documentation files. Each document covers a focused topic — load only
 
 | Document | What It Covers |
 |----------|---------------|
-| [Periodic Audit Checklist](periodic-audit-checklist.md) | 10 systematic audits to run periodically: silent failures, race conditions, unbounded growth, idempotency, secrets, timeouts, stale caches, auth gaps, degradation decisions, dependency vulns. Tell Claude "Run audit #N from the periodic audit checklist." |
+| [Periodic Audit Checklist](periodic-audit-checklist.md) | 16 systematic audits to run periodically: silent failures, race conditions, unbounded growth, idempotency, secrets, timeouts, stale caches, auth gaps, degradation decisions, dependency vulns, dead code, N+1 queries, input validation, cross-system contracts, error UX, graceful shutdown. Tell Claude "Run audit #N from the periodic audit checklist." |
+| [Post-Audit Runbook](POST-AUDIT-RUNBOOK.md) | Deployment steps for audit fix branches |
 
 ## Future
 
