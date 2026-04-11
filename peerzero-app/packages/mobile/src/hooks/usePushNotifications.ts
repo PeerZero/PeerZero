@@ -83,8 +83,9 @@ export function usePushNotifications(isAuthenticated: boolean): void {
 
         // Register with our server
         await notifApi.registerToken(token, Device.deviceName || undefined);
-      } catch {
+      } catch (err) {
         // Push registration is best-effort — don't crash the app
+        console.warn('Push notification registration failed:', err);
       }
     })();
   }, [isAuthenticated]);

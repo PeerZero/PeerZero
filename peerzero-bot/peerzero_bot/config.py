@@ -224,8 +224,9 @@ class BotConfig:
         """
         try:
             mode = path.stat().st_mode
-        except OSError:
-            return  # Can't check permissions — skip silently
+        except OSError as e:
+            logger.warning(f"Cannot check config file permissions for {path}: {e}")
+            return
         if mode & stat.S_IRGRP or mode & stat.S_IROTH:
             if os.environ.get("PEERZERO_ALLOW_INSECURE_CONFIG") == "1":
                 logger.warning(

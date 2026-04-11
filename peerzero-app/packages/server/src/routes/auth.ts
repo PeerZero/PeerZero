@@ -9,6 +9,7 @@ import { requireAuth } from '../middleware/auth';
 import { removeBotJobs } from '../jobs/queue';
 import { logAudit } from '../services/audit.service';
 import { queryRows, queryOne } from '../db/client';
+import { logger } from '../lib/logger';
 
 const router = Router();
 
@@ -220,8 +221,9 @@ router.delete('/account', requireAuth, async (req: Request, res: Response) => {
         const { getSchoolAdapter } = await import('../adapters/adapter.factory');
         const adapter = getSchoolAdapter();
         await adapter.deleteAgent(bot.base_url, bot.school_agent_handle);
-      } catch {
+      } catch (err) {
         // Log but don't block — App data deletion is more important
+        logger.error({ err: err instanceof Error ? err.message : err, handle: bot.school_agent_handle, baseUrl: bot.base_url }, 'Failed to delete school agent during account deletion — GDPR/COPPA erasure incomplete');
       }
     }
   }

@@ -15,6 +15,7 @@ import * as taskService from '../services/task.service';
 import * as botService from '../services/bot.service';
 import { logAudit } from '../services/audit.service';
 import { validateExternalUrl } from '../lib/url-validation';
+import { logger } from '../lib/logger';
 import rateLimit from 'express-rate-limit';
 
 const incomingTaskLimiter = rateLimit({
@@ -68,6 +69,17 @@ router.post('/:id/tasks/incoming', incomingTaskLimiter, async (req: Request, res
     res.status(400).json({ error: 'sender and action_requested required' });
     return;
   }
+
+  // Log incoming task with sender identity — sender is self-reported and unverified
+  // unless the bot has incoming_task_secret_hash set (which proves the caller knows the secret)
+  const isAuthenticated = !!bot.incoming_task_secret_hash;
+  logger.info({
+    botId: req.params.id,
+    sender,
+    action: action_requested,
+    authenticated: isAuthenticated,
+    sourceIp: req.ip,
+  }, `Incoming A2A task from ${isAuthenticated ? 'authenticated' : 'UNAUTHENTICATED'} sender: ${sender}`);
 
   // Validate callback_url against SSRF before storing
   if (callback_url) {

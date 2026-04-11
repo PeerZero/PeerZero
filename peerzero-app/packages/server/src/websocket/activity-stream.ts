@@ -93,12 +93,18 @@ function ensureRedis(): boolean {
     });
 
     // Connect both, then subscribe
-    redisPub.connect().catch(() => {});
+    redisPub.connect().catch((err) => {
+      logger.error({ err: err instanceof Error ? err.message : err }, 'Redis pub connection failed — WebSocket federation disabled');
+      redisPub = null;
+    });
     redisSub.connect().then(() => {
       redisSub!.psubscribe(`${WS_CHANNEL_PREFIX}*`).catch((err) => {
         logger.error({ err: err instanceof Error ? err.message : err }, 'Failed to psubscribe to ws:bot:* pattern');
       });
-    }).catch(() => {});
+    }).catch((err) => {
+      logger.error({ err: err instanceof Error ? err.message : err }, 'Redis sub connection failed — WebSocket federation disabled');
+      redisSub = null;
+    });
 
     return false; // not ready yet — will be ready asynchronously
   } catch (err) {

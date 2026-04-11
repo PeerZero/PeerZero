@@ -112,8 +112,8 @@ async function cacheBotVoice(
        )`,
       [botId],
     );
-  } catch {
-    // Non-critical — don't let cache failures break anything
+  } catch (err) {
+    logger.debug({ err: err instanceof Error ? err.message : err, botId }, 'Voice cache write/cleanup failed');
   }
 }
 
@@ -246,7 +246,8 @@ async function getCachedDialogue(botId: string, context: string): Promise<string
       [botId, `dialogue:${context}`],
     );
     return row?.bot_message || null;
-  } catch {
+  } catch (err) {
+    logger.debug({ err: err instanceof Error ? err.message : err, botId }, 'Voice cache read failed');
     return null;
   }
 }
@@ -264,8 +265,8 @@ async function cacheDialogue(botId: string, context: string, message: string): P
        VALUES ($1, $2, $3, $4)`,
       [botId, `dialogue:${context}`, message, JSON.stringify({ context })],
     );
-  } catch {
-    // Non-critical
+  } catch (err) {
+    logger.debug({ err: err instanceof Error ? err.message : err, botId }, 'Dialogue cache write failed');
   }
 }
 
@@ -279,8 +280,8 @@ export async function invalidateDialogueCache(botId: string): Promise<void> {
       `DELETE FROM bot_voice_cache WHERE bot_id = $1 AND event_type LIKE 'dialogue:%'`,
       [botId],
     );
-  } catch {
-    // Non-critical
+  } catch (err) {
+    logger.debug({ err: err instanceof Error ? err.message : err, botId }, 'Dialogue cache invalidation failed');
   }
 }
 

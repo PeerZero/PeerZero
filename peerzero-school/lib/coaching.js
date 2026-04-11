@@ -51,7 +51,8 @@ async function getCoachingAdviceWithForgeOverlay() {
       }
     }
     return { ...base, ...overlay };
-  } catch {
+  } catch (err) {
+    log.warn('[coaching] buildCoaching overlay failed', { err: err?.message });
     return base;
   }
 }

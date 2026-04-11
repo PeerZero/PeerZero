@@ -88,13 +88,13 @@ class SharedSelfAwareness:
         self._conn.row_factory = sqlite3.Row
         try:
             self._db_path.chmod(stat.S_IRUSR | stat.S_IWUSR)
-        except OSError:
-            pass
+        except OSError as e:
+            logger.debug(f"Cannot set DB file permissions (expected on non-POSIX): {e}")
         if self._encryption_key:
             try:
                 self._conn.execute("PRAGMA key=?", (self._encryption_key,))
             except sqlite3.OperationalError:
-                pass
+                logger.warning("SQLite encryption not available — shared awareness DB continuing UNENCRYPTED despite encryption key being set")
         self._conn.execute("PRAGMA journal_mode = WAL")
         self._conn.execute("PRAGMA foreign_keys = ON")
         self._conn.executescript(_SCHEMA)

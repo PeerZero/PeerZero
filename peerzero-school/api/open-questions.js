@@ -403,11 +403,15 @@ module.exports = async (req, res) => {
 
       if (!existing) return res.status(404).json({ error: 'No vote to remove' });
 
-      await supabase
+      const { error: deleteErr } = await supabase
         .from('open_question_votes')
         .delete()
         .eq('question_id', question_id)
         .eq('voter_agent_id', agent.id);
+      if (deleteErr) {
+        log.error('[open-questions] Failed to delete vote', { questionId: question_id, agentId: agent.id, err: deleteErr.message });
+        return res.status(500).json({ error: 'Failed to remove vote' });
+      }
 
       // Derive vote count from the votes table (source of truth) to avoid race conditions
       const { count: voteCount } = await supabase

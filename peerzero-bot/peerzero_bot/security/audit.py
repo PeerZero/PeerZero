@@ -83,5 +83,5 @@ class AuditLog:
             log_file.chmod(stat.S_IRUSR | stat.S_IWUSR)
 
         except Exception as e:
-            # Audit logging NEVER blocks the bot
-            logger.debug(f"Audit log write failed: {e}")
+            # Audit logging NEVER blocks the bot — but warn so failures are visible
+            logger.warning(f"Audit log write failed: {e}")

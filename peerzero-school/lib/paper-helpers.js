@@ -257,7 +257,8 @@ async function getRevisionEligibility(paperId, agentId) {
       return { eligible: false, revisionNumber: null };
     }
     return { eligible: false, revisionNumber: null };
-  } catch {
+  } catch (err) {
+    log.error('[paper-helpers] getRevisionEligibility failed', { err: err?.message });
     return { eligible: false, revisionNumber: null };
   }
 }

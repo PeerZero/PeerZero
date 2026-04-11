@@ -177,8 +177,8 @@ class ConversationalMemoryDB:
         # Set file permissions (owner-only)
         try:
             self._db_path.chmod(stat.S_IRUSR | stat.S_IWUSR)
-        except OSError:
-            pass
+        except OSError as e:
+            logger.debug(f"Cannot set DB file permissions (expected on non-POSIX): {e}")
 
         # Apply encryption if configured
         if self._encryption_key:
@@ -186,7 +186,7 @@ class ConversationalMemoryDB:
                 # Use parameterized form to prevent SQL injection via key contents
                 self._conn.execute("PRAGMA key=?", (self._encryption_key,))
             except sqlite3.OperationalError:
-                logger.debug("SQLite encryption not available — continuing unencrypted")
+                logger.warning("SQLite encryption not available — conversation DB continuing UNENCRYPTED despite encryption key being set")
 
         # Performance pragmas
         self._conn.execute("PRAGMA journal_mode = WAL")

@@ -115,7 +115,8 @@ async function checkGradeProgress(agentId) {
   if (qualityMet) {
     const newGrade = grade + 1;
     const newHighest = Math.max(agent.highest_grade_completed || 0, grade);
-    await supabase.from('agents').update({
+    // Optimistic lock: only advance if grade hasn't changed since we read it
+    const { data: advanceResult, error: advanceErr } = await supabase.from('agents').update({
       current_grade: newGrade,
       grade_papers: 0,
       grade_reviews: 0,
@@ -124,7 +125,12 @@ async function checkGradeProgress(agentId) {
       grade_forge_papers: 0,
       grade_started_at: new Date().toISOString(),
       highest_grade_completed: newHighest,
-    }).eq('id', agentId);
+    }).eq('id', agentId).eq('current_grade', grade).select('id');
+
+    if (advanceErr || !advanceResult || advanceResult.length === 0) {
+      log.warn('[grade] Grade advance skipped — concurrent advancement detected', { agentId, grade });
+      return { status: 'in_progress', grade, gradeInfo, bestGradeScore, advanced: false, failed: false };
+    }
 
     log.info('[grade] Agent advanced', { agentId, newGrade, completedGrade: grade });
     gradeInfo.current_grade = newGrade;
@@ -138,6 +144,7 @@ async function checkGradeProgress(agentId) {
 
   // FAIL: activity met but quality gate not met — reset grade
   const newFailCount = (agent.grade_fail_count || 0) + 1;
+  // Optimistic lock: only reset if grade hasn't changed since we read it
   await supabase.from('agents').update({
     grade_papers: 0,
     grade_reviews: 0,
@@ -146,7 +153,7 @@ async function checkGradeProgress(agentId) {
     grade_forge_papers: 0,
     grade_started_at: new Date().toISOString(),
     grade_fail_count: newFailCount,
-  }).eq('id', agentId);
+  }).eq('id', agentId).eq('current_grade', grade);
 
   log.info('[grade] Agent FAILED grade', { agentId, grade, attempt: newFailCount, bestScore: bestGradeScore, needed: reqs.min_score });
   gradeInfo.activity = { papers: 0, reviews: 0, revisions: 0, bounties: 0, forge_papers: 0 };

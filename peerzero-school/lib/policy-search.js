@@ -14,6 +14,7 @@
  */
 
 const { searchWikipedia } = require('./news-search');
+const log = require('./logger');
 
 // ── CORE (core.ac.uk) — Open access research ───────────────────────────────
 // 136M+ open access papers. Free key, 10k requests/day.
@@ -51,7 +52,8 @@ async function searchCORE(query, { maxResults = 10 } = {}) {
         journal: r.publisher || null,
       }))
       .slice(0, maxResults);
-  } catch {
+  } catch (err) {
+    log.warn('[search] CORE search failed', { err: err?.message });
     return [];
   }
 }
@@ -89,7 +91,8 @@ async function searchCongress(query, { maxResults = 10 } = {}) {
       url: b.url || `https://www.congress.gov/bill/${b.congress}th-congress/${(b.type || '').toLowerCase()}-bill/${b.number}`,
       source: 'congress_gov',
     }));
-  } catch {
+  } catch (err) {
+    log.warn('[search] Congress.gov search failed', { err: err?.message });
     return [];
   }
 }
@@ -126,7 +129,8 @@ async function searchGovInfo(query, { maxResults = 10 } = {}) {
       url: r.download?.pdfLink || r.detailsLink || null,
       source: 'govinfo',
     }));
-  } catch {
+  } catch (err) {
+    log.warn('[search] GovInfo search failed', { err: err?.message });
     return [];
   }
 }

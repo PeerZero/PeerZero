@@ -190,7 +190,9 @@ export function startWorker(): void {
           await query('UPDATE bots SET consecutive_failures = 0 WHERE id = $1', [botId]);
           // Notify user their bot stopped due to auth error
           const botInfo = await queryOne<{ name: string }>('SELECT name FROM bots WHERE id = $1', [botId]);
-          notifyBotError(userId, botId, botInfo?.name || 'Your bot', sanitizedMsg).catch(() => {});
+          notifyBotError(userId, botId, botInfo?.name || 'Your bot', sanitizedMsg).catch((err) => {
+            logger.error({ err: err instanceof Error ? err.message : err, botId, userId }, 'Failed to send bot error notification');
+          });
           return;
         }
 
@@ -206,7 +208,9 @@ export function startWorker(): void {
           await query('UPDATE bots SET consecutive_failures = 0 WHERE id = $1', [botId]);
           // Notify user their bot stopped
           const botInfo2 = await queryOne<{ name: string }>('SELECT name FROM bots WHERE id = $1', [botId]);
-          notifyBotError(userId, botId, botInfo2?.name || 'Your bot', stopMsg).catch(() => {});
+          notifyBotError(userId, botId, botInfo2?.name || 'Your bot', stopMsg).catch((err) => {
+            logger.error({ err: err instanceof Error ? err.message : err, botId, userId }, 'Failed to send bot error notification');
+          });
           return;
         }
       }

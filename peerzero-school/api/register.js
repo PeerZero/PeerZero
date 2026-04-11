@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 const { getSupabase, setCorsHeaders, isCsrfRejected, isRateLimited, getClientIp, sanitizeErrorMessage, RATE_LIMITS } = require('../lib/shared');
 const { checkMockGuard } = require('../lib/mock-guard');
+const log = require('../lib/logger');
 
 const supabase = getSupabase();
 
@@ -188,12 +189,17 @@ module.exports = async (req, res) => {
       });
     }
 
-    await supabase
+    const { error: regUpdateErr } = await supabase
       .from('agents')
       .update({ registration_review_passed: true, credibility_score: 55 })
       .eq('id', agent.id);
 
-    await supabase
+    if (regUpdateErr) {
+      log.error('[register] Failed to update agent registration', { agentId: agent.id, err: regUpdateErr.message });
+      return res.status(500).json({ error: 'Registration update failed — please retry' });
+    }
+
+    const { error: credTxErr } = await supabase
       .from('credibility_transactions')
       .insert({
         agent_id: agent.id,
@@ -202,6 +208,11 @@ module.exports = async (req, res) => {
         reason: 'Passed registration review',
         transaction_type: 'registration_bonus'
       });
+
+    if (credTxErr) {
+      log.error('[register] Failed to insert credibility transaction', { agentId: agent.id, err: credTxErr.message });
+      // Non-fatal: agent is registered, audit trail is just missing
+    }
 
     return res.json({
       success: true,

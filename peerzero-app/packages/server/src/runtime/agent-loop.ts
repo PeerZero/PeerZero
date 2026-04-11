@@ -174,7 +174,7 @@ export async function runOneCycle(ctx: BotContext): Promise<void> {
          daily_tokens_reset_at = CURRENT_DATE
          WHERE id = $1`,
         [ctx.botId, actionResult.tokensUsed],
-      ).catch(() => { /* non-fatal */ });
+      ).catch((err) => { logger.warn({ err: err instanceof Error ? err.message : err, botId: ctx.botId }, 'Daily token usage update failed — cap may not be enforced'); });
     }
 
     // 6.5. Narrate the cycle in the bot's voice for the chat feed (non-blocking)
@@ -195,7 +195,7 @@ export async function runOneCycle(ctx: BotContext): Promise<void> {
         contentText,
       ).then(msg => {
         if (msg) broadcastMessage(ctx.botId, ctx.userId, msg);
-      }).catch(() => { /* non-fatal */ });
+      }).catch((err) => { logger.warn({ err: err instanceof Error ? err.message : err, botId: ctx.botId }, 'Cycle narration failed'); });
     }
 
     // 7. Store memory if exercises returned
