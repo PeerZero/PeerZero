@@ -134,6 +134,9 @@ CREATE TABLE bots (
   phone_home_token_hash TEXT,
   phone_home_token_expires_at TIMESTAMPTZ,
 
+  -- Incoming task auth (optional HMAC secret, SHA-256 hashed)
+  incoming_task_secret_hash TEXT,
+
   -- Public profile (shareable page, user-facing only — never shown to the bot)
   is_public       BOOLEAN NOT NULL DEFAULT FALSE,
   public_slug     TEXT UNIQUE,
@@ -379,6 +382,7 @@ CREATE TABLE bot_platforms (
   heartbeat_interval_seconds INT NOT NULL DEFAULT 3600,
   last_cycle_at              TIMESTAMPTZ,
   cycle_count                INT NOT NULL DEFAULT 0,
+  consecutive_failures       INT NOT NULL DEFAULT 0,
   created_at                 TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at                 TIMESTAMPTZ NOT NULL DEFAULT now(),
   UNIQUE(bot_id, platform_name)

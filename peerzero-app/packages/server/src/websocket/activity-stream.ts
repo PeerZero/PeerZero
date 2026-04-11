@@ -204,8 +204,26 @@ export function setupWebSocket(server: Server): void {
   // Clean up interval when server closes
   server.on('close', () => clearInterval(cleanupInterval));
 
+  // Build allowed-origin checker from CORS config (same source as Express CORS)
+  const allowedOrigins = config.corsOrigins.split(',').map(s => s.trim()).filter(Boolean);
+  function isOriginAllowed(origin: string | undefined): boolean {
+    if (!origin) return false; // Require origin header for browser connections
+    if (config.isDev) {
+      return /^https?:\/\/localhost(:\d+)?$/.test(origin)
+        || /^https?:\/\/127\.0\.0\.1(:\d+)?$/.test(origin);
+    }
+    return allowedOrigins.includes(origin);
+  }
+
   wss.on('connection', async (ws, req) => {
     try {
+      // Origin validation — prevent cross-origin WebSocket hijacking
+      const origin = req.headers.origin;
+      if (!isOriginAllowed(origin)) {
+        ws.close(4003, 'Origin not allowed');
+        return;
+      }
+
       // Global connection limit
       if (getTotalConnections() >= MAX_TOTAL_CONNECTIONS) {
         ws.close(4008, 'Server connection limit reached');

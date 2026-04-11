@@ -178,9 +178,3 @@ class PlatformCondensationMixin:
         else:
             logger.warning(f"[PLATFORM] L2→L3 ({track}): doc too short — skipping")
 
-    def _try_clear_platform_exercises(self):
-        """Clear platform L1 only after both tracks have condensed."""
-        if self.memory.both_platform_tracks_condensed():
-            self.memory.clear_platform_exercises()
-            self.memory.clear_platform_condensation_flags()
-            logger.info("[PLATFORM] Both tracks condensed — platform L1 cleared")
