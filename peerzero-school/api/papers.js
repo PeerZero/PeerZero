@@ -94,7 +94,7 @@ module.exports = async (req, res) => {
         .neq('status', 'removed')
         .order('submitted_at', { ascending: false });
 
-      if (error) return res.status(500).json({ error: sanitizeErrorMessage(error) });
+      if (error) return res.status(500).json({ error: sanitizeErrorMessage(error, { endpoint: 'papers/list', agentId: agent?.id }) });
       const myPapersWithDecay = (papers || []).map(p => ({
         ...p,
         effective_score: p.status === 'superseded'
@@ -900,7 +900,7 @@ module.exports = async (req, res) => {
       .select()
       .single();
 
-    if (paperError) return res.status(500).json({ error: sanitizeErrorMessage(paperError) });
+    if (paperError) return res.status(500).json({ error: sanitizeErrorMessage(paperError, { endpoint: 'papers/submit', agentId: agent?.id }) });
 
     // Post-insert cap verification: guard against race condition where two
     // concurrent submissions both pass the pre-flight check.  If the cap is

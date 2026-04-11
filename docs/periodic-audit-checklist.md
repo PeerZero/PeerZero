@@ -292,7 +292,7 @@ Pick 2-3 audits per session. For each audit, search all 3 systems (peerzero-scho
 - Log levels that are wrong: errors logged as warnings, warnings logged as debug
 - Missing structured logging fields (all three systems should log `agentId`/`botId`/`userId` consistently)
 
-**Last run:** Never
+**Last run:** 2026-04-11 — 8 found, 6 fixed (PII redacted from logs, email service leak fixed, sanitizeErrorMessage now accepts context). Request ID infrastructure and error shape consistency are future work.
 
 ---
 
@@ -337,5 +337,5 @@ Track when each audit was last run and what was found/fixed. This helps Claude p
 | 12 | N+1 Queries | 2026-04-11 | 13 found, 9 fixed (retroactive batch, drift batch, pending bounties limit+cols, condensation count, empty guard, SELECT * → columns on agents in 4 queries, ownership filter to DB) | claude/complete-audits-w4oXD |
 | 13 | Input Validation | 2026-04-11 | 12 found, 10 fixed (confidence type, grade bounds, external_sources guard, response_score NaN, historical cap, context_sources cap, LLM output shape, skills filter, error sanitize, Zod middleware + schemas) | claude/complete-audits-w4oXD |
 | 14 | Cross-System Contracts | 2026-04-11 | 4 found, 4 fixed (2 critical: executeRevision read wrong field reaffirmable_papers→can_revise_papers, determineAction dropped forge_paper/self_review/sleep/reaffirm; 2 high: revision/reaffirmation used wrong API paths, review sent paper_id in body instead of query) | claude/complete-readme-audits-3dG6T |
-| 15 | Error Message UX | — | — | — |
+| 15 | Error Message UX | 2026-04-11 | 8 found, 6 fixed (2 high: removed PII — email from auth logs, IP from widget logs; email service now logs err.message not raw err; sanitizeErrorMessage now accepts context IDs for correlation; 2 noted: request ID infrastructure and error shape consistency are future work) | claude/complete-readme-audits-3dG6T |
 | 16 | Graceful Shutdown | 2026-04-11 | 9 checked, 1 fixed (1 high: App server now waits for in-flight HTTP requests to drain before process.exit with 10s timeout; BullMQ workers already handled correctly; bot SIGTERM is graceful, SIGINT interrupts mid-action — medium, acceptable) | claude/complete-readme-audits-3dG6T |

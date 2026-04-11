@@ -1286,7 +1286,7 @@ module.exports = async (req, res) => {
       return res.json({ stored: true });
     } catch (err) {
       log.error('[decision-rationale] API store failed', { err: err?.message });
-      return res.status(500).json({ error: require('../lib/shared').sanitizeErrorMessage(err) });
+      return res.status(500).json({ error: require('../lib/shared').sanitizeErrorMessage(err, { endpoint: 'agents/decision_rationale', agentId: agentDR?.id }) });
     }
   }
 
@@ -1308,7 +1308,7 @@ module.exports = async (req, res) => {
       return res.json({ stored: !!stored, signal_id: stored?.id || null });
     } catch (err) {
       log.error('[persistence] API store failed', { err: err?.message });
-      return res.status(500).json({ error: sanitizeErrorMessage(err) });
+      return res.status(500).json({ error: sanitizeErrorMessage(err, { endpoint: 'agents/persistence', agentId: agentPS?.id }) });
     }
   }
 
