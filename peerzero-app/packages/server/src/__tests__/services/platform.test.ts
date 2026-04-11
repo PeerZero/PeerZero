@@ -30,8 +30,8 @@ vi.mock('../../services/audit.service', () => ({
   logAudit: (...args: any[]) => mockLogAudit(...args),
 }));
 
-const mockNotifyPlatformConnected = vi.fn();
-const mockNotifyPlatformError = vi.fn();
+const mockNotifyPlatformConnected = vi.fn().mockResolvedValue(undefined);
+const mockNotifyPlatformError = vi.fn().mockResolvedValue(undefined);
 vi.mock('../../services/notification.service', () => ({
   notifyPlatformConnected: (...args: any[]) => mockNotifyPlatformConnected(...args),
   notifyPlatformError: (...args: any[]) => mockNotifyPlatformError(...args),

@@ -64,9 +64,7 @@ const mockSupabase = {
       },
       update(data) {
         lastUpdate = data;
-        return {
-          eq() { return Promise.resolve({ data: null, error: null }); },
-        };
+        return buildChain([{ id: 'agent-1' }]);
       },
     };
   },
