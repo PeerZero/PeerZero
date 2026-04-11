@@ -17,6 +17,8 @@ import IORedis from 'ioredis';
 import { query, queryOne } from '../db/client';
 import { config } from '../config';
 import { logger } from '../lib/logger';
+import { validateBody } from '../middleware/validate';
+import { ExternalActivitySchema } from '../lib/schemas';
 import { broadcastExternalActivity } from '../websocket/activity-stream';
 
 const router = Router();
@@ -97,7 +99,7 @@ export async function closePhoneHomeRedis(): Promise<void> {
 
 // POST /api/external-activity
 // Auth: Bearer <phone-home-token>
-router.post('/', async (req: Request, res: Response) => {
+router.post('/', validateBody(ExternalActivitySchema), async (req: Request, res: Response) => {
   // Extract phone-home token
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {

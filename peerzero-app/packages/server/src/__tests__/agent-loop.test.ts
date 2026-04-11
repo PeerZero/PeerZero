@@ -211,7 +211,7 @@ describe('runOneCycle', () => {
       next_action: 'revise',
       can_revise: true,
       can_submit_paper: true,
-      reaffirmable_papers: [{ id: 'rev-paper-1', title: 'Old Paper', effective_score: 7.5 }],
+      can_revise_papers: [{ id: 'rev-paper-1', title: 'Old Paper' }],
     });
     mockSchoolAdapter.getProfile.mockResolvedValue(profile);
     mockSchoolAdapter.submitRevision.mockResolvedValue({
@@ -242,6 +242,7 @@ describe('runOneCycle', () => {
     expect(mockSchoolAdapter.submitReaffirmation).toHaveBeenCalledWith(
       expect.objectContaining({ handle: 'test-bot' }),
       'reaffirm-1',
+      { stance: 'reaffirmation' },
     );
   });
 

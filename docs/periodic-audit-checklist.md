@@ -199,7 +199,7 @@ Pick 2-3 audits per session. For each audit, search all 3 systems (peerzero-scho
 - Verify Anthropic SDK version is current (API changes, security fixes)
 - Check Node.js and Python runtime versions against EOL dates
 
-**Last run:** Never
+**Last run:** 2026-04-11 — 12 issues found, 8 fixed. Remaining 3 moderate (esbuild, vite, brace-expansion) are dev-only and documented in auditNotes.
 
 ---
 
@@ -218,7 +218,7 @@ Pick 2-3 audits per session. For each audit, search all 3 systems (peerzero-scho
 - `bots.py` references or patterns that leaked into production code (CLAUDE.md says it's deprecated)
 - Unused npm/pip dependencies in package.json/requirements.txt
 
-**Last run:** Never
+**Last run:** 2026-04-11 — 7 issues found, 4 fixed (unused Zod schemas wired to routes). 3 dead bot methods noted as future-feature stubs.
 
 ---
 
@@ -274,7 +274,7 @@ Pick 2-3 audits per session. For each audit, search all 3 systems (peerzero-scho
 - API versioning: if the School adds a required field, do all deployed bots handle it?
 - Condenser prompt format: does the School serve prompts in the shape the bot's condenser expects?
 
-**Last run:** Never
+**Last run:** 2026-04-11 — 4 issues found, 4 fixed (2 critical, 2 high). All App→School API contract mismatches corrected.
 
 ---
 
@@ -332,10 +332,10 @@ Track when each audit was last run and what was found/fixed. This helps Claude p
 | 7 | Stale Cache | — | — | — |
 | 8 | Authorization Gaps | 2026-04-11 | 9 found, 3 fixed (0 critical, 3 medium) | claude/silent-failures-check-8N9z2 |
 | 9 | Degradation Decisions | — | — | — |
-| 10 | Dependency Vulns | — | — | — |
-| 11 | Dead Code | — | — | — |
+| 10 | Dependency Vulns | 2026-04-11 | 12 found, 8 fixed (pnpm overrides for brace-expansion/yaml, model ID updated to claude-sonnet-4-6, stale h11 comment, removed dead tomli dep, synced httpx lock, .python-version, engines field, @types/node pinned; 3 remaining: esbuild/vite/brace-expansion dev-only, documented) | claude/complete-readme-audits-3dG6T |
+| 11 | Dead Code | 2026-04-11 | 7 found, 4 fixed (wired 4 unused Zod schemas to routes: UpdateBotSchema, AddApiKeySchema, SendMessageSchema, ExternalActivitySchema; fixed AddApiKeySchema field mismatch; 3 noted: dead bot methods for future features) | claude/complete-readme-audits-3dG6T |
 | 12 | N+1 Queries | 2026-04-11 | 13 found, 9 fixed (retroactive batch, drift batch, pending bounties limit+cols, condensation count, empty guard, SELECT * → columns on agents in 4 queries, ownership filter to DB) | claude/complete-audits-w4oXD |
 | 13 | Input Validation | 2026-04-11 | 12 found, 10 fixed (confidence type, grade bounds, external_sources guard, response_score NaN, historical cap, context_sources cap, LLM output shape, skills filter, error sanitize, Zod middleware + schemas) | claude/complete-audits-w4oXD |
-| 14 | Cross-System Contracts | — | — | — |
+| 14 | Cross-System Contracts | 2026-04-11 | 4 found, 4 fixed (2 critical: executeRevision read wrong field reaffirmable_papers→can_revise_papers, determineAction dropped forge_paper/self_review/sleep/reaffirm; 2 high: revision/reaffirmation used wrong API paths, review sent paper_id in body instead of query) | claude/complete-readme-audits-3dG6T |
 | 15 | Error Message UX | — | — | — |
 | 16 | Graceful Shutdown | — | — | — |

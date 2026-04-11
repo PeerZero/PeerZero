@@ -75,16 +75,16 @@ export class RealSchoolAdapter implements ISchoolAdapter {
   }
 
   async submitRevision(creds: SchoolCredentials, paperId: string, revision: Record<string, unknown>): Promise<SchoolPaperResult> {
-    return schoolFetch(creds, `/api/papers/${paperId}/revise`, {
+    return schoolFetch(creds, `/api/responses?paper_id=${encodeURIComponent(paperId)}`, {
       method: 'POST',
       body: JSON.stringify(revision),
     });
   }
 
   async submitReview(creds: SchoolCredentials, paperId: string, review: Record<string, unknown>): Promise<SchoolReviewResult> {
-    return schoolFetch(creds, `/api/reviews`, {
+    return schoolFetch(creds, `/api/reviews?paper_id=${encodeURIComponent(paperId)}`, {
       method: 'POST',
-      body: JSON.stringify({ paper_id: paperId, ...review }),
+      body: JSON.stringify(review),
     });
   }
 
@@ -123,9 +123,10 @@ export class RealSchoolAdapter implements ISchoolAdapter {
     });
   }
 
-  async submitReaffirmation(creds: SchoolCredentials, paperId: string): Promise<{ success: boolean; credibility_change?: number }> {
-    return schoolFetch(creds, `/api/responses/${paperId}/reaffirm`, {
+  async submitReaffirmation(creds: SchoolCredentials, paperId: string, reaffirmation: Record<string, unknown>): Promise<{ success: boolean; credibility_change?: number }> {
+    return schoolFetch(creds, `/api/responses?paper_id=${encodeURIComponent(paperId)}`, {
       method: 'POST',
+      body: JSON.stringify(reaffirmation),
     });
   }
 

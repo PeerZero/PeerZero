@@ -14,13 +14,20 @@
       "@expo/cli>picomatch": ">=4.0.4",
       "node-forge@<1.4.0": ">=1.4.0",
       "path-to-regexp@<0.1.13": ">=0.1.13",
-      "@xmldom/xmldom@<0.8.12": ">=0.8.12"
+      "@xmldom/xmldom@<0.8.12": ">=0.8.12",
+      "brace-expansion@<1.1.13": ">=1.1.13",
+      "brace-expansion@>=2.0.0 <2.0.3": ">=2.0.3",
+      "brace-expansion@5.0.4": "5.0.5",
+      "yaml@>=2.0.0 <2.8.3": ">=2.8.3"
     },
     "//auditNotes": {
       "esbuild@0.21.5 (moderate)": "GHSA-67mh-4wv8-2f99 — dev server CORS bypass. Dev-only (vitest>vite>esbuild), not a production risk. Cannot override to >=0.25.0 without breaking vite/vitest (breaking changes). Will resolve when vite upgrades its esbuild dep. Check: pnpm audit",
       "node-forge@1.3.3 (high)": "GHSA-5m6q-g25r-mvwx, GHSA-2328-f5f3-gj25, GHSA-q67f-28xg-22rw, GHSA-ppp5-5v6c-4jwp — DoS, cert bypass, Ed25519+RSA signature forgery. Comes from @expo/cli>@expo/code-signing-certificates>node-forge and @expo/cli>node-forge. Override to >=1.4.0.",
       "path-to-regexp@0.1.12 (high)": "GHSA-37ch-88jc-xwx2 — ReDoS via multiple route parameters. Comes from express@4.22.1>path-to-regexp. Override to >=0.1.13.",
-      "@xmldom/xmldom@<0.8.12 (high)": "GHSA-wh4c-j3r5-mjhp — XML injection via unsafe CDATA serialization. Comes from @expo/plist>@xmldom/xmldom. Override to >=0.8.12."
+      "@xmldom/xmldom@<0.8.12 (high)": "GHSA-wh4c-j3r5-mjhp — XML injection via unsafe CDATA serialization. Comes from @expo/plist>@xmldom/xmldom. Override to >=0.8.12.",
+      "brace-expansion@5.0.4 (moderate)": "GHSA-f886-m6hf-6m8v — zero-step sequence causes process hang / memory exhaustion. Comes from @expo/cli transitive deps. Override resolves root copy; hoisted copies in Expo/RN dev tooling resist override. Mobile dev-only, not a production server risk.",
+      "yaml@2.8.2 (moderate)": "GHSA-48c2-rrv3-qjmp — stack overflow via deeply nested YAML collections. Comes from expo>@expo/metro>metro-config>yaml. Override to >=2.8.3.",
+      "vite@5.4.21 (moderate)": "GHSA-4w7w-66w2-5vf9 — path traversal in .map handling. Dev-only (vitest>vite). Fix only available in vite v6 branch; vite v5 has no patch. Accept until vitest upgrades."
     }
   },
   "workspaces": [

@@ -760,7 +760,7 @@ async function getHistory({ generation, limit = 50 } = {}) {
 // Uses the same raw-https pattern as haiku-audit.js but with Sonnet for
 // better quality on frame extraction (frames need nuance, not just speed).
 
-function callAnthropic(prompt, { model = 'claude-sonnet-4-5-20241022', maxTokens = 2000, context = 'meta-condenser' } = {}) {
+function callAnthropic(prompt, { model = 'claude-sonnet-4-6', maxTokens = 2000, context = 'meta-condenser' } = {}) {
   return new Promise((resolve) => {
     if (!process.env.ANTHROPIC_API_KEY) {
       log.error(`[${context}] ANTHROPIC_API_KEY not set`);

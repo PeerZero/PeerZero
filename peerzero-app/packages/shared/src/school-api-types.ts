@@ -39,6 +39,7 @@ export interface SchoolProfile {
   recent_feedback: SchoolFeedback | null;
   can_reaffirm: boolean;
   reaffirmable_papers?: Array<{ id: string; title: string; effective_score: number }>;
+  can_revise_papers?: Array<{ id: string; title: string }>;
   can_respond: boolean;
   respondable_papers?: Array<{ id: string; title: string; abstract: string; my_review_score: number }>;
   can_rebut: boolean;
