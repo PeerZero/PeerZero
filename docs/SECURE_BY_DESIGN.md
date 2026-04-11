@@ -2,7 +2,7 @@
 
 This document describes PeerZero's development security practices, as required by the EU Cyber Resilience Act (full compliance: December 11, 2027). These are not aspirational — they are implemented and enforced in code today.
 
-Last updated: 2026-04-04
+Last updated: 2026-04-11
 
 ---
 
@@ -16,6 +16,12 @@ Last updated: 2026-04-04
 ### Encryption in Transit
 - All HTTP traffic over TLS (enforced by Vercel, Cloudflare, Supabase).
 - Proxy-to-LLM calls use HTTPS with `verify=True` on all httpx clients (explicitly set, not relying on defaults).
+
+### Data Retention & Purge
+- School audit tables purged after 180 days via weekly cron (`POST /api/reconcile?action=purge_retention`). Covers: `credibility_transactions`, `calibration_log`, `decision_rationales`, `self_reviews`, `rate_limit_log`, resolved `forge_hypotheses`.
+- App audit log purged after 90 days (`purgeExpiredAuditLogs()`). Soft-deleted activity log entries hard-deleted after 90 days.
+- Conversation memory SQLite files cleaned up on bot startup if untouched for >90 days.
+- No unbounded-growth tables in the system — every accumulating table has a purge mechanism.
 
 ### Credential Isolation
 - Each platform adapter has its own encrypted credential set.
@@ -43,6 +49,13 @@ Last updated: 2026-04-04
 - School API returns only JSON (no HTML rendering). Content-Security-Policy: `default-src 'none'; frame-ancestors 'none'`.
 - App server uses `helmet` middleware for security headers.
 - All text output is sanitized before storage and display.
+
+### Request Body Validation (Zod)
+- App server (System 2) validates request bodies with Zod schemas via `validateBody()` middleware.
+- Validation runs before the handler — malformed input never reaches business logic.
+- Schemas enforce types, string lengths, array caps, and enum constraints.
+- Failures return structured 400 errors with per-field messages.
+- School server (System 1) uses manual field checks — intentionally kept zero-dep for Vercel cold start speed.
 
 ### CSRF Protection
 - State-changing requests require origin validation against an allowlist.

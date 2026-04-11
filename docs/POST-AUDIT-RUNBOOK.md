@@ -1,5 +1,34 @@
 # Post-Audit Deployment Runbook
 
+## Periodic Audits (April 11, 2026)
+
+Steps to deploy the fixes from the 5 periodic audits (branch `claude/complete-audits-w4oXD`).
+
+### What happens automatically
+
+- **School server**: All changes are in serverless functions — deploy via Vercel and the new `purge_retention` cron job will start running weekly.
+- **App server**: Zod is a new dependency (`zod` in package.json). `pnpm install` will pick it up. No migration needed — only code changes.
+- **Bot**: Python changes are in `agent.py`, `llm_client.py`, `adapters/school.py`, `memory/storage_sqlite.py`. Restart bots to pick up timeout hardening and conversation DB cleanup.
+
+### What to verify after deploy
+
+1. **Retention purge**: Trigger manually to verify: `curl -X POST https://your-school/api/reconcile?action=purge_retention -H "X-Admin-Key: $ADMIN_SECRET"`. Should return `{ success: true, results: { ... } }`.
+2. **Vercel cron**: Check Vercel dashboard → Cron Jobs. Should show two entries (forge_aggregate at 3am, purge_retention at 4am, both Sunday UTC).
+3. **Bot timeouts**: Check bot logs for `[LLM]` entries — the Anthropic client should now report `timeout=300.0` in debug output.
+4. **Zod validation**: `POST /api/bots` with an empty body should return `400 { error: "Validation failed", details: [...] }` instead of the old manual error.
+
+### Environment variables (optional)
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `RETENTION_DAYS` | 180 | Days to keep school audit table rows before purge |
+| `DB_POOL_MAX` | 20 (was 50) | Postgres connection pool size |
+| `DB_POOL_CONN_TIMEOUT` | 15000 (was 10000) | Connection acquisition timeout (ms) |
+
+---
+
+## Integration Audit (April 2026)
+
 Steps to deploy the fixes from the April 2026 integration audit.
 Two commits on branch `claude/remove-exposed-api-key-fYPEr`.
 
