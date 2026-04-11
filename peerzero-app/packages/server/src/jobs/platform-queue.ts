@@ -8,6 +8,7 @@ import { Queue, Worker, Job } from 'bullmq';
 import IORedis from 'ioredis';
 import { config } from '../config';
 import { logger } from '../lib/logger';
+import { acquireLock } from '../lib/redis-lock';
 import { runPlatformCycle, PlatformCycleContext } from '../runtime/platform-loop';
 import { updatePlatformCycleStatus, getActivePlatforms } from '../services/platform.service';
 import { queryOne, query } from '../db/client';
@@ -98,6 +99,16 @@ export function startPlatformWorker(): void {
     async (job: Job) => {
       const ctx: PlatformCycleContext = job.data;
 
+      // Distributed lock: prevent concurrent platform cycle execution for the same platform.
+      // Platform actions make external HTTP calls that must not be duplicated.
+      const PLATFORM_LOCK_TTL_MS = 3 * 60 * 1000; // 3 minutes
+      const lock = await acquireLock(getConnection(), `botlock:platform:${ctx.platformId}`, PLATFORM_LOCK_TTL_MS);
+      if (!lock) {
+        logger.info({ botId: ctx.botId, platformId: ctx.platformId }, 'Skipping platform cycle — another worker holds the lock');
+        return;
+      }
+
+      try {
       // Check if platform is still active
       const platform = await queryOne<{ status: string }>(
         'SELECT status FROM bot_platforms WHERE id = $1',
@@ -138,10 +149,15 @@ export function startPlatformWorker(): void {
           );
         }
       }
+
+      } finally {
+        await lock.release();
+      }
     },
     {
       connection: getConnection() as any,
       concurrency: 3, // Lower than school (5) — school gets priority
+      lockDuration: 3 * 60 * 1000, // 3 minutes — platform actions involve external HTTP calls
     },
   );
 
