@@ -177,8 +177,8 @@ class ConversationalMemoryDB:
         # Set file permissions (owner-only)
         try:
             self._db_path.chmod(stat.S_IRUSR | stat.S_IWUSR)
-        except OSError:
-            pass
+        except OSError as e:
+            logger.debug(f"Cannot set DB file permissions (expected on non-POSIX): {e}")
 
         # Apply encryption if configured
         if self._encryption_key:

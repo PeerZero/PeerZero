@@ -88,8 +88,8 @@ class SharedSelfAwareness:
         self._conn.row_factory = sqlite3.Row
         try:
             self._db_path.chmod(stat.S_IRUSR | stat.S_IWUSR)
-        except OSError:
-            pass
+        except OSError as e:
+            logger.debug(f"Cannot set DB file permissions (expected on non-POSIX): {e}")
         if self._encryption_key:
             try:
                 self._conn.execute("PRAGMA key=?", (self._encryption_key,))
