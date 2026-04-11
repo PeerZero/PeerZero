@@ -124,9 +124,11 @@ export async function connectPlatform(
     metadata: { platform: platform.slug },
   });
 
-  // Fire-and-forget notification
+  // Fire-and-forget notification (must have .catch to prevent unhandled rejection crash)
   const botRow = await queryOne<{ name: string }>('SELECT name FROM bots WHERE id = $1', [botId]);
-  notifyPlatformConnected(userId, botId, botRow?.name || 'Your bot', platform.name);
+  notifyPlatformConnected(userId, botId, botRow?.name || 'Your bot', platform.name).catch((err) => {
+    logger.error({ err: err instanceof Error ? err.message : err, botId, userId }, 'Failed to send platform connected notification');
+  });
 
   // Install starter skills for the bot on its first platform connection.
   // These are "batteries included" — the average user never has to think about skills.

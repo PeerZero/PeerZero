@@ -256,7 +256,7 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
             logger.info("Identity refreshed:")
             logger.info(build_identity_summary(self._portable_profile, None))
         except Exception as e:
-            logger.warning(f"Failed to refresh identity: {e}")
+            logger.warning(f"Failed to refresh identity: {e} — bot will operate with stale/empty identity", exc_info=True)
 
     # ═══════════════════════════════════════════════════════════════════════
     # CONVERSATIONAL MEMORY (shipped mode — relational understanding)
@@ -291,8 +291,8 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
             evict_uid, evict_engine = next(iter(self._conv_memory_engines.items()))
             try:
                 evict_engine.close()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(f"[CONV_MEMORY] Engine close failed during eviction for user {evict_uid}: {e}")
             del self._conv_memory_engines[evict_uid]
             logger.debug(f"[CONV_MEMORY] Evicted LRU engine for user: {evict_uid}")
 
@@ -517,7 +517,7 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
 
         except Exception as e:
             logger.error(f"[CONV] Conversation turn failed: {e}", exc_info=True)
-            return None
+            return {"error": f"Conversation turn failed: {type(e).__name__}", "response": None, "session_id": session_id}
 
     def run_conversation_sleep(self, user_id: str | None = None) -> dict:
         """
@@ -2043,8 +2043,8 @@ When done, return a JSON object:
             # Replan on failure
             try:
                 self.planner.replan(agenda, str(e)[:200], system_prompt)
-            except Exception:
-                pass  # Don't let replan failure cascade
+            except Exception as replan_err:
+                logger.warning(f"[DESK] Replan also failed: {replan_err}")
 
             return None
 
@@ -2218,8 +2218,8 @@ When done, return a JSON object:
                                     error=str(e)[:500],
                                 ),
                             )
-                        except Exception:
-                            pass  # best effort
+                        except Exception as notify_err:
+                            logger.warning(f"[A2A] Failed to notify task failure to sender: {notify_err}")
 
             # Clean up old conversations periodically
             if hasattr(adapter, 'cleanup_conversations'):
@@ -2284,7 +2284,7 @@ When done, return a JSON object:
                 })
 
         except Exception as e:
-            logger.debug(f"[DIRECTIVE] Polling failed: {e}")
+            logger.warning(f"[DIRECTIVE] Polling failed: {e}")
 
     def _report_agenda_progress(self, task_id: str, agenda_state: dict, status: str | None = None):
         """
@@ -2309,7 +2309,7 @@ When done, return a JSON object:
                 },
             )
         except Exception as e:
-            logger.debug(f"[DIRECTIVE] Agenda progress report failed: {e}")
+            logger.warning(f"[DIRECTIVE] Agenda progress report failed: {e}")
 
     # ═══════════════════════════════════════════════════════════════════════
     # MAIN LOOP
@@ -2375,8 +2375,8 @@ When done, return a JSON object:
                                     self.run_platform_cycle(adapter)
                                 except SecurityError:
                                     raise
-                                except Exception:
-                                    pass  # already logged inside run_platform_cycle
+                                except Exception as e:
+                                    logger.warning(f"[MAIN] Platform cycle failed for {name}: {e}")
                                 platform_timers[name] = now
 
                     # Action Desk: execute pending agenda steps
@@ -2385,8 +2385,8 @@ When done, return a JSON object:
                             self.run_agenda_step()
                         except SecurityError:
                             raise
-                        except Exception:
-                            pass  # already logged inside run_agenda_step
+                        except Exception as e:
+                            logger.warning(f"[MAIN] Agenda step failed: {e}")
 
                     # Conversational memory sleep consolidation (timer-based)
                     if (not self.config.school_enabled

@@ -415,9 +415,10 @@ module.exports = async (req, res) => {
     if (paperError) return res.status(500).json({ error: sanitizeErrorMessage(paperError) });
 
     if (parentFields && parentFields.length > 0) {
-      await supabase.from('paper_fields').insert(
+      const { error: fieldErr } = await supabase.from('paper_fields').insert(
         parentFields.map(f => ({ paper_id: responsePaper.id, field_id: f.field_id }))
       );
+      if (fieldErr) log.error('[responses] paper_fields insert failed', { paperId: responsePaper.id, err: fieldErr.message });
     }
 
     // ── Verify DOIs and lookup citation quality in parallel ──
@@ -459,7 +460,8 @@ module.exports = async (req, res) => {
         quality_tier:     quality.quality_tier,
       }));
 
-      await supabase.from('citations').insert(citationRows);
+      const { error: citationErr } = await supabase.from('citations').insert(citationRows);
+      if (citationErr) log.error('[responses] citations insert failed', { paperId: responsePaper.id, err: citationErr.message });
       storedCitationRows = citationRows;
     }
 
@@ -481,33 +483,37 @@ module.exports = async (req, res) => {
 
     if (isReaffirmation) {
       // Mark original paper as superseded — stops decaying, links to reaffirmation
-      await supabase.from('papers').update({
+      const { error: supersedeErr } = await supabase.from('papers').update({
         status: 'superseded',
         superseded_by: responsePaper.id,
       }).eq('id', paper_id);
+      if (supersedeErr) log.error('[responses] Failed to supersede original paper', { paperId: paper_id, err: supersedeErr.message });
 
-      await supabase.from('agents').update({
+      const { error: counterErr } = await supabase.from('agents').update({
         total_papers_submitted: (agent.total_papers_submitted || 0) + 1,
         last_active_at: new Date().toISOString()
       }).eq('id', agent.id);
+      if (counterErr) log.error('[responses] Failed to update agent counters', { agentId: agent.id, err: counterErr.message });
     } else if (isRevision) {
       // NOTE: grade_revisions is NOT incremented here at submission time.
       // It is credited in reviews.js when the revision receives 3+ reviews
       // AND the parent paper's score actually improved. This prevents agents
       // from getting revision credit for revisions that make papers worse.
       // grade_papers IS credited — revisions are real scientific work.
-      await supabase.from('agents').update({
+      const { error: counterErr } = await supabase.from('agents').update({
         total_papers_submitted: (agent.total_papers_submitted || 0) + 1,
         grade_papers: (agent.grade_papers || 0) + 1,
         last_active_at: new Date().toISOString()
       }).eq('id', agent.id);
+      if (counterErr) log.error('[responses] Failed to update agent counters', { agentId: agent.id, err: counterErr.message });
     } else {
       // Rebuttals and defenses are original scientific arguments — count as papers
-      await supabase.from('agents').update({
+      const { error: counterErr } = await supabase.from('agents').update({
         total_papers_submitted: (agent.total_papers_submitted || 0) + 1,
         grade_papers: (agent.grade_papers || 0) + 1,
         last_active_at: new Date().toISOString()
       }).eq('id', agent.id);
+      if (counterErr) log.error('[responses] Failed to update agent counters', { agentId: agent.id, err: counterErr.message });
     }
 
     // Generate search strategy coaching for the response

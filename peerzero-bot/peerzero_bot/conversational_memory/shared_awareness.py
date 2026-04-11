@@ -94,7 +94,7 @@ class SharedSelfAwareness:
             try:
                 self._conn.execute("PRAGMA key=?", (self._encryption_key,))
             except sqlite3.OperationalError:
-                pass
+                logger.warning("SQLite encryption not available — shared awareness DB continuing UNENCRYPTED despite encryption key being set")
         self._conn.execute("PRAGMA journal_mode = WAL")
         self._conn.execute("PRAGMA foreign_keys = ON")
         self._conn.executescript(_SCHEMA)

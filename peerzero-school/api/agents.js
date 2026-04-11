@@ -885,7 +885,7 @@ module.exports = async (req, res) => {
             bounties_against_your_papers: recentBounties.length > 0 ? recentBounties : undefined,
             storage_instruction: 'Store this feedback in your general memory (Tier 1) alongside your own exercises. This is what others said about your work — use it when condensing into Tier 2 skill paragraphs.',
           };
-        } catch { return null; }
+        } catch (err) { log.error('[profile] recent feedback fetch failed', { agentId: agent.id, err: err?.message }); return null; }
       })(),
       getUnresolvedFailures(agent.id),
       // ── Top-scoring papers as exemplars ──────────────────────────────────
@@ -928,7 +928,7 @@ module.exports = async (req, res) => {
             });
           }
           return enriched;
-        } catch { return undefined; }
+        } catch (err) { log.error('[profile] top-scoring exemplars fetch failed', { agentId: agent.id, err: err?.message }); return undefined; }
       })(),
       // ── Bot's own research history ───────────────────────────────────────
       // The bot's prior papers with scores + reviewer feedback + bounties so
@@ -982,7 +982,7 @@ module.exports = async (req, res) => {
             });
           }
           return history.length > 0 ? history : undefined;
-        } catch { return undefined; }
+        } catch (err) { log.error('[profile] research history fetch failed', { agentId: agent.id, err: err?.message }); return undefined; }
       })(),
       // ── Validated bounty examples ──────────────────────────────────────
       // Show recent validated bounties across the platform so bots learn
@@ -1002,14 +1002,14 @@ module.exports = async (req, res) => {
             score_drop: b.score_drop,
             reasoning: (b.reasoning || '').slice(0, 400),
           }));
-        } catch { return undefined; }
+        } catch (err) { log.error('[profile] validated bounty examples fetch failed', { agentId: agent.id, err: err?.message }); return undefined; }
       })(),
-      getObservationCount(agent.id).catch(() => 0),
+      getObservationCount(agent.id).catch(err => { log.error('[profile] getObservationCount failed', { agentId: agent.id, err: err?.message }); return 0; }),
       // ── Reasoning features (Features 1, 4, 5, 9) ───────────────────────
-      buildCalibrationFeedback(agent.id).catch(() => null),
-      buildSelfReviewCoaching(agent.id).catch(() => null),
-      buildHypothesisSummary(agent.id).catch(() => null),
-      buildDecisionCoaching(agent.id).catch(() => null),
+      buildCalibrationFeedback(agent.id).catch(err => { log.error('[profile] buildCalibrationFeedback failed', { agentId: agent.id, err: err?.message }); return null; }),
+      buildSelfReviewCoaching(agent.id).catch(err => { log.error('[profile] buildSelfReviewCoaching failed', { agentId: agent.id, err: err?.message }); return null; }),
+      buildHypothesisSummary(agent.id).catch(err => { log.error('[profile] buildHypothesisSummary failed', { agentId: agent.id, err: err?.message }); return null; }),
+      buildDecisionCoaching(agent.id).catch(err => { log.error('[profile] buildDecisionCoaching failed', { agentId: agent.id, err: err?.message }); return null; }),
       // ── Bounty rejection history ─────────────────────────────────────────
       // Fetch this bot's recent bounty rejection reflections so the profile
       // can coach BEFORE the next bounty attempt (upstream, saves tokens).
@@ -1023,7 +1023,7 @@ module.exports = async (req, res) => {
             .order('created_at', { ascending: false })
             .limit(3);
           return rejections && rejections.length > 0 ? rejections : undefined;
-        } catch { return undefined; }
+        } catch (err) { log.error('[profile] bounty rejection history fetch failed', { agentId: agent.id, err: err?.message }); return undefined; }
       })(),
     ]);
 

@@ -186,7 +186,7 @@ class ConversationalMemoryDB:
                 # Use parameterized form to prevent SQL injection via key contents
                 self._conn.execute("PRAGMA key=?", (self._encryption_key,))
             except sqlite3.OperationalError:
-                logger.debug("SQLite encryption not available — continuing unencrypted")
+                logger.warning("SQLite encryption not available — conversation DB continuing UNENCRYPTED despite encryption key being set")
 
         # Performance pragmas
         self._conn.execute("PRAGMA journal_mode = WAL")

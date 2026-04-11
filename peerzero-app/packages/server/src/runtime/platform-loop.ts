@@ -187,8 +187,8 @@ export async function runPlatformCycle(ctx: PlatformCycleContext): Promise<void>
       if (narration) {
         broadcastMessage(ctx.botId, ctx.userId, narration);
       }
-    } catch {
-      // Narration is non-blocking — don't fail the platform cycle
+    } catch (err) {
+      logger.warn({ err: err instanceof Error ? err.message : err, botId: ctx.botId }, 'Platform narration failed');
     }
 
     // ─────────────────────────────────────────────────────────────────────
@@ -263,8 +263,8 @@ export async function runPlatformCycle(ctx: PlatformCycleContext): Promise<void>
                 `Platform L1→L2 (${track.label}): stored condensed paragraph`
               );
             }
-          } catch {
-            // JSON parse failure — non-blocking per track
+          } catch (parseErr) {
+            logger.warn({ err: parseErr instanceof Error ? parseErr.message : parseErr, botId: ctx.botId }, 'Platform condensation JSON parse failed');
           }
         }
       }

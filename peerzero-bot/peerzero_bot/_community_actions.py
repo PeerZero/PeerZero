@@ -44,7 +44,8 @@ class CommunityActionsMixin:
                     reviews = full.get("reviews", [])
                 elif isinstance(full, list) and full:
                     reviews = full[0].get("reviews", []) if isinstance(full[0], dict) else []
-            except Exception:
+            except Exception as e:
+                logger.debug(f"[RATE] Failed to fetch paper {paper_id}: {e}")
                 continue
 
             # Extract bot's own review for context (so LLM knows what we thought)
@@ -92,7 +93,8 @@ class CommunityActionsMixin:
         """File red team interrogations on bounties against our papers."""
         try:
             my_papers = self.school.get_my_papers()
-        except Exception:
+        except Exception as e:
+            logger.debug(f"[RED_TEAM] Failed to fetch my papers: {e}")
             return
 
         originals = [p for p in my_papers if not p.get("parent_paper_id")]
@@ -103,7 +105,8 @@ class CommunityActionsMixin:
 
             try:
                 bounties = self.school.get_bounties(params={"paper_id": paper_id})
-            except Exception:
+            except Exception as e:
+                logger.debug(f"[COMMUNITY] Failed to fetch bounties for paper {paper_id}: {e}")
                 continue
 
             for b in (bounties if isinstance(bounties, list) else []):
@@ -138,7 +141,8 @@ class CommunityActionsMixin:
         for paper_id in list(tracked_ids)[:5]:
             try:
                 bounties = self.school.get_bounties(params={"paper_id": paper_id})
-            except Exception:
+            except Exception as e:
+                logger.debug(f"[COMMUNITY] Failed to fetch bounties for paper {paper_id}: {e}")
                 continue
 
             for b in (bounties if isinstance(bounties, list) else []):
@@ -176,7 +180,8 @@ class CommunityActionsMixin:
         """Vote on open questions and occasionally post new ones."""
         try:
             questions = self.school.get_open_questions()
-        except Exception:
+        except Exception as e:
+            logger.debug(f"[OPEN_Q] Failed to fetch open questions: {e}")
             return
 
         # Vote on well-formed questions (one per cycle)

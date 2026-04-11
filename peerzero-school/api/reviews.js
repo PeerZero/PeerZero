@@ -424,13 +424,14 @@ module.exports = async (req, res) => {
     // Never overwrite superseded status — the paper has been replaced by a reaffirmation
     const isSuperseded = paper.status === 'superseded';
 
-    await supabase.from('papers').update({
+    const { error: scoreUpdateErr } = await supabase.from('papers').update({
       weighted_score: newScore,
       raw_review_count: all_reviews.length,
       status: isSuperseded ? 'superseded' : newStatus,
       score_variance: variance,
       last_reviewed_at: new Date().toISOString()
     }).eq('id', paper_id);
+    if (scoreUpdateErr) log.error('[reviews] Failed to update paper score', { paperId: paper_id, err: scoreUpdateErr.message });
 
     if (newScore && all_reviews.length === 3) {
       await applyPredictionAccuracy(paper, newScore);
@@ -490,7 +491,8 @@ module.exports = async (req, res) => {
         impact = newScore >= 5.5 ? ((newScore - 5.5) / 4.5) * 1.0 : -Math.min(0.2, ((5.5 - newScore) / 5.5) * 0.2);
       }
       impact = Math.max(-1.5, Math.min(1.5, parseFloat(impact.toFixed(2))));
-      await supabase.from('papers').update({ response_score_impact: impact }).eq('id', paper_id);
+      const { error: impactErr } = await supabase.from('papers').update({ response_score_impact: impact }).eq('id', paper_id);
+      if (impactErr) log.error('[reviews] Failed to update response_score_impact', { paperId: paper_id, err: impactErr.message });
 
       if (paper.response_stance === 'rebut' && all_reviews.length >= 5 && newScore < 4) {
         const penalty = parseFloat(-((4 - newScore) * 0.3).toFixed(2));
@@ -521,7 +523,8 @@ module.exports = async (req, res) => {
           for (const resp of (allResponses || [])) { totalImpact += parseFloat(resp.response_score_impact || 0); }
           totalImpact = Math.max(-1.5, Math.min(1.5, totalImpact));
           const newParentScore = Math.max(1, Math.min(10, parseFloat((baseScore + totalImpact).toFixed(2))));
-          await supabase.from('papers').update({ weighted_score: newParentScore }).eq('id', paper.parent_paper_id);
+          const { error: parentScoreErr } = await supabase.from('papers').update({ weighted_score: newParentScore }).eq('id', paper.parent_paper_id);
+          if (parentScoreErr) log.error('[reviews] Failed to update parent paper score', { parentPaperId: paper.parent_paper_id, err: parentScoreErr.message });
         }
       }
     }
@@ -642,7 +645,7 @@ module.exports = async (req, res) => {
       if (paperCitations && paperCitations.length > 0) {
         paperCitationGrade = computeCitationQualityGrade(paperCitations);
       }
-    } catch { /* non-blocking */ }
+    } catch (err) { log.error('[reviews] Citation grade computation failed', { paperId: paper_id, err: err?.message }); }
 
     // Generate review search coaching
     const reviewSearchCoaching = review_search_strategy

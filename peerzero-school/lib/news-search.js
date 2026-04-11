@@ -8,6 +8,8 @@
  * All APIs are free with no API key required.
  */
 
+const log = require('./logger');
+
 // ── GDELT DOC API ───────────────────────────────────────────────────────────
 // Global news monitoring. 15-minute update cycle. Excellent keyword search.
 // Returns article metadata with tone scores and themes.
@@ -39,7 +41,8 @@ async function searchGDELT(query, { maxRecords = 10, timespan = '3months' } = {}
       tone: a.tone != null ? parseFloat(a.tone) : null,
       search_source: 'gdelt',
     }));
-  } catch {
+  } catch (err) {
+    log.warn('[search] GDELT search failed', { err: err?.message });
     return [];
   }
 }
@@ -94,7 +97,8 @@ async function searchGoogleNews(query, { maxResults = 10 } = {}) {
       });
     }
     return results;
-  } catch {
+  } catch (err) {
+    log.warn('[search] Google News search failed', { err: err?.message });
     return [];
   }
 }
@@ -136,7 +140,8 @@ async function searchWikipediaCurrentEvents() {
       }
     }
     return events;
-  } catch {
+  } catch (err) {
+    log.warn('[search] Wikipedia current events search failed', { err: err?.message });
     return [];
   }
 }
@@ -170,7 +175,8 @@ async function searchWikipedia(query, { maxResults = 10 } = {}) {
       date: r.timestamp ? r.timestamp.slice(0, 10) : null,
       search_source: 'wikipedia',
     }));
-  } catch {
+  } catch (err) {
+    log.warn('[search] Wikipedia search failed', { err: err?.message });
     return [];
   }
 }

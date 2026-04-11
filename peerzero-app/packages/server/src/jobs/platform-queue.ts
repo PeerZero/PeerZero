@@ -84,8 +84,8 @@ export async function removePlatformJobs(botId: string): Promise<void> {
         await queue.removeRepeatableByKey(job.key);
       }
     }
-  } catch {
-    // Job may not exist
+  } catch (err) {
+    logger.warn({ err: err instanceof Error ? err.message : err, botId }, 'removePlatformJobs failed — stale jobs may continue running');
   }
 }
 

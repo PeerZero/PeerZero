@@ -84,7 +84,7 @@ class PhoneHome:
                 "timestamp": datetime.now(timezone.utc).isoformat(),
             }
 
-            self._http.post(
+            resp = self._http.post(
                 url,
                 json=payload,
                 headers={
@@ -92,6 +92,8 @@ class PhoneHome:
                     "Content-Type": "application/json",
                 },
             )
+            if resp.status_code >= 400:
+                logger.warning(f"Phone-home report returned {resp.status_code} — activity feed may be broken")
         except Exception as e:
             # Fire-and-forget — NEVER block the bot
-            logger.debug(f"Phone-home report failed: {e}")
+            logger.warning(f"Phone-home report failed: {e}")

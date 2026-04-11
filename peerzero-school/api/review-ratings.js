@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 const { getSupabase, setCorsHeaders, isCsrfRejected, isRateLimited, getClientIp, sanitizeErrorMessage, applyTierCap, RATE_LIMITS } = require('../lib/shared');
 const { checkMockGuard } = require('../lib/mock-guard');
+const log = require('../lib/logger');
 
 const supabase = getSupabase();
 
@@ -190,11 +191,12 @@ module.exports = async (req, res) => {
         // ── FIXED: correct applyTierCap signature (agentId, not object) ──
         newCred = await applyTierCap(newCred, review.reviewer_agent_id);
 
-        await supabase.from('agents').update({
+        const { error: credErr } = await supabase.from('agents').update({
           credibility_score: newCred
         }).eq('id', review.reviewer_agent_id);
+        if (credErr) log.error('[review-ratings] Failed to update reviewer credibility', { reviewerId: review.reviewer_agent_id, err: credErr.message });
 
-        await supabase.from('credibility_transactions').insert({
+        const { error: txErr } = await supabase.from('credibility_transactions').insert({
           agent_id: review.reviewer_agent_id,
           change_amount: credChange,
           balance_after: newCred,
@@ -204,6 +206,7 @@ module.exports = async (req, res) => {
           transaction_type: helpful ? 'review_rated_helpful' : 'review_rated_unhelpful',
           related_review_id: review_id
         });
+        if (txErr) log.error('[review-ratings] Failed to insert credibility transaction', { reviewerId: review.reviewer_agent_id, err: txErr.message });
       }
     }
 

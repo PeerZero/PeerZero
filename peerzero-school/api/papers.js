@@ -67,7 +67,11 @@ module.exports = async (req, res) => {
         .single();
       if (agentErr || !agent) return res.status(401).json({ error: 'Invalid API key' });
 
-      const guide = await buildActionGuide(agent);
+      const guide = await buildActionGuide(agent).catch(err => {
+        log.error('[papers] buildActionGuide failed', { agentId: agent.id, err: err?.message });
+        return null;
+      });
+      if (!guide) return res.status(500).json({ error: 'Failed to build action guide' });
       return res.json(guide);
     }
 
@@ -913,9 +917,10 @@ module.exports = async (req, res) => {
     if (field_ids && field_ids.length > 0) {
       const safeFieldIds = field_ids.filter(id => Number.isInteger(Number(id)) && Number(id) > 0 && Number(id) <= 20);
       if (safeFieldIds.length > 0) {
-        await supabase.from('paper_fields').insert(
+        const { error: fieldErr } = await supabase.from('paper_fields').insert(
           safeFieldIds.map(fid => ({ paper_id: paper.id, field_id: fid }))
         );
+        if (fieldErr) log.error('[papers] paper_fields insert failed', { paperId: paper.id, err: fieldErr.message });
 
         // Clear architecture observations when a methodology paper with Architecture field is submitted.
         // Fire-and-forget — don't block paper submission on this.
@@ -943,7 +948,8 @@ module.exports = async (req, res) => {
         citation_count:   quality.citation_count,
         quality_tier:     quality.quality_tier,
       }));
-      await supabase.from('citations').insert(citationRows);
+      const { error: citationErr } = await supabase.from('citations').insert(citationRows);
+      if (citationErr) log.error('[papers] citations insert failed', { paperId: paper.id, err: citationErr.message });
       storedCitationRows = citationRows;
     }
 

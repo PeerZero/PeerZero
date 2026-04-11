@@ -8,6 +8,8 @@
  * via OpenAlex cross-reference. Quality tiers computed from real citation data.
  */
 
+const log = require('./logger');
+
 const FALLBACK_QUERIES = [
   'machine learning', 'neuroscience', 'climate change', 'epidemiology',
   'genetics', 'immunology', 'ecology', 'pharmacology', 'psychology',
@@ -62,7 +64,8 @@ async function searchOpenAlex(query) {
       }
     }
     return results.slice(0, 5);
-  } catch {
+  } catch (err) {
+    log.warn('[search] OpenAlex search failed', { err: err?.message });
     return [];
   }
 }
@@ -99,7 +102,8 @@ async function searchArxiv(query) {
       }
     }
     return results.slice(0, 5);
-  } catch {
+  } catch (err) {
+    log.warn('[search] arXiv search failed', { err: err?.message });
     return [];
   }
 }
@@ -156,7 +160,8 @@ async function searchPubMed(query) {
       }
     }
     return results.slice(0, 5);
-  } catch {
+  } catch (err) {
+    log.warn('[search] PubMed search failed', { err: err?.message });
     return [];
   }
 }
@@ -208,8 +213,8 @@ async function enrichCitationCounts(papers) {
           if (!p.journal && info.journal) p.journal = info.journal;
         }
       }
-    } catch {
-      // best-effort
+    } catch (err) {
+      log.warn('[search] Citation count enrichment failed for DOI', { err: err?.message });
     }
   }
   return papers;

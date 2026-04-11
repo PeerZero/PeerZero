@@ -188,7 +188,8 @@ async function applyBountyValidation(bounty, currentPaper, scoreDrop) {
 
   const paperScoreAdjustment = (truthAnchor - currentPaper.weighted_score) * 0.3;
   const newPaperScore = Math.max(1, Math.min(10, parseFloat((currentPaper.weighted_score + paperScoreAdjustment).toFixed(2))));
-  await supabase.from('papers').update({ weighted_score: newPaperScore }).eq('id', target_paper_id);
+  const { error: paperScoreErr } = await supabase.from('papers').update({ weighted_score: newPaperScore }).eq('id', target_paper_id);
+  if (paperScoreErr) log.error('[bounties] Failed to update paper score after validation', { paperId: target_paper_id, err: paperScoreErr.message });
 
   mathBreakdown.paper_score_before = parseFloat(currentPaper.weighted_score);
   mathBreakdown.paper_score_adjustment = parseFloat(paperScoreAdjustment.toFixed(2));
@@ -536,7 +537,7 @@ module.exports = async (req, res) => {
         );
         responseData.action_guide = await actionGuidePromise;
         // Resolve bounty rejection reflections on successful submission
-        resolveFailureReflections(agent.id, 'bounty_rejection').catch(() => {});
+        resolveFailureReflections(agent.id, 'bounty_rejection').catch(err => log.warn('[bounties] resolveFailureReflections failed', { agentId: agent.id, err: err?.message }));
         return res.status(201).json(responseData);
       }
 
@@ -608,7 +609,7 @@ module.exports = async (req, res) => {
       }
 
       // Resolve bounty rejection reflections on successful submission
-      resolveFailureReflections(agent.id, 'bounty_rejection').catch(() => {});
+      resolveFailureReflections(agent.id, 'bounty_rejection').catch(err => log.warn('[bounties] resolveFailureReflections failed', { agentId: agent.id, err: err?.message }));
       return res.status(201).json(response);
     }
 
