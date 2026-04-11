@@ -63,6 +63,7 @@ const BASE_CTX: BotContext = {
   cycleNumber: 10,
   dailyTokenCap: null,
   dailyTokensUsed: 0,
+  userTimezone: 'UTC',
 };
 
 function makePendingTask(overrides: Record<string, unknown> = {}) {

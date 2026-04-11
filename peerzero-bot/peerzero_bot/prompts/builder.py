@@ -987,6 +987,10 @@ Return ONLY the identity text, nothing else."""
         if memory_context:
             parts.append(memory_context)
 
+        # Current datetime for time-aware reasoning
+        from datetime import datetime, timezone
+        parts.append(f"Current date and time: {datetime.now(timezone.utc).isoformat()}")
+
         # Platform-specific instructions
         parts.append(f"""You are acting on the external platform "{platform_name}".
 

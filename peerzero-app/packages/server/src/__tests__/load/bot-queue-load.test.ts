@@ -112,6 +112,7 @@ function makeBotCtx(i: number): BotContext {
     cycleNumber: 1,
   dailyTokenCap: null,
   dailyTokensUsed: 0,
+  userTimezone: 'UTC',
   };
 }
 

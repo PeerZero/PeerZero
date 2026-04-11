@@ -19,8 +19,8 @@ import { query, queryOne, queryRows } from '../db/client';
 import { schedulePlatformJobs } from '../jobs/platform-queue';
 import { getLLMAdapter } from '../adapters/adapter.factory';
 import { getDecryptedKey } from '../services/api-key.service';
-import { updateAgendaMessage } from '../services/message.service';
-import { broadcastAgendaUpdate } from '../websocket/activity-stream';
+import { updateAgendaMessage, storeMessage } from '../services/message.service';
+import { broadcastAgendaUpdate, broadcastMessage } from '../websocket/activity-stream';
 import type { BotContext } from './agent-loop';
 
 /** POST a task result to the caller's callback URL. Fire-and-forget. */
@@ -122,16 +122,28 @@ export async function runShippedCycle(ctx: BotContext): Promise<void> {
           ? `\nThis is part of conversation ${task.conversation_id}, turn ${task.turn_number}.`
           : '';
 
+        // Inject current datetime in the user's timezone so the bot reasons about the right "today"
+        const now = new Date();
+        let localTime: string;
+        try {
+          localTime = now.toLocaleString('en-US', { timeZone: ctx.userTimezone, dateStyle: 'full', timeStyle: 'long' });
+        } catch {
+          localTime = now.toISOString();
+        }
+        const currentTime = `\nCurrent date and time: ${localTime} (${ctx.userTimezone})`;
+
         // Owner directives get richer prompting with planning
         const systemPrompt = isOwnerDirective
           ? [
               identityContext,
+              currentTime,
               '\nYour owner has asked you to do something. Break it into steps, execute them, and report back.',
               'Think through what needs to happen, then describe what you did and the result.',
               'Be thorough but concise.',
             ].join('\n')
           : [
               identityContext,
+              currentTime,
               `\nYou have received a task from ${task.sender}.`,
               `Action requested: ${task.action_requested}`,
               conversationContext,
@@ -194,19 +206,54 @@ export async function runShippedCycle(ctx: BotContext): Promise<void> {
           await deliverCallback(task.callback_url, task.id, taskResult);
         }
 
+        // Narrate the result to the user's chat feed
+        const resultSummary = llmResponse.content?.slice(0, 500) || 'Task completed.';
+        const resultMsg = await storeMessage(
+          ctx.botId, 'bot', resultSummary, 'activity', undefined,
+          { action_type: isOwnerDirective ? 'directive_result' : 'task_result', task_id: task.id, sender: task.sender },
+        );
+        broadcastMessage(ctx.botId, ctx.userId, resultMsg);
+
         logger.info(
           { botId: ctx.botId, taskId: task.id, action: task.action_requested, tokens: llmResponse.tokens_used },
           'Processed incoming task',
         );
       } catch (err) {
+        const errMsg = err instanceof Error ? err.message : String(err);
         logger.error(
-          { botId: ctx.botId, taskId: task.id, err: err instanceof Error ? err.message : err },
+          { botId: ctx.botId, taskId: task.id, err: errMsg },
           'Failed to process incoming task',
         );
         await query(
           `UPDATE bot_tasks SET status = 'failed', error = $2, updated_at = now() WHERE id = $1`,
-          [task.id, err instanceof Error ? err.message : String(err)],
+          [task.id, errMsg],
         );
+
+        // Notify user of the failure in chat
+        const isOwnerDir = task.sender === 'owner' && task.action_requested === 'owner_directive';
+        const failContent = isOwnerDir
+          ? `I wasn't able to complete that. Error: ${errMsg.slice(0, 200)}`
+          : `A task from ${task.sender} failed: ${errMsg.slice(0, 200)}`;
+        const failMsg = await storeMessage(
+          ctx.botId, 'bot', failContent, 'activity', undefined,
+          { action_type: 'task_failed', task_id: task.id, error: errMsg.slice(0, 500) },
+        );
+        broadcastMessage(ctx.botId, ctx.userId, failMsg);
+
+        // Update agenda card to show failure for owner directives
+        if (isOwnerDir) {
+          const failAgenda = {
+            directive: task.payload?.directive_summary || (typeof task.payload?.message === 'string' ? task.payload.message : ''),
+            intention: 'Failed',
+            steps: [{ action: String(task.payload?.message || task.action_requested), status: 'failed', result: errMsg.slice(0, 200), task_type: 'action' }],
+            status: 'failed',
+            progress_summary: 'Failed',
+          };
+          const updatedFail = await updateAgendaMessage(task.request_id, failAgenda);
+          if (updatedFail) {
+            broadcastAgendaUpdate(ctx.botId, ctx.userId, updatedFail.id, failAgenda);
+          }
+        }
       }
     }
   }

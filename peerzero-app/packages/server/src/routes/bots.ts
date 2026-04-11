@@ -14,7 +14,7 @@ import { generateDialogue, DIALOGUE_CONTEXTS, type DialogueContext } from '../se
 import * as messageService from '../services/message.service';
 import * as directiveService from '../services/directive.service';
 import * as taskService from '../services/task.service';
-import { broadcastMessage } from '../websocket/activity-stream';
+import { broadcastMessage, broadcastStatusChange } from '../websocket/activity-stream';
 import { addBotCycleJob, removeBotJobs, isQueueAvailable } from '../jobs/queue';
 import { logAudit } from '../services/audit.service';
 import * as platformService from '../services/platform.service';
@@ -128,6 +128,7 @@ router.post('/:id/start', userRateLimit('bot_control'), async (req: Request, res
 
   await botService.setBotStatus(req.params.id, 'running');
   await addBotCycleJob(req.params.id, req.user!.userId, bot.llm_api_key_id, bot.llm_model, bot.cycle_delay_seconds);
+  broadcastStatusChange(req.params.id, req.user!.userId, 'running');
   logAudit({ userId: req.user!.userId, action: 'bot.start', entityType: 'bot', entityId: req.params.id, ipAddress: req.ip });
   res.json({ status: 'running', mode: botMode });
 });
@@ -139,6 +140,7 @@ router.post('/:id/stop', userRateLimit('bot_control'), async (req: Request, res:
   // Always update DB status even if queue cleanup fails (stale locks)
   await Promise.allSettled([removeBotJobs(req.params.id)]);
   await botService.setBotStatus(req.params.id, 'stopped');
+  broadcastStatusChange(req.params.id, req.user!.userId, 'stopped');
   logAudit({ userId: req.user!.userId, action: 'bot.stop', entityType: 'bot', entityId: req.params.id, ipAddress: req.ip });
   res.json({ status: 'stopped' });
 });

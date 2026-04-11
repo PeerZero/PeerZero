@@ -133,8 +133,9 @@ export function startWorker(): void {
       const { botId, userId, llmApiKeyId, llmModel, cycleDelaySeconds } = job.data;
 
       // Check if bot is still running (also fetch mode, fast model, extended thinking from DB)
-      const bot = await queryOne<{ status: string; mode: string; cycle_count: number; fast_llm_model: string | null; extended_thinking: boolean; cycle_delay_seconds: number; daily_token_cap: number | null; daily_tokens_used: number; daily_tokens_reset_at: string | null }>(
-        'SELECT status, mode, cycle_count, fast_llm_model, extended_thinking, cycle_delay_seconds, daily_token_cap, daily_tokens_used, daily_tokens_reset_at FROM bots WHERE id = $1',
+      const bot = await queryOne<{ status: string; mode: string; cycle_count: number; fast_llm_model: string | null; extended_thinking: boolean; cycle_delay_seconds: number; daily_token_cap: number | null; daily_tokens_used: number; daily_tokens_reset_at: string | null; user_timezone: string }>(
+        `SELECT b.status, b.mode, b.cycle_count, b.fast_llm_model, b.extended_thinking, b.cycle_delay_seconds, b.daily_token_cap, b.daily_tokens_used, b.daily_tokens_reset_at, COALESCE(u.timezone, 'UTC') AS user_timezone
+         FROM bots b JOIN users u ON u.id = b.user_id WHERE b.id = $1`,
         [botId],
       );
       if (!bot || bot.status !== 'running') {
@@ -157,6 +158,7 @@ export function startWorker(): void {
         cycleNumber: (bot.cycle_count || 0) + 1,
         dailyTokenCap: bot.daily_token_cap,
         dailyTokensUsed,
+        userTimezone: bot.user_timezone || 'UTC',
       };
 
       try {
