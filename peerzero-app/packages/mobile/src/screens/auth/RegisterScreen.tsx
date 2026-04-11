@@ -6,7 +6,7 @@ import React, { useState, useRef } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet, Alert,
   TouchableWithoutFeedback, Keyboard, KeyboardAvoidingView, ScrollView,
-  Platform, ActivityIndicator,
+  Platform, ActivityIndicator, Linking,
 } from 'react-native';
 import type { TextInput as TextInputType } from 'react-native';
 import { useAuth } from '../../hooks/useAuth';
@@ -31,6 +31,7 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
   const [displayName, setDisplayName] = useState('');
   const [ageGroup, setAgeGroup] = useState<AgeGroup | null>(null);
   const [parentEmail, setParentEmail] = useState('');
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [loading, setLoading] = useState(false);
   const emailRef = useRef<TextInputType>(null);
   const passwordRef = useRef<TextInputType>(null);
@@ -62,6 +63,10 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
     }
     if (password !== confirmPassword) {
       Alert.alert('Password Mismatch', 'Passwords do not match.');
+      return;
+    }
+    if (!agreedToTerms) {
+      Alert.alert('Terms Required', 'Please agree to the Terms of Service and Privacy Policy to continue.');
       return;
     }
     setLoading(true);
@@ -199,14 +204,46 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
               accessibilityRole="text"
             />
 
+            {/* Terms of Service + Privacy Policy consent */}
             <TouchableOpacity
-              style={[styles.button, loading && styles.buttonDisabled]}
+              style={styles.termsRow}
+              onPress={() => setAgreedToTerms(!agreedToTerms)}
+              activeOpacity={0.7}
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: agreedToTerms }}
+              accessibilityLabel="I agree to the Terms of Service and Privacy Policy"
+            >
+              <View style={[styles.checkbox, agreedToTerms && styles.checkboxChecked]}>
+                {agreedToTerms && <Text style={styles.checkmark}>✓</Text>}
+              </View>
+              <Text style={styles.termsText}>
+                I agree to the{' '}
+                <Text
+                  style={styles.termsLink}
+                  onPress={() => Linking.openURL('https://peerzero.science/terms')}
+                  accessibilityRole="link"
+                >
+                  Terms of Service
+                </Text>
+                {' '}and{' '}
+                <Text
+                  style={styles.termsLink}
+                  onPress={() => Linking.openURL('https://peerzero.science/privacy')}
+                  accessibilityRole="link"
+                >
+                  Privacy Policy
+                </Text>
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.button, (loading || !agreedToTerms) && styles.buttonDisabled]}
               onPress={handleRegister}
-              disabled={loading}
+              disabled={loading || !agreedToTerms}
               activeOpacity={0.8}
               accessibilityRole="button"
               accessibilityLabel="Create Account"
-              accessibilityState={{ disabled: loading }}
+              accessibilityState={{ disabled: loading || !agreedToTerms }}
             >
               {loading ? (
                 <ActivityIndicator color="#fff" />
@@ -261,6 +298,27 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bg.card, color: colors.text.primary, padding: spacing.md,
     borderRadius: borderRadius.md, marginBottom: spacing.md, fontSize: fontSize.md,
     borderWidth: 1, borderColor: colors.border,
+  },
+  termsRow: {
+    flexDirection: 'row', alignItems: 'flex-start', marginTop: spacing.md,
+    marginBottom: spacing.xs,
+  },
+  checkbox: {
+    width: 22, height: 22, borderRadius: borderRadius.xs, borderWidth: 2,
+    borderColor: colors.text.tertiary, alignItems: 'center', justifyContent: 'center',
+    marginRight: spacing.sm, marginTop: 1,
+  },
+  checkboxChecked: {
+    backgroundColor: colors.accent.primary, borderColor: colors.accent.primary,
+  },
+  checkmark: {
+    color: '#fff', fontSize: 14, fontWeight: '700', marginTop: -1,
+  },
+  termsText: {
+    flex: 1, fontSize: fontSize.sm, color: colors.text.secondary, lineHeight: 20,
+  },
+  termsLink: {
+    color: colors.accent.secondary, textDecorationLine: 'underline',
   },
   button: {
     backgroundColor: colors.accent.primary, padding: spacing.md,
