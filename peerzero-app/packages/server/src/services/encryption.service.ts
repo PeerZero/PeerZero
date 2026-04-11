@@ -57,6 +57,34 @@ export function encrypt(plaintext: string): EncryptedPayload {
   return { encrypted: combined, iv, fingerprint };
 }
 
+/**
+ * Re-encrypt a value from an old master key to the current master key.
+ * Used during key rotation: decrypt with oldKey, re-encrypt with current key.
+ */
+export function reEncrypt(encrypted: Buffer, iv: Buffer, oldKeyHex: string): EncryptedPayload {
+  // Decrypt with old key
+  if (oldKeyHex.length !== 64) {
+    throw new Error('Old key must be 64 hex chars (32 bytes)');
+  }
+  const oldKey = Buffer.from(oldKeyHex, 'hex');
+
+  const authTag = encrypted.subarray(encrypted.length - AUTH_TAG_LENGTH);
+  const ciphertext = encrypted.subarray(0, encrypted.length - AUTH_TAG_LENGTH);
+
+  const decipher = crypto.createDecipheriv(ALGORITHM, oldKey, iv, { authTagLength: AUTH_TAG_LENGTH });
+  decipher.setAuthTag(authTag);
+
+  const decrypted = Buffer.concat([
+    decipher.update(ciphertext),
+    decipher.final(),
+  ]);
+
+  const plaintext = decrypted.toString('utf8');
+
+  // Re-encrypt with current key
+  return encrypt(plaintext);
+}
+
 /** Decrypt an encrypted payload back to plaintext string. */
 export function decrypt(encrypted: Buffer, iv: Buffer): string {
   const key = getMasterKey();

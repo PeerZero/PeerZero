@@ -324,6 +324,37 @@ export async function generatePhoneHomeToken(userId: string, botId: string): Pro
 }
 
 /**
+ * Generate an incoming task secret for A2A authentication.
+ * When set, incoming tasks must include a valid HMAC-SHA256 signature.
+ * Secret is stored as SHA-256 hash — plaintext returned only once.
+ */
+export async function generateIncomingTaskSecret(userId: string, botId: string): Promise<string> {
+  const bot = await queryOne('SELECT id FROM bots WHERE id = $1 AND user_id = $2', [botId, userId]);
+  if (!bot) throw new AppError(404, 'Bot not found');
+
+  const secret = `its_${crypto.randomBytes(32).toString('hex')}`;
+  const secretHash = crypto.createHash('sha256').update(secret).digest('hex');
+
+  await query(
+    'UPDATE bots SET incoming_task_secret_hash = $1, updated_at = NOW() WHERE id = $2',
+    [secretHash, botId],
+  );
+
+  return secret;
+}
+
+/** Clear the incoming task secret (revert to open A2A). */
+export async function clearIncomingTaskSecret(userId: string, botId: string): Promise<void> {
+  const bot = await queryOne('SELECT id FROM bots WHERE id = $1 AND user_id = $2', [botId, userId]);
+  if (!bot) throw new AppError(404, 'Bot not found');
+
+  await query(
+    'UPDATE bots SET incoming_task_secret_hash = NULL, updated_at = NOW() WHERE id = $1',
+    [botId],
+  );
+}
+
+/**
  * Check if a bot has unlocked a specific grade.
  * Used by the agent loop to gate grade advancement on payment.
  */

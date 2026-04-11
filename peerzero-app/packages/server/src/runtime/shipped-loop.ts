@@ -23,6 +23,33 @@ import { updateAgendaMessage, storeMessage } from '../services/message.service';
 import { broadcastAgendaUpdate, broadcastMessage } from '../websocket/activity-stream';
 import type { BotContext } from './agent-loop';
 
+/** POST an outgoing task to the target agent's incoming endpoint. Fire-and-forget. */
+async function deliverOutgoingTask(
+  targetUrl: string,
+  sender: string,
+  actionRequested: string,
+  payload: Record<string, unknown>,
+  callbackUrl: string | null,
+): Promise<void> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 10000);
+  const response = await fetch(targetUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      sender,
+      action_requested: actionRequested,
+      payload,
+      ...(callbackUrl ? { callback_url: callbackUrl } : {}),
+    }),
+    signal: controller.signal,
+  });
+  clearTimeout(timeout);
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+  }
+}
+
 /** POST a task result to the caller's callback URL. Fire-and-forget. */
 async function deliverCallback(callbackUrl: string, taskId: string, result: Record<string, unknown>): Promise<void> {
   try {
@@ -258,7 +285,63 @@ export async function runShippedCycle(ctx: BotContext): Promise<void> {
     }
   }
 
-  // 2. Schedule platform cycles for all active platform connections
+  // 2. Deliver pending outgoing tasks
+  const outgoingTasks = await queryRows<{
+    id: string;
+    request_id: string;
+    target: string;
+    action_requested: string;
+    payload: Record<string, unknown>;
+    callback_url: string | null;
+    sender: string;
+  }>(
+    `SELECT id, request_id, target, action_requested, payload, callback_url, sender
+     FROM bot_tasks
+     WHERE bot_id = $1 AND direction = 'outgoing' AND status = 'pending'
+     ORDER BY created_at ASC
+     LIMIT 10`,
+    [ctx.botId],
+  );
+
+  for (const task of outgoingTasks) {
+    try {
+      await query(
+        `UPDATE bot_tasks SET status = 'processing', updated_at = now() WHERE id = $1`,
+        [task.id],
+      );
+
+      await deliverOutgoingTask(
+        task.target,
+        task.sender,
+        task.action_requested,
+        task.payload,
+        task.callback_url,
+      );
+
+      await query(
+        `UPDATE bot_tasks SET status = 'completed', completed_at = now(), updated_at = now(),
+         result = $2 WHERE id = $1`,
+        [task.id, JSON.stringify({ delivered: true, delivered_at: new Date().toISOString() })],
+      );
+
+      logger.info(
+        { botId: ctx.botId, taskId: task.id, target: task.target },
+        'Delivered outgoing task',
+      );
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      logger.error(
+        { botId: ctx.botId, taskId: task.id, err: errMsg },
+        'Failed to deliver outgoing task',
+      );
+      await query(
+        `UPDATE bot_tasks SET status = 'failed', error = $2, updated_at = now() WHERE id = $1`,
+        [task.id, errMsg],
+      );
+    }
+  }
+
+  // 3. Schedule platform cycles for all active platform connections
   try {
     const utilityModel = ctx.fastLlmModel || ctx.llmModel;
     await schedulePlatformJobs(ctx.botId, ctx.userId, ctx.llmApiKeyId, utilityModel);
@@ -269,14 +352,14 @@ export async function runShippedCycle(ctx: BotContext): Promise<void> {
     );
   }
 
-  // 3. Expire overdue tasks
+  // 4. Expire overdue tasks
   await query(
     `UPDATE bot_tasks SET status = 'expired', updated_at = now()
      WHERE bot_id = $1 AND status = 'pending' AND deadline IS NOT NULL AND deadline < now()`,
     [ctx.botId],
   );
 
-  // 4. Increment cycle count
+  // 5. Increment cycle count
   await query(
     'UPDATE bots SET cycle_count = cycle_count + 1, last_cycle_at = now() WHERE id = $1',
     [ctx.botId],

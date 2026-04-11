@@ -7,7 +7,7 @@ vi.mock('../../lib/logger', () => ({
 }));
 
 vi.mock('../../config', () => ({
-  config: { jwtSecret: 'test-secret' },
+  config: { jwtSecret: 'test-secret', corsOrigins: 'https://test.example.com', isDev: false },
 }));
 
 const mockQueryOne = vi.fn();
@@ -96,7 +96,7 @@ describe('activity-stream', () => {
     const ws = new FakeWebSocket();
     const req = {
       url: botId ? `/ws?bot_id=${botId}` : '/ws',
-      headers: { host: 'localhost:3000' },
+      headers: { host: 'localhost:3000', origin: 'https://test.example.com' },
     };
     fakeWss.emit('connection', ws, req);
     return ws;

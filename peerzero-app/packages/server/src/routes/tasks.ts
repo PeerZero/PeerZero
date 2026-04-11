@@ -8,6 +8,7 @@
 // =============================================================================
 
 import { Router, Request, Response } from 'express';
+import crypto from 'crypto';
 import { requireAuth } from '../middleware/auth';
 import { userRateLimit } from '../middleware/rate-limit';
 import * as taskService from '../services/task.service';
@@ -26,10 +27,10 @@ const incomingTaskLimiter = rateLimit({
 
 const router = Router();
 
-// ── Incoming task (from another agent — no auth required, but bot must exist) ──
+// ── Incoming task (from another agent — HMAC auth if secret configured) ──
 router.post('/:id/tasks/incoming', incomingTaskLimiter, async (req: Request, res: Response) => {
   // Verify bot exists and is in shipped mode
-  const bot = await botService.getBotById(req.params.id);
+  const bot = await botService.getBotById(req.params.id) as Record<string, unknown> | null;
   if (!bot) {
     res.status(404).json({ error: 'Bot not found' });
     return;
@@ -37,6 +38,29 @@ router.post('/:id/tasks/incoming', incomingTaskLimiter, async (req: Request, res
   if (bot.mode !== 'shipped') {
     res.status(403).json({ error: 'Bot is not accepting tasks (school mode)' });
     return;
+  }
+
+  // If bot has an incoming task secret configured, require Bearer token auth.
+  // Same pattern as phone-home tokens: hash the provided secret, compare to stored hash.
+  // If no secret configured, tasks are accepted openly (standard A2A).
+  if (bot.incoming_task_secret_hash) {
+    const authHeader = req.headers.authorization;
+    if (!authHeader?.startsWith('Bearer ')) {
+      res.status(401).json({ error: 'This bot requires authentication for incoming tasks. Provide the task secret as a Bearer token.' });
+      return;
+    }
+    const providedSecret = authHeader.slice(7);
+    const providedHash = crypto.createHash('sha256').update(providedSecret).digest('hex');
+
+    try {
+      if (!crypto.timingSafeEqual(Buffer.from(providedHash, 'hex'), Buffer.from(bot.incoming_task_secret_hash as string, 'hex'))) {
+        res.status(401).json({ error: 'Invalid task secret' });
+        return;
+      }
+    } catch {
+      res.status(401).json({ error: 'Invalid task secret' });
+      return;
+    }
   }
 
   const { sender, action_requested, payload, callback_url, deadline, conversation_id, turn_number } = req.body;

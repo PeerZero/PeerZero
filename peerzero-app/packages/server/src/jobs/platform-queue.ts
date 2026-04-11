@@ -10,10 +10,7 @@ import { config } from '../config';
 import { logger } from '../lib/logger';
 import { runPlatformCycle, PlatformCycleContext } from '../runtime/platform-loop';
 import { updatePlatformCycleStatus, getActivePlatforms } from '../services/platform.service';
-import { queryOne } from '../db/client';
-
-// Track consecutive failures per platform (in-memory, resets on worker restart)
-const consecutiveFailures = new Map<string, number>();
+import { queryOne, query } from '../db/client';
 
 let connection: IORedis | null = null;
 let platformQueue: Queue | null = null;
@@ -110,12 +107,21 @@ export function startPlatformWorker(): void {
 
       try {
         await runPlatformCycle(ctx);
-        consecutiveFailures.delete(ctx.platformId);
+        // Reset failure counter on success (persistent in DB)
+        await query(
+          'UPDATE bot_platforms SET consecutive_failures = 0 WHERE id = $1',
+          [ctx.platformId],
+        );
       } catch (err) {
         logger.error({ platformId: ctx.platformId, err }, 'Platform cycle failed');
 
-        const failures = (consecutiveFailures.get(ctx.platformId) || 0) + 1;
-        consecutiveFailures.set(ctx.platformId, failures);
+        // Increment persistent failure counter
+        const row = await queryOne<{ consecutive_failures: number }>(
+          `UPDATE bot_platforms SET consecutive_failures = consecutive_failures + 1, updated_at = now()
+           WHERE id = $1 RETURNING consecutive_failures`,
+          [ctx.platformId],
+        );
+        const failures = row?.consecutive_failures || 1;
 
         // 3 consecutive failures = pause platform (NOT stop bot)
         if (failures >= 3) {
@@ -125,7 +131,11 @@ export function startPlatformWorker(): void {
             'paused',
             `Paused after ${failures} consecutive failures: ${errorMsg.slice(0, 400)}`,
           );
-          consecutiveFailures.delete(ctx.platformId);
+          // Reset counter after pausing so reactivation starts fresh
+          await query(
+            'UPDATE bot_platforms SET consecutive_failures = 0 WHERE id = $1',
+            [ctx.platformId],
+          );
         }
       }
     },
