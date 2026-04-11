@@ -18,7 +18,6 @@ import TutorialTip from '../../components/TutorialTip';
 import MilestoneModal from '../../components/MilestoneModal';
 import type { MilestoneType } from '../../components/MilestoneModal';
 import * as WebBrowser from 'expo-web-browser';
-import { useAuth } from '../../hooks/useAuth';
 import * as Haptics from 'expo-haptics';
 import type { BotDetail } from '@peerzero/shared';
 import { credibilityToStage, calculateHunger, getGradePriceDisplay, GRADUATION_GRADE, getGradePriceCents, GRADE_PRICES_CENTS } from '@peerzero/shared';
@@ -43,8 +42,6 @@ function formatDelay(seconds: number): string {
 
 export default function BotScreen({ route, navigation }: BotScreenProps) {
   const { botId } = route.params;
-  const { user } = useAuth();
-  const isChild = user?.age_group === 'child';
   const [bot, setBot] = useState<BotDetail | null>(null);
   const [delayDraft, setDelayDraft] = useState<number | null>(null);
   const [unlockedGrades, setUnlockedGrades] = useState<number[]>([]);
@@ -491,10 +488,6 @@ export default function BotScreen({ route, navigation }: BotScreenProps) {
               Your bot completed the previous grade! Unlock the next one to keep learning.
             </Text>
             <TouchableOpacity style={[styles.gradeUnlockButton, gradeUnlockLoading && styles.actionButtonDisabled]} onPress={() => {
-              if (isChild) {
-                Alert.alert('Parent Required', 'Ask your parent or guardian to unlock this grade for you.');
-                return;
-              }
               handleGradeUnlock('next');
             }} disabled={gradeUnlockLoading} accessibilityRole="button" accessibilityLabel={`Unlock Grade ${currentGrade} for ${getGradePriceDisplay(currentGrade)}`}>
               {gradeUnlockLoading ? (

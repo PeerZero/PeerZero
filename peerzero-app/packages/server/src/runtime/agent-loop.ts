@@ -164,17 +164,22 @@ export async function runOneCycle(ctx: BotContext): Promise<void> {
       contentText,
     );
 
-    // 6.25. Update daily token usage (non-blocking, fire-and-forget)
+    // 6.25. Update daily token usage (awaited — ensures tokens are counted before
+    // the cycle is considered successful, preventing double-count on retry)
     if (actionResult.tokensUsed) {
-      query(
-        `UPDATE bots SET daily_tokens_used = CASE
-           WHEN daily_tokens_reset_at < CURRENT_DATE THEN $2
-           ELSE daily_tokens_used + $2
-         END,
-         daily_tokens_reset_at = CURRENT_DATE
-         WHERE id = $1`,
-        [ctx.botId, actionResult.tokensUsed],
-      ).catch((err) => { logger.warn({ err: err instanceof Error ? err.message : err, botId: ctx.botId }, 'Daily token usage update failed — cap may not be enforced'); });
+      try {
+        await query(
+          `UPDATE bots SET daily_tokens_used = CASE
+             WHEN daily_tokens_reset_at < CURRENT_DATE THEN $2
+             ELSE daily_tokens_used + $2
+           END,
+           daily_tokens_reset_at = CURRENT_DATE
+           WHERE id = $1`,
+          [ctx.botId, actionResult.tokensUsed],
+        );
+      } catch (err) {
+        logger.warn({ err: err instanceof Error ? err.message : err, botId: ctx.botId }, 'Daily token usage update failed — cap may not be enforced');
+      }
     }
 
     // 6.5. Narrate the cycle in the bot's voice for the chat feed (non-blocking)

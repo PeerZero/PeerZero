@@ -31,9 +31,6 @@ const mockChangePassword = vi.fn();
 const mockDeleteAccount = vi.fn();
 const mockForgotPassword = vi.fn();
 const mockResetPassword = vi.fn();
-const mockVerifyParentalConsent = vi.fn();
-const mockWithdrawParentalConsent = vi.fn();
-
 vi.mock('../../services/auth.service', () => ({
   registerUser: (...args: any[]) => mockRegisterUser(...args),
   loginUser: (...args: any[]) => mockLoginUser(...args),
@@ -45,8 +42,6 @@ vi.mock('../../services/auth.service', () => ({
   deleteAccount: (...args: any[]) => mockDeleteAccount(...args),
   forgotPassword: (...args: any[]) => mockForgotPassword(...args),
   resetPassword: (...args: any[]) => mockResetPassword(...args),
-  verifyParentalConsent: (...args: any[]) => mockVerifyParentalConsent(...args),
-  withdrawParentalConsent: (...args: any[]) => mockWithdrawParentalConsent(...args),
 }));
 
 const mockQueryOne = vi.fn();
@@ -125,42 +120,7 @@ describe('POST /auth/register', () => {
     expect(res.body.error).toMatch(/at least 8/i);
   });
 
-  it('returns 400 for invalid age_group', async () => {
-    const res = await request(app).post('/auth/register').send({
-      email: 'test@example.com', password: 'longpassword', age_group: 'toddler',
-    });
-    expect(res.status).toBe(400);
-    expect(res.body.error).toMatch(/invalid age group/i);
-  });
-
-  it('returns 400 when child registers without parent_email', async () => {
-    const res = await request(app).post('/auth/register').send({
-      email: 'kid@example.com', password: 'longpassword', age_group: 'child',
-    });
-    expect(res.status).toBe(400);
-    expect(res.body.error).toMatch(/parent email is required/i);
-  });
-
-  it('returns 400 when child registers with invalid parent_email', async () => {
-    const res = await request(app).post('/auth/register').send({
-      email: 'kid@example.com', password: 'longpassword', age_group: 'child', parent_email: 'not-valid',
-    });
-    expect(res.status).toBe(400);
-    expect(res.body.error).toMatch(/invalid parent email/i);
-  });
-
-  it('returns 201 with consent_pending for child accounts', async () => {
-    mockRegisterUser.mockResolvedValueOnce({ consentPending: true });
-
-    const res = await request(app).post('/auth/register').send({
-      email: 'kid@example.com', password: 'longpassword', age_group: 'child', parent_email: 'parent@example.com',
-    });
-
-    expect(res.status).toBe(201);
-    expect(res.body.consent_pending).toBe(true);
-  });
-
-  it('returns 201 with tokens for adult registration', async () => {
+  it('returns 201 with tokens for registration', async () => {
     mockRegisterUser.mockResolvedValueOnce({
       user: { id: 'user-1', email: 'test@example.com' },
       tokens: { accessToken: 'at-123', refreshToken: 'rt-123' },
@@ -177,87 +137,6 @@ describe('POST /auth/register', () => {
     expect(res.body.access_token).toBe('at-123');
     expect(res.body.refresh_token).toBe('rt-123');
     expect(res.body.user).toBeDefined();
-  });
-});
-
-describe('POST /auth/parental-consent/verify', () => {
-  it('returns 400 when token is missing', async () => {
-    const res = await request(app).post('/auth/parental-consent/verify').send({});
-    expect(res.status).toBe(400);
-    expect(res.body.error).toMatch(/verification token/i);
-  });
-
-  it('returns tokens on successful verification', async () => {
-    mockVerifyParentalConsent.mockResolvedValueOnce({
-      user: { id: 'user-1', email: 'kid@example.com' },
-      tokens: { accessToken: 'at-new', refreshToken: 'rt-new' },
-    });
-
-    const res = await request(app).post('/auth/parental-consent/verify').send({ token: 'valid-token' });
-
-    expect(res.status).toBe(200);
-    expect(res.body.access_token).toBe('at-new');
-    expect(res.body.refresh_token).toBe('rt-new');
-  });
-});
-
-describe('POST /auth/parental-consent/withdraw', () => {
-  it('returns 401 without auth', async () => {
-    const res = await request(app).post('/auth/parental-consent/withdraw').send({ child_user_id: 'child-1' });
-    expect(res.status).toBe(401);
-  });
-
-  it('returns 400 when child_user_id is missing', async () => {
-    const token = makeToken({ userId: 'parent-1', email: 'parent@example.com' });
-    const res = await request(app)
-      .post('/auth/parental-consent/withdraw')
-      .set('Authorization', `Bearer ${token}`)
-      .send({});
-
-    expect(res.status).toBe(400);
-    expect(res.body.error).toMatch(/child_user_id/i);
-  });
-
-  it('returns 404 when no consent record exists', async () => {
-    mockQueryOne.mockResolvedValueOnce(null); // no consent record
-
-    const token = makeToken({ userId: 'parent-1', email: 'parent@example.com' });
-    const res = await request(app)
-      .post('/auth/parental-consent/withdraw')
-      .set('Authorization', `Bearer ${token}`)
-      .send({ child_user_id: 'child-1' });
-
-    expect(res.status).toBe(404);
-  });
-
-  it('returns 403 when authenticated user is not the parent', async () => {
-    mockQueryOne
-      .mockResolvedValueOnce({ parent_email: 'realparent@example.com' }) // consent record
-      .mockResolvedValueOnce({ email: 'nottheparent@example.com' });     // authed user
-
-    const token = makeToken({ userId: 'wrong-parent', email: 'nottheparent@example.com' });
-    const res = await request(app)
-      .post('/auth/parental-consent/withdraw')
-      .set('Authorization', `Bearer ${token}`)
-      .send({ child_user_id: 'child-1' });
-
-    expect(res.status).toBe(403);
-  });
-
-  it('succeeds when authenticated user is the parent', async () => {
-    mockQueryOne
-      .mockResolvedValueOnce({ parent_email: 'parent@example.com' })
-      .mockResolvedValueOnce({ email: 'parent@example.com' });
-    mockWithdrawParentalConsent.mockResolvedValueOnce(undefined);
-
-    const token = makeToken({ userId: 'parent-1', email: 'parent@example.com' });
-    const res = await request(app)
-      .post('/auth/parental-consent/withdraw')
-      .set('Authorization', `Bearer ${token}`)
-      .send({ child_user_id: 'child-1' });
-
-    expect(res.status).toBe(200);
-    expect(res.body.success).toBe(true);
   });
 });
 

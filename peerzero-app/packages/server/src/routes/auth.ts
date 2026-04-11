@@ -4,7 +4,7 @@
 
 import { Router, Request, Response } from 'express';
 import rateLimit from 'express-rate-limit';
-import { registerUser, loginUser, refreshTokens, revokeRefreshTokens, getUserProfile, updateProfile, changePassword, deleteAccount, forgotPassword, resetPassword, verifyParentalConsent, withdrawParentalConsent } from '../services/auth.service';
+import { registerUser, loginUser, refreshTokens, revokeRefreshTokens, getUserProfile, updateProfile, changePassword, deleteAccount, forgotPassword, resetPassword } from '../services/auth.service';
 import { requireAuth } from '../middleware/auth';
 import { removeBotJobs } from '../jobs/queue';
 import { logAudit } from '../services/audit.service';
@@ -24,15 +24,6 @@ const refreshLimiter = rateLimit({
   message: { error: 'Too many refresh attempts. Try again later.' },
 });
 
-// Strict rate limit for parental consent verification to prevent brute-force token guessing
-const consentLimiter = rateLimit({
-  windowMs: 60 * 60 * 1000, // 1 hour
-  max: 5,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: 'Too many verification attempts. Try again later.' },
-});
-
 // Strict rate limit for password reset to prevent brute-force code guessing
 const resetPasswordLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -43,7 +34,7 @@ const resetPasswordLimiter = rateLimit({
 });
 
 router.post('/register', async (req: Request, res: Response) => {
-  const { email, password, display_name, age_group, parent_email } = req.body;
+  const { email, password, display_name } = req.body;
   if (!email || !password) {
     res.status(400).json({ error: 'Email and password required' });
     return;
@@ -57,67 +48,10 @@ router.post('/register', async (req: Request, res: Response) => {
     return;
   }
 
-  // Validate age_group — default to 'adult' for backwards compatibility
-  const ageGroup = age_group || 'adult';
-  if (!['child', 'teen', 'adult'].includes(ageGroup)) {
-    res.status(400).json({ error: 'Invalid age group' });
-    return;
-  }
-  if (ageGroup === 'child' && !parent_email) {
-    res.status(400).json({ error: 'Parent email is required for users under 13' });
-    return;
-  }
-  if (ageGroup === 'child' && (typeof parent_email !== 'string' || !/^[^\s@]+@[^\s@]+\.[a-zA-Z]{2,}$/.test(parent_email))) {
-    res.status(400).json({ error: 'Invalid parent email format' });
-    return;
-  }
-
-  const result = await registerUser(email, password, display_name, ageGroup, parent_email);
-
-  if ('consentPending' in result) {
-    res.status(201).json({ consent_pending: true, message: 'Parental consent required. We have sent a verification email to the parent.' });
-    return;
-  }
+  const result = await registerUser(email, password, display_name);
 
   const profile = await getUserProfile(result.user.id);
-  res.status(201).json({ access_token: result.tokens!.accessToken, refresh_token: result.tokens!.refreshToken, user: profile });
-});
-
-router.post('/parental-consent/verify', consentLimiter, async (req: Request, res: Response) => {
-  const { token } = req.body;
-  if (!token || typeof token !== 'string') {
-    res.status(400).json({ error: 'Verification token is required' });
-    return;
-  }
-  const { user, tokens } = await verifyParentalConsent(token, req.ip);
-  res.json({ access_token: tokens.accessToken, refresh_token: tokens.refreshToken, user });
-});
-
-router.post('/parental-consent/withdraw', requireAuth, async (req: Request, res: Response) => {
-  const { child_user_id } = req.body;
-  if (!child_user_id || typeof child_user_id !== 'string') {
-    res.status(400).json({ error: 'child_user_id is required' });
-    return;
-  }
-
-  // Verify the authenticated user's email matches the parent_email on the consent record
-  const consent = await queryOne<{ parent_email: string }>(
-    'SELECT parent_email FROM parental_consent WHERE child_user_id = $1',
-    [child_user_id],
-  );
-  if (!consent) {
-    res.status(404).json({ error: 'No consent record found' });
-    return;
-  }
-
-  const authedUser = await queryOne<{ email: string }>('SELECT email FROM users WHERE id = $1', [req.user!.userId]);
-  if (!authedUser || authedUser.email.toLowerCase() !== consent.parent_email.toLowerCase()) {
-    res.status(403).json({ error: 'Only the parent on the consent record can withdraw consent' });
-    return;
-  }
-
-  await withdrawParentalConsent(child_user_id);
-  res.json({ success: true });
+  res.status(201).json({ access_token: result.tokens.accessToken, refresh_token: result.tokens.refreshToken, user: profile });
 });
 
 router.post('/login', async (req: Request, res: Response) => {
@@ -223,7 +157,7 @@ router.delete('/account', requireAuth, async (req: Request, res: Response) => {
         await adapter.deleteAgent(bot.base_url, bot.school_agent_handle);
       } catch (err) {
         // Log but don't block — App data deletion is more important
-        logger.error({ err: err instanceof Error ? err.message : err, handle: bot.school_agent_handle, baseUrl: bot.base_url }, 'Failed to delete school agent during account deletion — GDPR/COPPA erasure incomplete');
+        logger.error({ err: err instanceof Error ? err.message : err, handle: bot.school_agent_handle, baseUrl: bot.base_url }, 'Failed to delete school agent during account deletion — GDPR erasure incomplete');
       }
     }
   }
@@ -239,6 +173,109 @@ router.delete('/account', requireAuth, async (req: Request, res: Response) => {
 
   await deleteAccount(userId);
   res.json({ success: true });
+});
+
+// ── Data Export (GDPR Article 20 — data portability) ──
+
+router.get('/export-data', requireAuth, async (req: Request, res: Response) => {
+  const userId = req.user!.userId;
+
+  // User profile
+  const user = await queryOne<Record<string, unknown>>(
+    'SELECT id, email, display_name, language, created_at, updated_at FROM users WHERE id = $1',
+    [userId],
+  );
+
+  // Bots (owned by user)
+  const bots = await queryRows<Record<string, unknown>>(
+    `SELECT id, name, mode, status, llm_model, fast_llm_model, extended_thinking, cycle_delay_seconds,
+       cycle_count, cached_credibility, cached_grade, cached_next_action,
+       school_agent_handle, is_public, public_slug, created_at, last_cycle_at
+     FROM bots WHERE user_id = $1 AND deleted_at IS NULL`,
+    [userId],
+  );
+  const botIds = bots.map(b => b.id as string);
+
+  // Activity logs (school)
+  const activityLog = botIds.length > 0 ? await queryRows<Record<string, unknown>>(
+    `SELECT bot_id, cycle_number, action_type, translated, content_text, duration_ms, llm_tokens_used, created_at
+     FROM activity_log WHERE bot_id = ANY($1) AND deleted_at IS NULL ORDER BY created_at DESC LIMIT 1000`,
+    [botIds],
+  ) : [];
+
+  // Messages (chat feed)
+  const messages = botIds.length > 0 ? await queryRows<Record<string, unknown>>(
+    `SELECT bot_id, role, content, message_type, created_at
+     FROM bot_messages WHERE bot_id = ANY($1) ORDER BY created_at DESC LIMIT 1000`,
+    [botIds],
+  ) : [];
+
+  // External activity (platform)
+  const externalActivity = botIds.length > 0 ? await queryRows<Record<string, unknown>>(
+    `SELECT bot_id, platform, action, summary, content_preview, skills_demonstrated, bot_timestamp, created_at
+     FROM external_activity_log WHERE bot_id = ANY($1) AND deleted_at IS NULL ORDER BY created_at DESC LIMIT 1000`,
+    [botIds],
+  ) : [];
+
+  // Enrollments
+  const enrollments = botIds.length > 0 ? await queryRows<Record<string, unknown>>(
+    `SELECT bot_id, school_id, status, enrolled_at FROM enrollments WHERE bot_id = ANY($1)`,
+    [botIds],
+  ) : [];
+
+  // Purchases
+  const purchases = await queryRows<Record<string, unknown>>(
+    `SELECT id, product_type, amount_cents, currency, status, created_at FROM purchases WHERE user_id = $1`,
+    [userId],
+  );
+
+  // API keys (metadata only — never export actual keys)
+  const apiKeys = await queryRows<Record<string, unknown>>(
+    `SELECT id, provider, label, key_fingerprint, is_valid, created_at FROM llm_api_keys WHERE user_id = $1`,
+    [userId],
+  );
+
+  // Notification preferences
+  const notifPrefs = await queryOne<Record<string, unknown>>(
+    'SELECT preferences FROM notification_preferences WHERE user_id = $1',
+    [userId],
+  );
+
+  // Platform connections (metadata only — no credentials)
+  const platforms = botIds.length > 0 ? await queryRows<Record<string, unknown>>(
+    `SELECT id, bot_id, platform_name, adapter_type, status, heartbeat_interval_seconds, cycle_count, created_at
+     FROM bot_platforms WHERE bot_id = ANY($1)`,
+    [botIds],
+  ) : [];
+
+  // Audit log entries for this user
+  const auditLog = await queryRows<Record<string, unknown>>(
+    `SELECT action, entity_type, entity_id, created_at FROM audit_log WHERE user_id = $1 ORDER BY created_at DESC LIMIT 500`,
+    [userId],
+  );
+
+  logAudit({
+    userId,
+    action: 'data.export',
+    entityType: 'user',
+    entityId: userId,
+    ipAddress: req.ip,
+  });
+
+  res.json({
+    exported_at: new Date().toISOString(),
+    user,
+    bots,
+    activity_log: activityLog,
+    messages,
+    external_activity: externalActivity,
+    enrollments,
+    purchases,
+    api_keys: apiKeys,
+    notification_preferences: notifPrefs?.preferences || null,
+    platform_connections: platforms,
+    audit_log: auditLog,
+  });
 });
 
 export default router;

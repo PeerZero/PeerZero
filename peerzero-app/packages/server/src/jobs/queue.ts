@@ -9,6 +9,7 @@ import { Queue, Worker, Job } from 'bullmq';
 import IORedis from 'ioredis';
 import { config } from '../config';
 import { logger } from '../lib/logger';
+import { acquireLock } from '../lib/redis-lock';
 import { runOneCycle, BotContext } from '../runtime/agent-loop';
 import { runShippedCycle } from '../runtime/shipped-loop';
 import { setBotStatus } from '../services/bot.service';
@@ -134,6 +135,17 @@ export function startWorker(): void {
     async (job: Job) => {
       const { botId, userId, llmApiKeyId, llmModel, cycleDelaySeconds } = job.data;
 
+      // Distributed lock: prevent concurrent cycle execution for the same bot.
+      // If another worker is already running this bot's cycle (stale BullMQ lock,
+      // duplicate job, etc.), skip gracefully — the other worker will self-schedule.
+      const CYCLE_LOCK_TTL_MS = 5 * 60 * 1000; // 5 minutes — safety net for crashed workers
+      const lock = await acquireLock(getConnection(), `botlock:cycle:${botId}`, CYCLE_LOCK_TTL_MS);
+      if (!lock) {
+        logger.info({ botId }, 'Skipping cycle — another worker holds the lock');
+        return;
+      }
+
+      try {
       // Check if bot is still running (also fetch mode, fast model, extended thinking from DB)
       const bot = await queryOne<{ status: string; mode: string; cycle_count: number; fast_llm_model: string | null; extended_thinking: boolean; cycle_delay_seconds: number; daily_token_cap: number | null; daily_tokens_used: number; daily_tokens_reset_at: string | null; user_timezone: string }>(
         `SELECT b.status, b.mode, b.cycle_count, b.fast_llm_model, b.extended_thinking, b.cycle_delay_seconds, b.daily_token_cap, b.daily_tokens_used, b.daily_tokens_reset_at, COALESCE(u.timezone, 'UTC') AS user_timezone
@@ -228,10 +240,15 @@ export function startWorker(): void {
         const delay = Math.min(baseDelay * backoffMultiplier, 300); // cap at 5 minutes (was 1 hour — too aggressive for recovery)
         await scheduleNextCycle(botId, userId, llmApiKeyId, llmModel, delay);
       }
+
+      } finally {
+        await lock.release();
+      }
     },
     {
       connection: getConnection() as any,
       concurrency: 5, // Process up to 5 bot cycles in parallel
+      lockDuration: 5 * 60 * 1000, // 5 minutes — LLM calls can take a while
     },
   );
 

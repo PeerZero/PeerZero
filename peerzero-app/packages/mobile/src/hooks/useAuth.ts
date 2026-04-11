@@ -11,7 +11,7 @@ interface AuthState {
   isLoading: boolean;
   isAuthenticated: boolean;
   login: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string, displayName?: string, ageGroup?: string, parentEmail?: string) => Promise<void>;
+  register: (email: string, password: string, displayName?: string) => Promise<void>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
 }
@@ -52,12 +52,8 @@ export function useAuthProvider(): AuthState {
     setUser(result.user);
   }, []);
 
-  const register = useCallback(async (email: string, password: string, displayName?: string, ageGroup?: string, parentEmail?: string) => {
-    const result = await authApi.register(email, password, displayName, ageGroup, parentEmail) as AuthResponse;
-    // If consent_pending, don't save tokens (they won't be there)
-    if ((result as any).consent_pending) {
-      return; // Let the UI handle the pending state
-    }
+  const register = useCallback(async (email: string, password: string, displayName?: string) => {
+    const result = await authApi.register(email, password, displayName) as AuthResponse;
     await saveTokens(result.access_token, result.refresh_token);
     setUser(result.user);
   }, []);

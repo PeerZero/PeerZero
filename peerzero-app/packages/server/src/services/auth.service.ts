@@ -11,7 +11,7 @@ import { queryOne, queryRows, query } from '../db/client';
 import { AppError } from '../middleware/error-handler';
 import { JwtPayload } from '../middleware/auth';
 import { logger } from '../lib/logger';
-import { sendPasswordResetEmail, sendParentalConsentEmail } from './email.service';
+import { sendPasswordResetEmail } from './email.service';
 
 const SALT_ROUNDS = 12;
 
@@ -38,7 +38,7 @@ export interface TokenPair {
   refreshToken: string;
 }
 
-export async function registerUser(email: string, password: string, displayName?: string, ageGroup: string = 'adult', parentEmail?: string) {
+export async function registerUser(email: string, password: string, displayName?: string) {
   // Check for existing user
   const existing = await queryOne('SELECT id FROM users WHERE email = $1', [email]);
   if (existing) throw new AppError(409, 'Email already registered');
@@ -49,78 +49,16 @@ export async function registerUser(email: string, password: string, displayName?
     if (nameTaken) throw new AppError(409, 'Display name is already taken');
   }
 
-  // Validate age group
-  if (!['child', 'teen', 'adult'].includes(ageGroup)) {
-    throw new AppError(400, 'Invalid age group');
-  }
-
-  // Children require a parent email
-  if (ageGroup === 'child' && !parentEmail) {
-    throw new AppError(400, 'Parent email is required for users under 13');
-  }
-
   const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
-  const user = await queryOne<{ id: string; email: string; display_name: string | null; age_group: string; created_at: string }>(
-    `INSERT INTO users (email, password_hash, display_name, age_group, parent_email)
-     VALUES ($1, $2, $3, $4, $5)
-     RETURNING id, email, display_name, age_group, created_at`,
-    [email, passwordHash, displayName || null, ageGroup, parentEmail || null],
+  const user = await queryOne<{ id: string; email: string; display_name: string | null; created_at: string }>(
+    `INSERT INTO users (email, password_hash, display_name)
+     VALUES ($1, $2, $3)
+     RETURNING id, email, display_name, created_at`,
+    [email, passwordHash, displayName || null],
   );
-
-  // Child accounts require parental consent before issuing tokens
-  if (ageGroup === 'child') {
-    const verificationToken = crypto.randomBytes(32).toString('hex');
-    await query(
-      `INSERT INTO parental_consent (child_user_id, parent_email, verification_token)
-       VALUES ($1, $2, $3)`,
-      [user!.id, parentEmail, verificationToken],
-    );
-    await sendParentalConsentEmail(parentEmail!, verificationToken);
-    return { user: user!, consentPending: true };
-  }
 
   const tokens = await issueTokens(user!.id, user!.email);
   return { user: user!, tokens };
-}
-
-export async function verifyParentalConsent(token: string, ipAddress?: string) {
-  const consent = await queryOne<{ id: string; child_user_id: string; created_at: string; verified: boolean }>(
-    'SELECT id, child_user_id, created_at, verified FROM parental_consent WHERE verification_token = $1',
-    [token],
-  );
-  if (!consent) throw new AppError(400, 'Invalid or expired consent token');
-  if (consent.verified) throw new AppError(400, 'Consent has already been verified');
-
-  // Check if token is within 7-day window
-  const createdAt = new Date(consent.created_at);
-  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-  if (createdAt < sevenDaysAgo) {
-    throw new AppError(400, 'Invalid or expired consent token');
-  }
-
-  await query(
-    `UPDATE parental_consent SET verified = true, consent_given_at = NOW(), ip_address = $1
-     WHERE id = $2`,
-    [ipAddress || null, consent.id],
-  );
-
-  const user = await queryOne<{ id: string; email: string }>(
-    'SELECT id, email FROM users WHERE id = $1',
-    [consent.child_user_id],
-  );
-  if (!user) throw new AppError(404, 'User not found');
-
-  const tokens = await issueTokens(user.id, user.email);
-  const profile = await getUserProfile(user.id);
-  return { user: profile, tokens };
-}
-
-export async function withdrawParentalConsent(childUserId: string) {
-  await query(
-    'UPDATE parental_consent SET consent_withdrawn_at = NOW() WHERE child_user_id = $1',
-    [childUserId],
-  );
-  await deleteAccount(childUserId);
 }
 
 export async function loginUser(email: string, password: string) {
@@ -288,8 +226,8 @@ export async function resetPassword(email: string, code: string, newPassword: st
 }
 
 export async function getUserProfile(userId: string) {
-  const user = await queryOne<{ id: string; email: string; display_name: string | null; age_group: string; language: string; created_at: string }>(
-    'SELECT id, email, display_name, age_group, language, created_at FROM users WHERE id = $1',
+  const user = await queryOne<{ id: string; email: string; display_name: string | null; language: string; created_at: string }>(
+    'SELECT id, email, display_name, language, created_at FROM users WHERE id = $1',
     [userId],
   );
   if (!user) throw new AppError(404, 'User not found');
