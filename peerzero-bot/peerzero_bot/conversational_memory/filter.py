@@ -40,6 +40,10 @@ For each item, provide:
   - "user" — this touches who the user IS (their values, identity, self-concept, recurring concerns, what defines them)
   - "self" — this reveals something about who the bot is becoming (what it finds interesting, what it cares about, what resonates with it)
   - "relational" — this exists at the intersection of both identities (shared meaning, something that matters BECAUSE of who they are to each other)
+- updates: (optional) If this item CORRECTS or REPLACES existing understanding, the label of the node being superseded. Omit if this is new information or simple reinforcement.
+- update_type: (required when "updates" is present) One of:
+  - "correction" — the old understanding is now wrong ("I moved from New York to London")
+  - "evolution" — natural progression, old context still useful ("got promoted from engineer to tech lead")
 
 Think of it this way: a bored student memorizes facts (neutral). An interested student connects everything to who they are and what they care about (identity-anchored). Memory that touches identity sticks harder.
 
@@ -61,7 +65,18 @@ Format:
   ]
 }"""
 
+EXISTING_CONTEXT_SECTION = """
+You already carry understanding about these things. If the new message CHANGES, CORRECTS, or SUPERSEDES any of this, flag it with "updates" and "update_type":
+
+<existing_understanding>
+{context}
+</existing_understanding>
+"""
+
 VALID_RELEVANCE = frozenset({"neutral", "self", "user", "relational"})
+
+
+VALID_UPDATE_TYPES = frozenset({"correction", "evolution"})
 
 
 class Filter:
@@ -71,10 +86,31 @@ class Filter:
         self._config = config
         self._llm_call = llm_call
 
-    async def run(self, message: str) -> list[dict]:
-        """Extract entities from a message. Returns list of items."""
+    async def run(
+        self, message: str, existing_nodes: list[dict] | None = None
+    ) -> list[dict]:
+        """Extract entities from a message. Returns list of items.
+
+        Args:
+            message: The user or bot message to filter.
+            existing_nodes: Optional list of nodes with enriched portraits,
+                used to detect contradictions and updates. Each dict should
+                have at minimum: label, enriched_portrait.
+        """
         try:
-            prompt = f'{FILTER_PROMPT}\n\nUser message:\n"{message}"'
+            context_section = ""
+            if existing_nodes:
+                context_lines = "\n".join(
+                    f"- {n['label']}: {n['enriched_portrait']}"
+                    for n in existing_nodes
+                    if n.get("enriched_portrait")
+                )
+                if context_lines:
+                    context_section = EXISTING_CONTEXT_SECTION.format(
+                        context=context_lines
+                    )
+
+            prompt = f'{FILTER_PROMPT}{context_section}\n\nUser message:\n"{message}"'
             text = await self._llm_call(
                 model=self._config.models.filter,
                 prompt=prompt,
@@ -92,14 +128,25 @@ class Filter:
                 if not label:
                     continue
                 relevance = item.get("identity_relevance", "neutral")
-                items.append({
+                parsed_item = {
                     "label": label,
                     "type": item.get("type", "concept"),
                     "weight": self._config.weight_for_level(item.get("weight", "passing")),
                     "observation": str(item.get("observation", "")).strip(),
                     "edges": [str(e) for e in item.get("edges", []) if e],
                     "identity_relevance": relevance if relevance in VALID_RELEVANCE else "neutral",
-                })
+                }
+
+                # Contradiction / update detection
+                updates_label = item.get("updates")
+                update_type = item.get("update_type")
+                if updates_label and isinstance(updates_label, str):
+                    updates_label = updates_label.strip()
+                    if updates_label and update_type in VALID_UPDATE_TYPES:
+                        parsed_item["updates"] = updates_label
+                        parsed_item["update_type"] = update_type
+
+                items.append(parsed_item)
             return items
 
         except Exception as e:

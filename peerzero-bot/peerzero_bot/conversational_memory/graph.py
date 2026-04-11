@@ -18,6 +18,7 @@ logger = logging.getLogger("peerzero-bot.conversational_memory")
 VALID_TYPES = frozenset({"person", "concept", "event", "emotion", "pattern", "place"})
 VALID_RELEVANCE = frozenset({"neutral", "self", "user", "relational"})
 VALID_PROVENANCE = frozenset({"school", "conversation", "relational"})
+VALID_EDGE_TYPES = frozenset({"explicit", "co_occurrence", "ripple", "supersedes"})
 
 
 class Graph:
@@ -395,6 +396,7 @@ class Graph:
         rows = self._db.execute(
             """SELECT l2.*, n.label as node_label FROM l2_observations l2
                JOIN nodes n ON l2.node_id = n.id
+               WHERE l2.superseded_by IS NULL
                ORDER BY l2.created_at DESC LIMIT ?""",
             (lim,),
         ).fetchall()
@@ -404,7 +406,8 @@ class Graph:
         rows = self._db.execute(
             """SELECT l2.*, n.label as node_label FROM l2_observations l2
                JOIN nodes n ON l2.node_id = n.id
-               WHERE l2.condensed_to_l3 = 0 ORDER BY l2.created_at ASC"""
+               WHERE l2.condensed_to_l3 = 0 AND l2.superseded_by IS NULL
+               ORDER BY l2.created_at ASC"""
         ).fetchall()
         return [dict(r) for r in rows]
 
@@ -414,6 +417,33 @@ class Graph:
             [(i,) for i in ids],
         )
         self._db.commit()
+
+    def mark_l2_superseded(self, node_id: str, new_l2_id: str):
+        """Mark all uncondensed L2 observations for a node as superseded by a newer one."""
+        self._db.execute(
+            """UPDATE l2_observations
+               SET superseded_by = ?
+               WHERE node_id = ? AND condensed_to_l3 = 0
+                 AND superseded_by IS NULL AND id != ?""",
+            (new_l2_id, node_id, new_l2_id),
+        )
+        self._db.commit()
+
+    def get_nodes_with_portraits(self, limit: int = 50) -> list[dict]:
+        """Get nodes that have enriched portraits, ordered by weight.
+
+        Used to provide existing context to the filter so it can detect
+        contradictions and updates. Only nodes with portraits have established
+        understanding worth checking against.
+        """
+        rows = self._db.execute(
+            """SELECT id, label, type, weight, enriched_portrait, identity_relevance
+               FROM nodes
+               WHERE enriched_portrait IS NOT NULL AND enriched_portrait != ''
+               ORDER BY weight DESC LIMIT ?""",
+            (limit,),
+        ).fetchall()
+        return [dict(r) for r in rows]
 
     # ── L3 Portrait ──────────────────────────────────────────────────────
 

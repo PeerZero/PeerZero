@@ -38,7 +38,7 @@ CREATE TABLE IF NOT EXISTS edges (
     to_node_id TEXT NOT NULL,
     weight REAL NOT NULL DEFAULT 0.10,
     co_occurrence_count INTEGER DEFAULT 1,
-    type TEXT DEFAULT 'explicit' CHECK(type IN ('explicit','co_occurrence','ripple')),
+    type TEXT DEFAULT 'explicit' CHECK(type IN ('explicit','co_occurrence','ripple','supersedes')),
     created_at INTEGER NOT NULL,
     last_reinforced INTEGER NOT NULL,
     FOREIGN KEY (from_node_id) REFERENCES nodes(id) ON DELETE CASCADE,
@@ -62,7 +62,9 @@ CREATE TABLE IF NOT EXISTS l2_observations (
     observation TEXT NOT NULL,
     created_at INTEGER NOT NULL,
     condensed_to_l3 INTEGER DEFAULT 0,
-    FOREIGN KEY (node_id) REFERENCES nodes(id) ON DELETE CASCADE
+    superseded_by TEXT DEFAULT NULL,
+    FOREIGN KEY (node_id) REFERENCES nodes(id) ON DELETE CASCADE,
+    FOREIGN KEY (superseded_by) REFERENCES l2_observations(id) ON DELETE SET NULL
 );
 
 -- L3 Felt Portrait (single living document — understanding of the user)
@@ -142,6 +144,7 @@ CREATE INDEX IF NOT EXISTS idx_l1_condensed ON l1_interactions(condensed);
 CREATE INDEX IF NOT EXISTS idx_l1_session ON l1_interactions(session_id);
 CREATE INDEX IF NOT EXISTS idx_l2_node ON l2_observations(node_id);
 CREATE INDEX IF NOT EXISTS idx_l2_condensed ON l2_observations(condensed_to_l3);
+CREATE INDEX IF NOT EXISTS idx_l2_superseded ON l2_observations(superseded_by);
 CREATE INDEX IF NOT EXISTS idx_l2_self_condensed ON l2_self_observations(condensed_to_l3);
 CREATE INDEX IF NOT EXISTS idx_short_term_session ON short_term(session_id);
 CREATE INDEX IF NOT EXISTS idx_conviction_log_label ON conviction_log(node_label);
@@ -192,7 +195,19 @@ class ConversationalMemoryDB:
         self._conn.execute("PRAGMA mmap_size = 67108864")  # 64MB mmap (was 256MB — reduced to prevent memory exhaustion at scale)
 
         self._conn.executescript(_SCHEMA)
+        self._migrate(self._conn)
         return self._conn
+
+    @staticmethod
+    def _migrate(conn: sqlite3.Connection):
+        """Apply incremental migrations for existing databases."""
+        # Migration: add superseded_by column to l2_observations
+        cols = {row[1] for row in conn.execute("PRAGMA table_info(l2_observations)").fetchall()}
+        if "superseded_by" not in cols:
+            conn.execute("ALTER TABLE l2_observations ADD COLUMN superseded_by TEXT DEFAULT NULL")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_l2_superseded ON l2_observations(superseded_by)")
+            conn.commit()
+            logger.info("[db] Migration: added superseded_by column to l2_observations")
 
     @property
     def conn(self) -> sqlite3.Connection:

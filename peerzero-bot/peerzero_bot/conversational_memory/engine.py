@@ -94,8 +94,9 @@ class ConversationalMemoryEngine:
         self._graph.store_short_term(session_id, "user", message)
         self._graph.store_l1(f"User: {message}", session_id)
 
-        # Step 2: Filter and splatter
-        items = await self._filter.run(message)
+        # Step 2: Filter and splatter (pass existing node context for contradiction detection)
+        existing_nodes = self._graph.get_nodes_with_portraits()
+        items = await self._filter.run(message, existing_nodes=existing_nodes)
         self._splatter(items)
 
         # Step 3: Salience check
@@ -314,6 +315,33 @@ class ConversationalMemoryEngine:
                 node["id"],
                 item.get("weight", self._config.weights.passing_mention),
             )
+
+            # Handle supersession — filter detected this item corrects/replaces an existing node
+            updates_label = item.get("updates")
+            update_type = item.get("update_type")
+            if updates_label and update_type:
+                superseded_node = self._graph.find_node_by_label(updates_label)
+                if superseded_node and superseded_node["id"] != node["id"]:
+                    # Create a supersedes edge: new → old
+                    self._graph.create_edge(
+                        from_node_id=node["id"],
+                        to_node_id=superseded_node["id"],
+                        weight=0.10,
+                        edge_type="supersedes",
+                    )
+                    # Mark old uncondensed L2 observations as superseded
+                    # Store a placeholder L2 on the new node so mark_l2_superseded has a target
+                    reason = f"Supersedes {updates_label}"
+                    if update_type == "correction":
+                        reason = f"Corrects {updates_label}: {item.get('observation', '')}"
+                    new_l2_id = self._graph.store_l2(node["id"], reason)
+                    self._graph.mark_l2_superseded(
+                        superseded_node["id"], new_l2_id
+                    )
+                    logger.info(
+                        f"[engine] Supersession: '{item['label']}' {update_type}s "
+                        f"'{updates_label}'"
+                    )
 
         # Create edges between items
         for item in items:
