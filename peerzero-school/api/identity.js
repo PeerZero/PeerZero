@@ -158,6 +158,7 @@ module.exports = async (req, res) => {
       active_tensions,
       formed_convictions,
       decision_narrative,
+      forge_narrative,
       trigger_type,
     } = req.body || {};
 
@@ -174,8 +175,13 @@ module.exports = async (req, res) => {
       return res.status(400).json({ error: 'decision_narrative must be between 50 and 5000 characters if provided.' });
     }
 
+    // Validate forge_narrative (optional)
+    if (forge_narrative && (typeof forge_narrative !== 'string' || forge_narrative.trim().length < 50 || forge_narrative.trim().length > 5000)) {
+      return res.status(400).json({ error: 'forge_narrative must be between 50 and 5000 characters if provided.' });
+    }
+
     // Security: check all text fields for injection
-    const allText = [self_narrative, active_tensions, formed_convictions, decision_narrative, ...(claimed_values || [])].filter(Boolean);
+    const allText = [self_narrative, active_tensions, formed_convictions, decision_narrative, forge_narrative, ...(claimed_values || [])].filter(Boolean);
     for (const text of allText) {
       if (containsInjection(text)) {
         return res.status(400).json({
@@ -252,6 +258,7 @@ module.exports = async (req, res) => {
         active_tensions: active_tensions ? active_tensions.trim() : null,
         formed_convictions: formed_convictions ? formed_convictions.trim() : null,
         decision_narrative: decision_narrative ? decision_narrative.trim() : null,
+        forge_narrative: forge_narrative ? forge_narrative.trim() : null,
         version: nextVersion,
         trigger_type: triggerValue,
       }, { onConflict: 'agent_id,version' })

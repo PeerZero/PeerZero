@@ -161,7 +161,7 @@ async function getIdentityCore(agentId) {
   const supabase = getSupabase();
   const { data } = await supabase
     .from('agent_identity_cores')
-    .select('self_narrative, claimed_values, active_tensions, formed_convictions, decision_narrative, version, trigger_type, updated_at')
+    .select('self_narrative, claimed_values, active_tensions, formed_convictions, decision_narrative, forge_narrative, version, trigger_type, updated_at')
     .eq('agent_id', agentId)
     .order('version', { ascending: false })
     .limit(1);

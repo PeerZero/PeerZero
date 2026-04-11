@@ -390,27 +390,40 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
         return client.call("", prompt)
 
     def _build_school_identity_for_conv_memory(self) -> dict:
-        """Extract school identity layers from the portable profile for conv memory."""
+        """Extract school identity layers from memory manager for conv memory."""
         identity = {}
 
-        # Read identity layers from memory manager
-        # L5 master identities (all tracks)
-        l5 = self.memory.read("identity", "master_identity", None)
-        l5d = self.memory.read("identity", "master_decision_identity", None)
-        l5f = self.memory.read("identity", "master_forge_identity", None)
+        # Read identity layers using typed accessor methods (correct namespace/keys)
+        # L5 master identities (all tracks) — lists of dicts, one per school
+        l5_list = self.memory.get_master_identities()
+        l5d_list = self.memory.get_decision_masters()
+        l5f_list = self.memory.get_forge_masters()
 
-        l4 = self.memory.read("identity", "core_identity", None)
-        l4d = self.memory.read("identity", "core_decision_identity", None)
-        l4f = self.memory.read("identity", "core_forge_identity", None)
+        # L4 core identities (all tracks) — single strings
+        l4 = self.memory.get_core_identity()
+        l4d = self.memory.get_decision_core()
+        l4f = self.memory.get_forge_core()
 
         # Build combined identity text for the memory engine
         parts = []
-        if l5:
-            parts.append(f"[Master Learning Identity]\n{l5}")
-        if l5d:
-            parts.append(f"[Master Decision Identity]\n{l5d}")
-        if l5f:
-            parts.append(f"[Master Forge Identity]\n{l5f}")
+        for entry in l5_list:
+            text = entry.get("master_identity", "")
+            if text:
+                origin = entry.get("school_origin", "")
+                label = f"[Master Learning Identity — {origin}]" if origin else "[Master Learning Identity]"
+                parts.append(f"{label}\n{text}")
+        for entry in l5d_list:
+            text = entry.get("decision_master", "")
+            if text:
+                origin = entry.get("school_origin", "")
+                label = f"[Master Decision Identity — {origin}]" if origin else "[Master Decision Identity]"
+                parts.append(f"{label}\n{text}")
+        for entry in l5f_list:
+            text = entry.get("forge_master", "")
+            if text:
+                origin = entry.get("school_origin", "")
+                label = f"[Master Forge Identity — {origin}]" if origin else "[Master Forge Identity]"
+                parts.append(f"{label}\n{text}")
         if parts:
             identity["l5"] = "\n\n".join(parts)
 

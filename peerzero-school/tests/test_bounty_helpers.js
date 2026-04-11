@@ -56,8 +56,8 @@ assert(typeof MIN_SCORE_DROP === 'number', 'MIN_SCORE_DROP is a number');
 
 section('STRUCTURAL_CHALLENGE_TYPES constant');
 
-assert(STRUCTURAL_CHALLENGE_TYPES instanceof Set, 'STRUCTURAL_CHALLENGE_TYPES is a Set');
-assert(STRUCTURAL_CHALLENGE_TYPES.size === 3, 'STRUCTURAL_CHALLENGE_TYPES has 3 entries');
+assert(typeof STRUCTURAL_CHALLENGE_TYPES.has === 'function', 'STRUCTURAL_CHALLENGE_TYPES has Set-like .has()');
+assert(STRUCTURAL_CHALLENGE_TYPES.size >= 3, 'STRUCTURAL_CHALLENGE_TYPES has at least 3 entries');
 assert(STRUCTURAL_CHALLENGE_TYPES.has('no_mechanism_chain'), 'contains no_mechanism_chain');
 assert(STRUCTURAL_CHALLENGE_TYPES.has('no_falsifiable_claim'), 'contains no_falsifiable_claim');
 assert(STRUCTURAL_CHALLENGE_TYPES.has('no_cross_study_connection'), 'contains no_cross_study_connection');

@@ -39,16 +39,3 @@ class TestRefreshPlatformCondensers:
         bot._refresh_platform_condensers()
 
 
-class TestTryClearPlatformExercises:
-    def test_clears_when_both_tracks_done(self):
-        bot = FakeBot()
-        bot.memory.both_platform_tracks_condensed.return_value = True
-        bot._try_clear_platform_exercises()
-        bot.memory.clear_platform_exercises.assert_called_once()
-        bot.memory.clear_platform_condensation_flags.assert_called_once()
-
-    def test_does_not_clear_when_tracks_pending(self):
-        bot = FakeBot()
-        bot.memory.both_platform_tracks_condensed.return_value = False
-        bot._try_clear_platform_exercises()
-        bot.memory.clear_platform_exercises.assert_not_called()

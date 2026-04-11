@@ -150,6 +150,7 @@ class MemoryManager:
         all_keys = [
             ("core", "core_identity"),
             ("decision_core", "decision_core"),
+            ("forge_core", "forge_core"),
         ]
 
         # Master identities are now lists (one per school). Handle both
@@ -157,6 +158,7 @@ class MemoryManager:
         master_keys = [
             ("master", "master_identity"),
             ("decision_master", "decision_master"),
+            ("forge_master", "forge_master"),
         ]
 
         for ns_key, field in master_keys:

@@ -163,6 +163,14 @@ router.post('/:id/tasks/send', requireAuth, userRateLimit('write'), async (req: 
     return;
   }
 
+  // Validate target_url against SSRF
+  try {
+    validateExternalUrl(target_url);
+  } catch (err) {
+    res.status(400).json({ error: `Invalid target_url: ${err instanceof Error ? err.message : 'validation failed'}` });
+    return;
+  }
+
   // Create outgoing task record
   const task = await taskService.createTask({
     botId: req.params.id,

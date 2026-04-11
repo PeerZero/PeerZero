@@ -170,7 +170,7 @@ for (const [name, config] of Object.entries(schools)) {
 
   // If action overrides exist, check they have the key action types
   if (hasAction) {
-    const requiredActions = ['review', 'paper', 'bounty', 'revise', 'respond', 'rebut', 'reaffirm', 'identity'];
+    const requiredActions = ['review', 'paper', 'bounty', 'revise', 'respond', 'rebut', 'reaffirm', 'identity', 'rate_review', 'paper_concept', 'open_question', 'forge_paper_concept', 'forge_paper', 'self_review'];
     for (const action of requiredActions) {
       assert(config.actionSectionOverrides[action],
         `${name}: actionSectionOverrides missing "${action}" section`);
