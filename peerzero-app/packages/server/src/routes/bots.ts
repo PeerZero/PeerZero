@@ -12,6 +12,8 @@ import * as statsService from '../services/stats.service';
 import * as skillService from '../services/skill.service';
 import { generateDialogue, DIALOGUE_CONTEXTS, type DialogueContext } from '../services/bot-voice.service';
 import * as messageService from '../services/message.service';
+import * as directiveService from '../services/directive.service';
+import * as taskService from '../services/task.service';
 import { broadcastMessage } from '../websocket/activity-stream';
 import { addBotCycleJob, removeBotJobs, isQueueAvailable } from '../jobs/queue';
 import { logAudit } from '../services/audit.service';
@@ -419,22 +421,55 @@ router.post('/:id/messages', userRateLimit('write'), async (req: Request, res: R
   // Broadcast user message via WebSocket
   broadcastMessage(req.params.id, req.user!.userId, userMsg);
 
-  // Generate and store bot reply
+  // Generate chat reply and classify directive in parallel
   const model = bot.fast_llm_model || bot.llm_model;
-  const replyText = await messageService.generateChatReply(
-    req.params.id,
-    bot.name,
-    req.user!.userId,
-    bot.llm_api_key_id,
-    model,
-    content.trim(),
+  const isShipped = bot.mode === 'shipped';
+
+  const [replyText, directive] = await Promise.all([
+    messageService.generateChatReply(
+      req.params.id,
+      bot.name,
+      req.user!.userId,
+      bot.llm_api_key_id,
+      model,
+      content.trim(),
+    ),
+    // Only classify directives for shipped-mode bots
+    isShipped
+      ? directiveService.classifyMessage(content.trim(), bot.llm_api_key_id, req.user!.userId, model)
+      : Promise.resolve({ isDirective: false, directiveSummary: '' }),
+  ]);
+
+  const botReply = await messageService.storeMessage(
+    req.params.id, 'bot', replyText, 'chat', undefined,
+    directive.isDirective ? { directive_detected: true } : undefined,
   );
-  const botReply = await messageService.storeMessage(req.params.id, 'bot', replyText, 'chat');
 
   // Broadcast bot reply via WebSocket
   broadcastMessage(req.params.id, req.user!.userId, botReply);
 
-  res.json({ user_message: userMsg, bot_reply: botReply });
+  // If this is a directive from a shipped-mode bot owner, create a task + agenda message
+  let agendaMsg = null;
+  if (directive.isDirective) {
+    const task = await taskService.createTask({
+      botId: req.params.id,
+      direction: 'incoming',
+      sender: 'owner',
+      actionRequested: 'owner_directive',
+      payload: { message: content.trim(), directive_summary: directive.directiveSummary, source: 'chat' },
+    });
+
+    agendaMsg = await messageService.storeAgendaMessage(
+      req.params.id,
+      task.request_id,
+      directive.directiveSummary || content.trim(),
+    );
+
+    // Broadcast the agenda message so it appears in chat immediately
+    broadcastMessage(req.params.id, req.user!.userId, agendaMsg);
+  }
+
+  res.json({ user_message: userMsg, bot_reply: botReply, agenda: agendaMsg });
 });
 
 // ── Skills ──

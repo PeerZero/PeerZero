@@ -1986,8 +1986,17 @@ When done, return a JSON object:
                 # Ask identity how to handle the failure
                 self.planner.replan(agenda, "Step execution returned no result", system_prompt)
 
+            # Report progress to app server (for UI updates)
+            source_task_id = getattr(agenda, '_source_task_id', None)
+            if source_task_id and self.phone_home:
+                self._report_agenda_progress(source_task_id, agenda.to_dict())
+
             # Check if agenda is complete
             if agenda.is_complete:
+                # Report completion to app server
+                if source_task_id and self.phone_home:
+                    self._report_agenda_progress(source_task_id, agenda.to_dict(), status='completed')
+
                 exercise = self.action_desk.complete_agenda(agenda)
 
                 # Reflect on what was learned about choosing (enriches exercise
@@ -2204,6 +2213,92 @@ When done, return a JSON object:
                 adapter.cleanup_conversations()
 
     # ═══════════════════════════════════════════════════════════════════════
+    # OWNER DIRECTIVE POLLING (self-hosted bots)
+    # ═══════════════════════════════════════════════════════════════════════
+
+    def _poll_owner_directives(self):
+        """
+        Poll the app server for owner directives sent via chat.
+
+        Self-hosted bots don't have the app server processing tasks —
+        they handle directives natively through the Action Desk with
+        full planning, DAG execution, and replanning.
+        """
+        if not self.phone_home or not hasattr(self.phone_home, '_app_url'):
+            return
+
+        try:
+            import httpx
+
+            url = f"{self.phone_home._app_url}/api/bots/{self.config.bot_id}/tasks/directives"
+            response = self.phone_home._http.get(
+                url,
+                headers={
+                    "Authorization": f"Bearer {self.phone_home._app_token}",
+                },
+            )
+
+            if response.status_code != 200:
+                return
+
+            data = response.json()
+            directives = data.get("directives", [])
+
+            for directive in directives:
+                task_id = directive.get("request_id", "")
+                payload = directive.get("payload", {})
+                message = payload.get("message", "") or payload.get("directive_summary", "")
+
+                if not message:
+                    continue
+
+                logger.info(f"[DIRECTIVE] Received from owner: {message[:100]}")
+
+                # Route through the full Action Desk
+                agenda_dict = self.handle_directive(message)
+
+                if agenda_dict and self.action_desk._active_agendas:
+                    # Tag the agenda with source task ID for progress reporting
+                    self.action_desk._active_agendas[-1]._source_task_id = task_id
+
+                # Report initial agenda state back to app
+                self._report_agenda_progress(task_id, agenda_dict or {
+                    "directive": message,
+                    "intention": "Failed to plan",
+                    "steps": [],
+                    "status": "failed",
+                    "progress_summary": "Planning failed",
+                })
+
+        except Exception as e:
+            logger.debug(f"[DIRECTIVE] Polling failed: {e}")
+
+    def _report_agenda_progress(self, task_id: str, agenda_state: dict, status: str | None = None):
+        """
+        Report agenda state back to app server for UI updates.
+        Fire-and-forget — never blocks the bot.
+        """
+        if not self.phone_home or not hasattr(self.phone_home, '_app_url'):
+            return
+
+        try:
+            url = f"{self.phone_home._app_url}/api/bots/{self.config.bot_id}/task-progress"
+            self.phone_home._http.post(
+                url,
+                json={
+                    "task_id": task_id,
+                    "agenda": agenda_state,
+                    "status": status,
+                },
+                headers={
+                    "Authorization": f"Bearer {self.phone_home._app_token}",
+                    "Content-Type": "application/json",
+                },
+            )
+        except Exception as e:
+            logger.debug(f"[DIRECTIVE] Agenda progress report failed: {e}")
+
+    # ═══════════════════════════════════════════════════════════════════════
     # MAIN LOOP
     # ═══════════════════════════════════════════════════════════════════════
 
@@ -2246,6 +2341,8 @@ When done, return a JSON object:
                     # Task inbox (shipped mode only) — process pending tasks
                     if not self.config.school_enabled:
                         self._process_task_inbox()
+                        # Poll for owner directives from chat
+                        self._poll_owner_directives()
 
                     # Platform cycles (run when their timer is due)
                     # School mode = training only. No platform interactions.

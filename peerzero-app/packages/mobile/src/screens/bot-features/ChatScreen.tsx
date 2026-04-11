@@ -25,6 +25,8 @@ import { useBotStream } from '../../hooks/useBotStream';
 import { colors } from '../../theme/colors';
 import { spacing, fontSize, fontWeight, borderRadius, layout, lineHeight } from '../../theme/spacing';
 import BotAvatar from '../../components/BotAvatar';
+import AgendaCard from '../../components/AgendaCard';
+import type { AgendaState } from '../../components/AgendaCard';
 import type { BotMessage, BotDetail, SendMessageResponse, PaginatedResponse } from '@peerzero/shared';
 import { credibilityToStage, calculateHunger } from '@peerzero/shared';
 import type { ChatScreenProps } from '../../navigation/types';
@@ -170,6 +172,12 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
     onStatusChange: useCallback((status: string) => {
       setBot(prev => prev ? { ...prev, status: status as BotDetail['status'] } : null);
     }, []),
+    onAgendaUpdate: useCallback((messageId: string, agenda: Record<string, unknown>) => {
+      setMessages(prev => prev.map(m => {
+        if (m.id !== messageId) return m;
+        return { ...m, metadata: { ...m.metadata, agenda_state: agenda } };
+      }));
+    }, []),
   });
 
   // Filter messages based on active tab + preferences
@@ -181,7 +189,7 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
 
       // Tab-based filtering
       if (activeTab === 'chat') return m.message_type === 'chat';
-      if (activeTab === 'updates') return m.message_type === 'activity' || m.message_type === 'milestone';
+      if (activeTab === 'updates') return m.message_type === 'activity' || m.message_type === 'milestone' || m.message_type === 'agenda';
       return true; // 'all'
     });
   }, [messages, activeTab, prefs]);
@@ -243,6 +251,11 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
   };
 
   const renderMessage = ({ item }: { item: BotMessage }) => {
+    // Agenda messages render as an AgendaCard
+    if (item.message_type === 'agenda' && (item.metadata as Record<string, unknown> | null)?.agenda_state) {
+      return <AgendaCard agenda={(item.metadata as Record<string, unknown>).agenda_state as AgendaState} />;
+    }
+
     const isUser = item.role === 'user';
     const isActivity = item.message_type === 'activity';
     const isMilestone = item.message_type === 'milestone';

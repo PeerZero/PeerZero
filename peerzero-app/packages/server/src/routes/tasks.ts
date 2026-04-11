@@ -139,4 +139,107 @@ router.post('/:id/tasks/send', requireAuth, userRateLimit('write'), async (req: 
   res.status(201).json(task);
 });
 
+// ── Poll owner directives (self-hosted bots via phone-home token) ──
+router.get('/:id/tasks/directives', async (req: Request, res: Response) => {
+  // Auth via phone-home token (Bearer header)
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith('Bearer ')) {
+    res.status(401).json({ error: 'Missing phone-home token' });
+    return;
+  }
+  const token = authHeader.slice(7);
+
+  // Verify bot exists and token matches
+  const bot = await botService.getBotById(req.params.id);
+  if (!bot) {
+    res.status(404).json({ error: 'Bot not found' });
+    return;
+  }
+  if (bot.mode !== 'shipped') {
+    res.status(403).json({ error: 'Bot is not in shipped mode' });
+    return;
+  }
+
+  // Validate phone-home token
+  const { queryOne: qo } = await import('../db/client');
+  const tokenRow = await qo<{ id: string }>(
+    `SELECT id FROM phone_home_tokens WHERE bot_id = $1 AND token_hash = encode(sha256($2::bytea), 'hex') AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at > now())`,
+    [req.params.id, token],
+  );
+  if (!tokenRow) {
+    res.status(401).json({ error: 'Invalid phone-home token' });
+    return;
+  }
+
+  // Return pending owner directives
+  const tasks = await taskService.listTasks(req.params.id, {
+    direction: 'incoming',
+    status: 'pending',
+    limit: 10,
+  });
+
+  // Filter to owner directives only
+  const directives = tasks.data.filter(t => t.sender === 'owner' && t.action_requested === 'owner_directive');
+  res.json({ directives });
+});
+
+// ── Report agenda progress (self-hosted bots via phone-home token) ──
+router.post('/:id/task-progress', async (req: Request, res: Response) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith('Bearer ')) {
+    res.status(401).json({ error: 'Missing phone-home token' });
+    return;
+  }
+  const token = authHeader.slice(7);
+
+  const bot = await botService.getBotById(req.params.id);
+  if (!bot) {
+    res.status(404).json({ error: 'Bot not found' });
+    return;
+  }
+
+  // Validate phone-home token
+  const { queryOne: qo } = await import('../db/client');
+  const tokenRow = await qo<{ id: string }>(
+    `SELECT id FROM phone_home_tokens WHERE bot_id = $1 AND token_hash = encode(sha256($2::bytea), 'hex') AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at > now())`,
+    [req.params.id, token],
+  );
+  if (!tokenRow) {
+    res.status(401).json({ error: 'Invalid phone-home token' });
+    return;
+  }
+
+  const { task_id, agenda, status } = req.body;
+  if (!task_id) {
+    res.status(400).json({ error: 'task_id required' });
+    return;
+  }
+
+  // Update agenda message if provided
+  if (agenda) {
+    const { updateAgendaMessage } = await import('../services/message.service');
+    const { broadcastAgendaUpdate } = await import('../websocket/activity-stream');
+    const { queryOne: q1 } = await import('../db/client');
+
+    const updatedMsg = await updateAgendaMessage(task_id, agenda);
+    if (updatedMsg) {
+      // Look up user_id for WebSocket broadcast
+      const owner = await q1<{ user_id: string }>(
+        'SELECT user_id FROM bots WHERE id = $1',
+        [req.params.id],
+      );
+      if (owner) {
+        broadcastAgendaUpdate(req.params.id, owner.user_id, updatedMsg.id, agenda);
+      }
+    }
+  }
+
+  // Update task status if terminal
+  if (status && ['completed', 'failed'].includes(status)) {
+    await taskService.updateTaskStatus(task_id, status, agenda ? { agenda } : undefined);
+  }
+
+  res.json({ ok: true });
+});
+
 export default router;
