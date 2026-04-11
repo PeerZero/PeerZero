@@ -138,11 +138,8 @@ async function parseError(res: Response): Promise<Error> {
 // ── Auth API ──
 
 export const auth = {
-  register: (email: string, password: string, displayName?: string, ageGroup?: string, parentEmail?: string) =>
-    apiFetch('/auth/register', { method: 'POST', body: JSON.stringify({ email, password, display_name: displayName, age_group: ageGroup || 'adult', parent_email: parentEmail }) }),
-
-  verifyParentalConsent: (token: string) =>
-    apiFetch('/auth/parental-consent/verify', { method: 'POST', body: JSON.stringify({ token }) }),
+  register: (email: string, password: string, displayName?: string) =>
+    apiFetch('/auth/register', { method: 'POST', body: JSON.stringify({ email, password, display_name: displayName }) }),
 
   login: (email: string, password: string) =>
     apiFetch('/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) }),

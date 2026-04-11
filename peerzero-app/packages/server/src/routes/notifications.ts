@@ -6,8 +6,7 @@ import { Router, Request, Response } from 'express';
 import { requireAuth } from '../middleware/auth';
 import { userRateLimit } from '../middleware/rate-limit';
 import * as notificationService from '../services/notification.service';
-import { DEFAULT_NOTIFICATION_PREFS, CHILD_NOTIFICATION_PREFS } from '@peerzero/shared';
-import { queryOne } from '../db/client';
+import { DEFAULT_NOTIFICATION_PREFS } from '@peerzero/shared';
 
 const router = Router();
 router.use(requireAuth);
@@ -37,10 +36,7 @@ router.delete('/push-token', userRateLimit('write'), async (req: Request, res: R
 // Get notification preferences
 router.get('/preferences', userRateLimit('read'), async (req: Request, res: Response) => {
   const saved = await notificationService.getNotificationPrefs(req.user!.userId);
-  // COPPA: child accounts default to all notifications off
-  const user = await queryOne<{ age_group: string }>('SELECT age_group FROM users WHERE id = $1', [req.user!.userId]);
-  const defaults = user?.age_group === 'child' ? CHILD_NOTIFICATION_PREFS : DEFAULT_NOTIFICATION_PREFS;
-  const preferences = { ...defaults, ...saved };
+  const preferences = { ...DEFAULT_NOTIFICATION_PREFS, ...saved };
   res.json({ preferences });
 });
 
@@ -52,9 +48,7 @@ router.patch('/preferences', userRateLimit('write'), async (req: Request, res: R
     return;
   }
   const updated = await notificationService.updateNotificationPrefs(req.user!.userId, preferences);
-  const userRow = await queryOne<{ age_group: string }>('SELECT age_group FROM users WHERE id = $1', [req.user!.userId]);
-  const defaults = userRow?.age_group === 'child' ? CHILD_NOTIFICATION_PREFS : DEFAULT_NOTIFICATION_PREFS;
-  const merged = { ...defaults, ...updated };
+  const merged = { ...DEFAULT_NOTIFICATION_PREFS, ...updated };
   res.json({ preferences: merged });
 });
 

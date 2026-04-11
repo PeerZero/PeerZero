@@ -18,7 +18,6 @@ import type { ApiKeyInfo, BotSummary } from '@peerzero/shared';
 
 export default function SettingsScreen() {
   const { user, logout, refreshUser } = useAuth();
-  const isChild = user?.age_group === 'child';
   const { showToast } = useToast();
   const { resetTips, skippedAll } = useTutorial();
   const [keys, setKeys] = useState<ApiKeyInfo[]>([]);
@@ -359,20 +358,12 @@ export default function SettingsScreen() {
             <Text style={styles.sectionIcon}>🔑</Text>
             <Text style={styles.sectionTitle}>API Keys (BYOK)</Text>
           </View>
-          {!isChild && (
-            <TouchableOpacity onPress={() => setShowAddKey(!showAddKey)} accessibilityRole="button" accessibilityLabel={showAddKey ? 'Cancel adding key' : 'Add API Key'}>
-              <Text style={styles.addButton}>{showAddKey ? 'Cancel' : '+ Add Key'}</Text>
-            </TouchableOpacity>
-          )}
+          <TouchableOpacity onPress={() => setShowAddKey(!showAddKey)} accessibilityRole="button" accessibilityLabel={showAddKey ? 'Cancel adding key' : 'Add API Key'}>
+            <Text style={styles.addButton}>{showAddKey ? 'Cancel' : '+ Add Key'}</Text>
+          </TouchableOpacity>
         </View>
 
-        {isChild && (
-          <View style={styles.childNotice}>
-            <Text style={styles.childNoticeText}>API keys are managed by your parent or guardian. Ask them to add a key on their device.</Text>
-          </View>
-        )}
-
-        {!isChild && showAddKey && (
+        {showAddKey && (
           <View style={styles.addForm}>
             <View style={styles.providerRow}>
               <TouchableOpacity
@@ -408,15 +399,13 @@ export default function SettingsScreen() {
               <Text style={styles.keyLabel}>{k.label}</Text>
               <Text style={styles.keyFingerprint}>{k.provider} — {k.key_fingerprint}</Text>
             </View>
-            {!isChild && (
-              <TouchableOpacity onPress={() => handleDeleteKey(k.id, k.label)} accessibilityRole="button" accessibilityLabel={`Delete API key ${k.label}`}>
-                <Text style={styles.deleteText}>Delete</Text>
-              </TouchableOpacity>
-            )}
+            <TouchableOpacity onPress={() => handleDeleteKey(k.id, k.label)} accessibilityRole="button" accessibilityLabel={`Delete API key ${k.label}`}>
+              <Text style={styles.deleteText}>Delete</Text>
+            </TouchableOpacity>
           </View>
         ))}
 
-        {keys.length === 0 && !showAddKey && !isChild && (
+        {keys.length === 0 && !showAddKey && (
           <Text style={styles.hint}>Add your own API key to power your bots. You pay your provider directly.</Text>
         )}
       </View>
@@ -427,11 +416,6 @@ export default function SettingsScreen() {
           <Text style={styles.sectionIcon}>🔔</Text>
           <Text style={styles.sectionTitle}>Notifications</Text>
         </View>
-        {isChild && (
-          <View style={styles.childNotice}>
-            <Text style={styles.childNoticeText}>Push notifications are off by default for accounts under 13. You can enable them below.</Text>
-          </View>
-        )}
         {NOTIFICATION_TYPES.map(type => {
           const label = NOTIFICATION_LABELS[type];
           return (
@@ -633,9 +617,4 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   deleteAccountText: { fontSize: fontSize.sm, color: colors.text.tertiary },
-  childNotice: {
-    backgroundColor: colors.bg.card, padding: spacing.md, borderRadius: borderRadius.md,
-    marginBottom: spacing.sm, borderWidth: 1, borderColor: colors.accent.secondary + '30',
-  },
-  childNoticeText: { fontSize: fontSize.sm, color: colors.accent.secondary, fontStyle: 'italic' },
 });

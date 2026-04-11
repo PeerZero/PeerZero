@@ -10,8 +10,6 @@ export interface RegisterRequest {
   email: string;
   password: string;
   display_name?: string;
-  age_group: 'child' | 'teen' | 'adult';
-  parent_email?: string;  // Required if age_group === 'child'
 }
 
 export interface LoginRequest {
@@ -29,7 +27,6 @@ export interface UserProfile {
   id: string;
   email: string;
   display_name: string | null;
-  age_group: 'child' | 'teen' | 'adult';
   created_at: string;
   entitlements: {
     bot_slots: number;
