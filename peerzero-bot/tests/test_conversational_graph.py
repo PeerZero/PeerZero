@@ -380,3 +380,98 @@ class TestActiveNodes:
         graph.create_node("B", "concept")
         all_nodes = graph.get_all_nodes()
         assert len(all_nodes) == 2
+
+
+# ── Supersession / Contradiction handling ───────────────────────────────────
+
+class TestL2Supersession:
+    def test_mark_l2_superseded(self, graph):
+        """Superseded L2 observations should not appear in recent or uncondensed queries."""
+        node = graph.create_node("New York", "place")
+        old_l2 = graph.store_l2(node["id"], "Lives in New York")
+        new_l2 = graph.store_l2(node["id"], "Moved to London — corrects New York")
+
+        # Before supersession, both appear
+        assert len(graph.get_recent_l2(limit=10)) == 2
+        assert len(graph.get_uncondensed_l2()) == 2
+
+        # Mark old as superseded
+        graph.mark_l2_superseded(node["id"], new_l2)
+
+        # After supersession, only the new one appears
+        recent = graph.get_recent_l2(limit=10)
+        assert len(recent) == 1
+        assert recent[0]["id"] == new_l2
+
+        uncondensed = graph.get_uncondensed_l2()
+        assert len(uncondensed) == 1
+        assert uncondensed[0]["id"] == new_l2
+
+    def test_mark_l2_superseded_does_not_affect_other_nodes(self, graph):
+        """Supersession is scoped to a single node."""
+        node_a = graph.create_node("New York", "place")
+        node_b = graph.create_node("Cooking", "concept")
+        l2_a = graph.store_l2(node_a["id"], "Lives in New York")
+        l2_b = graph.store_l2(node_b["id"], "Enjoys Italian cooking")
+        new_l2 = graph.store_l2(node_a["id"], "Moved to London")
+
+        graph.mark_l2_superseded(node_a["id"], new_l2)
+
+        # Node B's observation should be untouched
+        uncondensed = graph.get_uncondensed_l2()
+        labels = [r["node_label"] for r in uncondensed]
+        assert "Cooking" in labels
+        assert len([l for l in labels if l == "Cooking"]) == 1
+
+    def test_mark_l2_superseded_skips_already_condensed(self, graph):
+        """Already-condensed L2s should not be marked as superseded."""
+        node = graph.create_node("Job", "concept")
+        old_l2 = graph.store_l2(node["id"], "Works as engineer")
+        graph.mark_l2_condensed([old_l2])
+        new_l2 = graph.store_l2(node["id"], "Promoted to tech lead")
+
+        graph.mark_l2_superseded(node["id"], new_l2)
+
+        # The condensed one still has superseded_by = NULL (wasn't touched)
+        # and the new one also has superseded_by = NULL
+        uncondensed = graph.get_uncondensed_l2()
+        assert len(uncondensed) == 1
+        assert uncondensed[0]["id"] == new_l2
+
+    def test_supersedes_edge_type(self, graph):
+        """Supersedes edges should be creatable and retrievable."""
+        n1 = graph.create_node("London", "place")
+        n2 = graph.create_node("New York", "place")
+        edge = graph.create_edge(n1["id"], n2["id"], edge_type="supersedes")
+        assert edge["type"] == "supersedes"
+        fetched = graph.get_edge(edge["id"])
+        assert fetched["type"] == "supersedes"
+
+
+class TestNodesWithPortraits:
+    def test_returns_only_nodes_with_portraits(self, graph):
+        graph.create_node("Alice", "person")
+        bob = graph.create_node("Bob", "person")
+        graph.set_enriched_portrait(bob["id"], "Bob is thoughtful and kind")
+
+        result = graph.get_nodes_with_portraits()
+        assert len(result) == 1
+        assert result[0]["label"] == "Bob"
+
+    def test_ordered_by_weight(self, graph):
+        a = graph.create_node("A", "concept", weight=1.0)
+        b = graph.create_node("B", "concept", weight=5.0)
+        graph.set_enriched_portrait(a["id"], "concept A")
+        graph.set_enriched_portrait(b["id"], "concept B")
+
+        result = graph.get_nodes_with_portraits()
+        assert result[0]["label"] == "B"
+        assert result[1]["label"] == "A"
+
+    def test_respects_limit(self, graph):
+        for i in range(10):
+            n = graph.create_node(f"Node{i}", "concept", weight=float(i))
+            graph.set_enriched_portrait(n["id"], f"portrait {i}")
+
+        result = graph.get_nodes_with_portraits(limit=3)
+        assert len(result) == 3

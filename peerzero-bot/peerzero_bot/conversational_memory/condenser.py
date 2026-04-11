@@ -163,8 +163,11 @@ Output structured JSON only. No preamble.
 
             # Store L2 observation and set enriched portrait
             if update.get("enriched_portrait"):
-                self._graph.store_l2(node["id"], update["enriched_portrait"])
+                new_l2_id = self._graph.store_l2(node["id"], update["enriched_portrait"])
                 self._graph.set_enriched_portrait(node["id"], update["enriched_portrait"])
+                # Mark old uncondensed L2 observations for this node as superseded —
+                # the new portrait subsumes them
+                self._graph.mark_l2_superseded(node["id"], new_l2_id)
 
             # Create new edges
             for edge in update.get("new_edges", []):
