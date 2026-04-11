@@ -34,6 +34,8 @@ export interface AgendaState {
 
 interface AgendaCardProps {
   agenda: AgendaState;
+  taskId?: string;
+  onCancel?: (taskId: string) => void;
 }
 
 const STATUS_ICON: Record<string, { icon: string; color: string }> = {
@@ -44,7 +46,7 @@ const STATUS_ICON: Record<string, { icon: string; color: string }> = {
   skipped: { icon: '\u2014', color: colors.text.tertiary },
 };
 
-export default function AgendaCard({ agenda }: AgendaCardProps) {
+export default function AgendaCard({ agenda, taskId, onCancel }: AgendaCardProps) {
   const [expanded, setExpanded] = useState(false);
 
   const isComplete = agenda.status === 'completed';
@@ -120,6 +122,17 @@ export default function AgendaCard({ agenda }: AgendaCardProps) {
               <Text style={styles.reasoningText}>{agenda.identity_reasoning}</Text>
             </View>
           ) : null}
+
+          {/* Cancel button for active/planning agendas */}
+          {!isComplete && !isAbandoned && taskId && onCancel && (
+            <TouchableOpacity
+              style={styles.cancelButton}
+              onPress={() => onCancel(taskId)}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.cancelButtonText}>Cancel</Text>
+            </TouchableOpacity>
+          )}
         </View>
       )}
     </TouchableOpacity>
@@ -281,5 +294,22 @@ const styles = StyleSheet.create({
     fontSize: fontSize.xs,
     color: colors.text.secondary,
     lineHeight: fontSize.xs * lineHeight.relaxed,
+  },
+
+  // Cancel button
+  cancelButton: {
+    marginTop: spacing.sm,
+    paddingVertical: spacing.xs + 2,
+    paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.accent.error + '40',
+    backgroundColor: colors.accent.error + '10',
+    alignSelf: 'flex-start',
+  },
+  cancelButtonText: {
+    fontSize: fontSize.xs,
+    fontWeight: fontWeight.semibold,
+    color: colors.accent.error,
   },
 });

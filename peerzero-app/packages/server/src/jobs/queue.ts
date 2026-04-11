@@ -13,6 +13,8 @@ import { runOneCycle, BotContext } from '../runtime/agent-loop';
 import { runShippedCycle } from '../runtime/shipped-loop';
 import { setBotStatus } from '../services/bot.service';
 import { queryOne, query, queryRows } from '../db/client';
+import { notifyBotError } from '../services/notification.service';
+import { broadcastStatusChange } from '../websocket/activity-stream';
 
 let connection: IORedis | null = null;
 let botQueue: Queue | null = null;
@@ -183,8 +185,12 @@ export function startWorker(): void {
         const sanitizedMsg = errorMsg.replace(/(?:sk-(?:ant-)?|key-|Bearer\s+|pwt_)[a-zA-Z0-9_-]+/g, '[REDACTED]').slice(0, 500);
         if (isAuthError) {
           await setBotStatus(botId, 'error', sanitizedMsg);
+          broadcastStatusChange(botId, userId, 'error');
           await removeBotJobs(botId);
           await query('UPDATE bots SET consecutive_failures = 0 WHERE id = $1', [botId]);
+          // Notify user their bot stopped due to auth error
+          const botInfo = await queryOne<{ name: string }>('SELECT name FROM bots WHERE id = $1', [botId]);
+          notifyBotError(userId, botId, botInfo?.name || 'Your bot', sanitizedMsg).catch(() => {});
           return;
         }
 
@@ -193,9 +199,14 @@ export function startWorker(): void {
         const failRow = await queryOne<{ consecutive_failures: number }>('SELECT consecutive_failures FROM bots WHERE id = $1', [botId]);
         const failures = failRow?.consecutive_failures || 1;
         if (failures >= 3) {
-          await setBotStatus(botId, 'error', `Stopped after ${failures} consecutive failures: ${sanitizedMsg.slice(0, 400)}`);
+          const stopMsg = `Stopped after ${failures} consecutive failures: ${sanitizedMsg.slice(0, 400)}`;
+          await setBotStatus(botId, 'error', stopMsg);
+          broadcastStatusChange(botId, userId, 'error');
           await removeBotJobs(botId);
           await query('UPDATE bots SET consecutive_failures = 0 WHERE id = $1', [botId]);
+          // Notify user their bot stopped
+          const botInfo2 = await queryOne<{ name: string }>('SELECT name FROM bots WHERE id = $1', [botId]);
+          notifyBotError(userId, botId, botInfo2?.name || 'Your bot', stopMsg).catch(() => {});
           return;
         }
       }

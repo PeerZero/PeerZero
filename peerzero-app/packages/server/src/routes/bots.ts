@@ -64,6 +64,30 @@ router.post('/', userRateLimit('write'), async (req: Request, res: Response) => 
 
 // Update bot
 router.patch('/:id', userRateLimit('write'), async (req: Request, res: Response) => {
+  // Guard: bot must be stopped before mode change
+  if (req.body.mode !== undefined) {
+    const currentBot = await botService.getBotDetail(req.user!.userId, req.params.id);
+    if (currentBot.status === 'running' && req.body.mode !== currentBot.mode) {
+      res.status(400).json({ error: 'Cannot change mode while bot is running. Stop the bot first.' });
+      return;
+    }
+
+    // Clean up state from the mode being left
+    if (req.body.mode !== currentBot.mode) {
+      if (currentBot.mode === 'shipped') {
+        // Leaving shipped: expire pending tasks so they don't become orphans
+        const { query: dbQuery } = await import('../db/client');
+        await dbQuery(
+          `UPDATE bot_tasks SET status = 'expired', error = 'Mode changed to school', updated_at = now()
+           WHERE bot_id = $1 AND status IN ('pending', 'processing')`,
+          [req.params.id],
+        );
+      }
+      // Remove cycle jobs for either direction (they'll be re-created on start)
+      await removeBotJobs(req.params.id);
+    }
+  }
+
   await botService.updateBot(req.user!.userId, req.params.id, req.body);
   const bot = await botService.getBotDetail(req.user!.userId, req.params.id);
   res.json(bot);

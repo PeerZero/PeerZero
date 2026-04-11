@@ -242,6 +242,15 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
     }
   };
 
+  // Cancel a running task
+  const handleCancelTask = useCallback(async (taskId: string) => {
+    try {
+      await botsApi.cancelTask(botId, taskId);
+    } catch (err: unknown) {
+      Alert.alert('Error', err instanceof Error ? err.message : 'Failed to cancel task');
+    }
+  }, [botId]);
+
   const toggleExpand = (id: string) => {
     setExpandedMessages(prev => {
       const next = new Set(prev);
@@ -253,7 +262,14 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
   const renderMessage = ({ item }: { item: BotMessage }) => {
     // Agenda messages render as an AgendaCard
     if (item.message_type === 'agenda' && (item.metadata as Record<string, unknown> | null)?.agenda_state) {
-      return <AgendaCard agenda={(item.metadata as Record<string, unknown>).agenda_state as AgendaState} />;
+      const meta = item.metadata as Record<string, unknown>;
+      return (
+        <AgendaCard
+          agenda={meta.agenda_state as AgendaState}
+          taskId={meta.task_id as string | undefined}
+          onCancel={handleCancelTask}
+        />
+      );
     }
 
     const isUser = item.role === 'user';

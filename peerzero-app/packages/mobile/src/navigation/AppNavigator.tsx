@@ -25,6 +25,7 @@ import BotScreen from '../screens/bot/BotScreen';
 import BrainScreen from '../screens/bot-features/BrainScreen';
 import ChatScreen from '../screens/bot-features/ChatScreen';
 import LogScreen from '../screens/bot-features/LogScreen';
+import TasksScreen from '../screens/bot-features/TasksScreen';
 import StatsScreen from '../screens/bot-features/StatsScreen';
 
 // Screens — Bot lifecycle
@@ -171,6 +172,7 @@ function BotStack() {
       <Stack.Screen name="Brain" component={BrainScreen} options={{ title: 'Brain' }} />
       <Stack.Screen name="Log" component={LogScreen} options={{ title: 'Activity Log' }} />
       <Stack.Screen name="Chat" component={ChatScreen} options={{ title: 'Chat' }} />
+      <Stack.Screen name="Tasks" component={TasksScreen} options={{ title: 'Task History' }} />
       <Stack.Screen name="CreateBot" component={CreateBotScreen} options={{ title: 'Create Bot', animation: 'slide_from_bottom' }} />
       <Stack.Screen name="EggHatch" component={EggHatchScreen} options={{ headerShown: false, gestureEnabled: false, animation: 'slide_from_bottom' }} />
       <Stack.Screen name="EnrollBot" component={EnrollBotScreen} options={{ title: 'Enroll in School', animation: 'slide_from_bottom' }} />

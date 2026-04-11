@@ -28,7 +28,8 @@ import { logger } from '../lib/logger';
 import { getDecryptedKey } from '../services/api-key.service';
 import { getPlatformCredentials, updatePlatformCycleStatus } from '../services/platform.service';
 import { query, queryOne } from '../db/client';
-import { broadcastExternalActivity } from '../websocket/activity-stream';
+import { broadcastExternalActivity, broadcastMessage } from '../websocket/activity-stream';
+import { narrateCycleActivity } from '../services/message.service';
 import {
   getLatestSelfAuthored,
   storeExercise,
@@ -167,6 +168,28 @@ export async function runPlatformCycle(ctx: PlatformCycleContext): Promise<void>
       content_preview: preview || null,
       skills_demonstrated: result.skills_demonstrated || [],
     });
+
+    // 8b. Narrate the platform activity in the user's chat feed
+    try {
+      const narration = await narrateCycleActivity(
+        ctx.botId,
+        ctx.botHandle,
+        ctx.userId,
+        ctx.llmApiKeyId,
+        ctx.llmModel,
+        `${action.action_type} on ${platCreds.platformName}`,
+        summary,
+        `platform:${action.action_type}`,
+        'neutral',
+        '', // no activity_id for platform cycles
+        preview,
+      );
+      if (narration) {
+        broadcastMessage(ctx.botId, ctx.userId, narration);
+      }
+    } catch {
+      // Narration is non-blocking — don't fail the platform cycle
+    }
 
     // ─────────────────────────────────────────────────────────────────────
     // 9. Platform condensation: L1→L2→L3 ONLY (L4/L5 are school-exclusive)

@@ -100,6 +100,55 @@ router.get('/:id/tasks/:requestId', requireAuth, userRateLimit('read'), async (r
   res.json(task);
 });
 
+// ── Cancel a pending/processing task (authenticated — bot owner only) ──
+router.post('/:id/tasks/:requestId/cancel', requireAuth, userRateLimit('write'), async (req: Request, res: Response) => {
+  await botService.getBotDetail(req.user!.userId, req.params.id);
+  const task = await taskService.getTaskByRequestId(req.params.requestId);
+  if (!task || task.bot_id !== req.params.id) {
+    res.status(404).json({ error: 'Task not found' });
+    return;
+  }
+  if (!['pending', 'processing'].includes(task.status)) {
+    res.status(400).json({ error: `Cannot cancel task in '${task.status}' state` });
+    return;
+  }
+
+  await taskService.updateTaskStatus(task.id, 'rejected', undefined, 'Cancelled by owner');
+
+  // Update the agenda card if this was an owner directive
+  if (task.sender === 'owner' && task.action_requested === 'owner_directive') {
+    const { updateAgendaMessage } = await import('../services/message.service');
+    const { broadcastAgendaUpdate, broadcastMessage: broadcastMsg } = await import('../websocket/activity-stream');
+    const { queryOne: q1 } = await import('../db/client');
+
+    const cancelAgenda = {
+      directive: task.payload?.directive_summary || String(task.payload?.message || ''),
+      intention: 'Cancelled',
+      steps: [],
+      status: 'abandoned',
+      progress_summary: 'Cancelled by owner',
+    };
+    const updatedMsg = await updateAgendaMessage(task.request_id, cancelAgenda);
+    if (updatedMsg) {
+      const owner = await q1<{ user_id: string }>('SELECT user_id FROM bots WHERE id = $1', [req.params.id]);
+      if (owner) {
+        broadcastAgendaUpdate(req.params.id, owner.user_id, updatedMsg.id, cancelAgenda);
+      }
+    }
+  }
+
+  logAudit({
+    userId: req.user!.userId,
+    action: 'task.cancel',
+    entityType: 'bot_task',
+    entityId: task.id,
+    ipAddress: req.ip,
+    metadata: { request_id: req.params.requestId },
+  });
+
+  res.json({ status: 'cancelled', request_id: task.request_id });
+});
+
 // ── Send a task to another agent (authenticated — user triggers delegation) ──
 router.post('/:id/tasks/send', requireAuth, userRateLimit('write'), async (req: Request, res: Response) => {
   const bot = await botService.getBotDetail(req.user!.userId, req.params.id);
