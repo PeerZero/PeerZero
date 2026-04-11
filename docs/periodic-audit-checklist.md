@@ -324,13 +324,13 @@ Track when each audit was last run and what was found/fixed. This helps Claude p
 | # | Audit | Last Run | Issues Found | Branch/PR |
 |---|-------|----------|-------------|-----------|
 | 1 | Silent Failures | 2026-04-11 | 65 found, 65 fixed | claude/silent-failures-check-8N9z2 |
-| 2 | Race Conditions | — | — | — |
+| 2 | Race Conditions | 2026-04-11 | 18 found, 8 fixed (3 critical, 4 high) | claude/silent-failures-check-8N9z2 |
 | 3 | Unbounded Growth | — | — | — |
-| 4 | Retry & Idempotency | — | — | — |
+| 4 | Retry & Idempotency | 2026-04-11 | 21 found, noted (2 critical need transactions) | claude/silent-failures-check-8N9z2 |
 | 5 | Secret Exposure | — | — | — |
 | 6 | Timeout & Exhaustion | — | — | — |
 | 7 | Stale Cache | — | — | — |
-| 8 | Authorization Gaps | — | — | — |
+| 8 | Authorization Gaps | 2026-04-11 | 9 found, 3 fixed (0 critical, 3 medium) | claude/silent-failures-check-8N9z2 |
 | 9 | Degradation Decisions | — | — | — |
 | 10 | Dependency Vulns | — | — | — |
 | 11 | Dead Code | — | — | — |

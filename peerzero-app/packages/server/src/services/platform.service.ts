@@ -194,6 +194,22 @@ export async function updatePlatform(
     params.push(hb);
   }
   if (updates.config !== undefined) {
+    // Apply the same whitelist used in connectPlatform to prevent arbitrary config injection
+    const ALLOWED_CONFIG_OVERRIDES: Record<string, 'string' | 'number' | 'boolean'> = {
+      base_url: 'string',
+      heartbeat_interval: 'number',
+      webhook_url: 'string',
+      timeout_ms: 'number',
+      retry_enabled: 'boolean',
+    };
+    for (const [key, value] of Object.entries(updates.config)) {
+      if (!(key in ALLOWED_CONFIG_OVERRIDES)) {
+        throw new AppError(400, `Config key '${key}' is not allowed. Allowed: ${Object.keys(ALLOWED_CONFIG_OVERRIDES).join(', ')}`);
+      }
+      if (typeof value !== ALLOWED_CONFIG_OVERRIDES[key]) {
+        throw new AppError(400, `Config key '${key}' must be of type ${ALLOWED_CONFIG_OVERRIDES[key]}`);
+      }
+    }
     sets.push(`config = $${idx++}`);
     params.push(JSON.stringify(updates.config));
   }

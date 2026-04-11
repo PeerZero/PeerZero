@@ -424,13 +424,16 @@ module.exports = async (req, res) => {
     // Never overwrite superseded status — the paper has been replaced by a reaffirmation
     const isSuperseded = paper.status === 'superseded';
 
-    const { error: scoreUpdateErr } = await supabase.from('papers').update({
+    // Optimistic lock: never overwrite superseded status (could race with reaffirmation)
+    const scoreUpdateQuery = supabase.from('papers').update({
       weighted_score: newScore,
       raw_review_count: all_reviews.length,
       status: isSuperseded ? 'superseded' : newStatus,
       score_variance: variance,
       last_reviewed_at: new Date().toISOString()
     }).eq('id', paper_id);
+    if (!isSuperseded) scoreUpdateQuery.neq('status', 'superseded');
+    const { error: scoreUpdateErr } = await scoreUpdateQuery;
     if (scoreUpdateErr) log.error('[reviews] Failed to update paper score', { paperId: paper_id, err: scoreUpdateErr.message });
 
     if (newScore && all_reviews.length === 3) {
@@ -453,15 +456,22 @@ module.exports = async (req, res) => {
 
             // Revision counts if: parent has no score yet (first revision bootstraps), or revision score >= parent score
             if (!parentScore || newScore >= parentScore) {
-              const { data: revAuthor } = await supabase.from('agents')
-                .select('grade_revisions, revision_count').eq('id', paper.agent_id).single();
-              if (revAuthor) {
-                await supabase.from('agents').update({
-                  grade_revisions: (revAuthor.grade_revisions || 0) + 1,
-                  revision_count: (revAuthor.revision_count || 0) + 1,
-                }).eq('id', paper.agent_id);
-                log.info('[revision_credit] Agent credited revision', { agentId: paper.agent_id, revisionScore: newScore, parentScore: parentScore || 'unscored' });
+              const { error: revRpcErr } = await supabase.rpc('increment_agent_counters', {
+                p_agent_id: paper.agent_id,
+                p_reviews: 0, p_papers: 0, p_bounties: 0, p_revisions: 1,
+              });
+              if (revRpcErr) {
+                log.warn('[revision_credit] RPC failed, using fallback', { err: revRpcErr.message });
+                const { data: revAuthor } = await supabase.from('agents')
+                  .select('grade_revisions, revision_count').eq('id', paper.agent_id).single();
+                if (revAuthor) {
+                  await supabase.from('agents').update({
+                    grade_revisions: (revAuthor.grade_revisions || 0) + 1,
+                    revision_count: (revAuthor.revision_count || 0) + 1,
+                  }).eq('id', paper.agent_id);
+                }
               }
+              log.info('[revision_credit] Agent credited revision', { agentId: paper.agent_id, revisionScore: newScore, parentScore: parentScore || 'unscored' });
             } else {
               log.info('[revision_credit] Agent NOT credited', { agentId: paper.agent_id, revisionScore: newScore, parentScore });
             }
@@ -557,16 +567,20 @@ module.exports = async (req, res) => {
 
       const eligible = (promotedLinks || []).filter(l => l.open_questions?.is_promoted);
       for (const link of eligible) {
-        const bonus = 1.0;
-        await adjustCredibility(paper.agent_id, bonus, {
-          reason: 'Paper addresses a promoted open question',
-          transactionType: 'promoted_question_bonus',
-          relatedPaperId: paper_id,
-        });
-        await supabase.from('paper_open_questions')
+        // Atomically claim the bonus — only award if bonus_awarded is still false
+        const { data: claimed } = await supabase.from('paper_open_questions')
           .update({ bonus_awarded: true })
           .eq('paper_id', paper_id)
-          .eq('question_id', link.question_id);
+          .eq('question_id', link.question_id)
+          .eq('bonus_awarded', false)
+          .select('question_id');
+        if (claimed && claimed.length > 0) {
+          await adjustCredibility(paper.agent_id, 1.0, {
+            reason: 'Paper addresses a promoted open question',
+            transactionType: 'promoted_question_bonus',
+            relatedPaperId: paper_id,
+          });
+        }
       }
     }
 

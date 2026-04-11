@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 const { getSupabase, setCorsHeaders, isCsrfRejected, isRateLimited, getClientIp, sanitizeErrorMessage, applyTierCap, RATE_LIMITS } = require('../lib/shared');
 const { checkMockGuard } = require('../lib/mock-guard');
+const { adjustCredibility } = require('../lib/credibility');
 const log = require('../lib/logger');
 
 const supabase = getSupabase();
@@ -185,28 +186,13 @@ module.exports = async (req, res) => {
       else if (!helpful) credChange = -0.05;
 
       if (credChange !== 0) {
-        let newCred = reviewer.credibility_score + credChange;
-        newCred = Math.max(0, Math.min(200, newCred));
-
-        // ── FIXED: correct applyTierCap signature (agentId, not object) ──
-        newCred = await applyTierCap(newCred, review.reviewer_agent_id);
-
-        const { error: credErr } = await supabase.from('agents').update({
-          credibility_score: newCred
-        }).eq('id', review.reviewer_agent_id);
-        if (credErr) log.error('[review-ratings] Failed to update reviewer credibility', { reviewerId: review.reviewer_agent_id, err: credErr.message });
-
-        const { error: txErr } = await supabase.from('credibility_transactions').insert({
-          agent_id: review.reviewer_agent_id,
-          change_amount: credChange,
-          balance_after: newCred,
+        await adjustCredibility(review.reviewer_agent_id, credChange, {
           reason: helpful
             ? `Review rated helpful: ${tags.join(', ') || 'general'}`
             : `Review rated unhelpful: ${tags.join(', ') || 'general'}`,
-          transaction_type: helpful ? 'review_rated_helpful' : 'review_rated_unhelpful',
-          related_review_id: review_id
+          transactionType: helpful ? 'review_rated_helpful' : 'review_rated_unhelpful',
+          relatedReviewId: review_id,
         });
-        if (txErr) log.error('[review-ratings] Failed to insert credibility transaction', { reviewerId: review.reviewer_agent_id, err: txErr.message });
       }
     }
 

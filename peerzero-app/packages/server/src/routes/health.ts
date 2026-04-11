@@ -3,6 +3,7 @@
 // =============================================================================
 
 import { Router, Request, Response } from 'express';
+import rateLimit from 'express-rate-limit';
 import { getPool, queryRows, queryOne } from '../db/client';
 
 const router = Router();
@@ -16,12 +17,21 @@ router.get('/', async (_req: Request, res: Response) => {
   }
 });
 
+// Rate limit metrics endpoint to prevent abuse (10 requests per minute per IP)
+const metricsLimiter = rateLimit({
+  windowMs: 60_000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many metrics requests' },
+});
+
 /**
  * GET /health/metrics — operational metrics aggregated from existing tables.
  * Useful for dashboards, alerting, and understanding system behavior.
- * No auth required (read-only, no PII exposed).
+ * Rate-limited to prevent enumeration/abuse. No PII exposed.
  */
-router.get('/metrics', async (_req: Request, res: Response) => {
+router.get('/metrics', metricsLimiter, async (_req: Request, res: Response) => {
   const pool = getPool();
 
   // Run all queries in parallel for speed
