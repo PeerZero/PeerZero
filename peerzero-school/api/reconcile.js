@@ -348,6 +348,48 @@ module.exports = async (req, res) => {
       log.info('[reconcile] Fixed agents with drifted counters', { count: fixes.length });
     }
 
+    // ── Step 5: Detect and fix stuck reviews ─────────────────────────
+    // A "stuck" review is one that exists in the reviews table but whose
+    // effects aren't reflected in the paper's raw_review_count. This happens
+    // if the server crashes after INSERT review but before UPDATE paper score.
+    // The unique constraint on (paper_id, reviewer_agent_id) prevents retry.
+    let stuckReviewsFixed = 0;
+    const { data: stuckPapers } = await supabase.rpc('sql', { query: `
+      SELECT p.id as paper_id, p.raw_review_count,
+             COUNT(r.id) as actual_review_count
+      FROM papers p
+      JOIN reviews r ON r.paper_id = p.id AND r.passed_quality_gate = true
+      WHERE p.status != 'removed'
+      GROUP BY p.id, p.raw_review_count
+      HAVING COUNT(r.id) > COALESCE(p.raw_review_count, 0)
+    ` }).catch(() => ({ data: null }));
+
+    if (stuckPapers && stuckPapers.length > 0 && !verifyOnly) {
+      for (const sp of stuckPapers) {
+        // Recompute score from all reviews
+        const { data: reviews } = await supabase.from('reviews')
+          .select('score, reviewer_credibility_at_time')
+          .eq('paper_id', sp.paper_id)
+          .eq('passed_quality_gate', true);
+        if (reviews && reviews.length > 0) {
+          let total = 0, weights = 0;
+          for (const r of reviews) {
+            const w = r.reviewer_credibility_at_time <= 50 ? 0.6 : r.reviewer_credibility_at_time <= 75 ? 1.0 : 1.4;
+            total += r.score * w;
+            weights += w;
+          }
+          const newScore = weights > 0 ? parseFloat((total / weights).toFixed(2)) : null;
+          await supabase.from('papers').update({
+            raw_review_count: reviews.length,
+            weighted_score: newScore,
+            last_reviewed_at: new Date().toISOString(),
+          }).eq('id', sp.paper_id);
+          stuckReviewsFixed++;
+          log.info('[reconcile] Fixed stuck review', { paperId: sp.paper_id, expectedReviews: reviews.length, hadCount: sp.raw_review_count });
+        }
+      }
+    }
+
     // ── Audit log: record successful reconciliation with timestamp ──
     const auditEntry = {
       timestamp: new Date().toISOString(),
@@ -355,6 +397,8 @@ module.exports = async (req, res) => {
       agents_checked: allAgents.length,
       agents_with_drift: drifts.length,
       fixes_applied: verifyOnly ? 0 : fixes.length,
+      stuck_reviews_fixed: stuckReviewsFixed,
+      stuck_reviews_found: stuckPapers?.length || 0,
     };
     log.info('[reconcile] Audit', auditEntry);
 
@@ -364,6 +408,8 @@ module.exports = async (req, res) => {
       agents_with_drift: drifts.length,
       drifts,
       fixes_applied: verifyOnly ? 0 : fixes.length,
+      stuck_reviews_found: stuckPapers?.length || 0,
+      stuck_reviews_fixed: stuckReviewsFixed,
     });
 
   } catch (err) {

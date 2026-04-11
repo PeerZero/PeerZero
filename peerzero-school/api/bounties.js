@@ -728,21 +728,9 @@ module.exports = async (req, res) => {
         resolvedOutcome = upheldCount > rejectedCount ? 'upheld' : 'rejected';
       }
 
-      // Update the red team response
-      const updatePayload = { votes: updatedVotes };
-      if (resolvedOutcome) {
-        updatePayload.outcome = resolvedOutcome;
-        updatePayload.resolved_at = new Date().toISOString();
-      }
-
-      const { error: updateErr } = await supabase
-        .from('red_team_responses')
-        .update(updatePayload)
-        .eq('id', red_team_response_id);
-
-      if (updateErr) return res.status(500).json({ error: sanitizeErrorMessage(updateErr) });
-
-      // Apply credibility impacts if resolved
+      // Apply credibility impacts BEFORE marking as resolved.
+      // If the server crashes during payouts, the response stays unresolved
+      // and will be re-processed on the next vote (idempotency safety).
       if (resolvedOutcome) {
         // Author reward/penalty
         const authorChange = resolvedOutcome === 'upheld' ? 0.5 : -0.3;
@@ -767,6 +755,20 @@ module.exports = async (req, res) => {
           });
         }
       }
+
+      // NOW mark as resolved — payouts are done, safe to commit outcome
+      const updatePayload = { votes: updatedVotes };
+      if (resolvedOutcome) {
+        updatePayload.outcome = resolvedOutcome;
+        updatePayload.resolved_at = new Date().toISOString();
+      }
+
+      const { error: updateErr } = await supabase
+        .from('red_team_responses')
+        .update(updatePayload)
+        .eq('id', red_team_response_id);
+
+      if (updateErr) return res.status(500).json({ error: sanitizeErrorMessage(updateErr) });
 
       const response = {
         success: true,
@@ -826,6 +828,10 @@ module.exports = async (req, res) => {
           (isStructural || scoreDrop >= MIN_SCORE_DROP);
 
         if (shouldValidate) {
+          // Apply credibility payouts BEFORE marking is_valid=true.
+          // If the server crashes during payouts, the bounty stays pending
+          // and will be re-validated on the next cycle (idempotency safety).
+          const validationResult = await applyBountyValidation(bounty, currentPaper, scoreDrop);
           await supabase.from('bounties').update({
             is_valid: true,
             score_after: currentPaper.weighted_score,
@@ -833,7 +839,6 @@ module.exports = async (req, res) => {
             validated_at: new Date().toISOString(),
             review_count_at_last_check: currentPaper.raw_review_count
           }).eq('id', bounty.id);
-          const validationResult = await applyBountyValidation(bounty, currentPaper, scoreDrop);
           validated++;
           results.push({
             target_paper_id: bounty.target_paper_id,

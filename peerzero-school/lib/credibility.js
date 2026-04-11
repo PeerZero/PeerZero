@@ -166,7 +166,10 @@ async function applyTierCap(newCred, agentId) {
   }
 
   if (newTierUnlocked > currentTierUnlocked) {
-    await supabase.from('agents').update({ tier_unlocked: newTierUnlocked }).eq('id', agentId);
+    // Only write if tier hasn't been advanced further by a concurrent call
+    await supabase.from('agents').update({ tier_unlocked: newTierUnlocked })
+      .eq('id', agentId)
+      .lt('tier_unlocked', newTierUnlocked);
     log.info('[tier_unlocked] Agent unlocked tier', { agentId, tier: newTierUnlocked });
   }
 
