@@ -146,7 +146,7 @@ Pick 2-3 audits per session. For each audit, search all 3 systems (peerzero-scho
 - BrainScreen data cached in mobile — how often does it refresh?
 - Supabase connection object reused across requests — does it reconnect on pool exhaustion?
 
-**Last run:** Never
+**Last run:** 2026-04-11 — 9 items checked, no fixes needed. Bot profile refresh mitigates staleness; school config frozen by design on serverless; no Redis data caching exists.
 
 ---
 
@@ -182,7 +182,7 @@ Pick 2-3 audits per session. For each audit, search all 3 systems (peerzero-scho
 - Condensation that silently fails — memory layers stop building without any indicator
 - When should the bot **stop and wait** vs. **proceed with degraded data**?
 
-**Last run:** Never
+**Last run:** 2026-04-11 — 8 items checked, 2 fixed (search error sentinel, condensation failure counter). 6 items have acceptable degradation behavior.
 
 ---
 
@@ -311,7 +311,7 @@ Pick 2-3 audits per session. For each audit, search all 3 systems (peerzero-scho
 - Vercel serverless: are there any operations that assume long-lived processes? (Vercel functions are ephemeral)
 - Scheduled jobs (setInterval): are they cleared on shutdown to prevent duplicate execution?
 
-**Last run:** Never
+**Last run:** 2026-04-11 — 9 items checked, 1 fixed (App server now drains in-flight requests before exit). BullMQ, DB pool, Redis cleanup all correctly handled.
 
 ---
 
@@ -329,13 +329,13 @@ Track when each audit was last run and what was found/fixed. This helps Claude p
 | 4 | Retry & Idempotency | 2026-04-11 | 21 found, noted (2 critical need transactions) | claude/silent-failures-check-8N9z2 |
 | 5 | Secret Exposure | 2026-04-11 | 12 found, 4 fixed (error sanitize before log, bearer regex improved, reconcile sanitize; test creds OK) | claude/complete-audits-w4oXD |
 | 6 | Timeout & Exhaustion | 2026-04-11 | 12 found, 10 fixed (SDK timeout, fetch timeout, SQLite timeout, pool sizing, Supabase timeout, news search logging, BullMQ lock renewal, JSON loop limit, rate bucket cap, fallback LRU) | claude/complete-audits-w4oXD |
-| 7 | Stale Cache | — | — | — |
+| 7 | Stale Cache | 2026-04-11 | 9 checked, 0 fixed needed (bot profile refresh mitigates identity staleness, school config frozen by design on serverless, no Redis data caching, mobile token revocation on next request, all low/none severity) | claude/complete-readme-audits-3dG6T |
 | 8 | Authorization Gaps | 2026-04-11 | 9 found, 3 fixed (0 critical, 3 medium) | claude/silent-failures-check-8N9z2 |
-| 9 | Degradation Decisions | — | — | — |
+| 9 | Degradation Decisions | 2026-04-11 | 8 found, 2 fixed (1 critical: search returns error sentinel instead of empty array to prevent citation-less papers; 1 high: condensation failure counter tracks consecutive failures and logs ERROR after 3; 6 noted as acceptable degradation) | claude/complete-readme-audits-3dG6T |
 | 10 | Dependency Vulns | 2026-04-11 | 12 found, 8 fixed (pnpm overrides for brace-expansion/yaml, model ID updated to claude-sonnet-4-6, stale h11 comment, removed dead tomli dep, synced httpx lock, .python-version, engines field, @types/node pinned; 3 remaining: esbuild/vite/brace-expansion dev-only, documented) | claude/complete-readme-audits-3dG6T |
 | 11 | Dead Code | 2026-04-11 | 7 found, 4 fixed (wired 4 unused Zod schemas to routes: UpdateBotSchema, AddApiKeySchema, SendMessageSchema, ExternalActivitySchema; fixed AddApiKeySchema field mismatch; 3 noted: dead bot methods for future features) | claude/complete-readme-audits-3dG6T |
 | 12 | N+1 Queries | 2026-04-11 | 13 found, 9 fixed (retroactive batch, drift batch, pending bounties limit+cols, condensation count, empty guard, SELECT * → columns on agents in 4 queries, ownership filter to DB) | claude/complete-audits-w4oXD |
 | 13 | Input Validation | 2026-04-11 | 12 found, 10 fixed (confidence type, grade bounds, external_sources guard, response_score NaN, historical cap, context_sources cap, LLM output shape, skills filter, error sanitize, Zod middleware + schemas) | claude/complete-audits-w4oXD |
 | 14 | Cross-System Contracts | 2026-04-11 | 4 found, 4 fixed (2 critical: executeRevision read wrong field reaffirmable_papers→can_revise_papers, determineAction dropped forge_paper/self_review/sleep/reaffirm; 2 high: revision/reaffirmation used wrong API paths, review sent paper_id in body instead of query) | claude/complete-readme-audits-3dG6T |
 | 15 | Error Message UX | — | — | — |
-| 16 | Graceful Shutdown | — | — | — |
+| 16 | Graceful Shutdown | 2026-04-11 | 9 checked, 1 fixed (1 high: App server now waits for in-flight HTTP requests to drain before process.exit with 10s timeout; BullMQ workers already handled correctly; bot SIGTERM is graceful, SIGINT interrupts mid-action — medium, acceptable) | claude/complete-readme-audits-3dG6T |

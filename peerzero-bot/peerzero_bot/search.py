@@ -24,6 +24,10 @@ import httpx
 
 logger = logging.getLogger("peerzero-bot.search")
 
+
+class SearchUnavailableError(Exception):
+    """Raised when the search API is unreachable — prevents citation-less papers."""
+
 # Read school connection from environment (same vars the bot config uses)
 _SCHOOL_URL = os.environ.get("PEERZERO_URL", "https://peerzero.science").rstrip("/")
 _API_KEY = os.environ.get("PEERZERO_API_KEY", "")
@@ -33,7 +37,7 @@ def _call_server_search(queries: list[str], context: str = "") -> dict:
     """Call POST /api/search on the PeerZero server."""
     if not _API_KEY:
         logger.warning("PEERZERO_API_KEY not set — cannot search server")
-        return {"papers": [], "search_log": {}}
+        return {"papers": [], "search_log": {}, "search_failed": True}
 
     try:
         with httpx.Client(timeout=60.0, follow_redirects=False, verify=True) as http:
@@ -50,11 +54,11 @@ def _call_server_search(queries: list[str], context: str = "") -> dict:
             )
             if resp.status_code != 200:
                 logger.warning(f"Server search failed: HTTP {resp.status_code}")
-                return {"papers": [], "search_log": {}}
+                return {"papers": [], "search_log": {}, "search_failed": True}
             return resp.json()
     except Exception as e:
         logger.warning(f"Server search error: {e}")
-        return {"papers": [], "search_log": {}}
+        return {"papers": [], "search_log": {}, "search_failed": True}
 
 
 def _rank_by_relevance(papers: list, paper_context: str, llm_fast) -> list:
@@ -184,6 +188,11 @@ def search_and_summarize(
     """
     # Phase 1: Server searches real academic databases
     result = _call_server_search(queries, context=paper_context)
+
+    if result.get("search_failed"):
+        logger.error("Search API unavailable — aborting to avoid citation-less paper")
+        raise SearchUnavailableError("Search API failed — cannot produce citations")
+
     all_papers = [_normalize_server_paper(p) for p in result.get("papers", [])]
     search_log = result.get("search_log", {})
     logger.info(
