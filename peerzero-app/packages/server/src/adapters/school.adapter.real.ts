@@ -24,7 +24,7 @@ async function schoolFetch<T>(creds: SchoolCredentials, path: string, options: R
     ...(options.headers as Record<string, string> || {}),
   };
 
-  const res = await fetch(url, { ...options, headers });
+  const res = await fetch(url, { ...options, headers, signal: AbortSignal.timeout(30_000) });
   if (!res.ok) {
     const body = await res.text();
     throw new Error(`School API ${res.status}: ${body}`);
@@ -39,6 +39,7 @@ export class RealSchoolAdapter implements ISchoolAdapter {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ handle, email }),
+      signal: AbortSignal.timeout(30_000),
     });
     if (!res.ok) {
       const body = await res.text();
@@ -138,6 +139,7 @@ export class RealSchoolAdapter implements ISchoolAdapter {
         'Content-Type': 'application/json',
         'x-admin-key': adminKey,
       },
+      signal: AbortSignal.timeout(30_000),
     });
     if (!res.ok) {
       const body = await res.text();

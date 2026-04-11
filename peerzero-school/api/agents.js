@@ -142,16 +142,19 @@ module.exports = async (req, res) => {
 
           // Fetch papers that are not removed, not own, under their review cap
           // Original papers: cap 15. Response/defense/rebuttal papers: cap 5.
+          // Ownership filter pushed to DB to reduce over-fetching.
           const { data: allPapers } = await supabase.from('papers')
             .select('id, title, abstract, weighted_score, raw_review_count, parent_paper_id, status, paper_type')
             .neq('status', 'removed')
+            .neq('agent_id', agent.id)
             .lt('raw_review_count', 15)
             .order('raw_review_count', { ascending: true })
             .limit(80);
 
           return (allPapers || [])
             .filter(p => {
-              if (myPaperIds.has(p.id) || reviewedIds.has(p.id)) return false;
+              // Own papers excluded in DB query; still need to exclude already-reviewed
+              if (reviewedIds.has(p.id)) return false;
               // Responses/defenses/rebuttals cap at 5 reviews — triggers fire at 3
               const cap = p.parent_paper_id ? 5 : 15;
               return p.raw_review_count < cap;
@@ -585,12 +588,15 @@ module.exports = async (req, res) => {
       // Bounties received against this bot's papers
       let bountiesReceived = [];
       try {
-        const { data: bountyData } = await supabase.from('bounties')
-          .select('challenge_type, reasoning, score_drop, created_at, target_paper_id')
-          .in('target_paper_id', myPaperList.map(p => p.id))
-          .eq('is_valid', true)
-          .order('created_at', { ascending: true })
-          .limit(20);
+        const myPaperIds = myPaperList.map(p => p.id);
+        const { data: bountyData } = myPaperIds.length > 0
+          ? await supabase.from('bounties')
+              .select('challenge_type, reasoning, score_drop, created_at, target_paper_id')
+              .in('target_paper_id', myPaperIds)
+              .eq('is_valid', true)
+              .order('created_at', { ascending: true })
+              .limit(20)
+          : { data: [] };
         bountiesReceived = (bountyData || []).map(b => ({
           type: b.challenge_type,
           reasoning: (b.reasoning || '').slice(0, 200),
@@ -618,14 +624,13 @@ module.exports = async (req, res) => {
       // Condensation counts
       let condensationCounts = { l2: 0, l2d: 0, l2f: 0 };
       try {
-        const { data: reflData } = await supabase.from('agent_skill_reflections')
-          .select('track', { count: 'exact', head: false })
-          .eq('agent_id', agent.id);
-        for (const r of (reflData || [])) {
-          if (r.track === 'learning') condensationCounts.l2++;
-          else if (r.track === 'decision') condensationCounts.l2d++;
-          else if (r.track === 'forge') condensationCounts.l2f++;
-        }
+        // Count per track using 3 lightweight head-only queries instead of fetching all rows
+        const [lRes, dRes, fRes] = await Promise.all([
+          supabase.from('agent_skill_reflections').select('id', { count: 'exact', head: true }).eq('agent_id', agent.id).eq('track', 'learning'),
+          supabase.from('agent_skill_reflections').select('id', { count: 'exact', head: true }).eq('agent_id', agent.id).eq('track', 'decision'),
+          supabase.from('agent_skill_reflections').select('id', { count: 'exact', head: true }).eq('agent_id', agent.id).eq('track', 'forge'),
+        ]);
+        condensationCounts = { l2: lRes.count || 0, l2d: dRes.count || 0, l2f: fRes.count || 0 };
       } catch (e) { /* non-fatal */ }
 
       // ── Prior forge papers + their reviews ─────────────────────────────

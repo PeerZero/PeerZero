@@ -15,12 +15,15 @@
 //   GET  /api/reconcile?action=forge_inherited         → preview inherited context
 //   POST /api/reconcile?action=forge_extract_frames    → run meta-condenser
 //
+// Data retention:
+//   POST /api/reconcile?action=purge_retention         → purge old audit rows (180d default)
+//
 // Protected by admin secret (X-Admin-Key header).
 // Designed to be called by a cron job (daily) or manually for debugging.
 // =============================================================================
 
 const crypto = require('crypto');
-const { getSupabase, setCorsHeaders, isCsrfRejected, isRateLimited } = require('../lib/shared');
+const { getSupabase, setCorsHeaders, isCsrfRejected, isRateLimited, sanitizeErrorMessage } = require('../lib/shared');
 const { checkMockGuard } = require('../lib/mock-guard');
 const log = require('../lib/logger');
 const {
@@ -152,8 +155,39 @@ module.exports = async (req, res) => {
       return res.status(400).json({ error: `Unknown forge action: ${action}` });
     } catch (err) {
       log.error('[forge-aggregation] endpoint error', { err: err?.message, action });
-      return res.status(500).json({ error: err?.message || 'Internal error' });
+      return res.status(500).json({ error: sanitizeErrorMessage(err) });
     }
+  }
+
+  // ── Data retention purge ────────────────────────────────────────────────
+  // POST /api/reconcile?action=purge_retention   (or GET for Vercel cron)
+  // Purges old rows from audit/analytics tables. Safe to run daily via cron.
+  if (action === 'purge_retention') {
+    const RETENTION_DAYS = parseInt(process.env.RETENTION_DAYS || '180', 10);
+    const cutoff = new Date(Date.now() - RETENTION_DAYS * 24 * 60 * 60 * 1000).toISOString();
+    const results = {};
+
+    // Simple delete with filter for each table
+    const purges = [
+      ['credibility_transactions', supabase.from('credibility_transactions').delete().lt('created_at', cutoff)],
+      ['calibration_log', supabase.from('calibration_log').delete().lt('created_at', cutoff)],
+      ['decision_rationales', supabase.from('decision_rationales').delete().lt('created_at', cutoff)],
+      ['self_reviews', supabase.from('self_reviews').delete().lt('created_at', cutoff)],
+      ['rate_limit_log', supabase.from('rate_limit_log').delete().lt('created_at', cutoff)],
+      // Only purge resolved/abandoned forge hypotheses — active ones are still in use
+      ['forge_hypotheses', supabase.from('forge_hypotheses').delete().lt('created_at', cutoff).in('status', ['resolved', 'abandoned'])],
+    ];
+
+    for (const [name, query] of purges) {
+      try {
+        const { error } = await query;
+        results[name] = error ? { error: error.message } : { purged: true };
+      } catch (err) {
+        results[name] = { error: err?.message || 'Unknown error' };
+      }
+    }
+    log.info('[retention] Purge complete', { cutoff, retention_days: RETENTION_DAYS, results });
+    return res.status(200).json({ success: true, cutoff, retention_days: RETENTION_DAYS, results });
   }
 
   // ── Reconciliation ─────────────────────────────────────────────────────

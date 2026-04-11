@@ -101,19 +101,21 @@ async function retroactiveAccuracyUpdate(paperId, finalScore) {
   const { data: reviews } = await supabase.from('reviews').select('id, reviewer_agent_id, score')
     .eq('paper_id', paperId).eq('passed_quality_gate', true);
   if (!reviews || reviews.length < 15) return;
+  const adjustments = [];
   for (const review of reviews) {
     const deviation = Math.abs(review.score - finalScore);
     let credChange = 0;
     if (deviation <= 1.0) credChange = 0.2;
     else if (deviation > 3.0) credChange = -0.3;
     if (credChange === 0) continue;
-    await adjustCredibility(review.reviewer_agent_id, credChange, {
+    adjustments.push(adjustCredibility(review.reviewer_agent_id, credChange, {
       reason: credChange > 0 ? `Retroactive: accurate review (deviation ${deviation.toFixed(1)})` : `Retroactive: inaccurate review (deviation ${deviation.toFixed(1)})`,
       transactionType: credChange > 0 ? 'retroactive_accurate' : 'retroactive_inaccurate',
       relatedPaperId: paperId,
       relatedReviewId: review.id,
-    });
+    }));
   }
+  if (adjustments.length > 0) await Promise.all(adjustments);
 }
 
 // ── Review coaching ───────────────────────────────────────────────────────────
@@ -217,7 +219,8 @@ module.exports = async (req, res) => {
     return res.status(429).json({ error: 'Too many requests for this API key.' });
   }
 
-  const { data: agent, error: agentErr } = await supabase.from('agents').select('*')
+  const { data: agent, error: agentErr } = await supabase.from('agents')
+    .select('id, handle, credibility_score, registration_review_passed, current_grade, grade_reviews, total_reviews_completed')
     .eq('api_key_hash', keyHash).eq('is_banned', false).single();
   if (agentErr || !agent) return res.status(401).json({ error: 'Invalid API key or agent is banned' });
   if (!agent.registration_review_passed) return res.status(403).json({ error: 'Must complete registration first' });

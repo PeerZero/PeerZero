@@ -194,7 +194,9 @@ export function startWorker(): void {
           err.message.includes('API key')
         );
         // Sanitize error message to prevent sensitive data leaks
-        const sanitizedMsg = errorMsg.replace(/(?:sk-(?:ant-)?|key-|Bearer\s+|pwt_)[a-zA-Z0-9_-]+/g, '[REDACTED]').slice(0, 500);
+        const sanitizedMsg = errorMsg
+          .replace(/(?:sk-(?:ant-)?|key-|Bearer\s+|pwt_|eyJ[A-Za-z0-9._-]+|supabase[a-zA-Z0-9_.\-/]+)[a-zA-Z0-9_.\-]*/gi, '[REDACTED]')
+          .slice(0, 500);
         if (isAuthError) {
           await setBotStatus(botId, 'error', sanitizedMsg);
           broadcastStatusChange(botId, userId, 'error');
@@ -249,6 +251,8 @@ export function startWorker(): void {
       connection: getConnection() as any,
       concurrency: 5, // Process up to 5 bot cycles in parallel
       lockDuration: 5 * 60 * 1000, // 5 minutes — LLM calls can take a while
+      lockRenewTime: 60 * 1000, // Renew lock every 60s to prevent expiry during long LLM calls
+      stalledInterval: 5 * 60 * 1000, // Match lock duration — don't mark jobs as stalled prematurely
     },
   );
 
@@ -259,8 +263,23 @@ export function startWorker(): void {
   logger.info('Bot cycle worker started');
 }
 
+/** Clear stale bot cycle locks left over from a crashed worker. */
+async function clearStaleLocks(): Promise<void> {
+  try {
+    const redis = getConnection();
+    const keys = await redis.keys('botlock:cycle:*');
+    if (keys.length > 0) {
+      await redis.del(...keys);
+      logger.info({ cleared: keys.length }, 'Cleared stale bot cycle locks on startup');
+    }
+  } catch (err) {
+    logger.warn({ err: err instanceof Error ? err.message : err }, 'Failed to clear stale locks');
+  }
+}
+
 /** Re-queue all bots that were running before the server restarted. */
 export async function recoverRunningBots(): Promise<void> {
+  await clearStaleLocks();
   const rows = await queryRows<{ id: string; user_id: string; llm_api_key_id: string; llm_model: string; cycle_delay_seconds: number }>(
     "SELECT id, user_id, llm_api_key_id, llm_model, cycle_delay_seconds FROM bots WHERE status = 'running' AND deleted_at IS NULL",
   );

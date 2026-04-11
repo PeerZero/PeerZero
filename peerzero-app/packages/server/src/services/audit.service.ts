@@ -17,6 +17,7 @@ interface AuditEntry {
 
 /**
  * Purge audit log entries older than the retention period (90 days).
+ * Also hard-deletes soft-deleted activity_log entries older than 90 days.
  * Should be called periodically (e.g. once per day on startup + setInterval).
  */
 export async function purgeExpiredAuditLogs(): Promise<number> {
@@ -28,6 +29,19 @@ export async function purgeExpiredAuditLogs(): Promise<number> {
     const deleted = (result as { rowCount?: number }).rowCount || 0;
     if (deleted > 0) {
       logger.info({ deleted }, 'Purged expired audit log entries');
+    }
+    // Hard-delete soft-deleted activity_log entries older than 90 days
+    try {
+      const actResult = await query(
+        `DELETE FROM activity_log WHERE deleted_at IS NOT NULL AND deleted_at < NOW() - INTERVAL '90 days'`,
+        [],
+      );
+      const actDeleted = (actResult as { rowCount?: number }).rowCount || 0;
+      if (actDeleted > 0) {
+        logger.info({ deleted: actDeleted }, 'Purged soft-deleted activity log entries');
+      }
+    } catch (actErr) {
+      logger.error({ err: actErr instanceof Error ? actErr.message : actErr }, 'Failed to purge activity logs');
     }
     return deleted;
   } catch (err) {

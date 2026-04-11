@@ -92,10 +92,16 @@ class LLMClient:
             return None  # Proxy mode — no direct client needed
         if self._provider == "anthropic":
             import anthropic
-            self._client = anthropic.Anthropic(api_key=self._api_key)
+            self._client = anthropic.Anthropic(
+                api_key=self._api_key,
+                timeout=300.0,  # 5 min — LLM calls with extended thinking can be slow
+            )
         elif self._provider == "openai":
             import openai
-            self._client = openai.OpenAI(api_key=self._api_key)
+            self._client = openai.OpenAI(
+                api_key=self._api_key,
+                timeout=300.0,
+            )
         return self._client
 
     def _exchange_session_token(self) -> bool:

@@ -13,9 +13,9 @@ export function getPool(): Pool {
     const sslEnabled = config.databaseUrl.includes('sslmode=');
     pool = new Pool({
       connectionString: config.databaseUrl,
-      max: Math.max(1, parseInt(process.env.DB_POOL_MAX || '50') || 50),
+      max: Math.max(1, parseInt(process.env.DB_POOL_MAX || '20') || 20),
       idleTimeoutMillis: Math.max(1000, parseInt(process.env.DB_POOL_IDLE_TIMEOUT || '30000') || 30000),
-      connectionTimeoutMillis: Math.max(1000, parseInt(process.env.DB_POOL_CONN_TIMEOUT || '10000') || 10000),
+      connectionTimeoutMillis: Math.max(1000, parseInt(process.env.DB_POOL_CONN_TIMEOUT || '15000') || 15000),
       ...(sslEnabled && { ssl: { rejectUnauthorized: process.env.NODE_ENV === 'production' } }),
     });
   }

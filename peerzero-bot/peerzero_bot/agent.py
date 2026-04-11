@@ -203,6 +203,12 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
                     f"self-awareness exercises injected into forge pipeline"
                 )
 
+        # Purge stale conversation DB files on disk (>90 days untouched)
+        try:
+            self._purge_stale_conversation_dbs()
+        except Exception as e:
+            logger.debug(f"[STARTUP] Conv DB cleanup skipped: {e}")
+
         # Load Action Desk (persistent task queue for autonomous work)
         self.action_desk.load()
         if self.action_desk.has_work:
@@ -282,8 +288,23 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
         if user_id in self._conv_memory_engines:
             # Touch for LRU tracking (move to end of dict ordering)
             engine = self._conv_memory_engines.pop(user_id)
+            engine._last_accessed = __import__('time').time()
             self._conv_memory_engines[user_id] = engine
             return engine
+
+        # Evict engines inactive for >7 days regardless of count
+        import time as _time
+        MAX_ENGINE_AGE_SECS = 7 * 24 * 3600
+        now_ts = _time.time()
+        stale = [uid for uid, eng in self._conv_memory_engines.items()
+                 if hasattr(eng, '_last_accessed') and now_ts - eng._last_accessed > MAX_ENGINE_AGE_SECS]
+        for uid in stale:
+            try:
+                self._conv_memory_engines[uid].close()
+            except Exception:
+                pass
+            del self._conv_memory_engines[uid]
+            logger.debug(f"[CONV_MEMORY] Evicted stale engine for user: {uid}")
 
         # Evict least-recently-used engines if at capacity (prevent file descriptor exhaustion)
         MAX_CONV_ENGINES = 50
@@ -320,6 +341,7 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
             encryption_key=self.config.conversational_memory_encryption_key,
         )
 
+        engine._last_accessed = __import__('time').time()
         self._conv_memory_engines[user_id] = engine
         mode = "owner" if is_owner else "wild"
         logger.info(f"[CONV_MEMORY] Initialized {mode} engine for user: {user_id}")
@@ -342,6 +364,39 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
         config.condensation.character_threshold = wild.condensation_threshold
 
         return config
+
+    def _purge_stale_conversation_dbs(self):
+        """Delete conversation SQLite files untouched for >90 days (disk cleanup)."""
+        import time as _t
+        base = self.config.conversational_memory_path or os.path.join(
+            self.config.memory_path or "memory", "conversations"
+        )
+        MAX_AGE_SECS = 90 * 24 * 3600  # 90 days
+        now = _t.time()
+        purged = 0
+        for subdir in ("owner", "wild"):
+            dirpath = os.path.join(base, subdir)
+            if not os.path.isdir(dirpath):
+                continue
+            for fname in os.listdir(dirpath):
+                if not fname.endswith(".db"):
+                    continue
+                fpath = os.path.join(dirpath, fname)
+                try:
+                    mtime = os.path.getmtime(fpath)
+                    if now - mtime > MAX_AGE_SECS:
+                        os.remove(fpath)
+                        purged += 1
+                        # Also remove WAL/SHM sidecar files
+                        for ext in ("-wal", "-shm"):
+                            try:
+                                os.remove(fpath + ext)
+                            except FileNotFoundError:
+                                pass
+                except Exception as e:
+                    logger.debug(f"[CONV_MEMORY] Stale DB cleanup skipped {fpath}: {e}")
+        if purged > 0:
+            logger.info(f"[CONV_MEMORY] Purged {purged} stale conversation DB files (>90 days)")
 
     def _get_shared_awareness(self) -> SharedSelfAwareness:
         """Get or create the shared self-awareness layer."""

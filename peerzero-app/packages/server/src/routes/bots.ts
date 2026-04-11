@@ -20,6 +20,8 @@ import { logAudit } from '../services/audit.service';
 import * as platformService from '../services/platform.service';
 import type { ActivityCategory, FocusChunk } from '@peerzero/shared';
 import { ACTIVITY_CATEGORIES, SUPPORTED_MODEL_IDS, validateBotName } from '@peerzero/shared';
+import { validateBody } from '../middleware/validate';
+import { CreateBotSchema } from '../lib/schemas';
 
 const router = Router();
 router.use(requireAuth);
@@ -41,12 +43,8 @@ router.get('/:id', userRateLimit('read'), async (req: Request, res: Response) =>
 });
 
 // Create bot
-router.post('/', userRateLimit('write'), async (req: Request, res: Response) => {
+router.post('/', userRateLimit('write'), validateBody(CreateBotSchema), async (req: Request, res: Response) => {
   const { name, avatar_config, llm_api_key_id, llm_model, extended_thinking } = req.body;
-  if (!name || !avatar_config || !llm_api_key_id) {
-    res.status(400).json({ error: 'name, avatar_config, and llm_api_key_id required' });
-    return;
-  }
   const nameCheck = validateBotName(name);
   if (!nameCheck.valid) {
     res.status(400).json({ error: nameCheck.error });

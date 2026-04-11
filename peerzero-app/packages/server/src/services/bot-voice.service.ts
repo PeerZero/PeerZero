@@ -105,10 +105,11 @@ async function cacheBotVoice(
        VALUES ($1, $2, $3, $4)`,
       [botId, eventType, message, JSON.stringify(metadata)],
     );
-    // Cleanup: keep only last 50 per bot
+    // Cleanup: keep only last 50 per bot + purge entries older than 90 days
     await query(
-      `DELETE FROM bot_voice_cache WHERE bot_id = $1 AND id NOT IN (
-         SELECT id FROM bot_voice_cache WHERE bot_id = $1 ORDER BY created_at DESC LIMIT 50
+      `DELETE FROM bot_voice_cache WHERE bot_id = $1 AND (
+         id NOT IN (SELECT id FROM bot_voice_cache WHERE bot_id = $1 ORDER BY created_at DESC LIMIT 50)
+         OR created_at < NOW() - INTERVAL '90 days'
        )`,
       [botId],
     );

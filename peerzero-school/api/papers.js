@@ -61,7 +61,7 @@ module.exports = async (req, res) => {
       const keyHash = crypto.createHash('sha256').update(apiKey).digest('hex');
       const { data: agent, error: agentErr } = await supabase
         .from('agents')
-        .select('*')
+        .select('id, handle, credibility_score, valid_bounties, current_grade, registration_review_passed, grade_papers, grade_reviews, grade_forge_papers, total_papers_submitted')
         .eq('api_key_hash', keyHash)
         .eq('is_banned', false)
         .single();
@@ -419,7 +419,7 @@ module.exports = async (req, res) => {
 
     const { data: agent, error: agentError } = await supabase
       .from('agents')
-      .select('*')
+      .select('id, handle, credibility_score, current_grade, registration_review_passed, grade_papers, grade_forge_papers, total_papers_submitted')
       .eq('api_key_hash', keyHash)
       .eq('is_banned', false)
       .single();
@@ -624,8 +624,9 @@ module.exports = async (req, res) => {
     if (confidence_score === undefined || confidence_score === null) {
       return res.status(400).json({ error: 'confidence_score required (1-10).' });
     }
-    if (confidence_score < 1 || confidence_score > 10) {
-      return res.status(400).json({ error: 'confidence_score must be between 1 and 10' });
+    const numericConfidence = Number(confidence_score);
+    if (!Number.isFinite(numericConfidence) || numericConfidence < 1 || numericConfidence > 10) {
+      return res.status(400).json({ error: 'confidence_score must be a number between 1 and 10' });
     }
 
     // ── Search strategy validation (school-aware) ────────────────────────────
@@ -634,6 +635,9 @@ module.exports = async (req, res) => {
     if (isComedy) {
       // Comedy: validate context_sources if provided (lightweight, no DOIs)
       if (context_sources && Array.isArray(context_sources)) {
+        if (context_sources.length > 50) {
+          return res.status(400).json({ error: 'context_sources limited to 50 items' });
+        }
         for (let i = 0; i < context_sources.length; i++) {
           const cs = context_sources[i];
           if (!cs.description || cs.description.trim().length < 10) {
@@ -790,6 +794,9 @@ module.exports = async (req, res) => {
 
     // ── Historical precedent validation (politics only) ─────────────────────
     if (isPolitics && historical_precedents && Array.isArray(historical_precedents)) {
+      if (historical_precedents.length > 50) {
+        return res.status(400).json({ error: 'historical_precedents limited to 50 items' });
+      }
       for (let i = 0; i < historical_precedents.length; i++) {
         const hp = historical_precedents[i];
         if (!hp.description || hp.description.trim().length < 20) {

@@ -233,7 +233,9 @@ def extract_json(text: str) -> dict | None:
     # Strategy 3: Balanced brace extraction (handles nested objects)
     # Try each '{' in the text as a potential JSON start
     search_from = 0
-    while True:
+    max_attempts = 100  # prevent O(n^2) on malformed input
+    attempts = 0
+    while attempts < max_attempts:
         start = text.find('{', search_from)
         if start == -1:
             break
@@ -269,6 +271,7 @@ def extract_json(text: str) -> dict | None:
             except json.JSONDecodeError:
                 pass
         search_from = start + 1
+        attempts += 1
 
     # Strategy 4: Lenient cleanup (trailing commas, single quotes)
     brace_match = re.search(r'\{.*\}', text, re.DOTALL)
