@@ -64,7 +64,8 @@ function checkInMemoryFallback(
   const bucket = fallbackBuckets.get(key);
 
   if (!bucket || now > bucket.resetAt) {
-    // Evict oldest-inserted entries if map is at capacity (O(1) using Map insertion order)
+    // Evict oldest-inserted entries if map is at capacity (O(1) using Map insertion order).
+    // Re-insert active keys on access to maintain LRU order.
     if (fallbackBuckets.size >= MAX_FALLBACK_BUCKETS && !fallbackBuckets.has(key)) {
       const firstKey = fallbackBuckets.keys().next().value;
       if (firstKey !== undefined) fallbackBuckets.delete(firstKey);
@@ -76,6 +77,9 @@ function checkInMemoryFallback(
     return { allowed: false, remaining: 0, limit: max };
   }
   bucket.count++;
+  // Move to end of Map insertion order (LRU: recently-accessed entries evict last)
+  fallbackBuckets.delete(key);
+  fallbackBuckets.set(key, bucket);
   return { allowed: true, remaining: max - bucket.count, limit: max };
 }
 

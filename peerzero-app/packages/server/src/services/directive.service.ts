@@ -133,9 +133,10 @@ Respond with ONLY valid JSON: {"is_directive": true/false, "summary": "brief tas
     ], { maxTokens: 60, temperature: 0 });
 
     const parsed = JSON.parse(response.content.trim());
+    if (typeof parsed !== 'object' || parsed === null) throw new Error('Invalid LLM response shape');
     return {
-      isDirective: !!parsed.is_directive,
-      directiveSummary: parsed.summary || content.trim(),
+      isDirective: typeof parsed.is_directive === 'boolean' ? parsed.is_directive : !!parsed.is_directive,
+      directiveSummary: typeof parsed.summary === 'string' ? parsed.summary : content.trim(),
     };
   } catch (err) {
     logger.debug({ err: err instanceof Error ? err.message : err }, 'LLM directive classification failed, defaulting to conversation');

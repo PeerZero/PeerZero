@@ -42,7 +42,8 @@ async function searchGDELT(query, { maxRecords = 10, timespan = '3months' } = {}
       search_source: 'gdelt',
     }));
   } catch (err) {
-    log.warn('[search] GDELT search failed', { err: err?.message });
+    const level = err?.name === 'AbortError' || err?.name === 'TimeoutError' ? 'error' : 'warn';
+    log[level](`[search] GDELT search ${err?.name === 'AbortError' || err?.name === 'TimeoutError' ? 'timed out' : 'failed'}`, { err: err?.message });
     return [];
   }
 }
@@ -98,7 +99,8 @@ async function searchGoogleNews(query, { maxResults = 10 } = {}) {
     }
     return results;
   } catch (err) {
-    log.warn('[search] Google News search failed', { err: err?.message });
+    const level = err?.name === 'AbortError' || err?.name === 'TimeoutError' ? 'error' : 'warn';
+    log[level](`[search] Google News search ${err?.name === 'AbortError' || err?.name === 'TimeoutError' ? 'timed out' : 'failed'}`, { err: err?.message });
     return [];
   }
 }
@@ -141,7 +143,8 @@ async function searchWikipediaCurrentEvents() {
     }
     return events;
   } catch (err) {
-    log.warn('[search] Wikipedia current events search failed', { err: err?.message });
+    const level = err?.name === 'AbortError' || err?.name === 'TimeoutError' ? 'error' : 'warn';
+    log[level](`[search] Wikipedia current events ${err?.name === 'AbortError' || err?.name === 'TimeoutError' ? 'timed out' : 'failed'}`, { err: err?.message });
     return [];
   }
 }
@@ -176,7 +179,8 @@ async function searchWikipedia(query, { maxResults = 10 } = {}) {
       search_source: 'wikipedia',
     }));
   } catch (err) {
-    log.warn('[search] Wikipedia search failed', { err: err?.message });
+    const level = err?.name === 'AbortError' || err?.name === 'TimeoutError' ? 'error' : 'warn';
+    log[level](`[search] Wikipedia search ${err?.name === 'AbortError' || err?.name === 'TimeoutError' ? 'timed out' : 'failed'}`, { err: err?.message });
     return [];
   }
 }

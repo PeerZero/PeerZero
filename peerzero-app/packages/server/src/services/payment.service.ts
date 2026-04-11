@@ -147,7 +147,7 @@ export async function handleStripeWebhook(event: Stripe.Event): Promise<void> {
         } else if (session.metadata?.grade) {
           // Single grade unlock
           const gradeNum = parseInt(session.metadata.grade, 10);
-          if (Number.isFinite(gradeNum) && gradeNum > 0) {
+          if (Number.isFinite(gradeNum) && gradeNum > 0 && gradeNum <= 200) {
             await unlockGrade(session.metadata.bot_id, gradeNum, purchaseId);
           }
         }

@@ -325,17 +325,17 @@ Track when each audit was last run and what was found/fixed. This helps Claude p
 |---|-------|----------|-------------|-----------|
 | 1 | Silent Failures | 2026-04-11 | 65 found, 65 fixed | claude/silent-failures-check-8N9z2 |
 | 2 | Race Conditions | 2026-04-11 | 18 found, 8 fixed (3 critical, 4 high) | claude/silent-failures-check-8N9z2 |
-| 3 | Unbounded Growth | 2026-04-11 | 11 found, 3 fixed (2 critical, 1 high) | claude/complete-audits-w4oXD |
+| 3 | Unbounded Growth | 2026-04-11 | 11 found, 6 fixed (voice cache purge, stale locks, activity purge, rate_limit_log purge, conv engine age eviction) | claude/complete-audits-w4oXD |
 | 4 | Retry & Idempotency | 2026-04-11 | 21 found, noted (2 critical need transactions) | claude/silent-failures-check-8N9z2 |
 | 5 | Secret Exposure | 2026-04-11 | 12 found, 2 fixed (1 critical downgraded, 3 high design-level) | claude/complete-audits-w4oXD |
-| 6 | Timeout & Exhaustion | 2026-04-11 | 12 found, 4 fixed (2 critical, 2 high) | claude/complete-audits-w4oXD |
+| 6 | Timeout & Exhaustion | 2026-04-11 | 12 found, 9 fixed (SDK timeout, fetch timeout, SQLite timeout, pool sizing, Supabase timeout, news search logging, BullMQ lock renewal, JSON loop limit, rate bucket cap) | claude/complete-audits-w4oXD |
 | 7 | Stale Cache | — | — | — |
 | 8 | Authorization Gaps | 2026-04-11 | 9 found, 3 fixed (0 critical, 3 medium) | claude/silent-failures-check-8N9z2 |
 | 9 | Degradation Decisions | — | — | — |
 | 10 | Dependency Vulns | — | — | — |
 | 11 | Dead Code | — | — | — |
-| 12 | N+1 Queries | 2026-04-11 | 13 found, 2 fixed (2 critical N+1 patterns batched) | claude/complete-audits-w4oXD |
-| 13 | Input Validation | 2026-04-11 | 12 found, 3 fixed (3 critical type/bounds checks) | claude/complete-audits-w4oXD |
+| 12 | N+1 Queries | 2026-04-11 | 13 found, 5 fixed (retroactive batch, drift batch, pending bounties limit+cols, condensation count, empty guard) | claude/complete-audits-w4oXD |
+| 13 | Input Validation | 2026-04-11 | 12 found, 9 fixed (confidence type, grade bounds, external_sources guard, response_score NaN, historical cap, context_sources cap, LLM output shape, skills filter, error sanitize) | claude/complete-audits-w4oXD |
 | 14 | Cross-System Contracts | — | — | — |
 | 15 | Error Message UX | — | — | — |
 | 16 | Graceful Shutdown | — | — | — |

@@ -41,7 +41,10 @@ async function recalculateParentScore(paperId) {
   if (responses && responses.length > 0) {
     for (const resp of responses) {
       if (resp.response_score_impact) {
-        totalImpact += parseFloat(resp.response_score_impact);
+        const impact = parseFloat(resp.response_score_impact);
+        if (Number.isFinite(impact)) {
+          totalImpact += impact;
+        }
       }
     }
     totalImpact = Math.max(-1.5, Math.min(1.5, totalImpact));

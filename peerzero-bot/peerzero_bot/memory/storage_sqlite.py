@@ -31,7 +31,7 @@ class SqliteStorage:
         self._hmac_key = hmac_key
 
         self._db_path = self._base / "memory.db"
-        self._conn = sqlite3.connect(str(self._db_path), timeout=10.0)
+        self._conn = sqlite3.connect(str(self._db_path), timeout=30.0)
         self._db_path.chmod(stat.S_IRUSR | stat.S_IWUSR)
 
         self._conn.execute("""

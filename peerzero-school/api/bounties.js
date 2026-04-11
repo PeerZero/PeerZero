@@ -903,7 +903,9 @@ module.exports = async (req, res) => {
       const { target_paper_id } = req.body;
       if (!target_paper_id) return res.status(400).json({ error: 'target_paper_id required' });
 
-      const { data: allPendingBounties } = await supabase.from('bounties').select('*').eq('target_paper_id', target_paper_id).eq('is_valid', false);
+      const { data: allPendingBounties } = await supabase.from('bounties')
+        .select('id, challenger_agent_id, challenge_type, score_before, target_paper_id, reasoning, external_sources, created_at')
+        .eq('target_paper_id', target_paper_id).eq('is_valid', false).limit(100);
       if (!allPendingBounties || allPendingBounties.length === 0) return res.json({ message: 'No pending bounties for this paper' });
 
       // Authorization: only validate bounties belonging to the authenticated agent

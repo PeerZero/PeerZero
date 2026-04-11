@@ -51,7 +51,15 @@ function getSupabase() {
 
     _supabase = createClient(
       process.env.SUPABASE_URL,
-      process.env.SUPABASE_SERVICE_KEY
+      process.env.SUPABASE_SERVICE_KEY,
+      {
+        global: {
+          fetch: (url, options = {}) => fetch(url, {
+            ...options,
+            signal: options.signal || AbortSignal.timeout(30_000),
+          }),
+        },
+      }
     );
   }
   return _supabase;

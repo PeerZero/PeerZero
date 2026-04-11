@@ -159,7 +159,7 @@ router.post('/', async (req: Request, res: Response) => {
   const safePreview = content_preview ? String(content_preview).slice(0, 200) : null;
   const safeSkills = Array.isArray(skills_demonstrated)
     ? skills_demonstrated
-        .filter((s: unknown) => typeof s === 'string' || typeof s === 'number')
+        .filter((s: unknown) => typeof s === 'string')
         .slice(0, 10)
         .map((s: unknown) => String(s).slice(0, 50))
     : [];

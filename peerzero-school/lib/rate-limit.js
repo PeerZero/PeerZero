@@ -16,6 +16,7 @@ function getSupabase() {
 // For durable rate limiting, use isRateLimitedDb() or enforceRateLimitDb().
 const rateBuckets = {};
 const RATE_CLEANUP_INTERVAL = 60000;
+const MAX_RATE_BUCKETS = 10_000;
 
 setInterval(() => {
   const now = Date.now();
@@ -23,6 +24,13 @@ setInterval(() => {
     if (now - rateBuckets[key].windowStart > 120000) {
       delete rateBuckets[key];
     }
+  }
+  // Safety cap: if buckets exceed limit after TTL cleanup, evict oldest
+  const keys = Object.keys(rateBuckets);
+  if (keys.length > MAX_RATE_BUCKETS) {
+    keys.sort((a, b) => rateBuckets[a].windowStart - rateBuckets[b].windowStart);
+    const toRemove = keys.length - MAX_RATE_BUCKETS;
+    for (let i = 0; i < toRemove; i++) delete rateBuckets[keys[i]];
   }
 }, RATE_CLEANUP_INTERVAL);
 
@@ -94,10 +102,22 @@ async function isRateLimitedDb(agentId, action, maxRequests, windowMs) {
  * @param {string} agentId
  * @param {string} action
  */
+let _lastRateLimitPurge = 0;
+const RATE_LOG_PURGE_INTERVAL_MS = 24 * 60 * 60 * 1000; // once per day
+
 async function logRateLimitedAction(agentId, action) {
   try {
     const supabase = getSupabase();
     await supabase.from('rate_limit_log').insert({ agent_id: agentId, action });
+    // Periodic purge: delete entries older than 90 days (at most once per day per instance)
+    const now = Date.now();
+    if (now - _lastRateLimitPurge > RATE_LOG_PURGE_INTERVAL_MS) {
+      _lastRateLimitPurge = now;
+      const cutoff = new Date(now - 90 * 24 * 60 * 60 * 1000).toISOString();
+      supabase.from('rate_limit_log').delete().lt('created_at', cutoff)
+        .then(({ error }) => { if (error) log.warn('[rate_limit_db] Purge failed', { err: error.message }); })
+        .catch(() => {});
+    }
   } catch (err) {
     log.error('[rate_limit_db] Log failed', { err: err?.message });
   }

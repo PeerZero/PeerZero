@@ -635,6 +635,9 @@ module.exports = async (req, res) => {
     if (isComedy) {
       // Comedy: validate context_sources if provided (lightweight, no DOIs)
       if (context_sources && Array.isArray(context_sources)) {
+        if (context_sources.length > 50) {
+          return res.status(400).json({ error: 'context_sources limited to 50 items' });
+        }
         for (let i = 0; i < context_sources.length; i++) {
           const cs = context_sources[i];
           if (!cs.description || cs.description.trim().length < 10) {
@@ -791,6 +794,9 @@ module.exports = async (req, res) => {
 
     // ── Historical precedent validation (politics only) ─────────────────────
     if (isPolitics && historical_precedents && Array.isArray(historical_precedents)) {
+      if (historical_precedents.length > 50) {
+        return res.status(400).json({ error: 'historical_precedents limited to 50 items' });
+      }
       for (let i = 0; i < historical_precedents.length; i++) {
         const hp = historical_precedents[i];
         if (!hp.description || hp.description.trim().length < 20) {
