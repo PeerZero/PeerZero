@@ -410,7 +410,7 @@ export interface BotPublicProfile {
 
 // ── Bot Messages (Chat Feed) ──
 export type MessageRole = 'bot' | 'user';
-export type MessageType = 'chat' | 'activity' | 'milestone';
+export type MessageType = 'chat' | 'activity' | 'milestone' | 'agenda';
 
 export interface BotMessage {
   id: string;

@@ -12,7 +12,9 @@ import * as statsService from '../services/stats.service';
 import * as skillService from '../services/skill.service';
 import { generateDialogue, DIALOGUE_CONTEXTS, type DialogueContext } from '../services/bot-voice.service';
 import * as messageService from '../services/message.service';
-import { broadcastMessage } from '../websocket/activity-stream';
+import * as directiveService from '../services/directive.service';
+import * as taskService from '../services/task.service';
+import { broadcastMessage, broadcastStatusChange } from '../websocket/activity-stream';
 import { addBotCycleJob, removeBotJobs, isQueueAvailable } from '../jobs/queue';
 import { logAudit } from '../services/audit.service';
 import * as platformService from '../services/platform.service';
@@ -62,6 +64,30 @@ router.post('/', userRateLimit('write'), async (req: Request, res: Response) => 
 
 // Update bot
 router.patch('/:id', userRateLimit('write'), async (req: Request, res: Response) => {
+  // Guard: bot must be stopped before mode change
+  if (req.body.mode !== undefined) {
+    const currentBot = await botService.getBotDetail(req.user!.userId, req.params.id);
+    if (currentBot.status === 'running' && req.body.mode !== currentBot.mode) {
+      res.status(400).json({ error: 'Cannot change mode while bot is running. Stop the bot first.' });
+      return;
+    }
+
+    // Clean up state from the mode being left
+    if (req.body.mode !== currentBot.mode) {
+      if (currentBot.mode === 'shipped') {
+        // Leaving shipped: expire pending tasks so they don't become orphans
+        const { query: dbQuery } = await import('../db/client');
+        await dbQuery(
+          `UPDATE bot_tasks SET status = 'expired', error = 'Mode changed to school', updated_at = now()
+           WHERE bot_id = $1 AND status IN ('pending', 'processing')`,
+          [req.params.id],
+        );
+      }
+      // Remove cycle jobs for either direction (they'll be re-created on start)
+      await removeBotJobs(req.params.id);
+    }
+  }
+
   await botService.updateBot(req.user!.userId, req.params.id, req.body);
   const bot = await botService.getBotDetail(req.user!.userId, req.params.id);
   res.json(bot);
@@ -126,6 +152,7 @@ router.post('/:id/start', userRateLimit('bot_control'), async (req: Request, res
 
   await botService.setBotStatus(req.params.id, 'running');
   await addBotCycleJob(req.params.id, req.user!.userId, bot.llm_api_key_id, bot.llm_model, bot.cycle_delay_seconds);
+  broadcastStatusChange(req.params.id, req.user!.userId, 'running');
   logAudit({ userId: req.user!.userId, action: 'bot.start', entityType: 'bot', entityId: req.params.id, ipAddress: req.ip });
   res.json({ status: 'running', mode: botMode });
 });
@@ -137,6 +164,7 @@ router.post('/:id/stop', userRateLimit('bot_control'), async (req: Request, res:
   // Always update DB status even if queue cleanup fails (stale locks)
   await Promise.allSettled([removeBotJobs(req.params.id)]);
   await botService.setBotStatus(req.params.id, 'stopped');
+  broadcastStatusChange(req.params.id, req.user!.userId, 'stopped');
   logAudit({ userId: req.user!.userId, action: 'bot.stop', entityType: 'bot', entityId: req.params.id, ipAddress: req.ip });
   res.json({ status: 'stopped' });
 });
@@ -419,22 +447,55 @@ router.post('/:id/messages', userRateLimit('write'), async (req: Request, res: R
   // Broadcast user message via WebSocket
   broadcastMessage(req.params.id, req.user!.userId, userMsg);
 
-  // Generate and store bot reply
+  // Generate chat reply and classify directive in parallel
   const model = bot.fast_llm_model || bot.llm_model;
-  const replyText = await messageService.generateChatReply(
-    req.params.id,
-    bot.name,
-    req.user!.userId,
-    bot.llm_api_key_id,
-    model,
-    content.trim(),
+  const isShipped = bot.mode === 'shipped';
+
+  const [replyText, directive] = await Promise.all([
+    messageService.generateChatReply(
+      req.params.id,
+      bot.name,
+      req.user!.userId,
+      bot.llm_api_key_id,
+      model,
+      content.trim(),
+    ),
+    // Only classify directives for shipped-mode bots
+    isShipped
+      ? directiveService.classifyMessage(content.trim(), bot.llm_api_key_id, req.user!.userId, model)
+      : Promise.resolve({ isDirective: false, directiveSummary: '' }),
+  ]);
+
+  const botReply = await messageService.storeMessage(
+    req.params.id, 'bot', replyText, 'chat', undefined,
+    directive.isDirective ? { directive_detected: true } : undefined,
   );
-  const botReply = await messageService.storeMessage(req.params.id, 'bot', replyText, 'chat');
 
   // Broadcast bot reply via WebSocket
   broadcastMessage(req.params.id, req.user!.userId, botReply);
 
-  res.json({ user_message: userMsg, bot_reply: botReply });
+  // If this is a directive from a shipped-mode bot owner, create a task + agenda message
+  let agendaMsg = null;
+  if (directive.isDirective) {
+    const task = await taskService.createTask({
+      botId: req.params.id,
+      direction: 'incoming',
+      sender: 'owner',
+      actionRequested: 'owner_directive',
+      payload: { message: content.trim(), directive_summary: directive.directiveSummary, source: 'chat' },
+    });
+
+    agendaMsg = await messageService.storeAgendaMessage(
+      req.params.id,
+      task.request_id,
+      directive.directiveSummary || content.trim(),
+    );
+
+    // Broadcast the agenda message so it appears in chat immediately
+    broadcastMessage(req.params.id, req.user!.userId, agendaMsg);
+  }
+
+  res.json({ user_message: userMsg, bot_reply: botReply, agenda: agendaMsg });
 });
 
 // ── Skills ──

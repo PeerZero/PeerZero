@@ -75,6 +75,7 @@ export interface BotContext {
   cycleNumber: number;
   dailyTokenCap: number | null;  // User-set daily token cap (null = unlimited)
   dailyTokensUsed: number;       // Tokens already used today
+  userTimezone: string;          // IANA timezone (e.g. 'America/New_York'), defaults to 'UTC'
 }
 
 export async function runOneCycle(ctx: BotContext): Promise<void> {

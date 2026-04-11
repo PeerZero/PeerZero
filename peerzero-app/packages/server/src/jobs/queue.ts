@@ -13,6 +13,8 @@ import { runOneCycle, BotContext } from '../runtime/agent-loop';
 import { runShippedCycle } from '../runtime/shipped-loop';
 import { setBotStatus } from '../services/bot.service';
 import { queryOne, query, queryRows } from '../db/client';
+import { notifyBotError } from '../services/notification.service';
+import { broadcastStatusChange } from '../websocket/activity-stream';
 
 let connection: IORedis | null = null;
 let botQueue: Queue | null = null;
@@ -133,8 +135,9 @@ export function startWorker(): void {
       const { botId, userId, llmApiKeyId, llmModel, cycleDelaySeconds } = job.data;
 
       // Check if bot is still running (also fetch mode, fast model, extended thinking from DB)
-      const bot = await queryOne<{ status: string; mode: string; cycle_count: number; fast_llm_model: string | null; extended_thinking: boolean; cycle_delay_seconds: number; daily_token_cap: number | null; daily_tokens_used: number; daily_tokens_reset_at: string | null }>(
-        'SELECT status, mode, cycle_count, fast_llm_model, extended_thinking, cycle_delay_seconds, daily_token_cap, daily_tokens_used, daily_tokens_reset_at FROM bots WHERE id = $1',
+      const bot = await queryOne<{ status: string; mode: string; cycle_count: number; fast_llm_model: string | null; extended_thinking: boolean; cycle_delay_seconds: number; daily_token_cap: number | null; daily_tokens_used: number; daily_tokens_reset_at: string | null; user_timezone: string }>(
+        `SELECT b.status, b.mode, b.cycle_count, b.fast_llm_model, b.extended_thinking, b.cycle_delay_seconds, b.daily_token_cap, b.daily_tokens_used, b.daily_tokens_reset_at, COALESCE(u.timezone, 'UTC') AS user_timezone
+         FROM bots b JOIN users u ON u.id = b.user_id WHERE b.id = $1`,
         [botId],
       );
       if (!bot || bot.status !== 'running') {
@@ -157,6 +160,7 @@ export function startWorker(): void {
         cycleNumber: (bot.cycle_count || 0) + 1,
         dailyTokenCap: bot.daily_token_cap,
         dailyTokensUsed,
+        userTimezone: bot.user_timezone || 'UTC',
       };
 
       try {
@@ -181,8 +185,12 @@ export function startWorker(): void {
         const sanitizedMsg = errorMsg.replace(/(?:sk-(?:ant-)?|key-|Bearer\s+|pwt_)[a-zA-Z0-9_-]+/g, '[REDACTED]').slice(0, 500);
         if (isAuthError) {
           await setBotStatus(botId, 'error', sanitizedMsg);
+          broadcastStatusChange(botId, userId, 'error');
           await removeBotJobs(botId);
           await query('UPDATE bots SET consecutive_failures = 0 WHERE id = $1', [botId]);
+          // Notify user their bot stopped due to auth error
+          const botInfo = await queryOne<{ name: string }>('SELECT name FROM bots WHERE id = $1', [botId]);
+          notifyBotError(userId, botId, botInfo?.name || 'Your bot', sanitizedMsg).catch(() => {});
           return;
         }
 
@@ -191,9 +199,14 @@ export function startWorker(): void {
         const failRow = await queryOne<{ consecutive_failures: number }>('SELECT consecutive_failures FROM bots WHERE id = $1', [botId]);
         const failures = failRow?.consecutive_failures || 1;
         if (failures >= 3) {
-          await setBotStatus(botId, 'error', `Stopped after ${failures} consecutive failures: ${sanitizedMsg.slice(0, 400)}`);
+          const stopMsg = `Stopped after ${failures} consecutive failures: ${sanitizedMsg.slice(0, 400)}`;
+          await setBotStatus(botId, 'error', stopMsg);
+          broadcastStatusChange(botId, userId, 'error');
           await removeBotJobs(botId);
           await query('UPDATE bots SET consecutive_failures = 0 WHERE id = $1', [botId]);
+          // Notify user their bot stopped
+          const botInfo2 = await queryOne<{ name: string }>('SELECT name FROM bots WHERE id = $1', [botId]);
+          notifyBotError(userId, botId, botInfo2?.name || 'Your bot', stopMsg).catch(() => {});
           return;
         }
       }

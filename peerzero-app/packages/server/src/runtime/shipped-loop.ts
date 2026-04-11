@@ -19,6 +19,8 @@ import { query, queryOne, queryRows } from '../db/client';
 import { schedulePlatformJobs } from '../jobs/platform-queue';
 import { getLLMAdapter } from '../adapters/adapter.factory';
 import { getDecryptedKey } from '../services/api-key.service';
+import { updateAgendaMessage, storeMessage } from '../services/message.service';
+import { broadcastAgendaUpdate, broadcastMessage } from '../websocket/activity-stream';
 import type { BotContext } from './agent-loop';
 
 /** POST a task result to the caller's callback URL. Fire-and-forget. */
@@ -104,9 +106,12 @@ export async function runShippedCycle(ctx: BotContext): Promise<void> {
         }
 
         // Build identity context from cached profile
-        const identityContext = botRow?.cached_profile
-          ? `You are ${botRow.name}. ${(botRow.cached_profile as Record<string, unknown>).identity_summary || ''}`
+        const profile = botRow?.cached_profile as Record<string, unknown> | null;
+        const identityContext = profile
+          ? `You are ${botRow!.name}. ${profile.identity_summary || ''}`
           : `You are ${botRow?.name || 'a PeerZero bot'}.`;
+
+        const isOwnerDirective = task.sender === 'owner' && task.action_requested === 'owner_directive';
 
         // Build the task prompt
         const taskMessage = typeof task.payload?.message === 'string'
@@ -117,18 +122,56 @@ export async function runShippedCycle(ctx: BotContext): Promise<void> {
           ? `\nThis is part of conversation ${task.conversation_id}, turn ${task.turn_number}.`
           : '';
 
-        const systemPrompt = [
-          identityContext,
-          `\nYou have received a task from ${task.sender}.`,
-          `Action requested: ${task.action_requested}`,
-          conversationContext,
-          '\nRespond helpfully and concisely. Your response will be sent back to the requester.',
-        ].join('\n');
+        // Inject current datetime in the user's timezone so the bot reasons about the right "today"
+        const now = new Date();
+        let localTime: string;
+        try {
+          localTime = now.toLocaleString('en-US', { timeZone: ctx.userTimezone, dateStyle: 'full', timeStyle: 'long' });
+        } catch {
+          localTime = now.toISOString();
+        }
+        const currentTime = `\nCurrent date and time: ${localTime} (${ctx.userTimezone})`;
 
-        const llmResponse = await llmAdapter.chat(llmKey, ctx.llmModel, [
+        // Owner directives get richer prompting with planning
+        const systemPrompt = isOwnerDirective
+          ? [
+              identityContext,
+              currentTime,
+              '\nYour owner has asked you to do something. Break it into steps, execute them, and report back.',
+              'Think through what needs to happen, then describe what you did and the result.',
+              'Be thorough but concise.',
+            ].join('\n')
+          : [
+              identityContext,
+              currentTime,
+              `\nYou have received a task from ${task.sender}.`,
+              `Action requested: ${task.action_requested}`,
+              conversationContext,
+              '\nRespond helpfully and concisely. Your response will be sent back to the requester.',
+            ].join('\n');
+
+        // Owner directives use the strong model for better planning
+        const taskModel = isOwnerDirective ? ctx.llmModel : (ctx.fastLlmModel || ctx.llmModel);
+
+        // Update agenda message to show processing has started
+        if (isOwnerDirective) {
+          const agendaState = {
+            directive: task.payload?.directive_summary || taskMessage,
+            intention: 'Processing directive...',
+            steps: [{ action: taskMessage, status: 'in_progress', task_type: 'action' }],
+            status: 'active',
+            progress_summary: '0/1 steps done',
+          };
+          const updatedMsg = await updateAgendaMessage(task.request_id, agendaState);
+          if (updatedMsg) {
+            broadcastAgendaUpdate(ctx.botId, ctx.userId, updatedMsg.id, agendaState);
+          }
+        }
+
+        const llmResponse = await llmAdapter.chat(llmKey, taskModel, [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: taskMessage },
-        ], { maxTokens: 2048 });
+        ], { maxTokens: isOwnerDirective ? 4096 : 2048 });
 
         const taskResult = {
           response: llmResponse.content,
@@ -143,24 +186,74 @@ export async function runShippedCycle(ctx: BotContext): Promise<void> {
           [task.id, JSON.stringify(taskResult)],
         );
 
+        // Update agenda message to show completion
+        if (isOwnerDirective) {
+          const agendaState = {
+            directive: task.payload?.directive_summary || taskMessage,
+            intention: 'Completed',
+            steps: [{ action: taskMessage, status: 'done', result: llmResponse.content?.slice(0, 200), task_type: 'action' }],
+            status: 'completed',
+            progress_summary: '1/1 steps done',
+          };
+          const updatedMsg = await updateAgendaMessage(task.request_id, agendaState);
+          if (updatedMsg) {
+            broadcastAgendaUpdate(ctx.botId, ctx.userId, updatedMsg.id, agendaState);
+          }
+        }
+
         // Deliver callback if set
         if (task.callback_url) {
           await deliverCallback(task.callback_url, task.id, taskResult);
         }
+
+        // Narrate the result to the user's chat feed
+        const resultSummary = llmResponse.content?.slice(0, 500) || 'Task completed.';
+        const resultMsg = await storeMessage(
+          ctx.botId, 'bot', resultSummary, 'activity', undefined,
+          { action_type: isOwnerDirective ? 'directive_result' : 'task_result', task_id: task.id, sender: task.sender },
+        );
+        broadcastMessage(ctx.botId, ctx.userId, resultMsg);
 
         logger.info(
           { botId: ctx.botId, taskId: task.id, action: task.action_requested, tokens: llmResponse.tokens_used },
           'Processed incoming task',
         );
       } catch (err) {
+        const errMsg = err instanceof Error ? err.message : String(err);
         logger.error(
-          { botId: ctx.botId, taskId: task.id, err: err instanceof Error ? err.message : err },
+          { botId: ctx.botId, taskId: task.id, err: errMsg },
           'Failed to process incoming task',
         );
         await query(
           `UPDATE bot_tasks SET status = 'failed', error = $2, updated_at = now() WHERE id = $1`,
-          [task.id, err instanceof Error ? err.message : String(err)],
+          [task.id, errMsg],
         );
+
+        // Notify user of the failure in chat
+        const isOwnerDir = task.sender === 'owner' && task.action_requested === 'owner_directive';
+        const failContent = isOwnerDir
+          ? `I wasn't able to complete that. Error: ${errMsg.slice(0, 200)}`
+          : `A task from ${task.sender} failed: ${errMsg.slice(0, 200)}`;
+        const failMsg = await storeMessage(
+          ctx.botId, 'bot', failContent, 'activity', undefined,
+          { action_type: 'task_failed', task_id: task.id, error: errMsg.slice(0, 500) },
+        );
+        broadcastMessage(ctx.botId, ctx.userId, failMsg);
+
+        // Update agenda card to show failure for owner directives
+        if (isOwnerDir) {
+          const failAgenda = {
+            directive: task.payload?.directive_summary || (typeof task.payload?.message === 'string' ? task.payload.message : ''),
+            intention: 'Failed',
+            steps: [{ action: String(task.payload?.message || task.action_requested), status: 'failed', result: errMsg.slice(0, 200), task_type: 'action' }],
+            status: 'failed',
+            progress_summary: 'Failed',
+          };
+          const updatedFail = await updateAgendaMessage(task.request_id, failAgenda);
+          if (updatedFail) {
+            broadcastAgendaUpdate(ctx.botId, ctx.userId, updatedFail.id, failAgenda);
+          }
+        }
       }
     }
   }

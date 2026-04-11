@@ -228,6 +228,17 @@ export const bots = {
 
   sendMessage: (id: string, content: string) =>
     apiFetch(`/bots/${id}/messages`, { method: 'POST', body: JSON.stringify({ content }) }),
+
+  tasks: (id: string, opts?: { direction?: string; status?: string; limit?: number }) => {
+    const params = new URLSearchParams();
+    if (opts?.direction) params.set('direction', opts.direction);
+    if (opts?.status) params.set('status', opts.status);
+    if (opts?.limit) params.set('limit', String(opts.limit));
+    return apiFetch(`/bots/${id}/tasks?${params.toString()}`);
+  },
+
+  cancelTask: (botId: string, requestId: string) =>
+    apiFetch(`/bots/${botId}/tasks/${requestId}/cancel`, { method: 'POST' }),
 };
 
 // ── API Keys ──

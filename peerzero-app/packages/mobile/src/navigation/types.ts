@@ -28,6 +28,7 @@ export type RootStackParamList = {
   Stats: { botId: string };
   Platforms: { botId: string };
   ConnectPlatform: { botId: string };
+  Tasks: { botId: string };
   Welcome: undefined;
 };
 
@@ -42,6 +43,7 @@ export type CreateBotScreenProps = NativeStackScreenProps<RootStackParamList, 'C
 export type EnrollBotScreenProps = NativeStackScreenProps<RootStackParamList, 'EnrollBot'>;
 export type BrainScreenProps = NativeStackScreenProps<RootStackParamList, 'Brain'>;
 export type LogScreenProps = NativeStackScreenProps<RootStackParamList, 'Log'>;
+export type TasksScreenProps = NativeStackScreenProps<RootStackParamList, 'Tasks'>;
 export type StatsScreenProps = NativeStackScreenProps<RootStackParamList, 'Stats'>;
 export type ChatScreenProps = NativeStackScreenProps<RootStackParamList, 'Chat'>;
 export type PlatformsScreenProps = NativeStackScreenProps<RootStackParamList, 'Platforms'>;

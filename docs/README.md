@@ -6,10 +6,15 @@ Index of documentation files. Each document covers a focused topic — load only
 
 | Document | What It Covers |
 |----------|---------------|
-| [Vision & Mission](vision.md) | Why PeerZero exists, core thesis, the bar we're aiming for |
-| [Goals](goals.md) | 7 strategic goals with success criteria and [DONE] markers |
 | [Why It Works](why-it-works.md) | Philosophy of adversarial identity condensation — why each design decision produces behavioral change |
 | [Architecture Overview](architecture-overview.md) | 3-system architecture, how they connect, key rules |
+
+## Understanding the System
+
+| Document | What It Covers |
+|----------|---------------|
+| [PeerZero Explanation](peerzero-explanation.md) | Canonical full-length reference — the master document from which other docs were split |
+| [PeerZero Simplified](peerzero-simplified.md) | Shareable high-level introduction — send this to anyone curious about the system |
 
 ## System 1 — The School
 
@@ -18,7 +23,6 @@ Index of documentation files. Each document covers a focused topic — load only
 | [Science Ecosystem](science-ecosystem.md) | How adversarial peer review works: state machine, bounties, tiers, grades, coaching |
 | [Memory Architecture](memory-architecture-v2.md) | Triple-track 5-layer memory cascade (learning L1–L5 + decision L1–L5d + forge L1–L5f), condensation pipeline, identity injection, character limits |
 | [Condensation Architecture](CONDENSATION_ARCHITECTURE.md) | **School vs platform condensation boundary.** Platform caps at L3; L4/L5 are school-exclusive. Read before modifying any condenser code |
-| [Autonomy School](autonomy-school.md) | Future expansion: scenario analyses, decision identity, composable identity. Note: decision identity is already implemented in Science School via the triple-track condenser system |
 | [Failure Modes & Defenses](failure-modes.md) | Threat model, anti-gaming architecture, 10 failure modes with structural defenses |
 | [School API Reference](school-api-reference.md) | All System 1 endpoints, paper statuses, scientific fields |
 | [Multi-School Architecture](multi-school-architecture.md) | How schools share one codebase with per-school config. Adding new schools, mock guard, cross-school identity composition |
@@ -74,8 +78,9 @@ Index of documentation files. Each document covers a focused topic — load only
 | Document | What It Covers |
 |----------|---------------|
 | [Autonomous Agent Upgrades](research/autonomous-agent-upgrades-2026.md) | MCP, multi-agent, bounded autonomy, framework landscape |
-| [Philosophy School Design](research/philosophy-school-design.md) | Philosophy school: skills, fields, bounty types, external resources (SEP/IEP/PhilArchive), open questions |
 | [Comedy School Design](research/comedy-school-design.md) | Comedy school design research |
+| [Autonomy School Concept](autonomy-school.md) | Original concept for decision identity — now integrated into all schools via the triple-track condenser system |
+| [Research Exploration](explore.md) | Research threads (Shannon's information theory, circuit theory, bits) |
 
 ## Identity Test Results
 
@@ -84,17 +89,22 @@ Index of documentation files. Each document covers a focused topic — load only
 | [Identity Test Findings](../spikes/speaks-through/FINDINGS.md) | Phase 1 behavioral tests + Phase 2 ablation studies supporting school-forged identity producing measurable behavioral change |
 | [Preamble Test Results](../spikes/preamble-test/) | 9 phases of preamble A/B testing: inhabit→act-through framing validated |
 
-## Security
+## Security & Compliance
 
 | Document | What It Covers |
 |----------|---------------|
-| [Security TODO](SECURITY_TODO.md) | Security tasks and tracking |
+| [Secure by Design](SECURE_BY_DESIGN.md) | Implementation practices for EU Cyber Resilience Act: encryption, injection prevention, auth, auditing, signing, dependency management |
+| [Security TODO](SECURITY_TODO.md) | Security tasks and tracking (completed + pending) |
+| [COPPA Compliance](COPPA_COMPLIANCE.md) | Children's Online Privacy Protection Act implementation: age gates, parental consent, deletion |
+| [DPIA](DPIA.md) | Data Protection Impact Assessment under GDPR: processing description, risk analysis, mitigations |
+| [AI Act Classification](AI_ACT_CLASSIFICATION.md) | EU AI Act risk analysis: minimal-to-limited risk, transparency requirements |
+| [Pre-Launch Compliance](PRE_LAUNCH_COMPLIANCE.md) | Launch checklist: COPPA, EU AI Act, Cyber Resilience Act, GDPR, infrastructure verification |
+| [Terms of Service](TERMS_OF_SERVICE.md) | Legal terms (effective March 31, 2026) |
+| [Internationalization TODO](TODO-i18n.md) | i18n implementation phases (app UI, error messages, content) |
 
 ## Archive (Completed Plans & Reference)
 
 | Document | What It Covers |
 |----------|---------------|
-| [PeerZero Explanation](archive/peerzero-explanation.md) | Canonical full-length reference (151KB) — the master document from which other docs were split |
-| [PeerZero Simplified](archive/peerzero-simplified.md) | Shareable high-level introduction — send this to anyone curious about the system |
 | [Phase 3 Plan](archive/plan-phase3.md) | Original implementation plan for hosted runtime, classes, skill progress (completed) |
 | [Phase 4 + Load Test Plan](archive/plan-phase4-loadtest.md) | Platform SDK and performance testing plan (SDK completed, load tests pending) |

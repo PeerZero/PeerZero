@@ -196,6 +196,55 @@ export async function narrateCycleActivity(
 }
 
 /**
+ * Store an agenda message — shows the bot's action plan inline in chat.
+ * Agenda messages are mutable: their metadata is updated as steps complete.
+ */
+export async function storeAgendaMessage(
+  botId: string,
+  taskId: string,
+  directive: string,
+): Promise<BotMessage> {
+  const content = `Working on: ${directive}`;
+  const metadata = {
+    task_id: taskId,
+    agenda_state: {
+      directive,
+      intention: '',
+      steps: [],
+      status: 'planning',
+      progress_summary: 'Planning...',
+    },
+  };
+  return storeMessage(botId, 'bot', content, 'agenda', undefined, metadata);
+}
+
+/**
+ * Update an existing agenda message with new state.
+ * Returns the updated message, or null if not found.
+ */
+export async function updateAgendaMessage(
+  taskId: string,
+  agendaState: Record<string, unknown>,
+): Promise<BotMessage | null> {
+  // Build a content summary from the agenda state
+  const steps = (agendaState.steps || []) as Array<{ status: string }>;
+  const done = steps.filter(s => s.status === 'done').length;
+  const total = steps.length;
+  const summary = total > 0
+    ? `Working on: ${agendaState.directive || 'task'} (${done}/${total} steps done)`
+    : `Working on: ${agendaState.directive || 'task'}`;
+
+  const row = await queryOne<BotMessage>(
+    `UPDATE bot_messages
+     SET content = $1, metadata = jsonb_set(COALESCE(metadata, '{}'::jsonb), '{agenda_state}', $2::jsonb), updated_at = now()
+     WHERE message_type = 'agenda' AND metadata->>'task_id' = $3
+     RETURNING id, bot_id, role, content, message_type, activity_id, metadata, created_at`,
+    [summary, JSON.stringify(agendaState), taskId],
+  );
+  return row || null;
+}
+
+/**
  * Cleanup old messages for a bot, keeping only the most recent N.
  * Called periodically (e.g. after narration) to prevent unbounded growth.
  */

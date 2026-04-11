@@ -43,7 +43,7 @@ const INITIAL_RECONNECT_DELAY = 1000; // Start at 1s
 const MAX_AUTH_RETRIES = 2; // Don't infinite-loop on bad credentials
 
 export interface BotStreamEvent {
-  type: 'activity' | 'status_change' | 'connected' | 'external_activity' | 'message';
+  type: 'activity' | 'status_change' | 'connected' | 'external_activity' | 'message' | 'agenda_update';
   status?: string;
   // Activity fields (when type === 'activity')
   cycle_number?: number;
@@ -60,6 +60,9 @@ export interface BotStreamEvent {
   content_preview?: string | null;
   skills_demonstrated?: string[];
   bot_timestamp?: string | null;
+  // Agenda update fields (when type === 'agenda_update')
+  message_id?: string;
+  agenda?: Record<string, unknown>;
 }
 
 interface UseBotStreamOptions {
@@ -69,6 +72,7 @@ interface UseBotStreamOptions {
   onStatusChange?: (status: string) => void;
   onExternalActivity?: (event: BotStreamEvent) => void;
   onMessage?: (message: BotMessage) => void;
+  onAgendaUpdate?: (messageId: string, agenda: Record<string, unknown>) => void;
 }
 
 interface UseBotStreamResult {
@@ -109,6 +113,7 @@ export function useBotStream({
   onStatusChange,
   onExternalActivity,
   onMessage,
+  onAgendaUpdate,
 }: UseBotStreamOptions): UseBotStreamResult {
   const [isConnected, setIsConnected] = useState(false);
   const [lastEvent, setLastEvent] = useState<BotStreamEvent | null>(null);
@@ -127,6 +132,8 @@ export function useBotStream({
   onExternalActivityRef.current = onExternalActivity;
   const onMessageRef = useRef(onMessage);
   onMessageRef.current = onMessage;
+  const onAgendaUpdateRef = useRef(onAgendaUpdate);
+  onAgendaUpdateRef.current = onAgendaUpdate;
 
   const connect = useCallback(async () => {
     if (!botId || !enabled || !mountedRef.current) return;
@@ -170,6 +177,8 @@ export function useBotStream({
             onExternalActivityRef.current?.(data);
           } else if (data.type === 'message' && (data as unknown as { message: BotMessage }).message) {
             onMessageRef.current?.((data as unknown as { message: BotMessage }).message);
+          } else if (data.type === 'agenda_update' && data.message_id && data.agenda) {
+            onAgendaUpdateRef.current?.(data.message_id, data.agenda);
           }
         } catch {
           // Ignore malformed messages

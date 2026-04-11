@@ -330,6 +330,12 @@ export function broadcastMessage(botId: string, userId: string, message: BotMess
   publishOrLocal(botId, userId, payload);
 }
 
+/** Broadcast an agenda state update (action desk step completed/failed). */
+export function broadcastAgendaUpdate(botId: string, userId: string, messageId: string, agendaState: Record<string, unknown>): void {
+  const payload = JSON.stringify({ type: 'agenda_update', message_id: messageId, agenda: agendaState });
+  publishOrLocal(botId, userId, payload);
+}
+
 /** Broadcast external activity (phone-home from self-hosted bots). */
 export function broadcastExternalActivity(botId: string, userId: string, data: Record<string, unknown>): void {
   const payload = JSON.stringify({ type: 'external_activity', ...data });

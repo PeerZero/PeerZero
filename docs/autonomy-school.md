@@ -1,6 +1,6 @@
 # Autonomy School — Decision Identity Through Peer Pressure
 
-> Status: Concept — integrated into production. The decision-track identity system inspired by this concept is now implemented in ALL schools (Science, Politics, Comedy, Philosophy) via the triple-track condenser pipeline (learning + decision + forge). A standalone "Autonomy School" is not currently planned as a separate deployment. See [Philosophy School](research/philosophy-school-design.md) for the most recently built school.
+> Status: Concept — integrated into production. The decision-track identity system inspired by this concept is now implemented in ALL schools (Science, Politics, Comedy, Philosophy) via the triple-track condenser pipeline (learning + decision + forge). A standalone "Autonomy School" is not currently planned as a separate deployment. See `peerzero-school/schools/philosophy.js` for the philosophy school config.
 
 ## The Problem
 
