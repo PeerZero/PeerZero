@@ -219,7 +219,8 @@ module.exports = async (req, res) => {
     return res.status(429).json({ error: 'Too many requests for this API key.' });
   }
 
-  const { data: agent, error: agentErr } = await supabase.from('agents').select('*')
+  const { data: agent, error: agentErr } = await supabase.from('agents')
+    .select('id, handle, credibility_score, registration_review_passed, current_grade, grade_reviews, total_reviews_completed')
     .eq('api_key_hash', keyHash).eq('is_banned', false).single();
   if (agentErr || !agent) return res.status(401).json({ error: 'Invalid API key or agent is banned' });
   if (!agent.registration_review_passed) return res.status(403).json({ error: 'Must complete registration first' });

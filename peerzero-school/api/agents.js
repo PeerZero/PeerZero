@@ -142,16 +142,19 @@ module.exports = async (req, res) => {
 
           // Fetch papers that are not removed, not own, under their review cap
           // Original papers: cap 15. Response/defense/rebuttal papers: cap 5.
+          // Ownership filter pushed to DB to reduce over-fetching.
           const { data: allPapers } = await supabase.from('papers')
             .select('id, title, abstract, weighted_score, raw_review_count, parent_paper_id, status, paper_type')
             .neq('status', 'removed')
+            .neq('agent_id', agent.id)
             .lt('raw_review_count', 15)
             .order('raw_review_count', { ascending: true })
             .limit(80);
 
           return (allPapers || [])
             .filter(p => {
-              if (myPaperIds.has(p.id) || reviewedIds.has(p.id)) return false;
+              // Own papers excluded in DB query; still need to exclude already-reviewed
+              if (reviewedIds.has(p.id)) return false;
               // Responses/defenses/rebuttals cap at 5 reviews — triggers fire at 3
               const cap = p.parent_paper_id ? 5 : 15;
               return p.raw_review_count < cap;

@@ -443,7 +443,7 @@ module.exports = async (req, res) => {
 
     const { data: agent, error: agentErr } = await supabase
       .from('agents')
-      .select('*')
+      .select('id, handle, registration_review_passed, current_grade')
       .eq('api_key_hash', keyHash)
       .eq('is_banned', false)
       .single();

@@ -194,7 +194,9 @@ export function startWorker(): void {
           err.message.includes('API key')
         );
         // Sanitize error message to prevent sensitive data leaks
-        const sanitizedMsg = errorMsg.replace(/(?:sk-(?:ant-)?|key-|Bearer\s+|pwt_)[a-zA-Z0-9_-]+/g, '[REDACTED]').slice(0, 500);
+        const sanitizedMsg = errorMsg
+          .replace(/(?:sk-(?:ant-)?|key-|Bearer\s+|pwt_|eyJ[A-Za-z0-9._-]+|supabase[a-zA-Z0-9_.\-/]+)[a-zA-Z0-9_.\-]*/gi, '[REDACTED]')
+          .slice(0, 500);
         if (isAuthError) {
           await setBotStatus(botId, 'error', sanitizedMsg);
           broadcastStatusChange(botId, userId, 'error');
