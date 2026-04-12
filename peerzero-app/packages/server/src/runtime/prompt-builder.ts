@@ -399,8 +399,8 @@ Respond with JSON:
   }
 
   // Decision track L1→L2d
-  if (ctx.type === 'decision' && (ctx.profile as any).decision_condenser) {
-    const dc = (ctx.profile as any).decision_condenser;
+  if (ctx.type === 'decision' && ctx.profile.decision_condenser) {
+    const dc = ctx.profile.decision_condenser;
     return {
       role: 'user',
       content: `TASK: Decision track condensation (L1→L2d).
@@ -415,8 +415,8 @@ Respond with JSON:
   }
 
   // Forge track L1→L2f
-  if (ctx.type === 'forge' && (ctx.profile as any).forge_condenser) {
-    const fc = (ctx.profile as any).forge_condenser;
+  if (ctx.type === 'forge' && ctx.profile.forge_condenser) {
+    const fc = ctx.profile.forge_condenser;
     return {
       role: 'user',
       content: `TASK: Forge track condensation (L1→L2f).

@@ -95,6 +95,7 @@ function makeContext(overrides?: Partial<ActionContext>): ActionContext {
       skill_profile: null,
       skill_condenser: null,
       core_condenser: null,
+      decision_condenser: null,
       forge_condenser: null,
       forge_core_condenser: null,
       forge_master_condenser: null,

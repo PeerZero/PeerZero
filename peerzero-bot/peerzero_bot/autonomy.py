@@ -221,14 +221,18 @@ class AutonomyGate:
                 # Search only first 50k chars to bound worst-case regex time.
                 # SECURITY: Wrap in a 2-second alarm to catch ReDoS patterns
                 # that slip past the static checks above.
+                timed_out = False
+                matched = None
                 try:
                     _old_handler = signal.signal(signal.SIGALRM, lambda *_: (_ for _ in ()).throw(TimeoutError()))
                     signal.alarm(2)
                     matched = pattern.search(content[:50000])
+                except TimeoutError:
+                    timed_out = True
+                finally:
                     signal.alarm(0)
                     signal.signal(signal.SIGALRM, _old_handler)
-                except TimeoutError:
-                    signal.alarm(0)
+                if timed_out:
                     logger.error(
                         f"Regex timeout (>2s) on blocked pattern '{pattern.pattern}' — "
                         f"possible ReDoS. Skipping this pattern and blocking action as precaution."

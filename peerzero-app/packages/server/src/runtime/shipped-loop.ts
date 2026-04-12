@@ -115,8 +115,8 @@ export async function runShippedCycle(ctx: BotContext): Promise<void> {
     const llmAdapter = getLLMAdapter();
 
     // Load bot's cached profile for identity context
-    const botRow = await queryOne<{ cached_profile: Record<string, unknown> | null; name: string }>(
-      'SELECT cached_profile, name FROM bots WHERE id = $1',
+    const botRow = await queryOne<{ cached_profile: Record<string, unknown> | null; name: string; extended_thinking: boolean }>(
+      'SELECT cached_profile, name, extended_thinking FROM bots WHERE id = $1',
       [ctx.botId],
     );
 
@@ -195,10 +195,11 @@ export async function runShippedCycle(ctx: BotContext): Promise<void> {
           }
         }
 
+        const extendedThinking = botRow?.extended_thinking ?? false;
         const llmResponse = await llmAdapter.chat(llmKey, taskModel, [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: taskMessage },
-        ], { maxTokens: isOwnerDirective ? 4096 : 2048 });
+        ], { maxTokens: isOwnerDirective ? 4096 : 2048, extendedThinking });
 
         const taskResult = {
           response: llmResponse.content,
