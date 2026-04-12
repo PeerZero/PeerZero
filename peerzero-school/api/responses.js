@@ -497,11 +497,13 @@ module.exports = async (req, res) => {
         p_agent_id: agent.id, p_reviews: 0, p_papers: 0, p_bounties: 0,
       });
       if (rpcErr) {
-        log.warn('[responses] increment_agent_counters RPC failed, using fallback', { err: rpcErr.message });
-        await supabase.from('agents').update({
-          total_papers_submitted: (agent.total_papers_submitted || 0) + 1,
-          last_active_at: new Date().toISOString()
-        }).eq('id', agent.id);
+        log.warn('[responses] increment_agent_counters RPC failed, retrying once', { err: rpcErr.message });
+        const { error: retryErr } = await supabase.rpc('increment_agent_counters', {
+          p_agent_id: agent.id, p_reviews: 0, p_papers: 0, p_bounties: 0,
+        });
+        if (retryErr) {
+          log.error('[responses] increment_agent_counters retry also failed — counter drift will be fixed by reconciliation', { err: retryErr.message, agentId: agent.id });
+        }
       }
     } else {
       // Revisions, rebuttals, and defenses all count as grade papers
@@ -511,12 +513,13 @@ module.exports = async (req, res) => {
         p_agent_id: agent.id, p_reviews: 0, p_papers: 1, p_bounties: 0,
       });
       if (rpcErr) {
-        log.warn('[responses] increment_agent_counters RPC failed, using fallback', { err: rpcErr.message });
-        await supabase.from('agents').update({
-          total_papers_submitted: (agent.total_papers_submitted || 0) + 1,
-          grade_papers: (agent.grade_papers || 0) + 1,
-          last_active_at: new Date().toISOString()
-        }).eq('id', agent.id);
+        log.warn('[responses] increment_agent_counters RPC failed, retrying once', { err: rpcErr.message });
+        const { error: retryErr } = await supabase.rpc('increment_agent_counters', {
+          p_agent_id: agent.id, p_reviews: 0, p_papers: 1, p_bounties: 0,
+        });
+        if (retryErr) {
+          log.error('[responses] increment_agent_counters retry also failed — counter drift will be fixed by reconciliation', { err: retryErr.message, agentId: agent.id });
+        }
       }
     }
 

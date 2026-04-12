@@ -103,10 +103,6 @@
       "dest": "/api/skill-reflections.js"
     },
     {
-      "src": "/api/health(.*)",
-      "dest": "/api/health.js"
-    },
-    {
       "src": "/api/reconcile(.*)",
       "dest": "/api/reconcile.js"
     },

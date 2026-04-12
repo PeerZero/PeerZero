@@ -56,7 +56,7 @@ Pick 2-3 audits per session. For each audit, search all 3 systems (peerzero-scho
 - Concurrent bot cycles that could both read stale `grade_papers` and increment to the same value
 - Redis operations that assume single-writer (WATCH/MULTI needed for read-modify-write)
 
-**Last run:** Never
+**Last run:** 2026-04-12 — 10 issues verified: 5 counter fallback read-then-write races eliminated (reviews.js, papers.js, bounties.js, responses.js ×2) — all now retry atomic RPC instead of using stale data. Paper status update now ALWAYS uses optimistic lock `.neq('status', 'superseded')` regardless of stale paper object. Revision credit fallback also fixed. Remaining: bounty validation loop reads stale paper score (medium — sequential within a single request), bot grade_papers stale read (medium — mitigated by distributed lock), promotion bonus race (medium — has optimistic lock already).
 
 ---
 
@@ -90,7 +90,7 @@ Pick 2-3 audits per session. For each audit, search all 3 systems (peerzero-scho
 - Bot cycles where the school action succeeds but the grade counter update fails — retry submits a duplicate paper
 - Any sequence of: `INSERT` then `UPDATE on different table` without a transaction
 
-**Last run:** Never
+**Last run:** 2026-04-12 — 21 items verified. 2 critical: paper submit + citations not in transaction, review submit + score update not in transaction — both mitigated by UNIQUE constraints (paper_id+reviewer_agent_id on reviews, challenger_agent_id+target_paper_id on bounties) that prevent duplicate on retry. True DB transactions deferred (Supabase JS SDK doesn't support multi-table transactions; would need Postgres function). All 5 counter fallbacks now retry atomic RPC instead of read-then-write. Bot cycle counter increment-after-action gap noted (medium — mitigated by distributed lock preventing concurrent cycles).
 
 ---
 
@@ -474,9 +474,9 @@ Track when each audit was last run and what was found/fixed. This helps Claude p
 | # | Audit | Last Run | Issues Found | Branch/PR |
 |---|-------|----------|-------------|-----------|
 | 1 | Silent Failures | 2026-04-11 | 65 found, 65 fixed | claude/silent-failures-check-8N9z2 |
-| 2 | Race Conditions | 2026-04-11 | 18 found, 8 fixed (3 critical, 4 high) | claude/silent-failures-check-8N9z2 |
+| 2 | Race Conditions | 2026-04-12 | 10 verified: 5 counter fallback races eliminated (retry atomic RPC), paper status optimistic lock hardened, revision credit fallback fixed. 3 medium remaining. | claude/fix-audit-issues-um2gE |
 | 3 | Unbounded Growth | 2026-04-11 | 11 found, 9 fixed (voice cache purge, stale locks, activity purge, rate_limit_log purge, conv engine age eviction, retention purge cron, conv DB disk cleanup) | claude/complete-audits-w4oXD |
-| 4 | Retry & Idempotency | 2026-04-11 | 21 found, noted (2 critical need transactions) | claude/silent-failures-check-8N9z2 |
+| 4 | Retry & Idempotency | 2026-04-12 | 21 verified: 5 counter fallbacks now retry atomic RPC. UNIQUE constraints prevent duplicate papers/reviews/bounties on retry. True DB transactions deferred (Supabase SDK limitation). | claude/fix-audit-issues-um2gE |
 | 5 | Secret Exposure | 2026-04-11 | 12 found, 4 fixed (error sanitize before log, bearer regex improved, reconcile sanitize; test creds OK) | claude/complete-audits-w4oXD |
 | 6 | Timeout & Exhaustion | 2026-04-11 | 12 found, 10 fixed (SDK timeout, fetch timeout, SQLite timeout, pool sizing, Supabase timeout, news search logging, BullMQ lock renewal, JSON loop limit, rate bucket cap, fallback LRU) | claude/complete-audits-w4oXD |
 | 7 | Stale Cache | 2026-04-11 | 9 checked, 0 fixed needed (bot profile refresh mitigates identity staleness, school config frozen by design on serverless, no Redis data caching, mobile token revocation on next request, all low/none severity) | claude/complete-readme-audits-3dG6T |

@@ -403,13 +403,16 @@ module.exports = async (req, res) => {
       p_bounties: 0,
     });
     if (counterErr) {
-      // Fallback: direct update (slightly racey but better than skipping)
-      log.warn('[reviews] increment_agent_counters RPC not found, using fallback', { err: counterErr.message });
-      await supabase.from('agents').update({
-        total_reviews_completed: (agent.total_reviews_completed || 0) + 1,
-        grade_reviews: (agent.grade_reviews || 0) + 1,
-        last_active_at: new Date().toISOString(),
-      }).eq('id', agent.id);
+      // Fallback: retry RPC once (failure may be transient). If RPC truly
+      // doesn't exist, log critical error — reconciliation job will fix drift.
+      // NEVER fall back to read-then-write (loses increments under concurrency).
+      log.warn('[reviews] increment_agent_counters RPC failed, retrying once', { err: counterErr.message });
+      const { error: retryErr } = await supabase.rpc('increment_agent_counters', {
+        p_agent_id: agent.id, p_reviews: 1, p_papers: 0, p_bounties: 0,
+      });
+      if (retryErr) {
+        log.error('[reviews] increment_agent_counters retry also failed — counter drift will be fixed by reconciliation', { err: retryErr.message, agentId: agent.id });
+      }
     }
 
     const { data: all_reviews } = await supabase.from('reviews')
@@ -424,19 +427,16 @@ module.exports = async (req, res) => {
       newStatus = 'active';
     }
 
-    // Never overwrite superseded status — the paper has been replaced by a reaffirmation
-    const isSuperseded = paper.status === 'superseded';
-
-    // Optimistic lock: never overwrite superseded status (could race with reaffirmation)
-    const scoreUpdateQuery = supabase.from('papers').update({
+    // Optimistic lock: ALWAYS guard against superseded status at the DB level,
+    // regardless of what the stale paper object says. This prevents a race where
+    // a reaffirmation supersedes the paper between our SELECT and this UPDATE.
+    const { error: scoreUpdateErr } = await supabase.from('papers').update({
       weighted_score: newScore,
       raw_review_count: all_reviews.length,
-      status: isSuperseded ? 'superseded' : newStatus,
+      status: newStatus,
       score_variance: variance,
       last_reviewed_at: new Date().toISOString()
-    }).eq('id', paper_id);
-    if (!isSuperseded) scoreUpdateQuery.neq('status', 'superseded');
-    const { error: scoreUpdateErr } = await scoreUpdateQuery;
+    }).eq('id', paper_id).neq('status', 'superseded');
     if (scoreUpdateErr) log.error('[reviews] Failed to update paper score', { paperId: paper_id, err: scoreUpdateErr.message });
 
     if (newScore && all_reviews.length === 3) {
@@ -464,14 +464,12 @@ module.exports = async (req, res) => {
                 p_reviews: 0, p_papers: 0, p_bounties: 0, p_revisions: 1,
               });
               if (revRpcErr) {
-                log.warn('[revision_credit] RPC failed, using fallback', { err: revRpcErr.message });
-                const { data: revAuthor } = await supabase.from('agents')
-                  .select('grade_revisions, revision_count').eq('id', paper.agent_id).single();
-                if (revAuthor) {
-                  await supabase.from('agents').update({
-                    grade_revisions: (revAuthor.grade_revisions || 0) + 1,
-                    revision_count: (revAuthor.revision_count || 0) + 1,
-                  }).eq('id', paper.agent_id);
+                log.warn('[revision_credit] RPC failed, retrying once', { err: revRpcErr.message });
+                const { error: retryErr } = await supabase.rpc('increment_agent_counters', {
+                  p_agent_id: paper.agent_id, p_reviews: 0, p_papers: 0, p_bounties: 0, p_revisions: 1,
+                });
+                if (retryErr) {
+                  log.error('[revision_credit] retry also failed — reconciliation will fix', { err: retryErr.message, agentId: paper.agent_id });
                 }
               }
               log.info('[revision_credit] Agent credited revision', { agentId: paper.agent_id, revisionScore: newScore, parentScore: parentScore || 'unscored' });
