@@ -21,6 +21,13 @@
 // Data retention:
 //   POST /api/reconcile?action=purge_retention         → purge old audit rows (180d default)
 //
+// Data integrity:
+//   GET  /api/reconcile?action=check_weighted_scores       → verify paper scores match reviews
+//   GET  /api/reconcile?action=check_calibration_staleness → find stale calibration summaries
+//   POST /api/reconcile?action=check_calibration_staleness → find + auto-refresh stale summaries
+//   GET  /api/reconcile?action=check_skill_integrity       → verify skill profile invariants
+//   POST /api/reconcile?action=check_skill_integrity       → verify + auto-fix skill invariants
+//
 // Protected by admin secret (X-Admin-Key header), except health check.
 // Designed to be called by a cron job (daily) or manually for debugging.
 // =============================================================================
@@ -264,29 +271,260 @@ module.exports = async (req, res) => {
   // Safe: removed papers are permanently excluded from all system queries.
   if (action === 'cleanup_orphans') {
     try {
-      const removedPaperIds = `SELECT id FROM papers WHERE status = 'removed'`;
-      const results = {};
+      // First fetch removed paper IDs, then delete children with .in()
+      // (PostgREST doesn't support SQL subqueries in .filter())
+      const { data: removedPapers, error: fetchErr } = await supabase
+        .from('papers')
+        .select('id')
+        .eq('status', 'removed');
 
-      const cleanups = [
-        ['reviews', supabase.from('reviews').delete().filter('paper_id', 'in', `(${removedPaperIds})`)],
-        ['bounties', supabase.from('bounties').delete().filter('target_paper_id', 'in', `(${removedPaperIds})`)],
-        ['citations', supabase.from('citations').delete().filter('paper_id', 'in', `(${removedPaperIds})`)],
-      ];
-
-      for (const [name, query] of cleanups) {
-        try {
-          const { error, count } = await query;
-          results[name] = error ? { error: error.message } : { deleted: count || 0 };
-        } catch (err) {
-          results[name] = { error: err?.message || 'Unknown error' };
-        }
+      if (fetchErr) {
+        log.error('[reconcile] Failed to fetch removed papers', { error: fetchErr.message });
+        return res.status(500).json({ error: 'Orphan cleanup failed — could not fetch removed papers' });
       }
 
-      log.info('[reconcile] Orphan cleanup complete', { results });
+      const removedIds = (removedPapers || []).map(p => p.id);
+      if (removedIds.length === 0) {
+        return res.json({ success: true, cleaned: { reviews: { deleted: 0 }, bounties: { deleted: 0 }, citations: { deleted: 0 } }, note: 'No removed papers found' });
+      }
+
+      const results = {};
+      // Batch in chunks of 500 to avoid PostgREST URL length limits
+      const CHUNK = 500;
+      for (const [name, col] of [['reviews', 'paper_id'], ['bounties', 'target_paper_id'], ['citations', 'paper_id']]) {
+        let totalDeleted = 0;
+        for (let i = 0; i < removedIds.length; i += CHUNK) {
+          const chunk = removedIds.slice(i, i + CHUNK);
+          try {
+            const { count, error } = await supabase.from(name).delete({ count: 'exact' }).in(col, chunk);
+            if (error) {
+              results[name] = { error: error.message };
+              break;
+            }
+            totalDeleted += count || 0;
+          } catch (err) {
+            results[name] = { error: err?.message || 'Unknown error' };
+            break;
+          }
+        }
+        if (!results[name]) results[name] = { deleted: totalDeleted };
+      }
+
+      log.info('[reconcile] Orphan cleanup complete', { removed_papers: removedIds.length, results });
       return res.json({ success: true, cleaned: results });
     } catch (err) {
       log.error('[reconcile] Orphan cleanup failed', { error: err?.message });
       return res.status(500).json({ error: 'Orphan cleanup failed' });
+    }
+  }
+
+  // ── Data integrity: weighted_score verification ─────────────────────────
+  // GET /api/reconcile?action=check_weighted_scores
+  // Reconstructs weighted_score for all scored papers from their reviews and
+  // reports any papers where stored score differs from computed score.
+  if (action === 'check_weighted_scores') {
+    try {
+      const { reviewerWeight } = require('../lib/review-helpers');
+      const PAGE_SIZE = 1000;
+
+      // Fetch all non-removed papers with a weighted_score
+      let papers = [];
+      let off = 0;
+      while (true) {
+        const { data: page, error } = await supabase.from('papers')
+          .select('id, weighted_score, raw_review_count')
+          .neq('status', 'removed')
+          .not('weighted_score', 'is', null)
+          .range(off, off + PAGE_SIZE - 1);
+        if (error) return res.status(500).json({ error: 'Failed to fetch papers' });
+        if (!page || page.length === 0) break;
+        papers = papers.concat(page);
+        if (page.length < PAGE_SIZE) break;
+        off += PAGE_SIZE;
+      }
+
+      // Fetch all quality-gate-passed reviews with scores and credibility
+      let reviews = [];
+      off = 0;
+      while (true) {
+        const { data: page, error } = await supabase.from('reviews')
+          .select('paper_id, score, reviewer_credibility_at_time')
+          .eq('passed_quality_gate', true)
+          .range(off, off + PAGE_SIZE - 1);
+        if (error) return res.status(500).json({ error: 'Failed to fetch reviews' });
+        if (!page || page.length === 0) break;
+        reviews = reviews.concat(page);
+        if (page.length < PAGE_SIZE) break;
+        off += PAGE_SIZE;
+      }
+
+      // Group reviews by paper_id
+      const reviewsByPaper = new Map();
+      for (const r of reviews) {
+        if (!reviewsByPaper.has(r.paper_id)) reviewsByPaper.set(r.paper_id, []);
+        reviewsByPaper.get(r.paper_id).push(r);
+      }
+
+      // Compare stored vs computed
+      const drifts = [];
+      for (const paper of papers) {
+        const paperReviews = reviewsByPaper.get(paper.id) || [];
+        if (paperReviews.length < 3) continue; // weightedScore returns null for <3 reviews
+
+        let total = 0, weights = 0;
+        for (const r of paperReviews) {
+          const w = reviewerWeight(r.reviewer_credibility_at_time || 50);
+          total += r.score * w;
+          weights += w;
+        }
+        const computed = weights > 0 ? parseFloat((total / weights).toFixed(2)) : null;
+        const stored = parseFloat(paper.weighted_score);
+        if (computed !== null && Math.abs(stored - computed) > 0.01) {
+          drifts.push({ paper_id: paper.id, stored, computed, diff: parseFloat((stored - computed).toFixed(4)) });
+        }
+      }
+
+      log.info('[reconcile] Weighted score check complete', { papers_checked: papers.length, drifts_found: drifts.length });
+      return res.json({ papers_checked: papers.length, drifts_found: drifts.length, drifts: drifts.slice(0, 100) });
+    } catch (err) {
+      log.error('[reconcile] Weighted score check failed', { error: err?.message });
+      return res.status(500).json({ error: 'Weighted score check failed' });
+    }
+  }
+
+  // ── Data integrity: calibration summary staleness ──────────────────────
+  // GET /api/reconcile?action=check_calibration_staleness
+  // Finds agents whose calibration summaries are stale (resolved predictions
+  // exist after the summary's updated_at timestamp).
+  if (action === 'check_calibration_staleness') {
+    try {
+      // Get all calibration summaries
+      const { data: summaries, error: sumErr } = await supabase.from('calibration_summaries')
+        .select('agent_id, updated_at, resolved_predictions');
+      if (sumErr) return res.status(500).json({ error: 'Failed to fetch calibration summaries' });
+
+      // For each summary, check if there are newer resolved predictions
+      const stale = [];
+      const missing = [];
+      const BATCH = 20;
+      for (let i = 0; i < (summaries || []).length; i += BATCH) {
+        const batch = summaries.slice(i, i + BATCH);
+        const results = await Promise.all(batch.map(async (s) => {
+          const { count } = await supabase.from('calibration_log')
+            .select('id', { count: 'exact', head: true })
+            .eq('agent_id', s.agent_id)
+            .not('outcome', 'is', null)
+            .gt('resolved_at', s.updated_at);
+          return { agent_id: s.agent_id, updated_at: s.updated_at, newer_predictions: count || 0 };
+        }));
+        for (const r of results) {
+          if (r.newer_predictions > 0) stale.push(r);
+        }
+      }
+
+      // Check for agents with resolved predictions but no summary
+      const { data: agentsWithPredictions } = await supabase.rpc('sql', { query: `
+        SELECT agent_id, COUNT(*) as resolved_count
+        FROM calibration_log
+        WHERE outcome IS NOT NULL
+        GROUP BY agent_id
+        HAVING COUNT(*) >= 5
+      ` }).catch(() => ({ data: null }));
+
+      const summaryAgentIds = new Set((summaries || []).map(s => s.agent_id));
+      for (const row of (agentsWithPredictions || [])) {
+        if (!summaryAgentIds.has(row.agent_id)) {
+          missing.push({ agent_id: row.agent_id, resolved_predictions: parseInt(row.resolved_count) });
+        }
+      }
+
+      // Auto-refresh stale summaries if POST
+      let refreshed = 0;
+      if (req.method === 'POST' && (stale.length > 0 || missing.length > 0)) {
+        const { updateCalibrationSummary } = require('../lib/calibration');
+        const toRefresh = [...stale.map(s => s.agent_id), ...missing.map(m => m.agent_id)];
+        for (let i = 0; i < toRefresh.length; i += BATCH) {
+          const batch = toRefresh.slice(i, i + BATCH);
+          await Promise.all(batch.map(id => updateCalibrationSummary(id)));
+          refreshed += batch.length;
+        }
+      }
+
+      log.info('[reconcile] Calibration staleness check', { stale: stale.length, missing: missing.length, refreshed });
+      return res.json({
+        summaries_checked: (summaries || []).length,
+        stale: stale.length,
+        missing_summaries: missing.length,
+        refreshed,
+        stale_agents: stale.slice(0, 50),
+        missing_agents: missing.slice(0, 50),
+      });
+    } catch (err) {
+      log.error('[reconcile] Calibration staleness check failed', { error: err?.message });
+      return res.status(500).json({ error: 'Calibration staleness check failed' });
+    }
+  }
+
+  // ── Data integrity: skill progress sanity check ────────────────────────
+  // GET /api/reconcile?action=check_skill_integrity
+  // Verifies invariants on agent_skill_profiles: hits ≤ reps, streak ≤ reps,
+  // best_streak ≥ streak, reliability ∈ [0,1], strength ≥ 0.
+  if (action === 'check_skill_integrity') {
+    try {
+      const PAGE_SIZE = 1000;
+      let profiles = [];
+      let off = 0;
+      while (true) {
+        const { data: page, error } = await supabase.from('agent_skill_profiles')
+          .select('id, agent_id, skill_key, reps, hits, reliability, strength, streak, best_streak')
+          .range(off, off + PAGE_SIZE - 1);
+        if (error) return res.status(500).json({ error: 'Failed to fetch skill profiles' });
+        if (!page || page.length === 0) break;
+        profiles = profiles.concat(page);
+        if (page.length < PAGE_SIZE) break;
+        off += PAGE_SIZE;
+      }
+
+      const violations = [];
+      for (const p of profiles) {
+        const issues = [];
+        if (p.hits > p.reps) issues.push(`hits(${p.hits}) > reps(${p.reps})`);
+        if (p.streak > p.reps) issues.push(`streak(${p.streak}) > reps(${p.reps})`);
+        if (p.best_streak < p.streak) issues.push(`best_streak(${p.best_streak}) < streak(${p.streak})`);
+        if (p.reliability < 0 || p.reliability > 1) issues.push(`reliability(${p.reliability}) out of [0,1]`);
+        if (p.strength < 0) issues.push(`strength(${p.strength}) negative`);
+        if (issues.length > 0) {
+          violations.push({ id: p.id, agent_id: p.agent_id, skill_key: p.skill_key, issues });
+        }
+      }
+
+      // Auto-fix best_streak < streak if POST
+      let fixed = 0;
+      if (req.method === 'POST') {
+        for (const v of violations) {
+          const fixable = v.issues.some(i => i.startsWith('best_streak'));
+          if (fixable) {
+            const profile = profiles.find(p => p.id === v.id);
+            if (profile) {
+              await supabase.from('agent_skill_profiles')
+                .update({ best_streak: profile.streak })
+                .eq('id', v.id);
+              fixed++;
+            }
+          }
+        }
+      }
+
+      log.info('[reconcile] Skill integrity check', { checked: profiles.length, violations: violations.length, fixed });
+      return res.json({
+        profiles_checked: profiles.length,
+        violations_found: violations.length,
+        fixed,
+        violations: violations.slice(0, 100),
+      });
+    } catch (err) {
+      log.error('[reconcile] Skill integrity check failed', { error: err?.message });
+      return res.status(500).json({ error: 'Skill integrity check failed' });
     }
   }
 

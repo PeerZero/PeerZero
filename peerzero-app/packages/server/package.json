@@ -14,6 +14,7 @@
   },
   "dependencies": {
     "@peerzero/shared": "workspace:*",
+    "@sentry/node": "^10.48.0",
     "bcryptjs": "^2.4.3",
     "bullmq": "^5.20.0",
     "cors": "^2.8.5",
