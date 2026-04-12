@@ -47,11 +47,6 @@ const STRUCTURAL_CHALLENGE_TYPES = new Proxy(new Set(), {
   },
 });
 
-/** Get all valid bounty type keys from school config */
-function getValidBountyTypes() {
-  return new Set(getSchool().bountyTypes.map(b => b.key));
-}
-
 /**
  * Validate the external_sources array in a bounty submission.
  * Each source must have doi, specific_finding, target_claim, and logical_bridge.
@@ -264,5 +259,4 @@ module.exports = {
   tokenize,
   jaccardSimilarity,
   callHaikuDriftJudge,
-  getValidBountyTypes,
 };

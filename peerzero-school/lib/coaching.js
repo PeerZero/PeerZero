@@ -1,5 +1,4 @@
 const { getSupabase, applyTimeDecay, recordFailureReflection } = require('./shared');
-const { getInternals } = require('./skills-core');
 const log = require('./logger');
 
 // ── Coaching layer ────────────────────────────────────────────────────────────
@@ -27,34 +26,6 @@ function getFailurePatterns() {
 
 function getCoachingAdvice() {
   return school.coachingAdvice || FALLBACK_ADVICE;
-}
-
-// Merge forge-evolved coaching insights from school_internals.
-// Returns base advice + any forge-evolved advice keyed by mechanism.
-async function getCoachingAdviceWithForgeOverlay() {
-  const base = getCoachingAdvice();
-  try {
-    const cfg = await getInternals();
-    const overlay = {};
-    // Check for forge-evolved review/bounty insights
-    for (const key of Object.keys(cfg)) {
-      if (key.startsWith('forge_evolved_') && cfg[key]?.proposals) {
-        const mechanism = key.replace('forge_evolved_', '');
-        // Build coaching advice from aggregated bot proposals
-        const summaries = cfg[key].proposals
-          .slice(0, 3)
-          .map(p => p.change)
-          .filter(Boolean);
-        if (summaries.length > 0) {
-          overlay[`forge_${mechanism}`] = `Collective forge insight (${mechanism}): ${summaries.join('; ')}`;
-        }
-      }
-    }
-    return { ...base, ...overlay };
-  } catch (err) {
-    log.warn('[coaching] buildCoaching overlay failed', { err: err?.message });
-    return base;
-  }
 }
 
 // Fallback patterns — used only if a school config omits coachingPatterns.
@@ -286,4 +257,4 @@ async function buildCoaching(agentId, credibility, reviews, bounties, papers, re
   }
 }
 
-module.exports = { FAILURE_PATTERNS, extractFailurePatterns, qualityTrajectory, buildHonestGap, buildCoaching, getCoachingAdviceWithForgeOverlay };
+module.exports = { FAILURE_PATTERNS, extractFailurePatterns, qualityTrajectory, buildHonestGap, buildCoaching };
