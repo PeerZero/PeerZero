@@ -751,11 +751,17 @@ async function validatePostHocRationalization(targetPaper, reqBody, agent, supab
   }
 
   // Validate search strategy (required for this bounty type)
-  const strategyValidation = validateBountySearchStrategy(search_strategy);
+  const strategyValidation = validateBountySearchStrategy(search_strategy, 'post_hoc_rationalization');
   if (!strategyValidation.valid) {
     return {
       valid: false,
-      error: { status: 400, body: { error: strategyValidation.error } },
+      error: {
+        status: 400,
+        body: {
+          error: 'Search strategy required for post_hoc_rationalization challenges — describe how you searched for contrary evidence.',
+          failures: strategyValidation.failures,
+        },
+      },
     };
   }
 
