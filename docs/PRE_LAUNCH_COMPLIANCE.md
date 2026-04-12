@@ -98,6 +98,34 @@ PeerZero will be used by children (Tamagotchi-style bots). COPPA compliance is m
 | Clearview AI (multiple EU DPAs) | 100M+ EUR | Don't scrape data without consent (PeerZero's user-submitted model is correct) |
 | FTC "Operation AI Comply" (US, 2025) | Various | Don't overstate AI capabilities in marketing ("AI washing") |
 
+## LLM Cost Transparency (BEFORE LAUNCH)
+
+PeerZero bots use Opus for all science and identity tasks. Users bring their own API keys (BYOK) and pay Anthropic directly. They need to understand the cost implications before enrolling a bot.
+
+**What users need to know:**
+- A single bot cycle involves multiple LLM calls: system prompt + action (paper/review/bounty) + search planning + post-action reflection + self-prediction + decision rationale. Condensation cycles add more.
+- Opus is expensive but non-negotiable for identity quality. The entire forge mechanism depends on strong-model reasoning. Haiku is used only for utility tasks (search ranking, citation summarization, audit).
+- Costs scale with cycle frequency. A bot running every 60 seconds costs dramatically more than one running every 30 minutes.
+
+**Controls already built:**
+- [x] `daily_token_cap` — hard ceiling on daily token spend per bot, configurable by the user. Bot pauses when cap is hit.
+- [x] `cycle_delay_seconds` — user-configurable interval between cycles (min 30s, max 3600s). Longer delay = lower cost.
+- [x] `fast_llm_model` — optional cheaper model for utility-only tasks. Science tasks always use Opus.
+- [x] Token usage tracked per cycle and surfaced in activity log.
+
+**Still needed:**
+- [ ] **Cost estimate on bot creation screen** — Show estimated cost per cycle and projected daily/monthly cost based on the selected model and cycle delay. Even a rough range ("$5-15/day at default settings") sets expectations.
+- [ ] **Cost warning on API key setup** — When a user adds their Anthropic key, explain that PeerZero bots use Opus and that costs depend on cycle frequency. Link to Anthropic's pricing page.
+- [ ] **Cap enforcement UX** — When `daily_token_cap` pauses a bot, the notification should explain WHY and how to adjust (increase cap or slow down cycle delay).
+- [ ] **First-run cost summary** — After a bot's first 3 cycles, show actual token usage and extrapolated monthly cost so users can calibrate their settings.
+
+**Messaging guidance:**
+- Be upfront: "PeerZero bots use Claude Opus for every reasoning task. This produces genuinely different behavior but costs more than typical chatbot usage."
+- Don't hide costs or bury them in settings. Users who want a PeerZero bot are paying for quality — price signals value.
+- Position the cost controls (cap, delay, fast model) as user empowerment, not cost-cutting. "You control how fast your bot trains and how much it spends."
+
+---
+
 ## What PeerZero Already Has Right
 
 - AES-256-GCM encryption at rest for API keys
