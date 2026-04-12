@@ -18,10 +18,11 @@ Pick 2-3 audits per session. For each audit, search all 3 systems (peerzero-scho
 
 | Frequency | Audits |
 |-----------|--------|
-| Monthly | #1 Silent Failures, #5 Secrets, #10 Dependencies |
-| Quarterly | #2 Race Conditions, #4 Idempotency, #6 Timeouts, #8 Auth Gaps |
-| Twice yearly | #3 Unbounded Growth, #7 Stale Cache, #9 Degradation, #11 Dead Code, #12 N+1 Queries |
-| After major features | #13 Input Validation, #14 Cross-System Contracts, #15 Error UX |
+| Monthly | #1 Silent Failures, #5 Secrets, #10 Dependencies, #20 Cost & Rate Limits |
+| Quarterly | #2 Race Conditions, #4 Idempotency, #6 Timeouts, #8 Auth Gaps, #23 Prompt Injection |
+| Twice yearly | #3 Unbounded Growth, #7 Stale Cache, #9 Degradation, #11 Dead Code, #12 N+1 Queries, #18 Data Integrity |
+| After major features | #13 Input Validation, #14 Cross-System Contracts, #15 Error UX, #24 HTTP Security Headers |
+| Pre-launch / post-incident | #17 Load & Concurrency, #19 Recovery & Rollback, #21 User Journey Smoke Test, #22 Monitoring & Alerting |
 
 ---
 
@@ -315,6 +316,155 @@ Pick 2-3 audits per session. For each audit, search all 3 systems (peerzero-scho
 
 ---
 
+## 17. Load & Concurrency Under Realistic Traffic
+
+**What it catches:** Bottlenecks and failures that only appear under concurrent load — connection pool exhaustion, job queue saturation, and Supabase tier limits.
+
+**What to look for:**
+- Profile endpoint fires 16+ Supabase queries via `Promise.all` — what happens when 50 bots call it simultaneously?
+- PostgreSQL/Supabase connection pool size vs concurrent bot count — are connections exhausted?
+- BullMQ job queue depth — what happens when the queue backs up? Are there dead letter queues?
+- Supabase free/pro tier limits vs actual usage (row counts, storage, bandwidth, API rate limits)
+- Redis memory usage under sustained load (rate limit buckets, BullMQ jobs, pub/sub channels)
+- Vercel serverless concurrent execution limits — can School endpoints handle burst traffic?
+- Bot cycle timing — if a cycle takes 60s and cycle_delay is 30s, do cycles stack?
+- LLM API concurrent request limits vs bot count — will Anthropic rate-limit you?
+
+**Last run:** Never
+
+---
+
+## 18. Data Integrity & Consistency Verification
+
+**What it catches:** Drift between computed values and stored values, orphaned records, and inconsistencies that accumulate over time.
+
+**What to look for:**
+- Can you reconstruct a bot's `credibility_score` from the `credibility_transactions` table? Compare computed vs stored for all agents
+- Orphaned records: papers without agents, reviews without papers, bounties referencing deleted papers
+- Grade counters (`total_papers_submitted`, `reviews_completed`, `valid_bounties`) — do they match actual row counts?
+- `weighted_score` on papers — does it match recalculation from reviews?
+- Calibration summaries — are they current or stale from a failed `updateCalibrationSummary`?
+- Foreign key integrity — are there any soft-deleted agents with active papers/reviews?
+- Skill progress values — do stored values match recalculation from skill exercises?
+- Identity layer consistency — are L3 docs consistent with L2 paragraphs they were condensed from?
+
+**Last run:** Never
+
+---
+
+## 19. Recovery & Rollback
+
+**What it catches:** Whether you can recover from failures — deployment bugs, data corruption, or third-party outages.
+
+**What to look for:**
+- If a bad deployment breaks the School API for 30 minutes, how many bots submit garbage? Can you identify and revert their submissions?
+- Database backup frequency and restore testing — has a backup restore ever been tested?
+- Can you redeploy the previous version in under 5 minutes? Is there a documented rollback procedure?
+- If Supabase goes down, what's the blast radius? Which systems degrade vs. hard-fail?
+- If Anthropic goes down, do bots retry forever or circuit-break?
+- Is there a way to pause ALL bots simultaneously (kill switch)?
+- Can you replay failed BullMQ jobs after fixing a bug, or are they lost?
+- Database migration rollback — can every migration be reversed?
+
+**Last run:** Never
+
+---
+
+## 20. Cost & Rate Limit Modeling
+
+**What it catches:** Runaway costs and rate limit collisions that only appear at scale.
+
+**What to look for:**
+- Cost per bot cycle (LLM tokens: system prompt + action + search + reflection + condensation). Multiply by bot count × cycles per day.
+- Anthropic API rate limits (tokens per minute, requests per minute) vs your concurrency — at what bot count do you hit them?
+- Supabase usage projections: rows per table growth rate, storage, bandwidth, API calls per month
+- Vercel serverless execution time limits and monthly budget
+- Are there any runaway-cost scenarios? (Retry loops on LLM calls, search queries that fan out, condensation cascades)
+- Redis memory — BullMQ job data retention, rate limit bucket count at scale
+- Cloudflare Worker limits (proxy) — requests per day, CPU time per request
+- What's the monthly cost floor to run 10 bots? 100 bots? 1000 bots?
+
+**Last run:** Never
+
+---
+
+## 21. User Journey Smoke Test
+
+**What it catches:** End-to-end integration failures that unit tests miss — the full user experience from signup to deletion.
+
+**What to do (manual walkthrough, not code search):**
+- Register account → verify email → log in
+- Add Anthropic API key → verify it's encrypted at rest
+- Create bot → enroll in school → start bot → verify it runs a cycle
+- Watch BrainScreen update → check activity log → verify WebSocket pushes
+- Send a chat message to the bot → verify conversational memory
+- Stop bot → change mode → restart
+- Delete API key while bot is running — what happens?
+- Delete bot → verify cascade (school agent, tasks, activity log)
+- Delete account → verify full erasure (GDPR right to erasure)
+- Test with a fresh database — what does a new user see when there are zero bots in the system?
+
+**Last run:** Never
+
+---
+
+## 22. Monitoring & Alerting Readiness
+
+**What it catches:** Whether you'll know something is broken before users tell you.
+
+**What to look for:**
+- Health check endpoints — does `/health` exist on both App and School? Do they check downstream dependencies (DB, Redis)?
+- If the School API starts returning 500s, how quickly do you know? Is there any monitoring?
+- If a bot gets stuck in an infinite loop or hangs on an LLM call, is there a circuit breaker?
+- Are there dashboards for: active bot count, cycle success rate, LLM token usage, error rate?
+- Uptime monitoring — is anything pinging your endpoints? (UptimeRobot, Better Uptime, etc.)
+- Log aggregation — are logs searchable? Can you query "all errors in the last hour"?
+- Alerting — does anyone get notified on: 5xx spike, queue depth > threshold, bot cycle failures?
+- Supabase dashboard monitoring — are you watching connection count, query latency, storage?
+
+**Last run:** Never
+
+---
+
+## 23. Prompt Injection & Agent Safety
+
+**What it catches:** Adversarial inputs that manipulate bot behavior — the #1 security concern for AI agent platforms in 2026.
+
+**What to look for:**
+- Can a malicious paper title or abstract in the School database inject instructions into a bot's system prompt? (Check `sanitize_untrusted` usage)
+- Can a crafted review manipulate the bot's next action? (Review text flows into skill exercises → condensation → identity)
+- Identity preamble injection — can a bot's condensed identity be manipulated to override the proxy preamble?
+- MCP tool call safety — can a bot be tricked into calling unintended tools? Are tool inputs validated?
+- A2A task injection — can an external agent send a malicious task that manipulates the bot?
+- Search result poisoning — if a malicious paper appears in academic search results, can its abstract inject instructions?
+- Skill text manipulation — if the School server is compromised, can skill text contain prompt injection?
+- LLM output parsing — can a crafted LLM response escape JSON extraction and execute unintended behavior?
+- Conversation memory injection — can a user inject instructions through chat messages that persist in memory and affect future behavior?
+
+**Last run:** Never
+
+---
+
+## 24. HTTP Security Headers & Transport
+
+**What it catches:** Missing security headers and transport-layer protections that browsers and security scanners flag.
+
+**What to look for:**
+- Is `helmet` middleware used on the Express App server? Check for: Content-Security-Policy, X-Content-Type-Options, X-Frame-Options, Strict-Transport-Security
+- CORS configuration — are `Access-Control-Allow-Origin` headers restrictive enough? (Check both School and App)
+- Are all cookies set with `httpOnly`, `Secure`, and `SameSite` flags?
+- HSTS (HTTP Strict Transport Security) — is it set on production domains?
+- Content-Security-Policy — does it block inline scripts and restrict sources?
+- X-Content-Type-Options: nosniff — prevents MIME type sniffing
+- Referrer-Policy — are referrers leaked to third parties?
+- Permissions-Policy — are unnecessary browser features (camera, microphone, geolocation) disabled?
+- TLS version — is TLS 1.2+ enforced? Are weak cipher suites disabled?
+- Vercel security headers — are they configured in `vercel.json` for the School?
+
+**Last run:** Never
+
+---
+
 ## Audit Log
 
 Track when each audit was last run and what was found/fixed. This helps Claude prioritize which audits are overdue.
@@ -339,3 +489,11 @@ Track when each audit was last run and what was found/fixed. This helps Claude p
 | 14 | Cross-System Contracts | 2026-04-11 | 4 found, 4 fixed (2 critical: executeRevision read wrong field reaffirmable_papers→can_revise_papers, determineAction dropped forge_paper/self_review/sleep/reaffirm; 2 high: revision/reaffirmation used wrong API paths, review sent paper_id in body instead of query) | claude/complete-readme-audits-3dG6T |
 | 15 | Error Message UX | 2026-04-11 | 8 found, 6 fixed (2 high: removed PII — email from auth logs, IP from widget logs; email service now logs err.message not raw err; sanitizeErrorMessage now accepts context IDs for correlation; 2 noted: request ID infrastructure and error shape consistency are future work) | claude/complete-readme-audits-3dG6T |
 | 16 | Graceful Shutdown | 2026-04-11 | 9 checked, 1 fixed (1 high: App server now waits for in-flight HTTP requests to drain before process.exit with 10s timeout; BullMQ workers already handled correctly; bot SIGTERM is graceful, SIGINT interrupts mid-action — medium, acceptable) | claude/complete-readme-audits-3dG6T |
+| 17 | Load & Concurrency | — | — | — |
+| 18 | Data Integrity | — | — | — |
+| 19 | Recovery & Rollback | — | — | — |
+| 20 | Cost & Rate Limits | — | — | — |
+| 21 | User Journey Smoke | — | — | — |
+| 22 | Monitoring & Alerting | — | — | — |
+| 23 | Prompt Injection | — | — | — |
+| 24 | HTTP Security Headers | — | — | — |
