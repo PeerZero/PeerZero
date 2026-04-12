@@ -1394,7 +1394,7 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
             try:
                 result_data["score"] = max(1.0, min(10.0, round(float(result_data["score"]), 1)))
             except (ValueError, TypeError):
-                logger.warning(f"[{handle}] LLM returned non-numeric review score: {result_data.get('score')!r} — defaulting to 5.0")
+                logger.warning(f"[{label}] LLM returned non-numeric review score: {result_data.get('score')!r} — defaulting to 5.0")
                 result_data["score"] = 5.0
 
         # Clamp paper fields
@@ -2383,6 +2383,59 @@ When done, return a JSON object:
     # MAIN LOOP
     # ═══════════════════════════════════════════════════════════════════════
 
+    # ── Main loop helpers ──────────────────────────────────────────────────
+
+    def _run_shipped_tasks(self):
+        """Process task inbox and owner directives (shipped mode only)."""
+        self._process_task_inbox()
+        self._poll_owner_directives()
+
+    def _run_platform_cycles(self, platform_timers: dict[str, float]):
+        """Run platform cycles whose heartbeat interval is due (shipped mode only)."""
+        now = time.time()
+        for adapter in self.platform_adapters:
+            name = adapter.platform_name
+            interval = self.config.cycle_delay
+            for pc in self.config.platforms:
+                if pc.name == name:
+                    interval = pc.heartbeat_interval
+                    break
+
+            if now - platform_timers.get(name, 0) >= interval:
+                try:
+                    self.run_platform_cycle(adapter)
+                except SecurityError:
+                    raise
+                except Exception as e:
+                    logger.warning(f"[MAIN] Platform cycle failed for {name}: {e}")
+                platform_timers[name] = now
+
+    def _run_agenda_steps(self):
+        """Execute pending action desk agenda steps."""
+        if self.action_desk.has_work:
+            try:
+                self.run_agenda_step()
+            except SecurityError:
+                raise
+            except Exception as e:
+                logger.warning(f"[MAIN] Agenda step failed: {e}")
+
+    def _run_conversation_sleep(self):
+        """Run conversational memory sleep consolidation if due (shipped mode only)."""
+        if (not self._conv_memory_engines
+                or time.time() - self._conv_last_sleep
+                < self._conv_memory_config.sleep_interval_seconds):
+            return
+        try:
+            results = self.run_conversation_sleep()
+            if results:
+                logger.info(f"[CONV_MEMORY] Sleep consolidation complete for {len(results)} user(s)")
+            self._conv_last_sleep = time.time()
+        except Exception as e:
+            logger.warning(f"[CONV_MEMORY] Sleep consolidation failed: {e}")
+
+    # ── Main entry point ─────────────────────────────────────────────────
+
     def run(self):
         """
         Main entry point. Runs School + platform cycles based on mode.
@@ -2398,15 +2451,12 @@ When done, return a JSON object:
             logger.info("[STOP] Received SIGTERM — shutting down gracefully")
             self._stop_requested = True
 
-        # Register SIGTERM handler (SIGINT is already KeyboardInterrupt)
         signal.signal(signal.SIGTERM, _handle_sigterm)
-
         self.startup()
 
-        # Track last platform cycle times
-        platform_timers: dict[str, float] = {}
-        for adapter in self.platform_adapters:
-            platform_timers[adapter.platform_name] = 0.0
+        platform_timers: dict[str, float] = {
+            a.platform_name: 0.0 for a in self.platform_adapters
+        }
 
         try:
             while not self._stop_requested:
@@ -2415,59 +2465,15 @@ When done, return a JSON object:
                     if self.config.school_enabled:
                         self.run_school_cycle()
                     else:
-                        # cycle_count is incremented in run_school_cycle(); when school
-                        # is disabled we still need to count cycles so max_cycles works.
                         self.cycle_count += 1
 
-                    # Task inbox (shipped mode only) — process pending tasks
+                    # Shipped mode: tasks, platforms, conversations
                     if not self.config.school_enabled:
-                        self._process_task_inbox()
-                        # Poll for owner directives from chat
-                        self._poll_owner_directives()
+                        self._run_shipped_tasks()
+                        self._run_platform_cycles(platform_timers)
+                        self._run_conversation_sleep()
 
-                    # Platform cycles (run when their timer is due)
-                    # School mode = training only. No platform interactions.
-                    if not self.config.school_enabled:
-                        now = time.time()
-                        for adapter in self.platform_adapters:
-                            name = adapter.platform_name
-                            # Find this platform's config for heartbeat interval
-                            interval = self.config.cycle_delay
-                            for pc in self.config.platforms:
-                                if pc.name == name:
-                                    interval = pc.heartbeat_interval
-                                    break
-
-                            if now - platform_timers.get(name, 0) >= interval:
-                                try:
-                                    self.run_platform_cycle(adapter)
-                                except SecurityError:
-                                    raise
-                                except Exception as e:
-                                    logger.warning(f"[MAIN] Platform cycle failed for {name}: {e}")
-                                platform_timers[name] = now
-
-                    # Action Desk: execute pending agenda steps
-                    if self.action_desk.has_work:
-                        try:
-                            self.run_agenda_step()
-                        except SecurityError:
-                            raise
-                        except Exception as e:
-                            logger.warning(f"[MAIN] Agenda step failed: {e}")
-
-                    # Conversational memory sleep consolidation (timer-based)
-                    if (not self.config.school_enabled
-                            and self._conv_memory_engines
-                            and time.time() - self._conv_last_sleep
-                            >= self._conv_memory_config.sleep_interval_seconds):
-                        try:
-                            results = self.run_conversation_sleep()
-                            if results:
-                                logger.info(f"[CONV_MEMORY] Sleep consolidation complete for {len(results)} user(s)")
-                            self._conv_last_sleep = time.time()
-                        except Exception as e:
-                            logger.warning(f"[CONV_MEMORY] Sleep consolidation failed: {e}")
+                    self._run_agenda_steps()
 
                 except SecurityError as e:
                     logger.error(f"[SECURITY] {e}")
@@ -2478,7 +2484,6 @@ When done, return a JSON object:
                 except Exception as e:
                     logger.error(f"[ERROR] Cycle failed: {e}", exc_info=True)
 
-                # Check max cycles
                 if self.config.max_cycles > 0 and self.cycle_count >= self.config.max_cycles:
                     logger.info(f"[STOP] Reached max cycles ({self.config.max_cycles})")
                     break
@@ -2489,7 +2494,6 @@ When done, return a JSON object:
                 logger.info(f"[SLEEP] {self.config.cycle_delay}s")
                 time.sleep(self.config.cycle_delay)
         finally:
-            # Always clean up — even on SecurityError or KeyboardInterrupt
             self._refresh_identity()
             self._cleanup()
             logger.info("[STOP] Bot stopped. Identity saved.")

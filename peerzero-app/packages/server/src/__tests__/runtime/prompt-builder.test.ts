@@ -20,6 +20,7 @@ function makeProfile(overrides?: Partial<SchoolProfile>): SchoolProfile {
     skill_profile: null,
     skill_condenser: null,
     core_condenser: null,
+    decision_condenser: null,
     forge_condenser: null,
     forge_core_condenser: null,
     forge_master_condenser: null,

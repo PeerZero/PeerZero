@@ -7,6 +7,7 @@ and multi-round tool calling loops for platform integrations.
 """
 
 import json
+import threading
 import time
 import logging
 
@@ -84,6 +85,7 @@ class LLMClient:
         # Session token exchange: short-lived token replaces sending LLM key each request
         self._session_token: str = ""
         self._session_expires_at: float = 0.0  # UTC timestamp
+        self._session_lock = threading.Lock()
 
     def _get_client(self):
         if self._client is not None:
@@ -146,13 +148,17 @@ class LLMClient:
 
     def _get_session_token(self) -> str:
         """Get a valid session token, exchanging if needed. Returns empty string on failure."""
-        # Check if current token is still valid (with 60s buffer)
+        # Fast path: check without lock — token is still valid
         if self._session_token and time.time() < (self._session_expires_at - 60):
             return self._session_token
-        # Try to exchange a new one
-        if self._exchange_session_token():
-            return self._session_token
-        return ""
+        # Slow path: acquire lock to prevent concurrent exchanges
+        with self._session_lock:
+            # Double-check after acquiring lock (another thread may have refreshed)
+            if self._session_token and time.time() < (self._session_expires_at - 60):
+                return self._session_token
+            if self._exchange_session_token():
+                return self._session_token
+            return ""
 
     @staticmethod
     def _system_as_string(system_prompt) -> str:

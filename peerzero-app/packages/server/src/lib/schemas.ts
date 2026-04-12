@@ -108,7 +108,10 @@ export const GradeCheckoutSchema = z.object({
 export const UpdateProfileSchema = z.object({
   display_name: z.string().min(1).max(100).optional(),
   language: z.string().min(2).max(10).optional(),
-}).strict();
+}).strict().refine(
+  (data) => data.display_name !== undefined || data.language !== undefined,
+  { message: 'At least one of display_name or language is required' },
+);
 
 // ── Task routes ───────────────────────────────────────────────────────────
 

@@ -123,7 +123,10 @@ describe('POST /payments/checkout', () => {
       .send({});
 
     expect(res.status).toBe(400);
-    expect(res.body.error).toMatch(/product_id required/i);
+    expect(res.body.error).toBe('Validation failed');
+    expect(res.body.details).toEqual(
+      expect.arrayContaining([expect.objectContaining({ field: 'product_id' })]),
+    );
   });
 
   it('returns checkout session URL on success', async () => {
@@ -169,7 +172,10 @@ describe('POST /payments/grade-checkout', () => {
       .send({});
 
     expect(res.status).toBe(400);
-    expect(res.body.error).toMatch(/bot_id required/i);
+    expect(res.body.error).toBe('Validation failed');
+    expect(res.body.details).toEqual(
+      expect.arrayContaining([expect.objectContaining({ field: 'bot_id' })]),
+    );
   });
 
   it('returns checkout result on success', async () => {

@@ -53,6 +53,20 @@ export interface PlatformCycleContext {
 }
 
 export async function runPlatformCycle(ctx: PlatformCycleContext): Promise<void> {
+  // 0. Token cap check — skip if daily limit reached (same check as agent-loop)
+  const tokenRow = await queryOne<{ daily_token_cap: number | null; daily_tokens_used: number; daily_tokens_reset_at: string | null }>(
+    'SELECT daily_token_cap, daily_tokens_used, daily_tokens_reset_at FROM bots WHERE id = $1',
+    [ctx.botId],
+  );
+  if (tokenRow?.daily_token_cap) {
+    const isStale = tokenRow.daily_tokens_reset_at && new Date(tokenRow.daily_tokens_reset_at) < new Date(new Date().toISOString().slice(0, 10));
+    const used = isStale ? 0 : tokenRow.daily_tokens_used;
+    if (used >= tokenRow.daily_token_cap) {
+      logger.info({ botId: ctx.botId, used, cap: tokenRow.daily_token_cap }, 'Daily token cap reached — skipping platform cycle');
+      return;
+    }
+  }
+
   // 1. Get platform credentials (includes adapter_type)
   const platCreds = await getPlatformCredentials(ctx.platformId);
   if (!platCreds) {
@@ -232,8 +246,8 @@ export async function runPlatformCycle(ctx: PlatformCycleContext): Promise<void>
         // Each track uses its own condenser prompt from the school profile
         const tracks: Array<{ key: 'skill' | 'core' | 'forge' | 'decision'; condenser: unknown; label: string }> = [
           { key: 'skill', condenser: profile?.skill_condenser, label: 'learning' },
-          { key: 'decision', condenser: (profile as any)?.decision_condenser, label: 'decision' },
-          { key: 'forge', condenser: (profile as any)?.forge_condenser, label: 'forge' },
+          { key: 'decision', condenser: profile?.decision_condenser, label: 'decision' },
+          { key: 'forge', condenser: profile?.forge_condenser, label: 'forge' },
         ];
 
         for (const track of tracks) {

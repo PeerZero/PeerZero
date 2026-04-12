@@ -29,6 +29,7 @@ export interface SchoolProfile {
   skill_profile: SchoolSkillProfile | null;
   skill_condenser: SchoolCondenser | null;
   core_condenser: SchoolCoreCondenser | null;
+  decision_condenser: SchoolCondenser | null;
   forge_condenser: SchoolCondenser | null;
   forge_core_condenser: SchoolCoreCondenser | null;
   forge_master_condenser: Record<string, unknown> | null;

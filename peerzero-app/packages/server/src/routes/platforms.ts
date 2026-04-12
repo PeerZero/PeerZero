@@ -37,18 +37,42 @@ router.post('/bot/:id', userRateLimit('write'), validateBody(ConnectPlatformSche
     api_key,
     config,
   );
+  logAudit({
+    userId: req.user!.userId,
+    action: 'platform.connect',
+    entityType: 'bot_platform',
+    entityId: connection.id,
+    metadata: { botId: req.params.id, platform_slug },
+    ipAddress: req.ip,
+  });
   res.status(201).json(connection);
 });
 
 // Disconnect a bot from a platform
 router.delete('/bot/:id/:platformId', userRateLimit('write'), async (req: Request, res: Response) => {
   await platformService.disconnectPlatform(req.params.id, req.user!.userId, req.params.platformId);
+  logAudit({
+    userId: req.user!.userId,
+    action: 'platform.disconnect',
+    entityType: 'bot_platform',
+    entityId: req.params.platformId,
+    metadata: { botId: req.params.id },
+    ipAddress: req.ip,
+  });
   res.json({ success: true });
 });
 
 // Update a platform connection (pause/resume, change heartbeat)
 router.patch('/bot/:id/:platformId', userRateLimit('write'), validateBody(UpdatePlatformSchema), async (req: Request, res: Response) => {
   await platformService.updatePlatform(req.params.id, req.user!.userId, req.params.platformId, req.body);
+  logAudit({
+    userId: req.user!.userId,
+    action: 'platform.update',
+    entityType: 'bot_platform',
+    entityId: req.params.platformId,
+    metadata: { botId: req.params.id, changes: req.body },
+    ipAddress: req.ip,
+  });
   res.json({ success: true });
 });
 

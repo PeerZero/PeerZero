@@ -406,7 +406,7 @@ async function handleCondensation(
 
   // Forge condensation (Tier 2f — forge track milestone)
   // Wrapped in try/catch: forge failures should not crash the cycle
-  if ((profile as any).forge_condenser) {
+  if (profile.forge_condenser) {
     try {
       const forgePrompt = buildPrompt('condense', { profile, type: 'forge' });
       const response = await llmAdapter.chat(llmKey, utilityModel, forgePrompt);
@@ -426,7 +426,7 @@ async function handleCondensation(
 
   // Decision condensation (Tier 2d — decision track milestone)
   // Wrapped in try/catch: decision failures should not crash the cycle
-  if ((profile as any).decision_condenser) {
+  if (profile.decision_condenser) {
     try {
       const decisionPrompt = buildPrompt('condense', { profile, type: 'decision' });
       const response = await llmAdapter.chat(llmKey, utilityModel, decisionPrompt);
