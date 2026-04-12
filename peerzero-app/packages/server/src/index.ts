@@ -12,6 +12,7 @@ import { createServer } from 'http';
 import { config, validateStartupConfig } from './config';
 import { logger } from './lib/logger';
 import { errorHandler } from './middleware/error-handler';
+import { requestIdMiddleware } from './middleware/request-id';
 import { authLimiter, closeRateLimitRedis } from './middleware/rate-limit';
 import { closePool } from './db/client';
 import { runMigrations } from './db/auto-migrate';
@@ -44,6 +45,8 @@ const app = express();
 app.set('trust proxy', 1);
 
 // ── Middleware ──
+app.use(requestIdMiddleware);
+
 // CSRF note: This is an API-only server (no HTML forms). CSRF is mitigated by
 // requiring Authorization headers (Bearer tokens) on all authenticated endpoints.
 // Browsers do not attach Authorization headers automatically from cross-origin

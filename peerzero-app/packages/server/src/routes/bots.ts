@@ -148,6 +148,12 @@ router.post('/:id/start', userRateLimit('bot_control'), async (req: Request, res
     return;
   }
 
+  // Idempotency: skip if already running (prevents duplicate queue jobs)
+  if (bot.status === 'running') {
+    res.json({ status: 'running', mode: botMode, already_running: true });
+    return;
+  }
+
   await botService.setBotStatus(req.params.id, 'running');
   await addBotCycleJob(req.params.id, req.user!.userId, bot.llm_api_key_id, bot.llm_model, bot.cycle_delay_seconds);
   broadcastStatusChange(req.params.id, req.user!.userId, 'running');

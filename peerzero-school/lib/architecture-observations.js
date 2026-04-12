@@ -148,5 +148,4 @@ module.exports = {
   getObservations,
   getObservationCount,
   clearObservations,
-  VALID_TRIGGER_TYPES,
 };

@@ -24,15 +24,17 @@ function sanitizeErrorMessage(message: string): string {
     .slice(0, 500);
 }
 
-export function errorHandler(err: Error, _req: Request, res: Response, _next: NextFunction): void {
+export function errorHandler(err: Error, req: Request, res: Response, _next: NextFunction): void {
+  const requestId = req.requestId;
   if (err instanceof AppError) {
-    res.status(err.statusCode).json({ error: sanitizeErrorMessage(err.message) });
+    res.status(err.statusCode).json({ error: sanitizeErrorMessage(err.message), request_id: requestId });
     return;
   }
 
   // Log unexpected errors in dev, hide details in prod
-  logger.error({ err }, 'Unhandled error');
+  logger.error({ err, requestId }, 'Unhandled error');
   res.status(500).json({
     error: config.isDev ? sanitizeErrorMessage(err.message) : 'Internal server error',
+    request_id: requestId,
   });
 }

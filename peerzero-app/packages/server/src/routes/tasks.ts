@@ -308,6 +308,17 @@ router.post('/:id/task-progress', async (req: Request, res: Response) => {
     return;
   }
 
+  // SECURITY: Verify the task belongs to this bot (prevents cross-bot task manipulation)
+  const { queryOne: qTask } = await import('../db/client');
+  const taskRow = await qTask<{ id: string }>(
+    'SELECT id FROM bot_tasks WHERE id = $1 AND bot_id = $2',
+    [task_id, req.params.id],
+  );
+  if (!taskRow) {
+    res.status(404).json({ error: 'Task not found for this bot' });
+    return;
+  }
+
   // Update agenda message if provided
   if (agenda) {
     const { updateAgendaMessage } = await import('../services/message.service');
