@@ -2,19 +2,47 @@
 // Health check + metrics routes
 // =============================================================================
 
+import crypto from 'crypto';
 import { Router, Request, Response } from 'express';
 import rateLimit from 'express-rate-limit';
-import { getPool, queryRows, queryOne } from '../db/client';
+import IORedis from 'ioredis';
+import { getPool, queryRows, queryOne, query } from '../db/client';
+import { config } from '../config';
+import { logger } from '../lib/logger';
 
 const router = Router();
 
 router.get('/', async (_req: Request, res: Response) => {
+  const checks: Record<string, string> = { database: 'unknown', redis: 'unknown' };
+  let healthy = true;
+
+  // Check database
   try {
     await getPool().query('SELECT 1');
-    res.json({ status: 'ok', timestamp: new Date().toISOString() });
+    checks.database = 'ok';
   } catch {
-    res.status(503).json({ status: 'unhealthy', timestamp: new Date().toISOString() });
+    checks.database = 'unhealthy';
+    healthy = false;
   }
+
+  // Check Redis (optional — skip if not configured)
+  if (config.redisUrl) {
+    try {
+      const redis = new IORedis(config.redisUrl, { lazyConnect: true, connectTimeout: 3000 });
+      await redis.connect();
+      await redis.ping();
+      checks.redis = 'ok';
+      await redis.quit();
+    } catch {
+      checks.redis = 'unhealthy';
+      healthy = false;
+    }
+  } else {
+    checks.redis = 'not_configured';
+  }
+
+  const status = healthy ? 200 : 503;
+  res.status(status).json({ status: healthy ? 'ok' : 'unhealthy', timestamp: new Date().toISOString(), checks });
 });
 
 // Rate limit metrics endpoint to prevent abuse (10 requests per minute per IP)
@@ -87,6 +115,36 @@ router.get('/metrics', metricsLimiter, async (_req: Request, res: Response) => {
       actions: actionBreakdown,
     },
   });
+});
+
+/**
+ * POST /health/emergency-stop — Kill switch: stop ALL running bots immediately.
+ * Protected by ADMIN_SECRET env var (X-Admin-Key header).
+ * Use when: bad deployment, runaway costs, or system-wide incident.
+ */
+router.post('/emergency-stop', async (req: Request, res: Response) => {
+  const adminSecret = process.env.ADMIN_SECRET;
+  const adminKey = req.headers['x-admin-key'];
+
+  if (!adminSecret || !adminKey || typeof adminKey !== 'string'
+    || adminKey.length !== adminSecret.length
+    || !crypto.timingSafeEqual(Buffer.from(adminKey), Buffer.from(adminSecret))) {
+    return res.status(401).json({ error: 'Unauthorized — X-Admin-Key required' });
+  }
+
+  try {
+    const result = await query(
+      `UPDATE bots SET status = 'stopped', updated_at = NOW()
+       WHERE status = 'running' AND deleted_at IS NULL
+       RETURNING id`,
+    );
+    const stoppedCount = result.rows?.length || 0;
+    logger.warn({ stoppedCount, triggeredBy: 'admin' }, 'EMERGENCY STOP: All running bots stopped');
+    res.json({ stopped: stoppedCount, timestamp: new Date().toISOString() });
+  } catch (err) {
+    logger.error({ err }, 'Emergency stop failed');
+    res.status(500).json({ error: 'Emergency stop failed' });
+  }
 });
 
 export default router;

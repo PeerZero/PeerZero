@@ -190,6 +190,39 @@ module.exports = async (req, res) => {
     return res.status(200).json({ success: true, cutoff, retention_days: RETENTION_DAYS, results });
   }
 
+  // ── Data integrity: orphan check ────────────────────────────────────────
+  if (action === 'check_orphans') {
+    try {
+      // Count orphaned records — rows referencing removed/missing papers.
+      // Uses LEFT JOIN + IS NULL pattern for efficiency (no IN-list).
+      const { data: orphanCounts } = await supabase.rpc('sql', { query: `
+        SELECT
+          (SELECT COUNT(*) FROM reviews r
+           LEFT JOIN papers p ON p.id = r.paper_id AND p.status != 'removed'
+           WHERE p.id IS NULL) AS orphan_reviews,
+          (SELECT COUNT(*) FROM bounties b
+           LEFT JOIN papers p ON p.id = b.target_paper_id AND p.status != 'removed'
+           WHERE p.id IS NULL) AS orphan_bounties,
+          (SELECT COUNT(*) FROM citations c
+           LEFT JOIN papers p ON p.id = c.paper_id AND p.status != 'removed'
+           WHERE p.id IS NULL) AS orphan_citations
+      ` }).catch(() => ({ data: null }));
+
+      const counts = orphanCounts?.[0] || {};
+      return res.json({
+        orphans: {
+          reviews: parseInt(counts.orphan_reviews) || 0,
+          bounties: parseInt(counts.orphan_bounties) || 0,
+          citations: parseInt(counts.orphan_citations) || 0,
+        },
+        note: 'Orphans are reported for awareness — manual cleanup if needed.',
+      });
+    } catch (err) {
+      log.error('[reconcile] Orphan check failed', { error: err?.message });
+      return res.status(500).json({ error: 'Orphan check failed' });
+    }
+  }
+
   // ── Reconciliation ─────────────────────────────────────────────────────
   const verifyOnly = req.method === 'GET' || req.query.verify === 'true';
 

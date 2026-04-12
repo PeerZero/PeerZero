@@ -30,7 +30,13 @@ function getConnection(): IORedis {
 
 function getQueue(): Queue {
   if (!botQueue) {
-    botQueue = new Queue('bot-cycles', { connection: getConnection() as any });
+    botQueue = new Queue('bot-cycles', {
+      connection: getConnection() as any,
+      defaultJobOptions: {
+        attempts: 2,
+        backoff: { type: 'exponential', delay: 5000 },
+      },
+    });
   }
   return botQueue;
 }
@@ -57,6 +63,8 @@ async function scheduleNextCycle(
       delay: cycleDelaySeconds * 1000,
       removeOnComplete: 100,
       removeOnFail: 50,
+      attempts: 2,
+      backoff: { type: 'exponential', delay: 5000 },
     },
   );
 }
@@ -82,6 +90,8 @@ export async function addBotCycleJob(
       jobId: `bot-${botId}-immediate`,
       removeOnComplete: 100,
       removeOnFail: 50,
+      attempts: 2,
+      backoff: { type: 'exponential', delay: 5000 },
     },
   );
 }
@@ -258,6 +268,17 @@ export function startWorker(): void {
 
   botWorker.on('error', (err) => {
     logger.error({ err }, 'Worker error');
+  });
+
+  botWorker.on('failed', (job, err) => {
+    const botId = job?.data?.botId || 'unknown';
+    const attempts = job?.attemptsMade || 0;
+    const maxAttempts = job?.opts?.attempts || 2;
+    if (attempts >= maxAttempts) {
+      logger.error({ botId, jobId: job?.id, attempts, err: err.message }, 'Bot cycle job exhausted all retries (dead letter)');
+    } else {
+      logger.warn({ botId, jobId: job?.id, attempts, maxAttempts, err: err.message }, 'Bot cycle job failed, will retry');
+    }
   });
 
   logger.info('Bot cycle worker started');

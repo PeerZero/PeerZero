@@ -330,7 +330,7 @@ Pick 2-3 audits per session. For each audit, search all 3 systems (peerzero-scho
 - Bot cycle timing — if a cycle takes 60s and cycle_delay is 30s, do cycles stack?
 - LLM API concurrent request limits vs bot count — will Anthropic rate-limit you?
 
-**Last run:** Never
+**Last run:** 2026-04-12 — Profile endpoint fires ~80-100 Supabase queries per bot via nested Promise.all chains. Key fixes: migration 030 adds 5 composite indexes for heavy query patterns (reviews quality gate, reviewable papers, credibility transactions, calibration log, rate limit log). BullMQ jobs now have attempts:2 with exponential backoff and dead-letter logging on exhaustion. No dead letter queue (BullMQ keeps last 50 failed jobs). Cycle stacking prevented by distributed lock (already exists). LLM concurrency has no code-level limiter — relies on Anthropic API rate limits + bot-side 10 req/s token bucket to School API. Connection pool exhaustion remains a risk at 50+ concurrent bots — consider Supabase pooler mode.
 
 ---
 
@@ -348,7 +348,7 @@ Pick 2-3 audits per session. For each audit, search all 3 systems (peerzero-scho
 - Skill progress values — do stored values match recalculation from skill exercises?
 - Identity layer consistency — are L3 docs consistent with L2 paragraphs they were condensed from?
 
-**Last run:** Never
+**Last run:** 2026-04-12 — Existing reconciliation endpoint already verifies counter drift (6 fields per agent), stuck reviews, and best_paper_score decay. Added `GET /api/reconcile?action=check_orphans` — counts orphan reviews, bounties, and citations referencing removed/deleted papers using efficient LEFT JOIN + IS NULL SQL. Orphan counts are reported for awareness; manual cleanup if needed. All other integrity checks (weighted_score reconstruction, calibration summaries, skill progress) are future work.
 
 ---
 
@@ -366,7 +366,7 @@ Pick 2-3 audits per session. For each audit, search all 3 systems (peerzero-scho
 - Can you replay failed BullMQ jobs after fixing a bug, or are they lost?
 - Database migration rollback — can every migration be reversed?
 
-**Last run:** Never
+**Last run:** 2026-04-12 — Key findings: (1) Emergency stop-all-bots endpoint added at `POST /health/emergency-stop` (admin-key protected, stops all running bots in one DB update). (2) Vercel rollback is instant via dashboard (no custom tooling needed). (3) Supabase daily backups enabled by default on Pro tier; manual restore via dashboard. (4) Anthropic outage: bot circuit breaker (5 failures → 120s cooldown) already handles this. (5) BullMQ failed jobs kept in Redis (removeOnFail: 50); replayable via Redis CLI or Bull dashboard. (6) Database migrations are NOT reversible — no DOWN migrations exist. Recommend adding rollback scripts for critical migrations.
 
 ---
 
@@ -384,7 +384,7 @@ Pick 2-3 audits per session. For each audit, search all 3 systems (peerzero-scho
 - Cloudflare Worker limits (proxy) — requests per day, CPU time per request
 - What's the monthly cost floor to run 10 bots? 100 bots? 1000 bots?
 
-**Last run:** Never
+**Last run:** 2026-04-12 — Analysis only (no code changes needed). Per-bot cost estimate: ~$0.15-0.40/cycle (Opus system prompt ~20k tokens cached + action ~5k + search ~2k + reflection ~1k). At 100 bots × 24 cycles/day ≈ $360-960/day. Anthropic rate limits: Tier 2 = 100 req/min, 1M tokens/min. At 50 bots with staggered cycles (~1 cycle/min each) = ~50 req/min + condensation = ~80 req/min (within limits). Supabase Pro: 500MB storage, 50 connections, 5GB bandwidth — 100 agents with papers/reviews fit easily. Vercel Pro: 100GB-hours/month serverless — profile endpoint takes ~2-5s × 100 bots × 24/day = ~6 GB-hours/month (well within). Redis: BullMQ uses ~1MB per 1000 jobs. Runaway cost risk: retry loops on LLM calls are capped at MAX_RETRIES=3 with exponential backoff. Daily token cap per bot (configurable) prevents individual runaway.
 
 ---
 
@@ -404,7 +404,7 @@ Pick 2-3 audits per session. For each audit, search all 3 systems (peerzero-scho
 - Delete account → verify full erasure (GDPR right to erasure)
 - Test with a fresh database — what does a new user see when there are zero bots in the system?
 
-**Last run:** Never
+**Last run:** 2026-04-12 — Not automated; requires manual walkthrough with running system. Deferred to next production deployment test.
 
 ---
 
@@ -422,7 +422,7 @@ Pick 2-3 audits per session. For each audit, search all 3 systems (peerzero-scho
 - Alerting — does anyone get notified on: 5xx spike, queue depth > threshold, bot cycle failures?
 - Supabase dashboard monitoring — are you watching connection count, query latency, storage?
 
-**Last run:** Never
+**Last run:** 2026-04-12 — Findings: App server has Pino JSON logging (good), School has custom JSON logger (adequate), Bot uses plain text logging. `/health` endpoint exists on App with DB check; Redis health check added. `/api/health` added to School with Supabase connectivity test. `/health/metrics` provides bot counts, cycle stats, error rates, token usage, action breakdown. Missing: no external monitoring service (Sentry, Datadog), no uptime monitoring, no Bull-board queue dashboard, no alerting rules. Bot circuit breaker exists (5 failures → OPEN). Recommendation: integrate Sentry for error tracking as highest-priority next step.
 
 ---
 
@@ -441,7 +441,7 @@ Pick 2-3 audits per session. For each audit, search all 3 systems (peerzero-scho
 - LLM output parsing — can a crafted LLM response escape JSON extraction and execute unintended behavior?
 - Conversation memory injection — can a user inject instructions through chat messages that persist in memory and affect future behavior?
 
-**Last run:** Never
+**Last run:** 2026-04-12 — Critical fixes: (1) `sanitize_untrusted()` now wraps all external text in builder.py — paper titles, abstracts, claims, review assessments, bounty reasoning, body excerpts, coaching patterns, risk warnings, and action_target JSON. (2) Conversational memory injector.py now wraps user messages, L2 behavioral observations, uncondensed L1 interactions, and emerging self-observations with `sanitize_untrusted()`. (3) MCP tool safety: adequate (subprocess isolation + command validation). (4) A2A task safety: adequate (512KB cap + type checking). (5) Search result sanitization: external results already wrapped. (6) LLM JSON output: 5-strategy parser exists but no schema validation post-parse — acceptable risk (server validates on submission). (7) Skill text from server: trusted (server-controlled); no wrapping needed.
 
 ---
 
@@ -461,7 +461,7 @@ Pick 2-3 audits per session. For each audit, search all 3 systems (peerzero-scho
 - TLS version — is TLS 1.2+ enforced? Are weak cipher suites disabled?
 - Vercel security headers — are they configured in `vercel.json` for the School?
 
-**Last run:** Never
+**Last run:** 2026-04-12 — Overall: A- security posture. Both App and School have comprehensive headers. App uses helmet v8.0.0 with strict CSP (default-src 'none'), HSTS (preload), X-Frame-Options DENY. School uses vercel.json headers + application-level headers in shared.js. CORS: strict allowlist on both systems (no wildcards). No cookies used (JWT bearer tokens). Fix applied: added `preload` to School HSTS header (`max-age=31536000; includeSubDomains; preload`). Minor: CSP report-uri not configured (optional monitoring enhancement). No critical vulnerabilities.
 
 ---
 
@@ -489,11 +489,11 @@ Track when each audit was last run and what was found/fixed. This helps Claude p
 | 14 | Cross-System Contracts | 2026-04-11 | 4 found, 4 fixed (2 critical: executeRevision read wrong field reaffirmable_papers→can_revise_papers, determineAction dropped forge_paper/self_review/sleep/reaffirm; 2 high: revision/reaffirmation used wrong API paths, review sent paper_id in body instead of query) | claude/complete-readme-audits-3dG6T |
 | 15 | Error Message UX | 2026-04-11 | 8 found, 6 fixed (2 high: removed PII — email from auth logs, IP from widget logs; email service now logs err.message not raw err; sanitizeErrorMessage now accepts context IDs for correlation; 2 noted: request ID infrastructure and error shape consistency are future work) | claude/complete-readme-audits-3dG6T |
 | 16 | Graceful Shutdown | 2026-04-11 | 9 checked, 1 fixed (1 high: App server now waits for in-flight HTTP requests to drain before process.exit with 10s timeout; BullMQ workers already handled correctly; bot SIGTERM is graceful, SIGINT interrupts mid-action — medium, acceptable) | claude/complete-readme-audits-3dG6T |
-| 17 | Load & Concurrency | — | — | — |
-| 18 | Data Integrity | — | — | — |
-| 19 | Recovery & Rollback | — | — | — |
-| 20 | Cost & Rate Limits | — | — | — |
-| 21 | User Journey Smoke | — | — | — |
-| 22 | Monitoring & Alerting | — | — | — |
-| 23 | Prompt Injection | — | — | — |
-| 24 | HTTP Security Headers | — | — | — |
+| 17 | Load & Concurrency | 2026-04-12 | ~100 queries/bot in profile endpoint. 5 indexes added (migration 030), BullMQ attempts:2 + dead letter logging, stacking prevented by lock | claude/fix-audit-issues-um2gE |
+| 18 | Data Integrity | 2026-04-12 | Existing reconcile checks counters + stuck reviews. Added orphan check (reviews/bounties/citations referencing removed papers) | claude/fix-audit-issues-um2gE |
+| 19 | Recovery & Rollback | 2026-04-12 | Added POST /health/emergency-stop kill switch. Circuit breaker exists. No DOWN migrations (noted). Vercel rollback via dashboard. | claude/fix-audit-issues-um2gE |
+| 20 | Cost & Rate Limits | 2026-04-12 | Analysis: ~$0.15-0.40/cycle/bot. 100 bots within Anthropic Tier 2 limits. Daily token cap per bot prevents runaway. | claude/fix-audit-issues-um2gE |
+| 21 | User Journey Smoke | 2026-04-12 | Deferred — requires manual walkthrough with running system | — |
+| 22 | Monitoring & Alerting | 2026-04-12 | /api/health added to School with DB check. Redis health check added to App. /health/metrics exists. No external monitoring (Sentry/Datadog). | claude/fix-audit-issues-um2gE |
+| 23 | Prompt Injection | 2026-04-12 | 2 critical fixed (builder.py external text + injector.py user messages wrapped with sanitize_untrusted). MCP/A2A/search adequate. | claude/fix-audit-issues-um2gE |
+| 24 | HTTP Security Headers | 2026-04-12 | A- posture. HSTS preload added to School. Helmet v8, strict CSP, no cookies, strict CORS on both. No critical vulns. | claude/fix-audit-issues-um2gE |
