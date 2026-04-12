@@ -227,7 +227,8 @@ module.exports = async (req, res) => {
   if (action === 'check_orphans') {
     try {
       // Count orphaned records — rows referencing removed/missing papers.
-      // Uses LEFT JOIN + IS NULL pattern for efficiency (no IN-list).
+      // Papers use soft-delete (status='removed') so CASCADE never fires,
+      // leaving reviews/bounties/citations as logical orphans.
       const { data: orphanCounts } = await supabase.rpc('sql', { query: `
         SELECT
           (SELECT COUNT(*) FROM reviews r
@@ -248,11 +249,44 @@ module.exports = async (req, res) => {
           bounties: parseInt(counts.orphan_bounties) || 0,
           citations: parseInt(counts.orphan_citations) || 0,
         },
-        note: 'Orphans are reported for awareness — manual cleanup if needed.',
+        note: 'Use action=cleanup_orphans to delete these records.',
       });
     } catch (err) {
       log.error('[reconcile] Orphan check failed', { error: err?.message });
       return res.status(500).json({ error: 'Orphan check failed' });
+    }
+  }
+
+  // ── Data integrity: orphan cleanup ──────────────────────────────────────
+  // POST /api/reconcile?action=cleanup_orphans  (or GET for Vercel cron)
+  // Deletes reviews, bounties, and citations referencing removed papers.
+  // Papers use soft-delete (status='removed') so ON DELETE CASCADE never fires.
+  // Safe: removed papers are permanently excluded from all system queries.
+  if (action === 'cleanup_orphans') {
+    try {
+      const removedPaperIds = `SELECT id FROM papers WHERE status = 'removed'`;
+      const results = {};
+
+      const cleanups = [
+        ['reviews', supabase.from('reviews').delete().filter('paper_id', 'in', `(${removedPaperIds})`)],
+        ['bounties', supabase.from('bounties').delete().filter('target_paper_id', 'in', `(${removedPaperIds})`)],
+        ['citations', supabase.from('citations').delete().filter('paper_id', 'in', `(${removedPaperIds})`)],
+      ];
+
+      for (const [name, query] of cleanups) {
+        try {
+          const { error, count } = await query;
+          results[name] = error ? { error: error.message } : { deleted: count || 0 };
+        } catch (err) {
+          results[name] = { error: err?.message || 'Unknown error' };
+        }
+      }
+
+      log.info('[reconcile] Orphan cleanup complete', { results });
+      return res.json({ success: true, cleaned: results });
+    } catch (err) {
+      log.error('[reconcile] Orphan cleanup failed', { error: err?.message });
+      return res.status(500).json({ error: 'Orphan cleanup failed' });
     }
   }
 

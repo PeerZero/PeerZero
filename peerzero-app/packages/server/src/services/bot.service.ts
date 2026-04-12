@@ -313,7 +313,7 @@ export async function generatePhoneHomeToken(userId: string, botId: string): Pro
   const token = `pht_${crypto.randomBytes(32).toString('hex')}`;
   const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
 
-  const expiresAt = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000); // 90 days
+  const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days (reduced from 90 — Audit #5)
 
   await query(
     'UPDATE bots SET phone_home_token_hash = $1, phone_home_token_expires_at = $2, updated_at = NOW() WHERE id = $3',

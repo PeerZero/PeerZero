@@ -567,22 +567,25 @@ module.exports = async (req, res) => {
         .eq('bonus_awarded', false);
 
       const eligible = (promotedLinks || []).filter(l => l.open_questions?.is_promoted);
-      for (const link of eligible) {
-        // Atomically claim the bonus — only award if bonus_awarded is still false
-        const { data: claimed } = await supabase.from('paper_open_questions')
+      // Claim all eligible bonuses in parallel (atomic per-row via optimistic lock).
+      // Then award credibility only for successfully claimed bonuses. (Audit #12)
+      const claimResults = await Promise.all(eligible.map(link =>
+        supabase.from('paper_open_questions')
           .update({ bonus_awarded: true })
           .eq('paper_id', paper_id)
           .eq('question_id', link.question_id)
           .eq('bonus_awarded', false)
-          .select('question_id');
-        if (claimed && claimed.length > 0) {
-          await adjustCredibility(paper.agent_id, 1.0, {
-            reason: 'Paper addresses a promoted open question',
-            transactionType: 'promoted_question_bonus',
-            relatedPaperId: paper_id,
-          });
-        }
-      }
+          .select('question_id')
+      ));
+      const successfulClaims = claimResults.filter(r => r.data && r.data.length > 0);
+      // Award credibility for each successfully claimed bonus
+      await Promise.all(successfulClaims.map(() =>
+        adjustCredibility(paper.agent_id, 1.0, {
+          reason: 'Paper addresses a promoted open question',
+          transactionType: 'promoted_question_bonus',
+          relatedPaperId: paper_id,
+        })
+      ));
     }
 
     // Invalidate haiku_audit cache if this new review brings the paper to a new

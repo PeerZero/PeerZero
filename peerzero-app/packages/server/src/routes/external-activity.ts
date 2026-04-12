@@ -127,9 +127,9 @@ router.post('/', validateBody(ExternalActivitySchema), async (req: Request, res:
     return;
   }
 
-  // Look up bot by token hash (include user_id and expiry for WebSocket broadcast)
-  const bot = await queryOne<{ id: string; user_id: string; phone_home_token_expires_at: string | null }>(
-    'SELECT id, user_id, phone_home_token_expires_at FROM bots WHERE phone_home_token_hash = $1',
+  // Look up bot by token hash — token auth only needs bot id + expiry (write-only scope)
+  const bot = await queryOne<{ id: string; phone_home_token_expires_at: string | null }>(
+    'SELECT id, phone_home_token_expires_at FROM bots WHERE phone_home_token_hash = $1',
     [tokenHash],
   );
   if (!bot) {
@@ -142,6 +142,12 @@ router.post('/', validateBody(ExternalActivitySchema), async (req: Request, res:
     res.status(401).json({ error: 'Phone-home token expired. Generate a new one.' });
     return;
   }
+
+  // Separate query for user_id (needed for WebSocket broadcast, not part of token auth)
+  const owner = await queryOne<{ user_id: string }>(
+    'SELECT user_id FROM bots WHERE id = $1',
+    [bot.id],
+  );
 
   // Validate payload
   const { platform, action, summary, content_preview, skills_demonstrated, timestamp } = req.body;
@@ -187,7 +193,7 @@ router.post('/', validateBody(ExternalActivitySchema), async (req: Request, res:
   logger.debug({ botId: bot.id, platform: safePlatform, action: safeAction }, 'Phone-home report received');
 
   // Broadcast to connected WebSocket clients in real-time
-  broadcastExternalActivity(bot.id, bot.user_id, {
+  broadcastExternalActivity(bot.id, owner?.user_id || '', {
     platform: safePlatform,
     action: safeAction,
     summary: safeSummary,
