@@ -22,11 +22,14 @@
 //   POST /api/reconcile?action=purge_retention         → purge old audit rows (180d default)
 //
 // Data integrity:
-//   GET  /api/reconcile?action=check_weighted_scores       → verify paper scores match reviews
-//   GET  /api/reconcile?action=check_calibration_staleness → find stale calibration summaries
-//   POST /api/reconcile?action=check_calibration_staleness → find + auto-refresh stale summaries
-//   GET  /api/reconcile?action=check_skill_integrity       → verify skill profile invariants
-//   POST /api/reconcile?action=check_skill_integrity       → verify + auto-fix skill invariants
+//   GET  /api/reconcile?action=check_weighted_scores         → verify paper scores match reviews
+//   GET  /api/reconcile?action=check_calibration_staleness   → find stale calibration summaries
+//   POST /api/reconcile?action=check_calibration_staleness   → find + auto-refresh stale summaries
+//   GET  /api/reconcile?action=check_skill_integrity         → verify skill profile invariants
+//   POST /api/reconcile?action=check_skill_integrity         → verify + auto-fix skill invariants
+//   GET  /api/reconcile?action=check_credibility_integrity   → verify credibility_score matches transactions
+//   GET  /api/reconcile?action=check_orphans                 → find orphaned records (removed papers)
+//   POST /api/reconcile?action=cleanup_orphans               → delete orphaned reviews/bounties/citations
 //
 // Protected by admin secret (X-Admin-Key header), except health check.
 // Designed to be called by a cron job (daily) or manually for debugging.
