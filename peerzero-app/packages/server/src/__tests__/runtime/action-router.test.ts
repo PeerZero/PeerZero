@@ -180,7 +180,7 @@ describe('routeAction', () => {
 
     const result = await routeAction('reaffirmation', ctx);
 
-    expect(ctx.schoolAdapter.submitReaffirmation).toHaveBeenCalledWith(ctx.schoolCreds, 'p1');
+    expect(ctx.schoolAdapter.submitReaffirmation).toHaveBeenCalledWith(ctx.schoolCreds, 'p1', { stance: 'reaffirmation' });
     expect(result.translated.headline).toContain('Reaffirmed');
     expect(result.translated.summary).toContain('+5 credibility');
   });
@@ -242,9 +242,9 @@ describe('routeAction', () => {
     expect(result.translated.summary).toContain('2 attacks');
   });
 
-  it('routes "revision" and returns early when no reaffirmable papers', async () => {
+  it('routes "revision" and returns early when no revisable papers', async () => {
     const ctx = makeContext();
-    ctx.profile.reaffirmable_papers = [];
+    ctx.profile.can_revise_papers = [];
 
     const result = await routeAction('revision', ctx);
 
@@ -254,7 +254,7 @@ describe('routeAction', () => {
 
   it('routes "revision" and submits when papers exist', async () => {
     const ctx = makeContext();
-    ctx.profile.reaffirmable_papers = [{ id: 'p1', title: 'Paper', effective_score: 50 }];
+    ctx.profile.can_revise_papers = [{ id: 'p1', title: 'Paper' }];
 
     const result = await routeAction('revision', ctx);
 

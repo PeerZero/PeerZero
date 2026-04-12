@@ -86,6 +86,12 @@ export async function routeAction(actionType: string, ctx: ActionContext): Promi
     case 'reaffirmation': return executeReaffirmation(ctx);
     case 'respond': return executeResponse(ctx);
     case 'rebut': return executeRebuttal(ctx);
+    case 'sleep': return {
+      rawRequest: null,
+      rawResponse: null,
+      translated: { headline: 'Sleeping', summary: 'No actions available — waiting for next cycle.', details: [], mood: 'neutral' },
+      tokensUsed: 0,
+    };
     default: return executeReview(ctx); // fallback
   }
 }
@@ -179,8 +185,8 @@ async function executeBounty(ctx: ActionContext): Promise<ActionResult> {
 
 async function executeRevision(ctx: ActionContext): Promise<ActionResult> {
   // Check for revisable papers first to avoid wasting an LLM call
-  const reaffirmable = ctx.profile.reaffirmable_papers || [];
-  if (reaffirmable.length === 0) {
+  const revisable = ctx.profile.can_revise_papers || [];
+  if (revisable.length === 0) {
     return {
       rawRequest: null,
       rawResponse: null,
@@ -188,7 +194,7 @@ async function executeRevision(ctx: ActionContext): Promise<ActionResult> {
       tokensUsed: 0,
     };
   }
-  const paperId = reaffirmable[0].id;
+  const paperId = revisable[0].id;
 
   const messages = buildPrompt('revision', { profile: ctx.profile, selfAuthoredBlock: ctx.selfAuthoredBlock, activeSkills: ctx.activeSkills });
   const llmResponse = await ctx.llmAdapter.chat(ctx.llmKey, ctx.llmModel, messages, {
@@ -227,7 +233,7 @@ async function executeReaffirmation(ctx: ActionContext): Promise<ActionResult> {
   }
 
   const paper = reaffirmable[0];
-  const reaffirmResult = await ctx.schoolAdapter.submitReaffirmation(ctx.schoolCreds, paper.id);
+  const reaffirmResult = await ctx.schoolAdapter.submitReaffirmation(ctx.schoolCreds, paper.id, { stance: 'reaffirmation' });
   const result = toRecord(reaffirmResult);
 
   return {

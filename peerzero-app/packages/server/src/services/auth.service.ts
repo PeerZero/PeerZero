@@ -191,7 +191,7 @@ export async function forgotPassword(email: string): Promise<void> {
     await r.set(resetCodeKey(email), codeHash, 'EX', RESET_CODE_TTL_SECONDS);
     // Send code via email (fire-and-forget — don't block the response)
     sendPasswordResetEmail(email, code).catch((err) => {
-      logger.error({ err: err instanceof Error ? err.message : err, email }, 'Password reset email failed to send');
+      logger.error({ err: err instanceof Error ? err.message : err }, 'Password reset email failed to send');
     });
   }
 }

@@ -82,7 +82,7 @@ function jwtOrWidgetToken(req: Request, res: Response, next: NextFunction): void
       return;
     } catch (err) {
       // JWT verification failed — log before falling through to widget token check
-      logger.warn({ err: err instanceof Error ? err.message : 'unknown', ip: req.ip }, 'Widget JWT auth failed, falling through to widget token');
+      logger.warn({ err: err instanceof Error ? err.message : 'unknown' }, 'Widget JWT auth failed, falling through to widget token');
     }
   }
 

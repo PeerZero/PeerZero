@@ -41,7 +41,7 @@ export async function sendPasswordResetEmail(to: string, code: string): Promise<
     logger.info({ to }, 'Password reset email sent');
     return true;
   } catch (err) {
-    logger.error({ err, to }, 'Failed to send password reset email');
+    logger.error({ err: err instanceof Error ? err.message : String(err) }, 'Failed to send password reset email');
     return false;
   }
 }

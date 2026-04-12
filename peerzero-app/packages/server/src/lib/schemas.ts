@@ -18,10 +18,13 @@ export const CreateBotSchema = z.object({
 export const UpdateBotSchema = z.object({
   name: z.string().min(1).max(100).optional(),
   avatar_config: z.record(z.string(), z.unknown()).optional(),
+  llm_api_key_id: z.string().uuid().optional(),
   llm_model: z.string().max(100).optional(),
   fast_llm_model: z.string().max(100).nullable().optional(),
   extended_thinking: z.boolean().optional(),
   cycle_delay_seconds: z.number().int().min(30).max(3600).optional(),
+  is_public: z.boolean().optional(),
+  mode: z.enum(['school', 'shipped']).optional(),
   daily_token_cap: z.number().int().min(0).max(100_000_000).nullable().optional(),
 }).strict();
 
@@ -29,8 +32,8 @@ export const UpdateBotSchema = z.object({
 
 export const AddApiKeySchema = z.object({
   provider: z.enum(['anthropic', 'openai']),
-  api_key: z.string().min(10).max(500),
-  label: z.string().max(100).optional(),
+  key: z.string().min(10).max(500),
+  label: z.string().min(1).max(100),
 }).strict();
 
 // ── Message routes ──────────────────────────────────────────────────────────

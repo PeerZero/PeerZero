@@ -250,7 +250,7 @@ export class MockSchoolAdapter implements ISchoolAdapter {
     };
   }
 
-  async submitReaffirmation(_creds: SchoolCredentials, _paperId: string): Promise<{ success: boolean; credibility_change?: number }> {
+  async submitReaffirmation(_creds: SchoolCredentials, _paperId: string, _reaffirmation: Record<string, unknown>): Promise<{ success: boolean; credibility_change?: number }> {
     return { success: true, credibility_change: 2 };
   }
 

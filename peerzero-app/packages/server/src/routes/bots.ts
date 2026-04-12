@@ -21,7 +21,7 @@ import * as platformService from '../services/platform.service';
 import type { ActivityCategory, FocusChunk } from '@peerzero/shared';
 import { ACTIVITY_CATEGORIES, SUPPORTED_MODEL_IDS, validateBotName } from '@peerzero/shared';
 import { validateBody } from '../middleware/validate';
-import { CreateBotSchema } from '../lib/schemas';
+import { CreateBotSchema, UpdateBotSchema, SendMessageSchema } from '../lib/schemas';
 
 const router = Router();
 router.use(requireAuth);
@@ -61,7 +61,7 @@ router.post('/', userRateLimit('write'), validateBody(CreateBotSchema), async (r
 });
 
 // Update bot
-router.patch('/:id', userRateLimit('write'), async (req: Request, res: Response) => {
+router.patch('/:id', userRateLimit('write'), validateBody(UpdateBotSchema), async (req: Request, res: Response) => {
   // Guard: bot must be stopped before mode change
   if (req.body.mode !== undefined) {
     const currentBot = await botService.getBotDetail(req.user!.userId, req.params.id);
@@ -422,7 +422,7 @@ router.get('/:id/messages', userRateLimit('read'), async (req: Request, res: Res
 });
 
 // Send a chat message to the bot and get a reply
-router.post('/:id/messages', userRateLimit('write'), async (req: Request, res: Response) => {
+router.post('/:id/messages', userRateLimit('write'), validateBody(SendMessageSchema), async (req: Request, res: Response) => {
   const { content } = req.body;
   if (!content || typeof content !== 'string' || content.trim().length === 0) {
     res.status(400).json({ error: 'content required' });

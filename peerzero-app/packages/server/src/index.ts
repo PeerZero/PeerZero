@@ -148,7 +148,12 @@ async function shutdown() {
   await closePhoneHomeRedis();
   await closeAuthRedis();
   await closePool();
-  server.close();
+  // Wait for in-flight HTTP requests to drain before exiting
+  await new Promise<void>((resolve) => {
+    server.close(() => resolve());
+    // Force exit after 10s if connections don't close
+    setTimeout(() => { logger.warn('Shutdown timeout — forcing exit'); resolve(); }, 10_000).unref();
+  });
   process.exit(0);
 }
 

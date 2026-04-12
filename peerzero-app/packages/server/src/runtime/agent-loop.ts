@@ -343,10 +343,14 @@ function determineAction(profile: SchoolProfile): string {
     case 'rebut':         return 'rebut';
     case 'submit_paper':  return 'paper';
     case 'file_bounty':   return 'bounty';
+    case 'reaffirm':      return 'reaffirmation';
+    case 'forge_paper':   return 'review'; // forge not yet implemented in App — fallback to review
+    case 'self_review':   return 'review'; // self-review not yet implemented in App — fallback to review
+    case 'sleep':         return 'sleep';
     case 'review': {
       // Reaffirmation is maintenance, not progression — the tier logic doesn't
-      // surface it as next_action. But when the tier says "review" and there's
-      // a decaying paper to save, reaffirmation takes priority over a routine review.
+      // always surface it as next_action. But when the tier says "review" and
+      // there's a decaying paper to save, reaffirmation takes priority.
       if (profile.can_reaffirm) return 'reaffirmation';
       return 'review';
     }

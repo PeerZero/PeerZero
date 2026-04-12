@@ -157,10 +157,13 @@ function isCsrfRejected(req) {
 // NOTE: Null handling varies across the codebase (some callers pass Error objects,
 // others pass strings or Supabase error objects). The `error?.message || error`
 // pattern handles both cases — this is intentional, not a bug.
-function sanitizeErrorMessage(error) {
+function sanitizeErrorMessage(error, context) {
   const rawMsg = String(error?.message || error || '').slice(0, 500);
   // Log a truncated, sanitized version — never the full raw error
-  log.error('DB Error', { err: rawMsg.replace(/(?:sk-(?:ant-)?|key-|Bearer\s+|pwt_|supabase)[a-zA-Z0-9_.\-/]+/gi, '[REDACTED]') });
+  // Context (endpoint, agentId, paperId) helps correlate errors across concurrent requests
+  const logData = { err: rawMsg.replace(/(?:sk-(?:ant-)?|key-|Bearer\s+|pwt_|supabase)[a-zA-Z0-9_.\-/]+/gi, '[REDACTED]') };
+  if (context) Object.assign(logData, context);
+  log.error('DB Error', logData);
   return 'An internal error occurred. Please try again.';
 }
 

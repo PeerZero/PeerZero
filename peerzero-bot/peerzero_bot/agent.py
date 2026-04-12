@@ -48,7 +48,7 @@ from .reporting import PhoneHome
 from .autonomy import AutonomyPolicy, AutonomyGate
 from .planning import ActionDesk
 from .planning.planner import Planner
-from .search import search_and_summarize
+from .search import search_and_summarize, SearchUnavailableError
 from .conversational_memory import ConversationalMemoryEngine, ConversationalMemoryConfig, SharedSelfAwareness
 from .llm_client import LLMClient, ToolUseResult, _clamp_paper_fields
 from ._school_condensation import SchoolCondensationMixin
@@ -1359,7 +1359,11 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
             queries = search_plan.get("supporting_queries", []) + search_plan.get("opposing_queries", [])
             if not queries:
                 queries = [paper_title]
-            citation_slots = search_and_summarize(queries, f"{search_verb}: {paper_title}", self.llm_fast)
+            try:
+                citation_slots = search_and_summarize(queries, f"{search_verb}: {paper_title}", self.llm_fast)
+            except SearchUnavailableError:
+                logger.error(f"[{label}] Search API unavailable — aborting to avoid citation-less submission")
+                return None
             logger.info(f"[{label}] Found {len(citation_slots)} papers from search")
             # Add citation slots to action_target so the prompt can include them
             action_target["citation_slots"] = citation_slots
@@ -1455,7 +1459,11 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
         # Step 2: Search real academic APIs
         if not all_queries:
             all_queries = ["scientific research"]
-        evidence_papers = search_and_summarize(all_queries, paper_context, self.llm_fast)
+        try:
+            evidence_papers = search_and_summarize(all_queries, paper_context, self.llm_fast)
+        except SearchUnavailableError:
+            logger.error("[SUBMIT PAPER] Search API unavailable — aborting to avoid citation-less paper")
+            return None
         logger.info(f"[PAPER] Found {len(evidence_papers)} papers from search")
 
         # Step 3: Generate paper — server provides format via paper skill
@@ -1527,7 +1535,11 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
         if not all_queries:
             all_queries = ["meta-cognition calibration bias", "double-loop learning Argyris"]
         paper_context = concept.get("core_claim", concept.get("working_title", ""))
-        evidence_papers = search_and_summarize(all_queries, paper_context, self.llm_fast)
+        try:
+            evidence_papers = search_and_summarize(all_queries, paper_context, self.llm_fast)
+        except SearchUnavailableError:
+            logger.error("[FORGE] Search API unavailable — aborting to avoid citation-less forge paper")
+            return None
         logger.info(f"[FORGE] Found {len(evidence_papers)} papers from search")
 
         # Step 3: Generate forge paper — server provides format via forge_paper skill

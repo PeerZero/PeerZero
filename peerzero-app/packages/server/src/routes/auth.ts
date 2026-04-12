@@ -67,7 +67,7 @@ router.post('/login', async (req: Request, res: Response) => {
     res.status(200).json({ access_token: tokens.accessToken, refresh_token: tokens.refreshToken, user: profile });
   } catch (err) {
     // Log failed login attempts for security monitoring
-    logAudit({ userId: 'unknown', action: 'auth.login_failed', entityType: 'user', entityId: 'unknown', metadata: { email }, ipAddress: req.ip });
+    logAudit({ userId: 'unknown', action: 'auth.login_failed', entityType: 'user', entityId: 'unknown', ipAddress: req.ip });
     throw err;
   }
 });

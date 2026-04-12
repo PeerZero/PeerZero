@@ -407,7 +407,7 @@ describe('E2E: Agent loop cycle', () => {
     const profile = makeProfile({
       next_action: 'revise',
       can_revise: true,
-      reaffirmable_papers: [{ id: 'rev-paper-1', title: 'Old Paper', effective_score: 7.5 }],
+      can_revise_papers: [{ id: 'rev-paper-1', title: 'Old Paper' }],
     });
     mockSchoolAdapter.getProfile.mockResolvedValue(profile);
     mockSchoolAdapter.submitRevision.mockResolvedValue({

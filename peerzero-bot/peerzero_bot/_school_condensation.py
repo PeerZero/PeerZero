@@ -31,6 +31,8 @@ class SchoolCondensationMixin:
     """Condensation cascade methods for school identity (L1→L5, both tracks)."""
 
     _last_feedback_hash: str = ""
+    _condensation_failures: int = 0  # Consecutive short/empty LLM outputs
+    _CONDENSATION_FAILURE_ALERT = 3  # Log ERROR after this many consecutive failures
 
     def _store_experience_context(self, profile: dict):
         """Store feedback and research history as ONE consolidated exercise.
@@ -246,6 +248,7 @@ class SchoolCondensationMixin:
         )
         paragraph = self.llm.call(system_prompt, user_msg)  # Strong model — identity task
         if paragraph and len(paragraph.strip()) >= 100:
+            self._condensation_failures = 0
             self.memory.store_identity_paragraph(paragraph.strip())
             self.memory.mark_learning_condensed()
             self._try_clear_exercises()
@@ -254,6 +257,13 @@ class SchoolCondensationMixin:
             except Exception as e:
                 logger.warning(f"[MEMORY] Server backup failed: {e}")
             logger.info(f"[MEMORY] L1→L2: Condensed {len(exercises)} exercises into learning paragraph")
+        else:
+            self._condensation_failures += 1
+            if self._condensation_failures >= self._CONDENSATION_FAILURE_ALERT:
+                logger.error(
+                    f"[MEMORY] Condensation has failed {self._condensation_failures} consecutive times — "
+                    f"identity layers are NOT building. L1 exercises: {len(exercises)}"
+                )
 
             # Persistence check: does this paragraph echo patterns L4/L5 already claims?
             self._check_persistence(paragraph.strip(), "learning", system_prompt)
@@ -278,6 +288,7 @@ class SchoolCondensationMixin:
         user_msg = self.prompts.build_paragraph_condenser_prompt(paragraphs)
         doc = self.llm.call(system_prompt, user_msg)  # Strong model — identity task
         if doc and len(doc.strip()) >= 200:
+            self._condensation_failures = 0
             self.memory.store_condensed_doc(doc.strip())
             self.memory.clear_identity_paragraphs()
             logger.info(f"[MEMORY] L2→L3: Condensed {len(paragraphs)} paragraphs into identity doc")
@@ -286,7 +297,8 @@ class SchoolCondensationMixin:
             if len(self.memory.get_condensed_docs()) >= 3:
                 self._run_identity_condenser(system_prompt)
         else:
-            logger.warning("[MEMORY] L2→L3 condensed doc too short — skipping")
+            self._condensation_failures += 1
+            logger.warning(f"[MEMORY] L2→L3 condensed doc too short — skipping (consecutive failures: {self._condensation_failures})")
 
     _IDENTITY_CONDENSER_THRESHOLD = 3  # L3 docs before condensing to L4
 
@@ -302,11 +314,13 @@ class SchoolCondensationMixin:
         user_msg = self.prompts.build_identity_condenser_prompt(docs, existing_core)
         core = self.llm.call(system_prompt, user_msg)  # Strong model — identity task
         if core and len(core.strip()) >= 200:
+            self._condensation_failures = 0
             self.memory.store_core_identity(core.strip())
             self.memory.clear_condensed_docs()
             logger.info(f"[MEMORY] L3→L4: Learning core identity updated ({len(core)} chars)")
         else:
-            logger.warning("[MEMORY] L3→L4 learning core identity too short — skipping")
+            self._condensation_failures += 1
+            logger.warning(f"[MEMORY] L3→L4 learning core identity too short — skipping (consecutive failures: {self._condensation_failures})")
 
     def _run_master_condenser(self, condenser: dict, system_prompt, grade: int):
         """L4→L5: Grade 12 graduation condensation (learning track).

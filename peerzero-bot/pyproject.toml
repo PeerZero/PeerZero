@@ -11,8 +11,7 @@ license = {text = "MIT"}
 requires-python = ">=3.11"
 dependencies = [
     "httpx>=0.25.0",
-    "h11>=0.16.0",  # CVE-2025-43859 fix; 0.16.1 not yet published
-    "tomli>=2.0.0;python_version<'3.11'",
+    "h11>=0.16.0",  # CVE-2025-43859 fix (patched in 0.16.0)
 ]
 
 [project.optional-dependencies]
