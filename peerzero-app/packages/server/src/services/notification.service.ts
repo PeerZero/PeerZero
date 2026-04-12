@@ -130,6 +130,7 @@ export async function sendNotification(
         'Accept': 'application/json',
       },
       body: JSON.stringify(messages),
+      signal: AbortSignal.timeout(15_000),
     });
 
     if (!response.ok) {

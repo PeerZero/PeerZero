@@ -45,7 +45,7 @@ module.exports = async (req, res) => {
   }
   const { data: agent } = await supabase
     .from('agents')
-    .select('*')
+    .select('id, handle, registration_review_passed')
     .eq('api_key_hash', keyHash)
     .eq('is_banned', false)
     .single();

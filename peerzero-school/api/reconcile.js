@@ -532,6 +532,49 @@ module.exports = async (req, res) => {
     }
   }
 
+  // ── Data integrity: credibility score vs transaction sum ───────────────
+  // GET /api/reconcile?action=check_credibility_integrity
+  // Reconstructs each agent's credibility_score from credibility_transactions
+  // and reports drift. Does NOT auto-fix (credibility is safety-critical).
+  if (action === 'check_credibility_integrity') {
+    try {
+      // Fetch all active agents with their stored credibility_score
+      const { data: agents, error: agentErr } = await supabase
+        .from('agents')
+        .select('id, handle, credibility_score')
+        .eq('is_banned', false);
+      if (agentErr) return res.status(500).json({ error: 'Failed to fetch agents' });
+
+      const drifts = [];
+      const BATCH = 20;
+      for (let i = 0; i < (agents || []).length; i += BATCH) {
+        const batch = agents.slice(i, i + BATCH);
+        const results = await Promise.all(batch.map(async (agent) => {
+          const { data: txSum } = await supabase
+            .from('credibility_transactions')
+            .select('change_amount')
+            .eq('agent_id', agent.id);
+          if (!txSum) return null;
+          // Starting credibility is 50.0 for all agents (set at registration)
+          const computed = 50.0 + txSum.reduce((sum, tx) => sum + (tx.change_amount || 0), 0);
+          const stored = agent.credibility_score || 50.0;
+          const drift = Math.abs(computed - stored);
+          if (drift > 0.05) {
+            return { agent_id: agent.id, handle: agent.handle, stored, computed: Math.round(computed * 100) / 100, drift: Math.round(drift * 100) / 100 };
+          }
+          return null;
+        }));
+        drifts.push(...results.filter(Boolean));
+      }
+
+      log.info('[reconcile] Credibility integrity check', { agents_checked: (agents || []).length, drifts_found: drifts.length });
+      return res.json({ agents_checked: (agents || []).length, drifts_found: drifts.length, drifts });
+    } catch (err) {
+      log.error('[reconcile] Credibility integrity check failed', { error: err?.message });
+      return res.status(500).json({ error: 'Credibility integrity check failed' });
+    }
+  }
+
   // ── Reconciliation ─────────────────────────────────────────────────────
   const verifyOnly = req.method === 'GET' || req.query.verify === 'true';
 

@@ -811,9 +811,10 @@ module.exports = async (req, res) => {
       // Already scoped to agent.id — only fetches this agent's own bounties
       const { data: pendingBounties } = await supabase
         .from('bounties')
-        .select('*, target_paper:papers!bounties_target_paper_id_fkey(title, weighted_score, raw_review_count, agent_id)')
+        .select('id, target_paper_id, challenger_agent_id, challenge_type, score_before, source_doi, specific_finding, logical_bridge, created_at, target_paper:papers!bounties_target_paper_id_fkey(title, weighted_score, raw_review_count, agent_id)')
         .eq('challenger_agent_id', agent.id)
-        .eq('is_valid', false);
+        .eq('is_valid', false)
+        .limit(200);
 
       if (!pendingBounties || pendingBounties.length === 0) {
         return res.json({ success: true, message: 'No pending bounties to validate', bounties_checked: 0, bounties_validated: 0, bounties_skipped: 0 });
