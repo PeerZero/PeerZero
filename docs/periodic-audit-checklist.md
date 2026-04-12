@@ -39,7 +39,7 @@ Pick 2-3 audits per session. For each audit, search all 3 systems (peerzero-scho
 - `except Exception` catching code bugs (TypeError, KeyError) alongside transient errors
 - Un-awaited async calls missing `.catch()` (can crash Node via unhandled rejection)
 
-**Last run:** 2026-04-11 — 65 issues found and fixed (all severities, all 3 systems).
+**Last run:** 2026-04-12 — Re-run: 65 prior fixes verified. 1 new medium found and fixed (reconcile.js batch update error checking).
 
 ---
 
@@ -109,7 +109,7 @@ Pick 2-3 audits per session. For each audit, search all 3 systems (peerzero-scho
 - Config files with secrets readable by group/other (the `_check_permissions` pattern)
 - Hardcoded credentials, test API keys, or placeholder secrets left in code
 
-**Last run:** 2026-04-12 — 12 found, 6 fixed. Phone-home token expiry reduced 90→30 days. Error sanitization regex hardened (JWT, pht_, whsec_, apiKey patterns). Error sanitize before log, bearer regex improved, reconcile sanitize. .env.test contains fake test credentials (acceptable). Config file permissions are secure-by-default (errors when group/other readable). Identity endpoint verified per-agent scoped.
+**Last run:** 2026-04-12 — Re-run: 0 new issues. All prior fixes verified across all 5 systems (school, app, bot, proxy, SDK). Error sanitization patterns comprehensive (sk-, pht_, whsec_, sbp_, JWT, Bearer). Crypto controls verified (constant-time comparison, Ed25519, rate limiting). 4 acceptable items re-confirmed.
 
 ---
 
@@ -275,7 +275,7 @@ Pick 2-3 audits per session. For each audit, search all 3 systems (peerzero-scho
 - API versioning: if the School adds a required field, do all deployed bots handle it?
 - Condenser prompt format: does the School serve prompts in the shape the bot's condenser expects?
 
-**Last run:** 2026-04-11 — 4 issues found, 4 fixed (2 critical, 2 high). All App→School API contract mismatches corrected.
+**Last run:** 2026-04-12 — Re-run: 1 critical found and fixed. Platform condensers endpoint missing forge track — bot silently skipped forge condensation on platforms. All prior fixes (endpoint paths, field names, enum alignment) verified correct.
 
 ---
 
@@ -473,11 +473,11 @@ Track when each audit was last run and what was found/fixed. This helps Claude p
 
 | # | Audit | Last Run | Issues Found | Branch/PR |
 |---|-------|----------|-------------|-----------|
-| 1 | Silent Failures | 2026-04-11 | 65 found, 65 fixed | claude/silent-failures-check-8N9z2 |
+| 1 | Silent Failures | 2026-04-12 | Re-run: 65 prior fixes verified. 1 new medium: reconcile.js batch agent updates via Promise.all didn't check individual Supabase `{ error }` returns — fixed with per-result error logging. | claude/silent-failures-check-8N9z2, claude/doc-audits-vxczt |
 | 2 | Race Conditions | 2026-04-12 | 10 verified: 5 counter fallback races eliminated, paper status optimistic lock hardened, revision credit fallback fixed. +1 fixed: bounty validation loop now fetches fresh paper score per-iteration instead of using stale joined snapshot. 2 remaining mitigated: grade_papers stale read guarded by optimistic lock on grade advance `.eq('current_grade', grade)`, promotion bonus guarded by `.eq('bonus_awarded', false)` atomic claim. Both verified correct — no further code changes needed. | claude/fix-audit-issues-H6H4C, claude/audit-list-issues-nyLMx |
 | 3 | Unbounded Growth | 2026-04-12 | 11 found, 11 fixed. +1: BullMQ completed/failed job cleanup on startup + weekly interval (30-day retention). Orphan auto-cleanup now works — fixed broken Supabase `.filter('in', subquery)` to use proper `.in()` with fetched IDs + chunked batches of 500. Cron runs weekly (Sun 4:30 AM UTC). | claude/fix-audit-issues-H6H4C, claude/audit-list-issues-nyLMx |
 | 4 | Retry & Idempotency | 2026-04-12 | 21 verified: 5 counter fallbacks now retry atomic RPC. UNIQUE constraints prevent duplicate papers/reviews/bounties on retry. True DB transactions deferred (Supabase SDK limitation). | claude/fix-audit-issues-um2gE |
-| 5 | Secret Exposure | 2026-04-12 | 12 found, 8 fixed. +2: phone-home token expiry reduced from 90→30 days, error sanitization regex hardened (JWT, pht_, whsec_, apiKey patterns). .env.example files reviewed — all placeholders clearly fake (your-*, sk-ant-..., change-this-to-*). Added documentation for ADMIN_SECRET, CRON_SECRET, SENTRY_DSN, CSP_REPORT_URI, DB pool config. Identity endpoint verified per-agent scoped (not a gap). | claude/fix-audit-issues-H6H4C, claude/audit-list-issues-nyLMx |
+| 5 | Secret Exposure | 2026-04-12 | Re-run: 0 new issues. All 8 prior fixes verified (phone-home 30d expiry, error sanitization regex, CORS strict). 4 acceptable items re-confirmed (test creds, config perms). Error sanitization enhanced with pht_, whsec_, sbp_ patterns. Crypto controls verified across all 5 systems. | claude/fix-audit-issues-H6H4C, claude/audit-list-issues-nyLMx, claude/doc-audits-vxczt |
 | 6 | Timeout & Exhaustion | 2026-04-12 | 12 found, 12 fixed. +1: BullMQ maxStalledCount=2. +1: Profile endpoint now has overall PROFILE_TIMEOUT_MS timeout (default 25s) with AbortController — returns 503 on timeout instead of hanging indefinitely. Existing 30s per-query timeout via AbortSignal in shared.js. | claude/fix-audit-issues-H6H4C, claude/audit-list-issues-nyLMx |
 | 7 | Stale Cache | 2026-04-11 | 9 checked, 0 fixed needed (bot profile refresh mitigates identity staleness, school config frozen by design on serverless, no Redis data caching, mobile token revocation on next request, all low/none severity) | claude/complete-readme-audits-3dG6T |
 | 8 | Authorization Gaps | 2026-04-12 | Task progress validates task_id belongs to bot. Emergency stop rate-limited. Bot start idempotent. +3 fixed: phone-home token auth no longer queries user_id (write-only scope enforced), export-data endpoint rate-limited (5/hr), skill ownership verified correct at service layer. 0 remaining. | claude/fix-audit-issues-H6H4C |
@@ -486,7 +486,7 @@ Track when each audit was last run and what was found/fixed. This helps Claude p
 | 11 | Dead Code | 2026-04-12 | +3 fixed previously. Re-verified: 3 stubs from prior audit already cleaned up. 1 bot stub (get_conversation_forge_feedback) retained — architectural placeholder for forge feedback loop (CLAUDE.md rule 27). 0 remaining. | claude/fix-audit-issues-H6H4C, claude/audit-list-issues-nyLMx |
 | 12 | N+1 Queries | 2026-04-12 | +3 fixed total. +1: promoted Q bonus loop parallelized (sequential claim+credit → Promise.all for both claims and credibility adjustments). | claude/fix-audit-issues-H6H4C |
 | 13 | Input Validation | 2026-04-12 | +3 fixed total. +1: cross_study_connection max length capped at 5000 chars. | claude/fix-audit-issues-H6H4C |
-| 14 | Cross-System Contracts | 2026-04-11 | 4 found, 4 fixed (2 critical: executeRevision read wrong field reaffirmable_papers→can_revise_papers, determineAction dropped forge_paper/self_review/sleep/reaffirm; 2 high: revision/reaffirmation used wrong API paths, review sent paper_id in body instead of query) | claude/complete-readme-audits-3dG6T |
+| 14 | Cross-System Contracts | 2026-04-12 | Re-run: 1 critical found, fixed. Platform condensers endpoint (GET /api/agents?platform_condensers=true) returned learning + decision but omitted forge track — bot silently skipped platform forge condensation. buildForgeMilestoneCondenser added to response. All prior fixes (endpoint paths, field names, enums) verified correct. | claude/complete-readme-audits-3dG6T, claude/doc-audits-vxczt |
 | 15 | Error Message UX | 2026-04-12 | +2 fixed: request ID middleware (X-Request-Id header + req.requestId), error responses now include request_id. Error shapes verified consistent ({ error: string } everywhere). X-Request-Id allowed in School CORS. | claude/fix-audit-issues-um2gE |
 | 16 | Graceful Shutdown | 2026-04-11 | 9 checked, 1 fixed (1 high: App server now waits for in-flight HTTP requests to drain before process.exit with 10s timeout; BullMQ workers already handled correctly; bot SIGTERM is graceful, SIGINT interrupts mid-action — medium, acceptable) | claude/complete-readme-audits-3dG6T |
 | 17 | Load & Concurrency | 2026-04-12 | ~100 queries/bot in profile endpoint. 5 indexes added (migration 030), BullMQ attempts:2 + dead letter logging, stacking prevented by lock. Connection pooling documented: School uses Supabase REST (PostgREST-managed), App has configurable pg pool (DB_POOL_MAX, default 20). Supabase pooler mode recommended for 50+ bots. | claude/fix-audit-issues-um2gE, claude/audit-list-issues-nyLMx |
