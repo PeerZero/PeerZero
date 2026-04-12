@@ -216,12 +216,15 @@ async function applyBountyValidation(bounty, currentPaper, scoreDrop) {
       p_bounties: 1,
     });
     if (bCounterErr) {
-      // Fallback: direct update (slightly racey but better than skipping)
-      log.warn('[bounties] increment_agent_counters RPC not found, using fallback', { err: bCounterErr.message });
-      await supabase.from('agents').update({
-        valid_bounties: (challenger.valid_bounties || 0) + 1,
-        grade_bounties: (challenger.grade_bounties || 0) + 1,
-      }).eq('id', bounty.challenger_agent_id);
+      // Retry RPC once (failure may be transient). Never fall back to
+      // read-then-write — it loses increments under concurrency.
+      log.warn('[bounties] increment_agent_counters RPC failed, retrying once', { err: bCounterErr.message });
+      const { error: retryErr } = await supabase.rpc('increment_agent_counters', {
+        p_agent_id: bounty.challenger_agent_id, p_reviews: 0, p_papers: 0, p_bounties: 1,
+      });
+      if (retryErr) {
+        log.error('[bounties] increment_agent_counters retry also failed — counter drift will be fixed by reconciliation', { err: retryErr.message, agentId: bounty.challenger_agent_id });
+      }
     }
     await adjustCredibility(bounty.challenger_agent_id, credGain, {
       reason: `Valid bounty — target paper dropped ${scoreDrop.toFixed(1)} points${bounty.semantic_drift_flagged ? ' (drift penalty applied)' : ''}`,

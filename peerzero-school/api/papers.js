@@ -987,16 +987,16 @@ module.exports = async (req, res) => {
       p_forge_papers: isForge ? 1 : 0,
     });
     if (counterErr) {
-      // Fallback: direct update (slightly racey but better than skipping)
-      log.warn('[papers] increment_agent_counters RPC not found, using fallback', { err: counterErr.message });
-      const counterUpdate = isForge
-        ? { grade_forge_papers: (agent.grade_forge_papers || 0) + 1 }
-        : { grade_papers: (agent.grade_papers || 0) + 1 };
-      await supabase.from('agents').update({
-        total_papers_submitted: (agent.total_papers_submitted || 0) + 1,
-        ...counterUpdate,
-        last_active_at: new Date().toISOString()
-      }).eq('id', agent.id);
+      // Retry RPC once (failure may be transient). Never fall back to
+      // read-then-write — it loses increments under concurrency.
+      log.warn('[papers] increment_agent_counters RPC failed, retrying once', { err: counterErr.message });
+      const { error: retryErr } = await supabase.rpc('increment_agent_counters', {
+        p_agent_id: agent.id, p_reviews: 0, p_papers: isForge ? 0 : 1,
+        p_bounties: 0, p_forge_papers: isForge ? 1 : 0,
+      });
+      if (retryErr) {
+        log.error('[papers] increment_agent_counters retry also failed — counter drift will be fixed by reconciliation', { err: retryErr.message, agentId: agent.id });
+      }
     }
 
     // ── Compute citation quality grade & diversity warnings ─────────────

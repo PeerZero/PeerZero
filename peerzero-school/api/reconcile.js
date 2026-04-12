@@ -1,5 +1,8 @@
 // =============================================================================
-// Admin endpoint — reconciliation + meta-forge aggregation
+// Admin endpoint — reconciliation, health, meta-forge aggregation
+//
+// Health (NO auth required — must be callable by uptime monitors):
+//   GET  /api/reconcile?action=health            → Supabase connectivity check
 //
 // Reconciliation:
 //   GET  /api/reconcile?verify=true   → shows drift without fixing (dry run)
@@ -18,7 +21,7 @@
 // Data retention:
 //   POST /api/reconcile?action=purge_retention         → purge old audit rows (180d default)
 //
-// Protected by admin secret (X-Admin-Key header).
+// Protected by admin secret (X-Admin-Key header), except health check.
 // Designed to be called by a cron job (daily) or manually for debugging.
 // =============================================================================
 
@@ -42,6 +45,36 @@ const supabase = getSupabase();
 module.exports = async (req, res) => {
   setCorsHeaders(req, res);
   if (req.method === 'OPTIONS') return res.status(200).end();
+
+  // ── Health check (NO auth — callable by uptime monitors) ────────────
+  if (req.query.action === 'health' && req.method === 'GET') {
+    const checks = { database: 'unknown' };
+    let healthy = true;
+    try {
+      const { error } = await supabase
+        .from('school_internals')
+        .select('key')
+        .eq('key', 'health_check')
+        .limit(1);
+      if (error) {
+        checks.database = 'unhealthy';
+        healthy = false;
+        log.error('[health] Supabase check failed', { error: error.message });
+      } else {
+        checks.database = 'ok';
+      }
+    } catch (err) {
+      checks.database = 'unhealthy';
+      healthy = false;
+      log.error('[health] Supabase connection error', { error: err.message });
+    }
+    return res.status(healthy ? 200 : 503).json({
+      status: healthy ? 'ok' : 'unhealthy',
+      timestamp: new Date().toISOString(),
+      checks,
+    });
+  }
+
   if (checkMockGuard(req, res)) return;
 
   // SECURITY: Rate limit admin endpoint to prevent brute-force on admin key
