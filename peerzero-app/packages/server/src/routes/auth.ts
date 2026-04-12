@@ -33,6 +33,15 @@ const resetPasswordLimiter = rateLimit({
   message: { error: 'Too many password reset attempts. Try again later.' },
 });
 
+// Rate limit data export to prevent abuse (GDPR portability endpoint)
+const exportDataLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many export requests. Try again later.' },
+});
+
 router.post('/register', async (req: Request, res: Response) => {
   const { email, password, display_name } = req.body;
   if (!email || !password) {
@@ -177,7 +186,7 @@ router.delete('/account', requireAuth, async (req: Request, res: Response) => {
 
 // ── Data Export (GDPR Article 20 — data portability) ──
 
-router.get('/export-data', requireAuth, async (req: Request, res: Response) => {
+router.get('/export-data', requireAuth, exportDataLimiter, async (req: Request, res: Response) => {
   const userId = req.user!.userId;
 
   // User profile

@@ -822,8 +822,24 @@ module.exports = async (req, res) => {
       let validated = 0, skipped = 0;
       const results = [];
 
+      // Cache fresh paper data per paper_id to avoid N+1 but also prevent stale
+      // scores when multiple bounties target the same paper (Audit #2 race fix).
+      const freshPaperCache = new Map();
+
       for (const bounty of pendingBounties) {
-        const currentPaper = bounty.target_paper;
+        // Fetch fresh paper data per-paper instead of relying on the joined
+        // snapshot from the initial query — a concurrent review could have
+        // changed weighted_score or raw_review_count since the SELECT.
+        let currentPaper = freshPaperCache.get(bounty.target_paper_id);
+        if (!currentPaper) {
+          const { data: freshPaper } = await supabase.from('papers')
+            .select('title, weighted_score, raw_review_count, agent_id')
+            .eq('id', bounty.target_paper_id)
+            .single();
+          currentPaper = freshPaper;
+          if (currentPaper) freshPaperCache.set(bounty.target_paper_id, currentPaper);
+        }
+
         if (!currentPaper || !currentPaper.weighted_score) {
           skipped++;
           results.push({ target_paper_id: bounty.target_paper_id, status: 'skipped', reason: 'paper not yet scored' });
@@ -854,6 +870,8 @@ module.exports = async (req, res) => {
             validated_at: new Date().toISOString(),
             review_count_at_last_check: currentPaper.raw_review_count
           }).eq('id', bounty.id);
+          // Invalidate cache so next bounty targeting the same paper gets fresh data
+          freshPaperCache.delete(bounty.target_paper_id);
           validated++;
           results.push({
             target_paper_id: bounty.target_paper_id,

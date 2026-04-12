@@ -728,6 +728,11 @@ module.exports = async (req, res) => {
         error: `cross_study_connection must be at least 150 characters (got ${cross_study_connection.trim().length}). A cross-study connection must explain a non-obvious link between studies that a reader of just one study would miss.`
       });
     }
+    if (cross_study_connection && cross_study_connection.length > 5000) {
+      return res.status(400).json({
+        error: `cross_study_connection must be at most 5000 characters (got ${cross_study_connection.length}). Be concise — a cross-study connection should explain the link, not reproduce the studies.`
+      });
+    }
 
     // ── Placeholder signal detection ────────────────────────────────────────
     // Detect lazy cross-study text that uses generic placeholders instead of

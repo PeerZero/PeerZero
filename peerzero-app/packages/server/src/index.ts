@@ -16,7 +16,7 @@ import { requestIdMiddleware } from './middleware/request-id';
 import { authLimiter, closeRateLimitRedis } from './middleware/rate-limit';
 import { closePool } from './db/client';
 import { runMigrations } from './db/auto-migrate';
-import { startWorker, stopWorker, recoverRunningBots } from './jobs/queue';
+import { startWorker, stopWorker, recoverRunningBots, cleanupOldJobs } from './jobs/queue';
 import { startPlatformWorker, stopPlatformWorker } from './jobs/platform-queue';
 import { setupWebSocket, closeActivityStreamRedis } from './websocket/activity-stream';
 import { purgeExpiredAuditLogs } from './services/audit.service';
@@ -135,6 +135,12 @@ runMigrations()
     // Purge expired audit logs on startup and then every 24 hours
     purgeExpiredAuditLogs().catch(() => {});
     setInterval(() => purgeExpiredAuditLogs().catch(() => {}), 24 * 60 * 60 * 1000);
+
+    // Clean up old BullMQ completed/failed jobs on startup and weekly (Audit #3)
+    if (config.redisUrl) {
+      cleanupOldJobs(30).catch(() => {});
+      setInterval(() => cleanupOldJobs(30).catch(() => {}), 7 * 24 * 60 * 60 * 1000);
+    }
   })
   .catch((err) => {
     logger.fatal({ err }, 'Failed to run migrations — server not started');
