@@ -2205,9 +2205,9 @@ When done, return a JSON object:
                         )
                         task_prompt = (
                             f"You have received a task from another agent.\n\n"
-                            f"Sender: {task.sender}\n"
-                            f"Action requested: {task.action_requested}\n"
-                            f"Payload: {json.dumps(task.payload, default=str)}\n"
+                            f"Sender: {sanitize_untrusted(str(task.sender), 'task_sender')}\n"
+                            f"Action requested: {sanitize_untrusted(str(task.action_requested), 'task_action')}\n"
+                            f"Payload: {sanitize_untrusted(json.dumps(task.payload, default=str), 'task_payload')}\n"
                         )
                         if task.deadline:
                             task_prompt += f"Deadline: {task.deadline}\n"
@@ -2222,7 +2222,7 @@ When done, return a JSON object:
                                 task_prompt += (
                                     f"\nConversation history "
                                     f"(turn {task.turn_number}):\n"
-                                    f"{json.dumps(history, default=str)}\n"
+                                    f"{sanitize_untrusted(json.dumps(history, default=str), 'task_history')}\n"
                                 )
 
                         task_prompt += (

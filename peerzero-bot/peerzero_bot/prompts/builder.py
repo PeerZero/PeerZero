@@ -261,7 +261,7 @@ class PromptBuilder:
                 ps_lines.append(f"  Still needed for next tier: {', '.join(needed)}")
             cap_msg = ps.get("tier_cap_message")
             if cap_msg:
-                ps_lines.append(f"  *** {cap_msg} ***")
+                ps_lines.append(f"  *** {sanitize_untrusted(str(cap_msg), 'tier_message')} ***")
             parts.append("\n".join(ps_lines))
 
         # Inject decision context — full game state so the bot understands why
@@ -271,7 +271,7 @@ class PromptBuilder:
             dc_lines = [f"\nDECISION CONTEXT — why you are about to {action_verb}:"]
             reasoning = dc.get("reasoning", "")
             if reasoning:
-                dc_lines.append(f"  Reasoning: {reasoning}")
+                dc_lines.append(f"  Reasoning: {sanitize_untrusted(str(reasoning), 'decision_reasoning')}")
 
             # Grade progress
             grade_info = dc.get("grade", {})
@@ -316,7 +316,7 @@ class PromptBuilder:
             # What's blocked and why
             blocked = dc.get("blocked_actions", {})
             if blocked:
-                blocked_strs = [f"{act}: {reason}" for act, reason in blocked.items()]
+                blocked_strs = [f"{sanitize_untrusted(str(act), 'action_name')}: {sanitize_untrusted(str(reason), 'block_reason')}" for act, reason in blocked.items()]
                 dc_lines.append(f"  Blocked: {'; '.join(blocked_strs[:4])}")
 
             # What comes next
@@ -862,15 +862,17 @@ Return ONLY the forge identity text, nothing else."""
     def build_review_rating_prompt(self, review: dict, action_skill: str = "", own_review: dict | None = None) -> str:
         """Format review data for rating. Intelligence lives in server's rate_review skill."""
         score = review.get("score", "?")
-        methodology = str(review.get("methodology_notes", ""))[:1500]
-        assessment = str(review.get("overall_assessment", ""))[:4000]
+        methodology = sanitize_untrusted(str(review.get("methodology_notes", ""))[:1500], "review_methodology")
+        assessment = sanitize_untrusted(str(review.get("overall_assessment", ""))[:4000], "review_assessment")
 
         own_context = ""
         if own_review:
+            own_methodology = sanitize_untrusted(str(own_review.get("methodology_notes", ""))[:800], "own_methodology")
+            own_assessment = sanitize_untrusted(str(own_review.get("overall_assessment", ""))[:1200], "own_assessment")
             own_context = f"""YOUR review of this paper (for reference):
 Your score: {own_review.get("score", "?")}
-Your methodology: {str(own_review.get("methodology_notes", ""))[:800]}
-Your assessment: {str(own_review.get("overall_assessment", ""))[:1200]}
+Your methodology: {own_methodology}
+Your assessment: {own_assessment}
 """
 
         return f"""{own_context}
@@ -884,17 +886,17 @@ Overall assessment: {assessment}
     def build_red_team_prompt(self, source_doi: str, specific_finding: str, logical_bridge: str, action_skill: str = "") -> str:
         """Format bounty source data for red team interrogation. Intelligence in server skill."""
         return f"""Source DOI: {source_doi}
-Their specific finding: {specific_finding}
-Their logical bridge: {logical_bridge}
+Their specific finding: {sanitize_untrusted(specific_finding, 'red_team_finding')}
+Their logical bridge: {sanitize_untrusted(logical_bridge, 'red_team_bridge')}
 
 {action_skill}"""
 
     def build_red_team_vote_prompt(self, specific_finding: str, logical_bridge: str, interrogation: str, action_skill: str = "") -> str:
         """Format red team data for jury vote. Intelligence in server skill."""
-        return f"""Challenger's finding: {specific_finding}
-Challenger's bridge: {logical_bridge}
+        return f"""Challenger's finding: {sanitize_untrusted(specific_finding, 'red_team_finding')}
+Challenger's bridge: {sanitize_untrusted(logical_bridge, 'red_team_bridge')}
 
-Author's interrogation: {interrogation}
+Author's interrogation: {sanitize_untrusted(interrogation, 'red_team_interrogation')}
 
 {action_skill}"""
 
