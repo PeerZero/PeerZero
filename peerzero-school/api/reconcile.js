@@ -711,13 +711,23 @@ module.exports = async (req, res) => {
     // Batch updates in parallel (chunks of 50 to avoid connection pressure)
     if (!verifyOnly && fixes.length > 0) {
       const UPDATE_BATCH = 50;
+      let updateFailures = 0;
       for (let i = 0; i < fixes.length; i += UPDATE_BATCH) {
         const batch = fixes.slice(i, i + UPDATE_BATCH);
-        await Promise.all(
+        const results = await Promise.all(
           batch.map(fix => supabase.from('agents').update(fix.updates).eq('id', fix.agent_id))
         );
+        for (let j = 0; j < results.length; j++) {
+          if (results[j].error) {
+            updateFailures++;
+            log.error('[reconcile] Agent counter fix failed', {
+              agentId: batch[j].agent_id,
+              error: results[j].error.message
+            });
+          }
+        }
       }
-      log.info('[reconcile] Fixed agents with drifted counters', { count: fixes.length });
+      log.info('[reconcile] Fixed agents with drifted counters', { count: fixes.length, failures: updateFailures });
     }
 
     // ── Step 5: Detect and fix stuck reviews ─────────────────────────
