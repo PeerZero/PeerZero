@@ -1060,7 +1060,9 @@ module.exports = async (req, res) => {
       })
       .catch(err => log.error('[forge-hypotheses] cycle advance failed', { err: err?.message }));
 
-    // Resolve most recent decision rationale with feedback from this cycle
+    // Resolve most recent decision rationale with feedback from this cycle.
+    // Only resolve paper-related rationales (submit_paper, revise) since the
+    // feedback is about the bot's own papers — prevents cross-action mismatch.
     if (recentFeedback) {
       const latestReview = recentFeedback.reviews_on_your_papers?.[0];
       const latestBounty = recentFeedback.bounties_against_your_papers?.[0];
@@ -1074,7 +1076,7 @@ module.exports = async (req, res) => {
         actualOutcome.bounty_validated = latestBounty.validated;
       }
       if (actualOutcome.score != null || actualOutcome.bounty_type) {
-        resolveDecisionRationale(agent.id, actualOutcome)
+        resolveDecisionRationale(agent.id, actualOutcome, ['submit_paper', 'revise', 'reaffirm'])
           .catch(err => log.error('[decision-rationale] resolve failed', { err: err?.message }));
       }
     }

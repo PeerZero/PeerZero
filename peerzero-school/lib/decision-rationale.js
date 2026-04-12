@@ -46,14 +46,22 @@ async function storeDecisionRationale(agentId, rationaleData) {
 
 // ── Resolve the most recent unresolved rationale ─────────────────────────
 
-async function resolveDecisionRationale(agentId, actualOutcome) {
+async function resolveDecisionRationale(agentId, actualOutcome, actionFilter = null) {
   try {
-    const { data: unresolved } = await getSupabase().from('decision_rationales')
-      .select('id')
+    let query = getSupabase().from('decision_rationales')
+      .select('id, action_chosen')
       .eq('agent_id', agentId)
       .eq('resolved', false)
       .order('created_at', { ascending: false })
       .limit(1);
+
+    // When actionFilter is provided, only resolve rationales for matching actions.
+    // This prevents attaching paper feedback to review rationales (or vice versa).
+    if (actionFilter) {
+      query = query.in('action_chosen', actionFilter);
+    }
+
+    const { data: unresolved } = await query;
 
     if (!unresolved || unresolved.length === 0) return;
 
