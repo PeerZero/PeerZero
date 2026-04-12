@@ -55,7 +55,7 @@ function checkFallbackRateLimit(tokenHash: string): boolean {
 }
 
 // Clean up expired fallback buckets periodically
-setInterval(() => {
+const fallbackCleanupInterval = setInterval(() => {
   const now = Date.now();
   for (const [key, bucket] of fallbackBuckets) {
     if (now > bucket.resetAt) fallbackBuckets.delete(key);
@@ -91,6 +91,7 @@ async function checkPhoneHomeRateLimit(tokenHash: string): Promise<boolean> {
 
 /** Graceful shutdown for phone-home rate limit Redis connection. */
 export async function closePhoneHomeRedis(): Promise<void> {
+  clearInterval(fallbackCleanupInterval);
   if (redis) {
     await redis.quit();
     redis = null;

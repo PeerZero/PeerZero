@@ -47,7 +47,7 @@ const fallbackBuckets = new Map<string, { count: number; resetAt: number }>();
 const MAX_FALLBACK_BUCKETS = 10_000;
 
 // Clean up expired fallback buckets every 60 seconds
-setInterval(() => {
+const fallbackCleanupInterval = setInterval(() => {
   const now = Date.now();
   for (const [key, bucket] of fallbackBuckets) {
     if (now > bucket.resetAt) fallbackBuckets.delete(key);
@@ -168,6 +168,7 @@ export function userRateLimit(category: RateLimitCategory) {
 
 /** Graceful shutdown for rate limit Redis connection. */
 export async function closeRateLimitRedis(): Promise<void> {
+  clearInterval(fallbackCleanupInterval);
   if (redis) {
     await redis.quit();
     redis = null;

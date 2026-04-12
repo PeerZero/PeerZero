@@ -21,11 +21,19 @@ class CommunityActionsMixin:
     """Community participation methods (rate reviews, red team, open questions)."""
 
     _rated_review_ids: set = None  # in-memory cache of review IDs we've already rated
+    _MAX_RATED_IDS = 2000  # cap to prevent unbounded growth over long-running sessions
 
     def _do_rate_reviews(self, system_prompt, profile: dict):
         """Rate other agents' reviews on papers we also reviewed."""
         if self._rated_review_ids is None:
             self._rated_review_ids = set()
+        # Evict oldest entries when cache grows too large
+        if len(self._rated_review_ids) > self._MAX_RATED_IDS:
+            # Keep most recent half (sets are unordered, but pruning any entries
+            # is acceptable — worst case we re-rate a review, which the server deduplicates)
+            excess = len(self._rated_review_ids) - self._MAX_RATED_IDS // 2
+            for _ in range(excess):
+                self._rated_review_ids.pop()
 
         # Use papers we've reviewed recently from tracked IDs
         tracked_ids = self.memory.get_tracked_review_ids()

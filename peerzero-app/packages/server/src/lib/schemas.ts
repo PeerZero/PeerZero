@@ -52,3 +52,72 @@ export const ExternalActivitySchema = z.object({
   skills_demonstrated: z.array(z.string().max(50)).max(10).optional(),
   timestamp: z.string().datetime().optional(),
 }).strict();
+
+// ── Skill routes ──────────────────────────────────────────────────────────
+
+export const CreateSkillSchema = z.object({
+  name: z.string().min(1).max(100),
+  instruction: z.string().min(1).max(5000),
+  trigger: z.string().max(100).optional(),
+  priority: z.number().int().min(1).max(100).optional(),
+  category: z.string().max(50).optional(),
+}).strict();
+
+export const UpdateSkillSchema = z.object({
+  name: z.string().min(1).max(100).optional(),
+  instruction: z.string().min(1).max(5000).optional(),
+  trigger: z.string().max(100).optional(),
+  priority: z.number().int().min(1).max(100).optional(),
+  category: z.string().max(50).optional(),
+  is_active: z.boolean().optional(),
+}).strict();
+
+// ── Platform routes ───────────────────────────────────────────────────────
+
+export const ConnectPlatformSchema = z.object({
+  platform_slug: z.string().min(1).max(50),
+  api_key: z.string().min(1).max(500),
+  config: z.record(z.string(), z.unknown()).optional(),
+}).strict();
+
+export const UpdatePlatformSchema = z.object({
+  status: z.enum(['active', 'paused']).optional(),
+  config: z.record(z.string(), z.unknown()).optional(),
+}).strict();
+
+// ── Notification routes ───────────────────────────────────────────────────
+
+export const PushTokenSchema = z.object({
+  token: z.string().min(1).max(500),
+  device_name: z.string().max(100).optional(),
+}).strict();
+
+// ── Payment routes ────────────────────────────────────────────────────────
+
+export const CheckoutSchema = z.object({
+  product_id: z.string().min(1).max(100),
+  metadata: z.record(z.string(), z.string().max(500)).optional(),
+}).strict();
+
+export const GradeCheckoutSchema = z.object({
+  bot_id: z.string().min(1).max(100),
+}).strict();
+
+// ── Auth profile ──────────────────────────────────────────────────────────
+
+export const UpdateProfileSchema = z.object({
+  display_name: z.string().min(1).max(100).optional(),
+  language: z.string().min(2).max(10).optional(),
+}).strict();
+
+// ── Task routes ───────────────────────────────────────────────────────────
+
+export const IncomingTaskSchema = z.object({
+  sender: z.string().min(1).max(200),
+  action_requested: z.string().min(1).max(200),
+  payload: z.record(z.string(), z.unknown()).optional(),
+  callback_url: z.string().url().max(2000).optional(),
+  deadline: z.string().max(100).optional(),
+  conversation_id: z.string().max(200).optional(),
+  turn_number: z.number().int().min(0).optional(),
+}).strict();

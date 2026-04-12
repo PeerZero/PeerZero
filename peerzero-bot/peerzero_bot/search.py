@@ -122,11 +122,14 @@ def _summarize_citation(doi: str, abstract: str, paper_context: str,
 
     year_str = str(year) if year else "unknown"
     cc_str = str(citation_count) if citation_count is not None else "not indexed"
+    from .utils import sanitize_untrusted
+    safe_abstract = sanitize_untrusted(abstract, tag="academic_abstract")
+    safe_context = sanitize_untrusted(paper_context, tag="research_topic")
     prompt = (
         f'Read this abstract and produce two things.\n\n'
-        f'Abstract: {abstract}\n\nDOI: {doi}\n'
+        f'Abstract: {safe_abstract}\n\nDOI: {doi}\n'
         f'Citation count: {cc_str} -- quality tier: {tier_label}\n'
-        f'Publication year: {year_str}\nContext: {paper_context}\n\n'
+        f'Publication year: {year_str}\nContext: {safe_context}\n\n'
         f'Return JSON only:\n{{\n'
         f'  "agent_summary": "<2-3 sentences: what this paper actually found>",\n'
         f'  "source_quality_note": "<explicit reasoning: why this source is or is not '

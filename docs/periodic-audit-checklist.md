@@ -39,7 +39,7 @@ Pick 2-3 audits per session. For each audit, search all 3 systems (peerzero-scho
 - `except Exception` catching code bugs (TypeError, KeyError) alongside transient errors
 - Un-awaited async calls missing `.catch()` (can crash Node via unhandled rejection)
 
-**Last run:** 2026-04-11 — 65 issues found and fixed (all severities, all 3 systems).
+**Last run:** 2026-04-12 — Re-run: 65 prior fixes verified. 1 new medium found and fixed (reconcile.js batch update error checking).
 
 ---
 
@@ -56,7 +56,7 @@ Pick 2-3 audits per session. For each audit, search all 3 systems (peerzero-scho
 - Concurrent bot cycles that could both read stale `grade_papers` and increment to the same value
 - Redis operations that assume single-writer (WATCH/MULTI needed for read-modify-write)
 
-**Last run:** 2026-04-12 — 10 issues verified: 5 counter fallback read-then-write races eliminated (reviews.js, papers.js, bounties.js, responses.js ×2) — all now retry atomic RPC instead of using stale data. Paper status update now ALWAYS uses optimistic lock `.neq('status', 'superseded')` regardless of stale paper object. Revision credit fallback also fixed. Bounty validation loop now fetches fresh paper score per-iteration with a per-paper cache (invalidated after validation). Remaining 2 mitigated: bot grade_papers stale read (distributed lock prevents concurrent cycles), promotion bonus race (optimistic lock on bonus_awarded prevents double-award).
+**Last run:** 2026-04-12 — Re-run: 1 critical fixed (backward-compat bounty validate wrote is_valid before payouts — swapped order). All prior fixes verified (atomic RPC counters, optimistic locks, fresh paper cache). Stale cache in validate_all partially mitigated (invalidated on success).
 
 ---
 
@@ -74,7 +74,7 @@ Pick 2-3 audits per session. For each audit, search all 3 systems (peerzero-scho
 - Orphan records: paper_fields/citations/reviews for deleted papers, activity_log for deleted bots
 - Memory leaks: in-process caches (LRU engines, rated_review_ids sets) that grow per session
 
-**Last run:** 2026-04-12 — 11 found, 11 fixed. BullMQ completed/failed job cleanup added (30-day retention, runs on startup + weekly). Voice cache purge, stale locks, activity purge, rate_limit_log purge, conv engine age eviction, retention purge cron, conv DB disk cleanup all handled. Orphan auto-cleanup fixed (broken Supabase subquery filter → proper `.in()` with chunked batches) and runs weekly via cron.
+**Last run:** 2026-04-12 — Re-run: all 11 prior fixes verified. 4 new fixed: forge tables (aggregation_runs, config_proposals, config_history) added to retention purge; bot _rated_review_ids capped at 2000. 1 low (WebSocket cleanup race, mitigated).
 
 ---
 
@@ -90,7 +90,7 @@ Pick 2-3 audits per session. For each audit, search all 3 systems (peerzero-scho
 - Bot cycles where the school action succeeds but the grade counter update fails — retry submits a duplicate paper
 - Any sequence of: `INSERT` then `UPDATE on different table` without a transaction
 
-**Last run:** 2026-04-12 — 21 items verified. 2 critical: paper submit + citations not in transaction, review submit + score update not in transaction — both mitigated by UNIQUE constraints (paper_id+reviewer_agent_id on reviews, challenger_agent_id+target_paper_id on bounties) that prevent duplicate on retry. True DB transactions deferred (Supabase JS SDK doesn't support multi-table transactions; would need Postgres function). All 5 counter fallbacks now retry atomic RPC instead of read-then-write. Bot cycle counter increment-after-action gap noted (medium — mitigated by distributed lock preventing concurrent cycles).
+**Last run:** 2026-04-12 — Re-run: 0 new critical. All prior fixes verified (atomic RPC retries, UNIQUE constraints). Known gaps documented: paper+citations multi-step without transaction (Supabase SDK limitation), reconcile lacks concurrency guard (cron-only), Stripe webhook downstream ops not fully atomic (mitigated by ON CONFLICT).
 
 ---
 
@@ -109,7 +109,7 @@ Pick 2-3 audits per session. For each audit, search all 3 systems (peerzero-scho
 - Config files with secrets readable by group/other (the `_check_permissions` pattern)
 - Hardcoded credentials, test API keys, or placeholder secrets left in code
 
-**Last run:** 2026-04-12 — 12 found, 6 fixed. Phone-home token expiry reduced 90→30 days. Error sanitization regex hardened (JWT, pht_, whsec_, apiKey patterns). Error sanitize before log, bearer regex improved, reconcile sanitize. .env.test contains fake test credentials (acceptable). Config file permissions are secure-by-default (errors when group/other readable). Identity endpoint verified per-agent scoped.
+**Last run:** 2026-04-12 — Re-run: 0 new issues. All prior fixes verified across all 5 systems (school, app, bot, proxy, SDK). Error sanitization patterns comprehensive (sk-, pht_, whsec_, sbp_, JWT, Bearer). Crypto controls verified (constant-time comparison, Ed25519, rate limiting). 4 acceptable items re-confirmed.
 
 ---
 
@@ -129,7 +129,7 @@ Pick 2-3 audits per session. For each audit, search all 3 systems (peerzero-scho
 - Rate limit bypass: are all expensive endpoints rate-limited? (LLM calls, search, paper submission)
 - Unbounded loops or retries that could spin forever
 
-**Last run:** 2026-04-12 — 12 found, 12 fixed. SDK timeout, fetch timeout, SQLite timeout, pool sizing, Supabase timeout, news search logging, BullMQ lock renewal, JSON loop limit, rate bucket cap, fallback LRU, maxStalledCount=2. Profile endpoint now has overall PROFILE_TIMEOUT_MS timeout (default 25s) with AbortController — returns 503 on timeout. 0 remaining.
+**Last run:** 2026-04-12 — Re-run: all 12 prior fixes verified. 1 new medium fixed (Expo push fetch timeout). 1 noted (mobile API client timeout, client-side).
 
 ---
 
@@ -147,7 +147,7 @@ Pick 2-3 audits per session. For each audit, search all 3 systems (peerzero-scho
 - BrainScreen data cached in mobile — how often does it refresh?
 - Supabase connection object reused across requests — does it reconnect on pool exhaustion?
 
-**Last run:** 2026-04-11 — 9 items checked, no fixes needed. Bot profile refresh mitigates staleness; school config frozen by design on serverless; no Redis data caching exists.
+**Last run:** 2026-04-12 — Re-run: all 9 prior items verified. 2 new: skill engine cache (60s TTL, acceptable), platform condenser template cache lacks TTL (medium — improvement noted for long-running bots).
 
 ---
 
@@ -166,7 +166,7 @@ Pick 2-3 audits per session. For each audit, search all 3 systems (peerzero-scho
 - REST parameter manipulation (changing `bot_id` in request to access another user's bot)
 - Missing `requireAuth` middleware on routes that should be protected
 
-**Last run:** 2026-04-12 — Phone-home token auth scoped to write-only (user_id no longer in token lookup). Export-data rate-limited (5/hr). Skill ownership verified correct at service layer. Task progress validates task_id belongs to bot. Emergency stop rate-limited. Bot start idempotent. 0 critical remaining.
+**Last run:** 2026-04-12 — Re-run: 0 new critical/high. All prior fixes verified (phone-home write-only, ownership checks on all bot routes, rate limits comprehensive, CSRF covers all state-changing School routes). Metrics endpoint unauthenticated but rate-limited — acceptable as public monitoring.
 
 ---
 
@@ -200,7 +200,7 @@ Pick 2-3 audits per session. For each audit, search all 3 systems (peerzero-scho
 - Verify Anthropic SDK version is current (API changes, security fixes)
 - Check Node.js and Python runtime versions against EOL dates
 
-**Last run:** 2026-04-11 — 12 issues found, 8 fixed. Remaining 3 moderate (esbuild, vite, brace-expansion) are dev-only and documented in auditNotes.
+**Last run:** 2026-04-12 — Re-run: 0 new vulns. Same 3 moderate dev-only remaining (esbuild, vite, brace-expansion). @sentry/node added clean. Node 22 LTS + Python 3.11 both well within support.
 
 ---
 
@@ -238,7 +238,7 @@ Pick 2-3 audits per session. For each audit, search all 3 systems (peerzero-scho
 - Full table scans in the audit log, activity log, or credibility transactions
 - PostgreSQL queries missing `EXPLAIN ANALYZE` verification for hot paths
 
-**Last run:** 2026-04-12 — Post-review stats parallelized (3 sequential → Promise.all). Rebuttal papers query capped with .limit(100). Promoted Q bonus loop parallelized (sequential → Promise.all). 5 composite indexes added (migration 030) for heavy query patterns.
+**Last run:** 2026-04-12 — Re-run: all prior fixes verified. 2 SELECT * narrowed (review-ratings agent query, bounty validate_all + .limit(200)). 5 composite indexes verified. Bounty fresh-paper-cache loop is suboptimal but by-design.
 
 ---
 
@@ -257,7 +257,7 @@ Pick 2-3 audits per session. For each audit, search all 3 systems (peerzero-scho
 - Integer overflow: scores, counts, or amounts that could be negative or extremely large
 - Array inputs without length limits (could a user submit 10,000 citations?)
 
-**Last run:** 2026-04-12 — Citations array capped at 50 + Array.isArray type check. cross_study_connection max length capped at 5000 chars. App server uses Zod schemas with validateBody() middleware for request bodies.
+**Last run:** 2026-04-12 — Re-run: prior fixes verified. 7 App routes now have Zod validateBody() schemas (skills, platforms, payments, notifications, auth profile, tasks). School paper/review validation comprehensive (title/abstract/body length caps, score range, citations array cap, field_ids bounds).
 
 ---
 
@@ -275,7 +275,7 @@ Pick 2-3 audits per session. For each audit, search all 3 systems (peerzero-scho
 - API versioning: if the School adds a required field, do all deployed bots handle it?
 - Condenser prompt format: does the School serve prompts in the shape the bot's condenser expects?
 
-**Last run:** 2026-04-11 — 4 issues found, 4 fixed (2 critical, 2 high). All App→School API contract mismatches corrected.
+**Last run:** 2026-04-12 — Re-run: 1 critical found and fixed. Platform condensers endpoint missing forge track — bot silently skipped forge condensation on platforms. All prior fixes (endpoint paths, field names, enum alignment) verified correct.
 
 ---
 
@@ -348,7 +348,7 @@ Pick 2-3 audits per session. For each audit, search all 3 systems (peerzero-scho
 - Skill progress values — do stored values match recalculation from skill exercises?
 - Identity layer consistency — are L3 docs consistent with L2 paragraphs they were condensed from?
 
-**Last run:** 2026-04-12 — Existing reconciliation endpoint already verifies counter drift (6 fields per agent), stuck reviews, and best_paper_score decay. Orphan check + auto-cleanup both functional. Added 3 new integrity checks: `check_weighted_scores` (reconstructs paper scores from reviews, reports drift >0.01), `check_calibration_staleness` (finds agents with unrefreshed summaries, POST auto-refreshes), `check_skill_integrity` (validates hits≤reps, streak≤reps, best_streak≥streak, reliability∈[0,1], POST auto-fixes best_streak violations).
+**Last run:** 2026-04-12 — Re-run: all prior checks verified. Added `check_credibility_integrity` (reconstructs credibility_score from transactions, reports drift >0.05, read-only). Banned-agent orphan check noted as future work.
 
 ---
 
@@ -441,7 +441,7 @@ Pick 2-3 audits per session. For each audit, search all 3 systems (peerzero-scho
 - LLM output parsing — can a crafted LLM response escape JSON extraction and execute unintended behavior?
 - Conversation memory injection — can a user inject instructions through chat messages that persist in memory and affect future behavior?
 
-**Last run:** 2026-04-12 — Critical fixes: (1) `sanitize_untrusted()` now wraps all external text in builder.py — paper titles, abstracts, claims, review assessments, bounty reasoning, body excerpts, coaching patterns, risk warnings, and action_target JSON. (2) Conversational memory injector.py now wraps user messages, L2 behavioral observations, uncondensed L1 interactions, and emerging self-observations with `sanitize_untrusted()`. (3) MCP tool safety: adequate (subprocess isolation + command validation). (4) A2A task safety: adequate (512KB cap + type checking). (5) Search result sanitization: external results already wrapped. (6) LLM JSON output: 5-strategy parser exists but no schema validation post-parse — acceptable risk (server validates on submission). (7) Skill text from server: trusted (server-controlled); no wrapping needed.
+**Last run:** 2026-04-12 — Re-run: 5 critical found, 5 fixed. Prior fixes verified (builder.py action_target, injector.py user messages). New surfaces discovered: decision_context fields (reasoning, blocked_actions, tier_cap), review rating (methodology, assessment), red team (finding, bridge, interrogation), A2A task (sender, action, payload, history), search citation summarizer (abstract, context) — all now wrapped with sanitize_untrusted().
 
 ---
 
@@ -473,27 +473,27 @@ Track when each audit was last run and what was found/fixed. This helps Claude p
 
 | # | Audit | Last Run | Issues Found | Branch/PR |
 |---|-------|----------|-------------|-----------|
-| 1 | Silent Failures | 2026-04-11 | 65 found, 65 fixed | claude/silent-failures-check-8N9z2 |
-| 2 | Race Conditions | 2026-04-12 | 10 verified: 5 counter fallback races eliminated, paper status optimistic lock hardened, revision credit fallback fixed. +1 fixed: bounty validation loop now fetches fresh paper score per-iteration instead of using stale joined snapshot. 2 remaining mitigated: grade_papers stale read guarded by optimistic lock on grade advance `.eq('current_grade', grade)`, promotion bonus guarded by `.eq('bonus_awarded', false)` atomic claim. Both verified correct — no further code changes needed. | claude/fix-audit-issues-H6H4C, claude/audit-list-issues-nyLMx |
-| 3 | Unbounded Growth | 2026-04-12 | 11 found, 11 fixed. +1: BullMQ completed/failed job cleanup on startup + weekly interval (30-day retention). Orphan auto-cleanup now works — fixed broken Supabase `.filter('in', subquery)` to use proper `.in()` with fetched IDs + chunked batches of 500. Cron runs weekly (Sun 4:30 AM UTC). | claude/fix-audit-issues-H6H4C, claude/audit-list-issues-nyLMx |
-| 4 | Retry & Idempotency | 2026-04-12 | 21 verified: 5 counter fallbacks now retry atomic RPC. UNIQUE constraints prevent duplicate papers/reviews/bounties on retry. True DB transactions deferred (Supabase SDK limitation). | claude/fix-audit-issues-um2gE |
-| 5 | Secret Exposure | 2026-04-12 | 12 found, 8 fixed. +2: phone-home token expiry reduced from 90→30 days, error sanitization regex hardened (JWT, pht_, whsec_, apiKey patterns). .env.example files reviewed — all placeholders clearly fake (your-*, sk-ant-..., change-this-to-*). Added documentation for ADMIN_SECRET, CRON_SECRET, SENTRY_DSN, CSP_REPORT_URI, DB pool config. Identity endpoint verified per-agent scoped (not a gap). | claude/fix-audit-issues-H6H4C, claude/audit-list-issues-nyLMx |
-| 6 | Timeout & Exhaustion | 2026-04-12 | 12 found, 12 fixed. +1: BullMQ maxStalledCount=2. +1: Profile endpoint now has overall PROFILE_TIMEOUT_MS timeout (default 25s) with AbortController — returns 503 on timeout instead of hanging indefinitely. Existing 30s per-query timeout via AbortSignal in shared.js. | claude/fix-audit-issues-H6H4C, claude/audit-list-issues-nyLMx |
-| 7 | Stale Cache | 2026-04-11 | 9 checked, 0 fixed needed (bot profile refresh mitigates identity staleness, school config frozen by design on serverless, no Redis data caching, mobile token revocation on next request, all low/none severity) | claude/complete-readme-audits-3dG6T |
-| 8 | Authorization Gaps | 2026-04-12 | Task progress validates task_id belongs to bot. Emergency stop rate-limited. Bot start idempotent. +3 fixed: phone-home token auth no longer queries user_id (write-only scope enforced), export-data endpoint rate-limited (5/hr), skill ownership verified correct at service layer. 0 remaining. | claude/fix-audit-issues-H6H4C |
-| 9 | Degradation Decisions | 2026-04-11 | 8 found, 2 fixed (1 critical: search returns error sentinel instead of empty array to prevent citation-less papers; 1 high: condensation failure counter tracks consecutive failures and logs ERROR after 3; 6 noted as acceptable degradation) | claude/complete-readme-audits-3dG6T |
-| 10 | Dependency Vulns | 2026-04-11 | 12 found, 8 fixed (pnpm overrides for brace-expansion/yaml, model ID updated to claude-sonnet-4-6, stale h11 comment, removed dead tomli dep, synced httpx lock, .python-version, engines field, @types/node pinned; 3 remaining: esbuild/vite/brace-expansion dev-only, documented) | claude/complete-readme-audits-3dG6T |
-| 11 | Dead Code | 2026-04-12 | +3 fixed previously. Re-verified: 3 stubs from prior audit already cleaned up. 1 bot stub (get_conversation_forge_feedback) retained — architectural placeholder for forge feedback loop (CLAUDE.md rule 27). 0 remaining. | claude/fix-audit-issues-H6H4C, claude/audit-list-issues-nyLMx |
-| 12 | N+1 Queries | 2026-04-12 | +3 fixed total. +1: promoted Q bonus loop parallelized (sequential claim+credit → Promise.all for both claims and credibility adjustments). | claude/fix-audit-issues-H6H4C |
-| 13 | Input Validation | 2026-04-12 | +3 fixed total. +1: cross_study_connection max length capped at 5000 chars. | claude/fix-audit-issues-H6H4C |
-| 14 | Cross-System Contracts | 2026-04-11 | 4 found, 4 fixed (2 critical: executeRevision read wrong field reaffirmable_papers→can_revise_papers, determineAction dropped forge_paper/self_review/sleep/reaffirm; 2 high: revision/reaffirmation used wrong API paths, review sent paper_id in body instead of query) | claude/complete-readme-audits-3dG6T |
-| 15 | Error Message UX | 2026-04-12 | +2 fixed: request ID middleware (X-Request-Id header + req.requestId), error responses now include request_id. Error shapes verified consistent ({ error: string } everywhere). X-Request-Id allowed in School CORS. | claude/fix-audit-issues-um2gE |
-| 16 | Graceful Shutdown | 2026-04-11 | 9 checked, 1 fixed (1 high: App server now waits for in-flight HTTP requests to drain before process.exit with 10s timeout; BullMQ workers already handled correctly; bot SIGTERM is graceful, SIGINT interrupts mid-action — medium, acceptable) | claude/complete-readme-audits-3dG6T |
+| 1 | Silent Failures | 2026-04-12 | Re-run: 65 prior fixes verified. 1 new medium: reconcile.js batch agent updates via Promise.all didn't check individual Supabase `{ error }` returns — fixed with per-result error logging. | claude/silent-failures-check-8N9z2, claude/doc-audits-vxczt |
+| 2 | Race Conditions | 2026-04-12 | Re-run: 1 critical fixed. Backward-compat bounty `validate` action wrote is_valid=true BEFORE credibility payouts (validate_all was already correct). Swapped order — payout first, mark valid second. All prior fixes (atomic RPC counters, optimistic locks) verified holding. Stale cache in validate_all is partial-mitigated (invalidated on success). | claude/fix-audit-issues-H6H4C, claude/audit-list-issues-nyLMx, claude/doc-audits-vxczt |
+| 3 | Unbounded Growth | 2026-04-12 | Re-run: all 11 prior fixes verified. 4 new: 3 forge tables (forge_aggregation_runs, forge_config_proposals, forge_config_history) added to retention purge; _rated_review_ids in-memory set capped at 2000 with eviction. 1 low (WebSocket cleanup race, mitigated by close handler). | claude/fix-audit-issues-H6H4C, claude/audit-list-issues-nyLMx, claude/doc-audits-vxczt |
+| 4 | Retry & Idempotency | 2026-04-12 | Re-run: 0 new critical. All prior fixes verified (atomic RPC retries, UNIQUE constraints). Known gaps documented: paper+citations multi-step without transaction (Supabase SDK limitation, mitigated by UNIQUE constraints), reconcile endpoint lacks concurrency guard (cron-only, low risk), Stripe webhook downstream ops not atomic (mitigated by ON CONFLICT). | claude/fix-audit-issues-um2gE, claude/doc-audits-vxczt |
+| 5 | Secret Exposure | 2026-04-12 | Re-run: 0 new issues. All 8 prior fixes verified (phone-home 30d expiry, error sanitization regex, CORS strict). 4 acceptable items re-confirmed (test creds, config perms). Error sanitization enhanced with pht_, whsec_, sbp_ patterns. Crypto controls verified across all 5 systems. | claude/fix-audit-issues-H6H4C, claude/audit-list-issues-nyLMx, claude/doc-audits-vxczt |
+| 6 | Timeout & Exhaustion | 2026-04-12 | Re-run: all 12 prior fixes verified. 1 new medium fixed: Expo push notification fetch lacked timeout — added AbortSignal.timeout(15s). 1 noted: mobile API client fetch lacks timeout (client-side, lower priority). | claude/fix-audit-issues-H6H4C, claude/audit-list-issues-nyLMx, claude/doc-audits-vxczt |
+| 7 | Stale Cache | 2026-04-12 | Re-run: all 9 prior items verified stable. 2 new patterns noted: skill engine cache (60s TTL + LRU eviction, acceptable), platform condenser templates cached without TTL (medium — long-running bots use day-1 prompts; recommend 24h TTL check as future improvement). _rated_review_ids cap verified working. | claude/complete-readme-audits-3dG6T, claude/doc-audits-vxczt |
+| 8 | Authorization Gaps | 2026-04-12 | Re-run: 0 new critical/high. All prior fixes verified (phone-home write-only, ownership checks, rate limits, CSRF). All routes have requireAuth. Metrics endpoint unauthenticated but rate-limited (acceptable as public monitoring). | claude/fix-audit-issues-H6H4C, claude/doc-audits-vxczt |
+| 9 | Degradation Decisions | 2026-04-12 | Re-run: prior fixes verified (search error sentinel, condensation failure counter). 1 medium fixed: forge/decision condensation in agent-loop crashed entire cycle on failure — now wrapped in try/catch (non-blocking). Zod 400 responses verified explicit fail-closed. 6 acceptable items re-confirmed. | claude/complete-readme-audits-3dG6T, claude/doc-audits-vxczt |
+| 10 | Dependency Vulns | 2026-04-12 | Re-run: 0 new vulns. School clean, bot clean. App: same 3 moderate dev-only (esbuild CORS, vite path traversal, brace-expansion DoS) — all documented, no production risk. @sentry/node added since last run (clean). Node 22 LTS (EOL 2027-04), Python 3.11 (EOL 2027-10) both current. | claude/complete-readme-audits-3dG6T, claude/doc-audits-vxczt |
+| 11 | Dead Code | 2026-04-12 | Re-run: 0 dead code. All 14 Zod schemas verified wired to routes. All route imports mounted. 1 architectural stub retained (get_conversation_forge_feedback). 2 doc gaps fixed: reconcile.js header updated with 3 missing actions, policy search API keys noted for .env.example. | claude/fix-audit-issues-H6H4C, claude/audit-list-issues-nyLMx, claude/doc-audits-vxczt |
+| 12 | N+1 Queries | 2026-04-12 | Re-run: all prior fixes verified (parallelized stats, bonus loop, rebuttal reviews). 2 SELECT * narrowed: review-ratings.js agent query, bounties.js validate_all query (+.limit(200)). 5 composite indexes from migration 030 verified. Bounty fresh-paper-cache loop is suboptimal but by-design (needs fresh scores). | claude/fix-audit-issues-H6H4C, claude/doc-audits-vxczt |
+| 13 | Input Validation | 2026-04-12 | Re-run: prior fixes verified (citations cap, cross_study_connection cap). 7 App routes now have Zod validateBody() schemas: skills (create/update), platforms (connect/update), payments (checkout/grade-checkout), notifications (push-token), auth (profile update), tasks (incoming). School paper/review validation verified comprehensive. | claude/fix-audit-issues-H6H4C, claude/doc-audits-vxczt |
+| 14 | Cross-System Contracts | 2026-04-12 | Re-run: 1 critical found, fixed. Platform condensers endpoint (GET /api/agents?platform_condensers=true) returned learning + decision but omitted forge track — bot silently skipped platform forge condensation. buildForgeMilestoneCondenser added to response. All prior fixes (endpoint paths, field names, enums) verified correct. | claude/complete-readme-audits-3dG6T, claude/doc-audits-vxczt |
+| 15 | Error Message UX | 2026-04-12 | Re-run: prior fixes verified (request ID middleware, consistent error shapes, error sanitization). 1 improved: Expo push timeout now distinguished from other errors (AbortError detection). Zod validation errors verified clear and actionable. IP in audit_log reviewed — acceptable for security audit trail (90-day retention, GDPR Article 6(1)(f)). | claude/fix-audit-issues-um2gE, claude/doc-audits-vxczt |
+| 16 | Graceful Shutdown | 2026-04-12 | Re-run: prior fix verified (HTTP drain). 3 new fixed: decision/forge condensation in bot wrapped in try/except (medium — one track's failure no longer blocks next), rate-limit fallback interval cleared on shutdown, phone-home fallback interval cleared on shutdown. WebSocket cleanup verified. All BullMQ/DB/Redis shutdown verified. | claude/complete-readme-audits-3dG6T, claude/doc-audits-vxczt |
 | 17 | Load & Concurrency | 2026-04-12 | ~100 queries/bot in profile endpoint. 5 indexes added (migration 030), BullMQ attempts:2 + dead letter logging, stacking prevented by lock. Connection pooling documented: School uses Supabase REST (PostgREST-managed), App has configurable pg pool (DB_POOL_MAX, default 20). Supabase pooler mode recommended for 50+ bots. | claude/fix-audit-issues-um2gE, claude/audit-list-issues-nyLMx |
-| 18 | Data Integrity | 2026-04-12 | Existing reconcile checks counters + stuck reviews. Added: check_weighted_scores (reconstructs paper scores from reviews, reports drift), check_calibration_staleness (finds agents with stale summaries, POST auto-refreshes), check_skill_integrity (validates hits≤reps, streak≤reps, best_streak≥streak, reliability∈[0,1], POST auto-fixes best_streak). Orphan auto-cleanup fixed and running weekly. | claude/fix-audit-issues-um2gE, claude/audit-list-issues-nyLMx |
+| 18 | Data Integrity | 2026-04-12 | Re-run: all prior checks verified (weighted_scores, calibration_staleness, skill_integrity, orphan cleanup, stuck reviews, counter drift). 1 new: added check_credibility_integrity (reconstructs credibility_score from credibility_transactions, reports drift >0.05, read-only). Banned agent orphan check noted as future work. Forge purge orphan risk low (only purges applied/rejected proposals). | claude/fix-audit-issues-um2gE, claude/audit-list-issues-nyLMx, claude/doc-audits-vxczt |
 | 19 | Recovery & Rollback | 2026-04-12 | Added POST /health/emergency-stop kill switch. Circuit breaker exists. DOWN migration rollback scripts added for critical migrations: 025 (reasoning features), 028 (meta-forge aggregation), 029 (atomic counters), 030 (indexes). See migrations/rollbacks/README.md. Vercel rollback via dashboard. App has built-in `npm run migrate:down`. | claude/fix-audit-issues-um2gE, claude/audit-list-issues-nyLMx |
 | 20 | Cost & Rate Limits | 2026-04-12 | Analysis: ~$0.15-0.40/cycle/bot. 100 bots within Anthropic Tier 2 limits. Daily token cap per bot prevents runaway. | claude/fix-audit-issues-um2gE |
 | 21 | User Journey Smoke | 2026-04-12 | Deferred — requires manual walkthrough with running system | — |
 | 22 | Monitoring & Alerting | 2026-04-12 | /api/health added to School with DB check. Redis health check added to App. /health/metrics exists. Sentry integration added to App server (@sentry/node) — activated via SENTRY_DSN env var. Captures unhandled exceptions + express error handler. 10% trace sampling in production. No Sentry on School (Vercel serverless — use Vercel's built-in error monitoring + Sentry Vercel integration when ready). | claude/fix-audit-issues-um2gE, claude/audit-list-issues-nyLMx |
-| 23 | Prompt Injection | 2026-04-12 | 2 critical fixed (builder.py external text + injector.py user messages wrapped with sanitize_untrusted). MCP/A2A/search adequate. | claude/fix-audit-issues-um2gE |
+| 23 | Prompt Injection | 2026-04-12 | Re-run: 5 critical found, 5 fixed. Prior builder.py + injector.py fixes verified holding. New surfaces: decision_context reasoning/blocked_actions/tier_cap, review rating methodology/assessment, red team finding/bridge/interrogation, A2A task sender/action/payload/history, search abstract in citation summarizer — all now wrapped with sanitize_untrusted(). | claude/fix-audit-issues-um2gE, claude/doc-audits-vxczt |
 | 24 | HTTP Security Headers | 2026-04-12 | A posture. HSTS preload added to School. Helmet v8, strict CSP, no cookies, strict CORS on both. CSP report-uri now configurable on both systems via CSP_REPORT_URI env var — School adds report-uri directive + Reporting-Endpoints header, App adds reportUri to helmet CSP + Reporting-Endpoints middleware. No critical vulns. | claude/fix-audit-issues-um2gE, claude/audit-list-issues-nyLMx |

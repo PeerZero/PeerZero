@@ -130,6 +130,7 @@ export async function sendNotification(
         'Accept': 'application/json',
       },
       body: JSON.stringify(messages),
+      signal: AbortSignal.timeout(15_000),
     });
 
     if (!response.ok) {
@@ -149,7 +150,13 @@ export async function sendNotification(
     }
   } catch (err) {
     // Never let notification failures break the bot cycle
-    logger.error({ err: err instanceof Error ? err.message : err, userId, type }, 'Push notification failed');
+    const isTimeout = err instanceof Error && err.name === 'AbortError';
+    logger.error({
+      err: err instanceof Error ? err.message : String(err),
+      userId,
+      type,
+      reason: isTimeout ? 'timeout' : 'error',
+    }, isTimeout ? 'Expo push notification timeout (15s)' : 'Push notification failed');
   }
 }
 

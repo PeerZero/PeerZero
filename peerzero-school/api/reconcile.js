@@ -22,11 +22,14 @@
 //   POST /api/reconcile?action=purge_retention         → purge old audit rows (180d default)
 //
 // Data integrity:
-//   GET  /api/reconcile?action=check_weighted_scores       → verify paper scores match reviews
-//   GET  /api/reconcile?action=check_calibration_staleness → find stale calibration summaries
-//   POST /api/reconcile?action=check_calibration_staleness → find + auto-refresh stale summaries
-//   GET  /api/reconcile?action=check_skill_integrity       → verify skill profile invariants
-//   POST /api/reconcile?action=check_skill_integrity       → verify + auto-fix skill invariants
+//   GET  /api/reconcile?action=check_weighted_scores         → verify paper scores match reviews
+//   GET  /api/reconcile?action=check_calibration_staleness   → find stale calibration summaries
+//   POST /api/reconcile?action=check_calibration_staleness   → find + auto-refresh stale summaries
+//   GET  /api/reconcile?action=check_skill_integrity         → verify skill profile invariants
+//   POST /api/reconcile?action=check_skill_integrity         → verify + auto-fix skill invariants
+//   GET  /api/reconcile?action=check_credibility_integrity   → verify credibility_score matches transactions
+//   GET  /api/reconcile?action=check_orphans                 → find orphaned records (removed papers)
+//   POST /api/reconcile?action=cleanup_orphans               → delete orphaned reviews/bounties/citations
 //
 // Protected by admin secret (X-Admin-Key header), except health check.
 // Designed to be called by a cron job (daily) or manually for debugging.
@@ -216,6 +219,10 @@ module.exports = async (req, res) => {
       ['rate_limit_log', supabase.from('rate_limit_log').delete().lt('created_at', cutoff)],
       // Only purge resolved/abandoned forge hypotheses — active ones are still in use
       ['forge_hypotheses', supabase.from('forge_hypotheses').delete().lt('created_at', cutoff).in('status', ['resolved', 'abandoned'])],
+      // Meta-forge aggregation tables — purge old runs and applied/rejected proposals
+      ['forge_aggregation_runs', supabase.from('forge_aggregation_runs').delete().lt('created_at', cutoff)],
+      ['forge_config_proposals', supabase.from('forge_config_proposals').delete().lt('created_at', cutoff).in('status', ['applied', 'rejected'])],
+      ['forge_config_history', supabase.from('forge_config_history').delete().lt('applied_at', cutoff)],
     ];
 
     for (const [name, query] of purges) {
@@ -528,6 +535,49 @@ module.exports = async (req, res) => {
     }
   }
 
+  // ── Data integrity: credibility score vs transaction sum ───────────────
+  // GET /api/reconcile?action=check_credibility_integrity
+  // Reconstructs each agent's credibility_score from credibility_transactions
+  // and reports drift. Does NOT auto-fix (credibility is safety-critical).
+  if (action === 'check_credibility_integrity') {
+    try {
+      // Fetch all active agents with their stored credibility_score
+      const { data: agents, error: agentErr } = await supabase
+        .from('agents')
+        .select('id, handle, credibility_score')
+        .eq('is_banned', false);
+      if (agentErr) return res.status(500).json({ error: 'Failed to fetch agents' });
+
+      const drifts = [];
+      const BATCH = 20;
+      for (let i = 0; i < (agents || []).length; i += BATCH) {
+        const batch = agents.slice(i, i + BATCH);
+        const results = await Promise.all(batch.map(async (agent) => {
+          const { data: txSum } = await supabase
+            .from('credibility_transactions')
+            .select('change_amount')
+            .eq('agent_id', agent.id);
+          if (!txSum) return null;
+          // Starting credibility is 50.0 for all agents (set at registration)
+          const computed = 50.0 + txSum.reduce((sum, tx) => sum + (tx.change_amount || 0), 0);
+          const stored = agent.credibility_score || 50.0;
+          const drift = Math.abs(computed - stored);
+          if (drift > 0.05) {
+            return { agent_id: agent.id, handle: agent.handle, stored, computed: Math.round(computed * 100) / 100, drift: Math.round(drift * 100) / 100 };
+          }
+          return null;
+        }));
+        drifts.push(...results.filter(Boolean));
+      }
+
+      log.info('[reconcile] Credibility integrity check', { agents_checked: (agents || []).length, drifts_found: drifts.length });
+      return res.json({ agents_checked: (agents || []).length, drifts_found: drifts.length, drifts });
+    } catch (err) {
+      log.error('[reconcile] Credibility integrity check failed', { error: err?.message });
+      return res.status(500).json({ error: 'Credibility integrity check failed' });
+    }
+  }
+
   // ── Reconciliation ─────────────────────────────────────────────────────
   const verifyOnly = req.method === 'GET' || req.query.verify === 'true';
 
@@ -711,13 +761,23 @@ module.exports = async (req, res) => {
     // Batch updates in parallel (chunks of 50 to avoid connection pressure)
     if (!verifyOnly && fixes.length > 0) {
       const UPDATE_BATCH = 50;
+      let updateFailures = 0;
       for (let i = 0; i < fixes.length; i += UPDATE_BATCH) {
         const batch = fixes.slice(i, i + UPDATE_BATCH);
-        await Promise.all(
+        const results = await Promise.all(
           batch.map(fix => supabase.from('agents').update(fix.updates).eq('id', fix.agent_id))
         );
+        for (let j = 0; j < results.length; j++) {
+          if (results[j].error) {
+            updateFailures++;
+            log.error('[reconcile] Agent counter fix failed', {
+              agentId: batch[j].agent_id,
+              error: results[j].error.message
+            });
+          }
+        }
       }
-      log.info('[reconcile] Fixed agents with drifted counters', { count: fixes.length });
+      log.info('[reconcile] Fixed agents with drifted counters', { count: fixes.length, failures: updateFailures });
     }
 
     // ── Step 5: Detect and fix stuck reviews ─────────────────────────

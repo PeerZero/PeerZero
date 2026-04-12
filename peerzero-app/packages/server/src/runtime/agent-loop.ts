@@ -405,32 +405,42 @@ async function handleCondensation(
   }
 
   // Forge condensation (Tier 2f — forge track milestone)
+  // Wrapped in try/catch: forge failures should not crash the cycle
   if ((profile as any).forge_condenser) {
-    const forgePrompt = buildPrompt('condense', { profile, type: 'forge' });
-    const response = await llmAdapter.chat(llmKey, utilityModel, forgePrompt);
+    try {
+      const forgePrompt = buildPrompt('condense', { profile, type: 'forge' });
+      const response = await llmAdapter.chat(llmKey, utilityModel, forgePrompt);
 
-    const parsed = tryParseJson(response.content);
-    if (parsed?.paragraph) {
-      await memory.storeParagraph(ctx.botId, 'forge_condensation', parsed.paragraph as string, ctx.cycleNumber);
-      await schoolAdapter.submitCondensation(schoolCreds, { ...parsed, track: 'forge' });
-      condensationOccurred = 'forge';
-    } else {
-      logger.warn({ contentSnippet: response.content?.slice(0, 120) }, 'Failed to extract JSON from forge condensation LLM response');
+      const parsed = tryParseJson(response.content);
+      if (parsed?.paragraph) {
+        await memory.storeParagraph(ctx.botId, 'forge_condensation', parsed.paragraph as string, ctx.cycleNumber);
+        await schoolAdapter.submitCondensation(schoolCreds, { ...parsed, track: 'forge' });
+        condensationOccurred = 'forge';
+      } else {
+        logger.warn({ contentSnippet: response.content?.slice(0, 120) }, 'Failed to extract JSON from forge condensation LLM response');
+      }
+    } catch (forgeErr) {
+      logger.warn({ err: forgeErr instanceof Error ? forgeErr.message : String(forgeErr) }, 'Forge condensation failed (non-blocking)');
     }
   }
 
   // Decision condensation (Tier 2d — decision track milestone)
+  // Wrapped in try/catch: decision failures should not crash the cycle
   if ((profile as any).decision_condenser) {
-    const decisionPrompt = buildPrompt('condense', { profile, type: 'decision' });
-    const response = await llmAdapter.chat(llmKey, utilityModel, decisionPrompt);
+    try {
+      const decisionPrompt = buildPrompt('condense', { profile, type: 'decision' });
+      const response = await llmAdapter.chat(llmKey, utilityModel, decisionPrompt);
 
-    const parsed = tryParseJson(response.content);
-    if (parsed?.paragraph) {
-      await memory.storeParagraph(ctx.botId, 'decision_condensation', parsed.paragraph as string, ctx.cycleNumber);
-      await schoolAdapter.submitCondensation(schoolCreds, { ...parsed, track: 'decision' });
-      condensationOccurred = 'decision';
-    } else {
-      logger.warn({ contentSnippet: response.content?.slice(0, 120) }, 'Failed to extract JSON from decision condensation LLM response');
+      const parsed = tryParseJson(response.content);
+      if (parsed?.paragraph) {
+        await memory.storeParagraph(ctx.botId, 'decision_condensation', parsed.paragraph as string, ctx.cycleNumber);
+        await schoolAdapter.submitCondensation(schoolCreds, { ...parsed, track: 'decision' });
+        condensationOccurred = 'decision';
+      } else {
+        logger.warn({ contentSnippet: response.content?.slice(0, 120) }, 'Failed to extract JSON from decision condensation LLM response');
+      }
+    } catch (decisionErr) {
+      logger.warn({ err: decisionErr instanceof Error ? decisionErr.message : String(decisionErr) }, 'Decision condensation failed (non-blocking)');
     }
   }
 

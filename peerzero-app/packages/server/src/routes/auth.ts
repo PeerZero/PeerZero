@@ -6,6 +6,8 @@ import { Router, Request, Response } from 'express';
 import rateLimit from 'express-rate-limit';
 import { registerUser, loginUser, refreshTokens, revokeRefreshTokens, getUserProfile, updateProfile, changePassword, deleteAccount, forgotPassword, resetPassword } from '../services/auth.service';
 import { requireAuth } from '../middleware/auth';
+import { validateBody } from '../middleware/validate';
+import { UpdateProfileSchema } from '../lib/schemas';
 import { removeBotJobs } from '../jobs/queue';
 import { logAudit } from '../services/audit.service';
 import { queryRows, queryOne } from '../db/client';
@@ -123,12 +125,8 @@ router.get('/me', requireAuth, async (req: Request, res: Response) => {
 
 // ── Profile Management ──
 
-router.patch('/profile', requireAuth, async (req: Request, res: Response) => {
+router.patch('/profile', requireAuth, validateBody(UpdateProfileSchema), async (req: Request, res: Response) => {
   const { display_name, language } = req.body;
-  if (display_name === undefined && language === undefined) {
-    res.status(400).json({ error: 'display_name or language required' });
-    return;
-  }
   await updateProfile(req.user!.userId, display_name, language);
   const profile = await getUserProfile(req.user!.userId);
   res.json(profile);

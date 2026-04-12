@@ -15,6 +15,8 @@
 import { Router, Request, Response } from 'express';
 import { requireAuth } from '../middleware/auth';
 import { userRateLimit } from '../middleware/rate-limit';
+import { validateBody } from '../middleware/validate';
+import { CreateSkillSchema, UpdateSkillSchema } from '../lib/schemas';
 import * as skillEngine from '../services/skill-engine.service';
 import { acquireSkill } from '../services/skill-acquisition.service';
 import { logAudit } from '../services/audit.service';
@@ -29,12 +31,8 @@ router.get('/bot/:id', userRateLimit('read'), async (req: Request, res: Response
 });
 
 // Create a skill manually
-router.post('/bot/:id', userRateLimit('write'), async (req: Request, res: Response) => {
+router.post('/bot/:id', userRateLimit('write'), validateBody(CreateSkillSchema), async (req: Request, res: Response) => {
   const { name, instruction, trigger, priority, category } = req.body;
-  if (!name || !instruction) {
-    res.status(400).json({ error: 'name and instruction required' });
-    return;
-  }
 
   const skill = await skillEngine.createSkill(
     req.params.id,
@@ -59,7 +57,7 @@ router.post('/bot/:id', userRateLimit('write'), async (req: Request, res: Respon
 });
 
 // Update a skill
-router.patch('/bot/:id/:skillId', userRateLimit('write'), async (req: Request, res: Response) => {
+router.patch('/bot/:id/:skillId', userRateLimit('write'), validateBody(UpdateSkillSchema), async (req: Request, res: Response) => {
   await skillEngine.updateSkill(req.params.skillId, req.params.id, req.user!.userId, req.body);
   res.json({ success: true });
 });

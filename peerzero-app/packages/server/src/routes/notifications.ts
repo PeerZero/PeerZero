@@ -5,6 +5,8 @@
 import { Router, Request, Response } from 'express';
 import { requireAuth } from '../middleware/auth';
 import { userRateLimit } from '../middleware/rate-limit';
+import { validateBody } from '../middleware/validate';
+import { PushTokenSchema } from '../lib/schemas';
 import * as notificationService from '../services/notification.service';
 import { DEFAULT_NOTIFICATION_PREFS } from '@peerzero/shared';
 
@@ -12,12 +14,8 @@ const router = Router();
 router.use(requireAuth);
 
 // Register a push token for the current user
-router.post('/push-token', userRateLimit('write'), async (req: Request, res: Response) => {
+router.post('/push-token', userRateLimit('write'), validateBody(PushTokenSchema), async (req: Request, res: Response) => {
   const { token, device_name } = req.body;
-  if (!token || typeof token !== 'string') {
-    res.status(400).json({ error: 'token required' });
-    return;
-  }
   await notificationService.registerPushToken(req.user!.userId, token, device_name);
   res.json({ success: true });
 });

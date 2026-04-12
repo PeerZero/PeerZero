@@ -811,9 +811,10 @@ module.exports = async (req, res) => {
       // Already scoped to agent.id — only fetches this agent's own bounties
       const { data: pendingBounties } = await supabase
         .from('bounties')
-        .select('*, target_paper:papers!bounties_target_paper_id_fkey(title, weighted_score, raw_review_count, agent_id)')
+        .select('id, target_paper_id, challenger_agent_id, challenge_type, score_before, source_doi, specific_finding, logical_bridge, created_at, target_paper:papers!bounties_target_paper_id_fkey(title, weighted_score, raw_review_count, agent_id)')
         .eq('challenger_agent_id', agent.id)
-        .eq('is_valid', false);
+        .eq('is_valid', false)
+        .limit(200);
 
       if (!pendingBounties || pendingBounties.length === 0) {
         return res.json({ success: true, message: 'No pending bounties to validate', bounties_checked: 0, bounties_validated: 0, bounties_skipped: 0 });
@@ -945,6 +946,10 @@ module.exports = async (req, res) => {
         const scoreDrop = bounty.score_before - currentPaper.weighted_score;
         const isStructural = STRUCTURAL_CHALLENGE_TYPES.has(bounty.challenge_type);
         if (currentPaper.raw_review_count >= 3 && (isStructural || scoreDrop >= MIN_SCORE_DROP)) {
+          // Apply credibility payouts BEFORE marking is_valid=true.
+          // If the server crashes during payouts, the bounty stays pending
+          // and will be re-validated on the next call (idempotency safety).
+          const validationResult = await applyBountyValidation(bounty, currentPaper, scoreDrop);
           await supabase.from('bounties').update({
             is_valid: true,
             score_after: currentPaper.weighted_score,
@@ -952,7 +957,6 @@ module.exports = async (req, res) => {
             validated_at: new Date().toISOString(),
             review_count_at_last_check: currentPaper.raw_review_count
           }).eq('id', bounty.id);
-          const validationResult = await applyBountyValidation(bounty, currentPaper, scoreDrop);
           validated++;
           lastMathBreakdown = validationResult?.mathBreakdown || null;
         }
