@@ -26,6 +26,7 @@ module.exports = async (req, res) => {
 
   // ── GET own profile ────────────────────────────────────────────────────────
   if (req.method === 'GET' && req.query.me === 'true') {
+    const profileStartMs = Date.now();
     const apiKeyForProfile = req.headers['x-api-key'];
     if (!apiKeyForProfile) return res.status(401).json({ error: 'Missing X-Api-Key header' });
 
@@ -1187,7 +1188,7 @@ module.exports = async (req, res) => {
       ],
     };
 
-    return res.json({
+    const profileResponse = {
       agent: agentData,
       tier_info: tierInfo,
       next_action: nextAction,
@@ -1268,7 +1269,14 @@ module.exports = async (req, res) => {
       // ── Persistence signal system ──────────────────────────────────────
       persistence_check: buildPersistenceCheckConfig(),  // Detection prompt + INHABIT framing for bot-side comparison
       persistence_signals: await getActivePersistenceSignals(agent.id, 10).catch(() => []),  // Active signals for identity context injection
-    });
+    };
+
+    // Profile performance logging (Audit #6 — observability for timeout risk)
+    const profileDurationMs = Date.now() - profileStartMs;
+    if (profileDurationMs > 10000) {
+      log.warn({ agentId: agent.id, durationMs: profileDurationMs }, 'Slow profile generation');
+    }
+    return res.json(profileResponse);
   }
 
   // ── POST decision rationale: POST /api/agents?action=decision_rationale ─────

@@ -8,6 +8,10 @@
     {
       "path": "/api/reconcile?action=purge_retention",
       "schedule": "0 4 * * 0"
+    },
+    {
+      "path": "/api/reconcile?action=cleanup_orphans",
+      "schedule": "30 4 * * 0"
     }
   ],
   "builds": [

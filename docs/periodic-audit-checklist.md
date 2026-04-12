@@ -109,7 +109,7 @@ Pick 2-3 audits per session. For each audit, search all 3 systems (peerzero-scho
 - Config files with secrets readable by group/other (the `_check_permissions` pattern)
 - Hardcoded credentials, test API keys, or placeholder secrets left in code
 
-**Last run:** Never (partial coverage: secret scanning was done in a previous PR)
+**Last run:** 2026-04-12 — 12 found, 6 fixed. Phone-home token expiry reduced 90→30 days. Error sanitization regex hardened (JWT, pht_, whsec_, apiKey patterns). Error sanitize before log, bearer regex improved, reconcile sanitize. .env.test contains fake test credentials (acceptable). Config file permissions are secure-by-default (errors when group/other readable). Identity endpoint verified per-agent scoped.
 
 ---
 
@@ -129,7 +129,7 @@ Pick 2-3 audits per session. For each audit, search all 3 systems (peerzero-scho
 - Rate limit bypass: are all expensive endpoints rate-limited? (LLM calls, search, paper submission)
 - Unbounded loops or retries that could spin forever
 
-**Last run:** Never
+**Last run:** 2026-04-12 — 12 found, 11 fixed. SDK timeout, fetch timeout, SQLite timeout, pool sizing, Supabase timeout, news search logging, BullMQ lock renewal, JSON loop limit, rate bucket cap, fallback LRU, maxStalledCount=2. Remaining: profile endpoint timeout risk at scale (medium, mitigated by composite indexes).
 
 ---
 
@@ -166,7 +166,7 @@ Pick 2-3 audits per session. For each audit, search all 3 systems (peerzero-scho
 - REST parameter manipulation (changing `bot_id` in request to access another user's bot)
 - Missing `requireAuth` middleware on routes that should be protected
 
-**Last run:** Never
+**Last run:** 2026-04-12 — Phone-home token auth scoped to write-only (user_id no longer in token lookup). Export-data rate-limited (5/hr). Skill ownership verified correct at service layer. Task progress validates task_id belongs to bot. Emergency stop rate-limited. Bot start idempotent. 0 critical remaining.
 
 ---
 
@@ -238,7 +238,7 @@ Pick 2-3 audits per session. For each audit, search all 3 systems (peerzero-scho
 - Full table scans in the audit log, activity log, or credibility transactions
 - PostgreSQL queries missing `EXPLAIN ANALYZE` verification for hot paths
 
-**Last run:** Never
+**Last run:** 2026-04-12 — Post-review stats parallelized (3 sequential → Promise.all). Rebuttal papers query capped with .limit(100). Promoted Q bonus loop parallelized (sequential → Promise.all). 5 composite indexes added (migration 030) for heavy query patterns.
 
 ---
 
@@ -257,7 +257,7 @@ Pick 2-3 audits per session. For each audit, search all 3 systems (peerzero-scho
 - Integer overflow: scores, counts, or amounts that could be negative or extremely large
 - Array inputs without length limits (could a user submit 10,000 citations?)
 
-**Last run:** Never
+**Last run:** 2026-04-12 — Citations array capped at 50 + Array.isArray type check. cross_study_connection max length capped at 5000 chars. App server uses Zod schemas with validateBody() middleware for request bodies.
 
 ---
 
