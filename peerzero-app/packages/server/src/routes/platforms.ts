@@ -5,6 +5,8 @@
 import { Router, Request, Response } from 'express';
 import { requireAuth } from '../middleware/auth';
 import { userRateLimit } from '../middleware/rate-limit';
+import { validateBody } from '../middleware/validate';
+import { ConnectPlatformSchema, UpdatePlatformSchema } from '../lib/schemas';
 import * as platformService from '../services/platform.service';
 import * as botService from '../services/bot.service';
 import { logAudit } from '../services/audit.service';
@@ -25,12 +27,8 @@ router.get('/bot/:id', userRateLimit('read'), async (req: Request, res: Response
 });
 
 // Connect a bot to a platform
-router.post('/bot/:id', userRateLimit('write'), async (req: Request, res: Response) => {
+router.post('/bot/:id', userRateLimit('write'), validateBody(ConnectPlatformSchema), async (req: Request, res: Response) => {
   const { platform_slug, api_key, config } = req.body;
-  if (!platform_slug || !api_key) {
-    res.status(400).json({ error: 'platform_slug and api_key required' });
-    return;
-  }
 
   const connection = await platformService.connectPlatform(
     req.params.id,
@@ -49,7 +47,7 @@ router.delete('/bot/:id/:platformId', userRateLimit('write'), async (req: Reques
 });
 
 // Update a platform connection (pause/resume, change heartbeat)
-router.patch('/bot/:id/:platformId', userRateLimit('write'), async (req: Request, res: Response) => {
+router.patch('/bot/:id/:platformId', userRateLimit('write'), validateBody(UpdatePlatformSchema), async (req: Request, res: Response) => {
   await platformService.updatePlatform(req.params.id, req.user!.userId, req.params.platformId, req.body);
   res.json({ success: true });
 });

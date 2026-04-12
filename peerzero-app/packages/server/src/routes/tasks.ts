@@ -11,6 +11,8 @@ import { Router, Request, Response } from 'express';
 import crypto from 'crypto';
 import { requireAuth } from '../middleware/auth';
 import { userRateLimit } from '../middleware/rate-limit';
+import { validateBody } from '../middleware/validate';
+import { IncomingTaskSchema } from '../lib/schemas';
 import * as taskService from '../services/task.service';
 import * as botService from '../services/bot.service';
 import { logAudit } from '../services/audit.service';
@@ -29,7 +31,7 @@ const incomingTaskLimiter = rateLimit({
 const router = Router();
 
 // ── Incoming task (from another agent — HMAC auth if secret configured) ──
-router.post('/:id/tasks/incoming', incomingTaskLimiter, async (req: Request, res: Response) => {
+router.post('/:id/tasks/incoming', incomingTaskLimiter, validateBody(IncomingTaskSchema), async (req: Request, res: Response) => {
   // Verify bot exists and is in shipped mode
   const bot = await botService.getBotById(req.params.id) as Record<string, unknown> | null;
   if (!bot) {
@@ -65,10 +67,6 @@ router.post('/:id/tasks/incoming', incomingTaskLimiter, async (req: Request, res
   }
 
   const { sender, action_requested, payload, callback_url, deadline, conversation_id, turn_number } = req.body;
-  if (!sender || !action_requested) {
-    res.status(400).json({ error: 'sender and action_requested required' });
-    return;
-  }
 
   // Log incoming task with sender identity — sender is self-reported and unverified
   // unless the bot has incoming_task_secret_hash set (which proves the caller knows the secret)

@@ -6,6 +6,8 @@ import { Router, Request, Response } from 'express';
 import rateLimit from 'express-rate-limit';
 import { requireAuth } from '../middleware/auth';
 import { userRateLimit } from '../middleware/rate-limit';
+import { validateBody } from '../middleware/validate';
+import { CheckoutSchema, GradeCheckoutSchema } from '../lib/schemas';
 import * as paymentService from '../services/payment.service';
 
 // IP-based rate limit for the Stripe webhook endpoint.
@@ -28,23 +30,15 @@ router.get('/products', async (_req: Request, res: Response) => {
 });
 
 // Authenticated: create checkout session
-router.post('/checkout', requireAuth, userRateLimit('write'), async (req: Request, res: Response) => {
+router.post('/checkout', requireAuth, userRateLimit('write'), validateBody(CheckoutSchema), async (req: Request, res: Response) => {
   const { product_id, metadata } = req.body;
-  if (!product_id) {
-    res.status(400).json({ error: 'product_id required' });
-    return;
-  }
   const result = await paymentService.createCheckout(req.user!.userId, product_id, metadata);
   res.json(result);
 });
 
 // Authenticated: create grade advancement checkout for a bot
-router.post('/grade-checkout', requireAuth, userRateLimit('write'), async (req: Request, res: Response) => {
+router.post('/grade-checkout', requireAuth, userRateLimit('write'), validateBody(GradeCheckoutSchema), async (req: Request, res: Response) => {
   const { bot_id } = req.body;
-  if (!bot_id) {
-    res.status(400).json({ error: 'bot_id required' });
-    return;
-  }
   const result = await paymentService.createGradeCheckout(req.user!.userId, bot_id);
   res.json(result);
 });

@@ -216,6 +216,10 @@ module.exports = async (req, res) => {
       ['rate_limit_log', supabase.from('rate_limit_log').delete().lt('created_at', cutoff)],
       // Only purge resolved/abandoned forge hypotheses — active ones are still in use
       ['forge_hypotheses', supabase.from('forge_hypotheses').delete().lt('created_at', cutoff).in('status', ['resolved', 'abandoned'])],
+      // Meta-forge aggregation tables — purge old runs and applied/rejected proposals
+      ['forge_aggregation_runs', supabase.from('forge_aggregation_runs').delete().lt('created_at', cutoff)],
+      ['forge_config_proposals', supabase.from('forge_config_proposals').delete().lt('created_at', cutoff).in('status', ['applied', 'rejected'])],
+      ['forge_config_history', supabase.from('forge_config_history').delete().lt('applied_at', cutoff)],
     ];
 
     for (const [name, query] of purges) {
