@@ -234,7 +234,10 @@ describe('PATCH /auth/profile', () => {
       .send({});
 
     expect(res.status).toBe(400);
-    expect(res.body.error).toMatch(/display_name or language/i);
+    expect(res.body.error).toBe('Validation failed');
+    expect(res.body.details).toEqual(
+      expect.arrayContaining([expect.objectContaining({ message: expect.stringMatching(/display_name or language/i) })]),
+    );
   });
 
   it('updates display_name and returns updated profile', async () => {
