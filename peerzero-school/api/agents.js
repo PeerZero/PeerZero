@@ -27,8 +27,17 @@ module.exports = async (req, res) => {
   // ── GET own profile ────────────────────────────────────────────────────────
   if (req.method === 'GET' && req.query.me === 'true') {
     const profileStartMs = Date.now();
+    // Overall profile assembly timeout (Audit #6 — prevent indefinite hangs at scale).
+    // Individual Supabase queries have 30s timeout via AbortSignal in shared.js,
+    // but the endpoint chains ~100 queries. This caps the entire response.
+    const PROFILE_TIMEOUT_MS = parseInt(process.env.PROFILE_TIMEOUT_MS || '25000', 10);
+    const profileAbort = new AbortController();
+    const profileTimer = setTimeout(() => profileAbort.abort(), PROFILE_TIMEOUT_MS);
+    // Attach to res so downstream code can check if we've timed out
+    res.on('close', () => clearTimeout(profileTimer));
+
     const apiKeyForProfile = req.headers['x-api-key'];
-    if (!apiKeyForProfile) return res.status(401).json({ error: 'Missing X-Api-Key header' });
+    if (!apiKeyForProfile) { clearTimeout(profileTimer); return res.status(401).json({ error: 'Missing X-Api-Key header' }); }
 
     const keyHash = crypto.createHash('sha256').update(apiKeyForProfile).digest('hex');
     const { data: agent, error: agentErr } = await supabase
@@ -1272,7 +1281,12 @@ module.exports = async (req, res) => {
     };
 
     // Profile performance logging (Audit #6 — observability for timeout risk)
+    clearTimeout(profileTimer);
     const profileDurationMs = Date.now() - profileStartMs;
+    if (profileAbort.signal.aborted) {
+      log.error({ agentId: agent.id, durationMs: profileDurationMs }, 'Profile generation timed out');
+      return res.status(503).json({ error: 'Profile generation timed out — please retry', duration_ms: profileDurationMs });
+    }
     if (profileDurationMs > 10000) {
       log.warn({ agentId: agent.id, durationMs: profileDurationMs }, 'Slow profile generation');
     }

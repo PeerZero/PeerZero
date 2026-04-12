@@ -4,6 +4,19 @@
 // Connects to School only through adapters when USE_REAL_ADAPTERS=true.
 // =============================================================================
 
+// Sentry must be initialized before other imports for proper instrumentation
+import * as Sentry from '@sentry/node';
+if (process.env.SENTRY_DSN) {
+  Sentry.init({
+    dsn: process.env.SENTRY_DSN,
+    environment: process.env.NODE_ENV || 'development',
+    // Capture 10% of transactions for performance monitoring in production
+    tracesSampleRate: process.env.NODE_ENV === 'production' ? 0.1 : 1.0,
+    // Don't send PII (user IPs, cookies)
+    sendDefaultPii: false,
+  });
+}
+
 import 'express-async-errors';
 import express from 'express';
 import cors from 'cors';
@@ -68,9 +81,19 @@ app.use(helmet({
       objectSrc: ["'none'"],
       baseUri: ["'none'"],
       formAction: ["'none'"],
+      // CSP violation reporting — configure via CSP_REPORT_URI env var
+      // (e.g., Sentry CSP endpoint or dedicated report collector)
+      ...(process.env.CSP_REPORT_URI ? { reportUri: process.env.CSP_REPORT_URI } : {}),
     },
   },
 }));
+// Reporting-Endpoints header for CSP report-to (modern browsers)
+if (process.env.CSP_REPORT_URI) {
+  app.use((_req, res, next) => {
+    res.setHeader('Reporting-Endpoints', `csp-endpoint="${process.env.CSP_REPORT_URI}"`);
+    next();
+  });
+}
 app.use(cors({
   origin: config.isDev
     ? [/^https?:\/\/localhost(:\d+)?$/, /^https?:\/\/127\.0\.0\.1(:\d+)?$/]
@@ -98,6 +121,11 @@ app.use('/api/widgets', widgetRoutes);
 app.use('/api/platforms', platformRoutes);
 app.use('/api/skills', skillRoutes);
 app.use('/health', healthRoutes);
+
+// ── Sentry error handler (captures exceptions before the custom error handler) ──
+if (process.env.SENTRY_DSN) {
+  Sentry.setupExpressErrorHandler(app);
+}
 
 // ── Error handler (must be last) ──
 app.use(errorHandler);
