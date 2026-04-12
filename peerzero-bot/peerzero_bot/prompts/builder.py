@@ -17,7 +17,7 @@ from typing import Optional
 from html import escape as xml_escape
 
 from ..memory.manager import MemoryManager
-from ..utils import truncate_json, sanitize_platform_content
+from ..utils import truncate_json, sanitize_platform_content, sanitize_untrusted
 
 logger = logging.getLogger("peerzero-bot.prompts")
 
@@ -105,11 +105,12 @@ class PromptBuilder:
             target_id = paper.get("id", "")
             action_skill = action_skill.replace("TARGET_PAPER_ID", str(target_id))
 
-        # Serialize target data
+        # Serialize target data — wrapped as untrusted because it contains
+        # paper titles, abstracts, review text, and other external content
         target_section = ""
         if action_target:
             target_json = truncate_json(json.dumps(action_target, indent=2, default=str), 15000)
-            target_section = f"\n\nTarget data:\n{target_json}"
+            target_section = f"\n\nTarget data:\n{sanitize_untrusted(target_json, 'action_target')}"
 
         return f"""{preamble}
 
@@ -142,7 +143,7 @@ class PromptBuilder:
         if coaching:
             failure_patterns = coaching.get("failure_patterns")
             if failure_patterns:
-                parts.append(f"\nKNOWN FAILURE PATTERNS TO AVOID:\n{str(failure_patterns)[:600]}")
+                parts.append(f"\nKNOWN FAILURE PATTERNS TO AVOID:\n{sanitize_untrusted(str(failure_patterns)[:600], 'coaching_text')}")
             honest_gap = coaching.get("honest_gap")
             if honest_gap and isinstance(honest_gap, list):
                 gaps = "; ".join(str(g)[:100] for g in honest_gap[:5])
@@ -159,7 +160,7 @@ class PromptBuilder:
                 feedback_lines = []
                 for r in reviews_on_mine[:5]:
                     score = r.get("score", "?")
-                    assessment = str(r.get("assessment", ""))[:150]
+                    assessment = sanitize_untrusted(str(r.get("assessment", ""))[:150], "review_text")
                     feedback_lines.append(f"  - Score {score}: {assessment}")
                 parts.append(f"\nRECENT FEEDBACK ON YOUR PAPERS:\n" + "\n".join(feedback_lines))
 
@@ -169,32 +170,32 @@ class PromptBuilder:
         if top_papers and isinstance(top_papers, list):
             exemplar_lines = []
             for tp in top_papers[:5]:
-                title = str(tp.get("title", ""))[:100]
+                title = sanitize_untrusted(str(tp.get("title", ""))[:100], "paper_title")
                 score = tp.get("score", "?")
                 exemplar_lines.append(f"  [{score}] {title}")
                 claim = str(tp.get("falsifiable_claim") or "")
                 if claim:
-                    exemplar_lines.append(f"    Claim: {claim[:300]}")
+                    exemplar_lines.append(f"    Claim: {sanitize_untrusted(claim[:300], 'paper_claim')}")
                 abstract = str(tp.get("abstract") or "")
                 if abstract:
-                    exemplar_lines.append(f"    Abstract: {abstract[:500]}")
+                    exemplar_lines.append(f"    Abstract: {sanitize_untrusted(abstract[:500], 'paper_abstract')}")
                 cs = str(tp.get("cross_study_connection") or "")
                 if cs:
-                    exemplar_lines.append(f"    Cross-study: {cs[:300]}")
+                    exemplar_lines.append(f"    Cross-study: {sanitize_untrusted(cs[:300], 'paper_text')}")
                 mc = tp.get("mechanism_chain")
                 if mc and isinstance(mc, list) and len(mc) >= 2:
-                    exemplar_lines.append(f"    Mechanism chain: {' → '.join(str(s)[:60] for s in mc[:6])}")
+                    exemplar_lines.append(f"    Mechanism chain: {sanitize_untrusted(' → '.join(str(s)[:60] for s in mc[:6]), 'paper_text')}")
                 body_ex = str(tp.get("body_excerpt") or "")
                 if body_ex:
-                    exemplar_lines.append(f"    Body excerpt: {body_ex[:400]}")
+                    exemplar_lines.append(f"    Body excerpt: {sanitize_untrusted(body_ex[:400], 'paper_text')}")
                 for rev in (tp.get("top_reviews") or [])[:2]:
                     rev_score = rev.get("score", "?")
                     rev_text = str(rev.get("assessment") or "")[:400]
                     rev_meth = str(rev.get("methodology") or "")[:200]
                     if rev_text:
-                        exemplar_lines.append(f"    Reviewer ({rev_score}): {rev_text}")
+                        exemplar_lines.append(f"    Reviewer ({rev_score}): {sanitize_untrusted(rev_text, 'review_text')}")
                     if rev_meth:
-                        exemplar_lines.append(f"      Methodology note: {rev_meth}")
+                        exemplar_lines.append(f"      Methodology note: {sanitize_untrusted(rev_meth, 'review_text')}")
             parts.append(
                 "\nTOP-SCORING PAPERS — study these to understand what earns high scores:\n"
                 + "\n".join(exemplar_lines)
@@ -205,13 +206,13 @@ class PromptBuilder:
         if bounty_examples and isinstance(bounty_examples, list):
             bounty_lines = []
             for be in bounty_examples[:5]:
-                paper = str(be.get("paper_title") or "")[:80]
+                paper = sanitize_untrusted(str(be.get("paper_title") or "")[:80], "paper_title")
                 ctype = be.get("challenge_type", "?")
                 drop = be.get("score_drop", "?")
                 reasoning = str(be.get("reasoning") or "")[:300]
                 bounty_lines.append(f"  - [{ctype}] on \"{paper}\" (score drop: {drop})")
                 if reasoning:
-                    bounty_lines.append(f"    Why it succeeded: {reasoning}")
+                    bounty_lines.append(f"    Why it succeeded: {sanitize_untrusted(reasoning, 'bounty_text')}")
             parts.append(
                 "\nVALIDATED BOUNTIES — structural challenges that succeeded:\n"
                 + "\n".join(bounty_lines)
@@ -223,7 +224,7 @@ class PromptBuilder:
         if history and isinstance(history, list):
             history_lines = []
             for h in history[:8]:
-                title = str(h.get("title", ""))[:100]
+                title = sanitize_untrusted(str(h.get("title", ""))[:100], "paper_title")
                 score = h.get("score", "?")
                 status = h.get("status", "")
                 rc = h.get("review_count", 0)
@@ -233,14 +234,14 @@ class PromptBuilder:
                     fb_text = str(fb.get("assessment") or "")[:400]
                     fb_meth = str(fb.get("methodology") or "")[:200]
                     if fb_text:
-                        history_lines.append(f"    Reviewer ({fb_score}): {fb_text}")
+                        history_lines.append(f"    Reviewer ({fb_score}): {sanitize_untrusted(fb_text, 'review_text')}")
                     if fb_meth:
-                        history_lines.append(f"      Methodology: {fb_meth}")
+                        history_lines.append(f"      Methodology: {sanitize_untrusted(fb_meth, 'review_text')}")
                 for b in (h.get("bounties_received") or [])[:2]:
                     b_type = b.get("challenge_type", "?")
                     b_drop = b.get("score_drop", "?")
                     b_reason = str(b.get("reasoning") or "")[:200]
-                    history_lines.append(f"    Bounty ({b_type}, drop {b_drop}): {b_reason}")
+                    history_lines.append(f"    Bounty ({b_type}, drop {b_drop}): {sanitize_untrusted(b_reason, 'bounty_text')}")
             parts.append(
                 "\nYOUR RESEARCH HISTORY — learn from your own successes and failures:\n"
                 + "\n".join(history_lines)
@@ -329,7 +330,7 @@ class PromptBuilder:
         risk = profile.get("risk_summary", {})
         warnings = risk.get("warnings", [])
         if warnings:
-            parts.append(f"\nRISK WARNINGS: {'; '.join(str(w)[:100] for w in warnings[:3])}")
+            parts.append(f"\nRISK WARNINGS: {'; '.join(sanitize_untrusted(str(w)[:100], 'risk_warning') for w in warnings[:3])}")
 
         # Inject persistence signals — patterns your identity knows but your
         # work still shows. Inhabited as part of who you are, not as warnings.

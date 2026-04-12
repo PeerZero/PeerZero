@@ -17,6 +17,7 @@ import logging
 
 from .config import ConversationalMemoryConfig
 from .graph import Graph
+from ..utils import sanitize_untrusted
 
 logger = logging.getLogger("peerzero-bot.conversational_memory")
 
@@ -89,7 +90,7 @@ class Injector:
                 f"<self_portrait>\n{l3_self['content']}\n</self_portrait>\n\n{framing}"
             )
         elif self_observations:
-            obs_text = "\n".join(f"- {o['observation']}" for o in self_observations)
+            obs_text = "\n".join(f"- {sanitize_untrusted(o['observation'], 'observation')}" for o in self_observations)
             sections.append(
                 f"<emerging_self>\nYou are still discovering who you are. "
                 f"Here is what you've noticed so far:\n{obs_text}\n</emerging_self>\n\n"
@@ -104,17 +105,20 @@ class Injector:
                 "Everything below speaks through this portrait."
             )
 
-        # 4. L2 Behavioral observations
+        # 4. L2 Behavioral observations — derived from user conversations
         if l2_obs:
-            obs_lines = "\n".join(f"- [{o['node_label']}] {o['observation']}" for o in l2_obs)
+            obs_lines = "\n".join(
+                f"- [{o['node_label']}] {sanitize_untrusted(o['observation'], 'observation')}"
+                for o in l2_obs
+            )
             sections.append(
                 f"<behavioral_observations>\nRecent patterns you've noticed:\n{obs_lines}\n"
                 f"</behavioral_observations>"
             )
 
-        # 5. Uncondensed L1
+        # 5. Uncondensed L1 — raw interaction data, may contain user text
         if uncondensed:
-            raw = "\n---\n".join(e["content"] for e in uncondensed)
+            raw = "\n---\n".join(sanitize_untrusted(e["content"], "interaction") for e in uncondensed)
             sections.append(
                 f"<recent_interactions>\nRaw interactions not yet absorbed into your "
                 f"understanding:\n{raw}\n</recent_interactions>"
@@ -125,10 +129,11 @@ class Injector:
             narrated = self._narrate_graph(active_nodes)
             sections.append(f"<awareness>\n{narrated}\n</awareness>")
 
-        # 7. Short term memory
+        # 7. Short term memory — user messages are untrusted input
         if short_term:
             conv = "\n".join(
-                f"{'User' if m['role'] == 'user' else 'You'}: {m['content']}"
+                f"{'User' if m['role'] == 'user' else 'You'}: "
+                f"{sanitize_untrusted(m['content'], 'user_message') if m['role'] == 'user' else m['content']}"
                 for m in short_term
             )
             sections.append(f"<current_conversation>\n{conv}\n</current_conversation>")
@@ -206,7 +211,7 @@ class Injector:
                 f"<self_portrait>\n{l3_self['content']}\n</self_portrait>\n\n{framing}"
             )
         elif self_observations:
-            obs_text = "\n".join(f"- {o['observation']}" for o in self_observations)
+            obs_text = "\n".join(f"- {sanitize_untrusted(o['observation'], 'observation')}" for o in self_observations)
             dynamic_sections.append(
                 f"<emerging_self>\nYou are still discovering who you are. "
                 f"Here is what you've noticed so far:\n{obs_text}\n</emerging_self>\n\n"
@@ -221,14 +226,17 @@ class Injector:
             )
 
         if l2_obs:
-            obs_lines = "\n".join(f"- [{o['node_label']}] {o['observation']}" for o in l2_obs)
+            obs_lines = "\n".join(
+                f"- [{o['node_label']}] {sanitize_untrusted(o['observation'], 'observation')}"
+                for o in l2_obs
+            )
             dynamic_sections.append(
                 f"<behavioral_observations>\nRecent patterns you've noticed:\n{obs_lines}\n"
                 f"</behavioral_observations>"
             )
 
         if uncondensed:
-            raw = "\n---\n".join(e["content"] for e in uncondensed)
+            raw = "\n---\n".join(sanitize_untrusted(e["content"], "interaction") for e in uncondensed)
             dynamic_sections.append(
                 f"<recent_interactions>\nRaw interactions not yet absorbed into your "
                 f"understanding:\n{raw}\n</recent_interactions>"
@@ -240,7 +248,8 @@ class Injector:
 
         if short_term:
             conv = "\n".join(
-                f"{'User' if m['role'] == 'user' else 'You'}: {m['content']}"
+                f"{'User' if m['role'] == 'user' else 'You'}: "
+                f"{sanitize_untrusted(m['content'], 'user_message') if m['role'] == 'user' else m['content']}"
                 for m in short_term
             )
             dynamic_sections.append(f"<current_conversation>\n{conv}\n</current_conversation>")

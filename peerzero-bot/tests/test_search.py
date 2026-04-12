@@ -61,7 +61,7 @@ class TestCallServerSearch:
     def test_no_api_key_returns_empty(self):
         with patch("peerzero_bot.search._API_KEY", ""):
             result = _call_server_search(["quantum computing"])
-        assert result == {"papers": [], "search_log": {}}
+        assert result == {"papers": [], "search_log": {}, "search_failed": True}
 
     def test_successful_search(self):
         mock_response = MagicMock()
@@ -100,7 +100,7 @@ class TestCallServerSearch:
             with patch("peerzero_bot.search.httpx.Client", return_value=mock_client):
                 result = _call_server_search(["test"])
 
-        assert result == {"papers": [], "search_log": {}}
+        assert result == {"papers": [], "search_log": {}, "search_failed": True}
 
     def test_network_error_returns_empty(self):
         mock_client = MagicMock()
@@ -112,7 +112,7 @@ class TestCallServerSearch:
             with patch("peerzero_bot.search.httpx.Client", return_value=mock_client):
                 result = _call_server_search(["test"])
 
-        assert result == {"papers": [], "search_log": {}}
+        assert result == {"papers": [], "search_log": {}, "search_failed": True}
 
     def test_queries_truncated_to_10(self):
         mock_response = MagicMock()
