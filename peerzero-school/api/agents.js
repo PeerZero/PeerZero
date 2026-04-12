@@ -1403,9 +1403,10 @@ module.exports = async (req, res) => {
     const alwaysTrigger = 9999;
     const grade = agent.current_grade || 1;
 
-    const [learningMilestone, decisionMilestone] = await Promise.all([
+    const [learningMilestone, decisionMilestone, forgeMilestone] = await Promise.all([
       buildMilestoneCondenser(alwaysTrigger, grade),
       buildDecisionMilestoneCondenser(alwaysTrigger, grade),
+      buildForgeMilestoneCondenser(alwaysTrigger, grade),
     ]);
 
     // NOTE: We intentionally do NOT return core (L3→L4) or master (L4→L5)
@@ -1426,6 +1427,10 @@ module.exports = async (req, res) => {
       },
       decision: {
         milestone: decisionMilestone,  // L1→L2d prompt template
+        // No core or master — school-only
+      },
+      forge: {
+        milestone: forgeMilestone,  // L1→L2f prompt template
         // No core or master — school-only
       },
       platform_cap: 'L3',  // Explicit signal: condensation stops at Layer 3
