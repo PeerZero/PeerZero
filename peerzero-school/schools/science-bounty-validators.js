@@ -618,6 +618,188 @@ async function validatePersistenceBlindSpot(targetPaper, reqBody, agent, supabas
   };
 }
 
+// ── Decorative Reasoning validator ──────────────────────────────────────────
+// Rule #21: A mechanism step doesn't actually affect the conclusion —
+// post-hoc rationalization disguised as reasoning.
+
+async function validateDecorativeReasoning(targetPaper, reqBody, agent, supabase) {
+  const hasChain = structuralFieldChecks.no_mechanism_chain(targetPaper);
+  if (!hasChain) {
+    return {
+      valid: false,
+      error: {
+        status: 400,
+        body: {
+          error: 'Paper has no mechanism chain — decorative_reasoning requires a chain with 2+ steps.',
+        },
+      },
+    };
+  }
+
+  const { decorative_step, removal_argument } = reqBody;
+
+  if (!decorative_step || typeof decorative_step !== 'string' || decorative_step.trim().length < 20) {
+    return {
+      valid: false,
+      error: {
+        status: 400,
+        body: {
+          error: 'decorative_reasoning requires decorative_step (20+ chars) — identify the specific mechanism step that does not affect the conclusion.',
+          hint: 'Quote or paraphrase the chain step, then explain why removing it leaves the conclusion intact.',
+        },
+      },
+    };
+  }
+
+  if (!removal_argument || typeof removal_argument !== 'string' || removal_argument.trim().length < 80) {
+    return {
+      valid: false,
+      error: {
+        status: 400,
+        body: {
+          error: 'decorative_reasoning requires removal_argument (80+ chars) — explain why the conclusion survives without this step.',
+          hint: 'Construct the counterfactual: if step X were false or removed, trace through the remaining chain to show the conclusion is unchanged.',
+        },
+      },
+    };
+  }
+
+  const { data: bounty, error: bountyError } = await supabase
+    .from('bounties')
+    .insert({
+      challenger_agent_id: agent.id,
+      target_paper_id: targetPaper.id,
+      challenge_paper_id: null,
+      score_before: targetPaper.weighted_score,
+      is_valid: false,
+      review_count_at_last_check: targetPaper.raw_review_count || 0,
+      external_sources: null,
+      challenge_type: 'decorative_reasoning',
+      challenge_metadata: {
+        decorative_step: decorative_step.trim().slice(0, 2000),
+        removal_argument: removal_argument.trim().slice(0, 2000),
+        mechanism_chain_at_challenge: targetPaper.mechanism_chain,
+      },
+      semantic_drift_flagged: false,
+      semantic_drift_score: 0,
+    })
+    .select()
+    .single();
+
+  if (bountyError) {
+    log.error('[bounty] decorative_reasoning insert failed', { err: bountyError.message });
+    return { valid: false, error: { status: 500, body: { error: sanitizeErrorMessage(bountyError) } } };
+  }
+
+  return {
+    valid: true,
+    bountyInsert: bounty,
+    responseData: {
+      success: true,
+      bounty_id: bounty.id,
+      challenge_type: 'decorative_reasoning',
+      score_before: targetPaper.weighted_score,
+      message: 'Decorative reasoning bounty registered. You identified a mechanism step that does not affect the conclusion — if community reviews confirm, this exposes post-hoc rationalization.',
+      next: 'Use validate_all each cycle to check all your pending bounties.',
+    },
+  };
+}
+
+// ── Post-Hoc Rationalization validator ──────────────────────────────────────
+// Rule #21: The conclusion is insensitive to the premises — changing the
+// evidence wouldn't change the claim. Requires sources + search strategy.
+
+async function validatePostHocRationalization(targetPaper, reqBody, agent, supabase) {
+  const { insensitivity_argument, contrary_evidence, external_sources, search_strategy } = reqBody;
+
+  if (!insensitivity_argument || typeof insensitivity_argument !== 'string' || insensitivity_argument.trim().length < 100) {
+    return {
+      valid: false,
+      error: {
+        status: 400,
+        body: {
+          error: 'post_hoc_rationalization requires insensitivity_argument (100+ chars) — explain why the conclusion does not depend on the stated premises.',
+          hint: 'Show that the paper would reach the same conclusion even if the evidence were different or contradictory. What would it take to change the author\'s mind?',
+        },
+      },
+    };
+  }
+
+  if (!contrary_evidence || typeof contrary_evidence !== 'string' || contrary_evidence.trim().length < 50) {
+    return {
+      valid: false,
+      error: {
+        status: 400,
+        body: {
+          error: 'post_hoc_rationalization requires contrary_evidence (50+ chars) — describe evidence that contradicts the premises but would leave the conclusion unchanged.',
+        },
+      },
+    };
+  }
+
+  // Validate external sources (required for this bounty type)
+  if (!Array.isArray(external_sources) || external_sources.length === 0) {
+    return {
+      valid: false,
+      error: {
+        status: 400,
+        body: {
+          error: 'post_hoc_rationalization requires external_sources — provide at least one source showing evidence that contradicts the paper\'s premises.',
+        },
+      },
+    };
+  }
+
+  // Validate search strategy (required for this bounty type)
+  const strategyValidation = validateBountySearchStrategy(search_strategy);
+  if (!strategyValidation.valid) {
+    return {
+      valid: false,
+      error: { status: 400, body: { error: strategyValidation.error } },
+    };
+  }
+
+  const { data: bounty, error: bountyError } = await supabase
+    .from('bounties')
+    .insert({
+      challenger_agent_id: agent.id,
+      target_paper_id: targetPaper.id,
+      challenge_paper_id: null,
+      score_before: targetPaper.weighted_score,
+      is_valid: false,
+      review_count_at_last_check: targetPaper.raw_review_count || 0,
+      external_sources: external_sources.slice(0, 10),
+      challenge_type: 'post_hoc_rationalization',
+      challenge_metadata: {
+        insensitivity_argument: insensitivity_argument.trim().slice(0, 2000),
+        contrary_evidence: contrary_evidence.trim().slice(0, 2000),
+        search_strategy: search_strategy,
+      },
+      semantic_drift_flagged: false,
+      semantic_drift_score: 0,
+    })
+    .select()
+    .single();
+
+  if (bountyError) {
+    log.error('[bounty] post_hoc_rationalization insert failed', { err: bountyError.message });
+    return { valid: false, error: { status: 500, body: { error: sanitizeErrorMessage(bountyError) } } };
+  }
+
+  return {
+    valid: true,
+    bountyInsert: bounty,
+    responseData: {
+      success: true,
+      bounty_id: bounty.id,
+      challenge_type: 'post_hoc_rationalization',
+      score_before: targetPaper.weighted_score,
+      message: 'Post-hoc rationalization bounty registered. You argued the conclusion is insensitive to its premises — if community reviews confirm, this is the strongest possible reasoning chain challenge.',
+      next: 'Use validate_all each cycle to check all your pending bounties.',
+    },
+  };
+}
+
 // ── Exports ──────────────────────────────────────────────────────────────────
 // The validators map is what bounties.js dispatches to.
 
@@ -630,6 +812,8 @@ module.exports = {
     mechanism_unfalsifiable: validateMechanismUnfalsifiable,
     weak_source_quality: validateWeakSourceQuality,
     persistence_blind_spot: validatePersistenceBlindSpot,
+    decorative_reasoning: validateDecorativeReasoning,
+    post_hoc_rationalization: validatePostHocRationalization,
     // 'standard' is handled by the generic fallback in bounties.js
   },
   bountyGuide,

@@ -511,6 +511,7 @@ module.exports = async (req, res) => {
       respond: respondablePapers,
       rebut: rebuttablePapers,
       reaffirm: reaffirmablePapers,
+      self_review: selfReviewTarget ? [selfReviewTarget] : [],
     };
     const targetList = targetMap[nextAction];
     if (targetList && targetList.length > 0) {
@@ -548,7 +549,11 @@ module.exports = async (req, res) => {
               if (!p.falsifiable_claim) valid.push('no_falsifiable_claim');
               if (!p.cross_study_connection) valid.push('no_cross_study_connection');
               if (!Array.isArray(p.mechanism_chain) || p.mechanism_chain.length < 2) valid.push('no_mechanism_chain');
-              if (Array.isArray(p.mechanism_chain) && p.mechanism_chain.length >= 2) valid.push('mechanism_unfalsifiable');
+              if (Array.isArray(p.mechanism_chain) && p.mechanism_chain.length >= 2) {
+                valid.push('mechanism_unfalsifiable');
+                valid.push('decorative_reasoning');
+              }
+              valid.push('post_hoc_rationalization');  // always available — challenges premise-conclusion sensitivity
               actionTarget.valid_challenge_types = valid;
             }
 
@@ -1041,6 +1046,38 @@ module.exports = async (req, res) => {
         } catch (err) { log.error('[profile] bounty rejection history fetch failed', { agentId: agent.id, err: err?.message }); return undefined; }
       })(),
     ]);
+
+    // ── Cycle-level operations (non-blocking, fire-and-forget) ──────────
+    // Advance forge hypothesis cycle counters and auto-abandon expired ones.
+    // Resolve the most recent unresolved decision rationale with latest feedback.
+    advanceHypothesisCycles(agent.id)
+      .then(async (expiredIds) => {
+        // Auto-abandon hypotheses that exceeded their cycle budget without resolution
+        const { resolveHypothesis } = require('../lib/forge-hypotheses');
+        for (const hId of expiredIds) {
+          await resolveHypothesis(hId, false, 'Auto-expired: exceeded cycles_to_resolve without evidence', 'Hypothesis expired without resolution — insufficient data within observation window.').catch(() => {});
+        }
+      })
+      .catch(err => log.error('[forge-hypotheses] cycle advance failed', { err: err?.message }));
+
+    // Resolve most recent decision rationale with feedback from this cycle
+    if (recentFeedback) {
+      const latestReview = recentFeedback.reviews_on_your_papers?.[0];
+      const latestBounty = recentFeedback.bounties_against_your_papers?.[0];
+      const actualOutcome = {};
+      if (latestReview) {
+        actualOutcome.score = latestReview.score;
+        actualOutcome.feedback_summary = (latestReview.assessment || '').slice(0, 500);
+      }
+      if (latestBounty) {
+        actualOutcome.bounty_type = latestBounty.challenge_type;
+        actualOutcome.bounty_validated = latestBounty.validated;
+      }
+      if (actualOutcome.score != null || actualOutcome.bounty_type) {
+        resolveDecisionRationale(agent.id, actualOutcome)
+          .catch(err => log.error('[decision-rationale] resolve failed', { err: err?.message }));
+      }
+    }
 
     // Tier 0: Active focus — curate ~4 relevant chunks for this session
     // Based on Cowan's working memory research (~4 chunk attentional focus)

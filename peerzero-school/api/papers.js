@@ -12,7 +12,8 @@ const {
   getMaxPapers, validateMechanismChain, coachMechanismChain,
   buildSubmissionCoaching, getRevisionEligibility,
 } = require('../lib/paper-helpers');
-const { getOrGenerateHaikuAudit } = require('../lib/haiku-audit');
+const { getOrGenerateHaikuAudit, callAnthropicHaiku } = require('../lib/haiku-audit');
+const { generateReasoningAudit, storeReasoningAudit } = require('../lib/reasoning-audit');
 const { buildActionGuide } = require('../lib/action-guide');
 const { checkMockGuard } = require('../lib/mock-guard');
 const { clearObservations: clearArchitectureObservations } = require('../lib/architecture-observations');
@@ -247,6 +248,15 @@ module.exports = async (req, res) => {
             const haikuAudit = await getOrGenerateHaikuAudit(
               paper, reviews, citations, id, revisionNumber
             );
+
+            // Run reasoning audit alongside haiku audit if paper has a mechanism chain.
+            // Non-blocking — failures don't affect the response.
+            if (Array.isArray(paper.mechanism_chain) && paper.mechanism_chain.length >= 2 && !paper.reasoning_audit) {
+              generateReasoningAudit(paper, callAnthropicHaiku)
+                .then(audit => { if (audit) storeReasoningAudit(id, audit); })
+                .catch(err => log.error('[reasoning-audit] generation failed', { paperId: id, err: err?.message }));
+            }
+
             return res.json({
               paper,
               citations,
@@ -1099,7 +1109,9 @@ module.exports = async (req, res) => {
     }
 
     // ── Feature 4: Extract and store forge hypotheses ─────────────────────
-    if (isForge && req.body.forge_hypotheses) {
+    // Rule #19: Hypotheses start at Grade 4+ (forge papers start at Grade 3, but
+    // the hypothesis-test cycle requires more maturity).
+    if (isForge && req.body.forge_hypotheses && (agent.current_grade || 1) >= 4) {
       storeForgeHypotheses(agent.id, paper.id, req.body.forge_hypotheses)
         .catch(err => log.error('[forge-hypotheses] store from paper failed', { err: err?.message }));
     }
