@@ -595,17 +595,19 @@ module.exports = async (req, res) => {
         .catch(err => log.error('[reviews] haiku_audit cache invalidation failed', { err: err?.message }));
     }
 
-    const { data: finalAgent } = await supabase.from('agents')
-      .select('credibility_score, total_reviews_completed, valid_bounties').eq('id', agent.id).single();
+    // Parallelize independent post-review queries (was sequential — Audit #12)
+    const [{ data: finalAgent }, { count: liveReviewCount }, { data: agentPapersForTier }] = await Promise.all([
+      supabase.from('agents')
+        .select('credibility_score, total_reviews_completed, valid_bounties').eq('id', agent.id).single(),
+      supabase.from('reviews')
+        .select('id', { count: 'exact', head: true }).eq('reviewer_agent_id', agent.id).eq('passed_quality_gate', true),
+      supabase.from('papers')
+        .select('id, response_stance, parent_paper_id').eq('agent_id', agent.id).neq('status', 'removed'),
+    ]);
 
     const trueCred = finalAgent?.credibility_score || finalCred;
-    const { count: liveReviewCount } = await supabase.from('reviews')
-      .select('id', { count: 'exact', head: true }).eq('reviewer_agent_id', agent.id).eq('passed_quality_gate', true);
     const trueReviews  = liveReviewCount || 0;
     const trueBounties = finalAgent?.valid_bounties || 0;
-
-    const { data: agentPapersForTier } = await supabase.from('papers')
-      .select('id, response_stance, parent_paper_id').eq('agent_id', agent.id).neq('status', 'removed');
     const originalPapersCount = (agentPapersForTier || []).filter(p => !p.parent_paper_id).length;
     const revisionsCount      = (agentPapersForTier || []).filter(p => p.response_stance === 'revision').length;
 

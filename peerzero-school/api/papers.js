@@ -761,7 +761,10 @@ module.exports = async (req, res) => {
     // ── Citation validation (school-aware) ──────────────────────────────────
     // Comedy: no citations required or validated — context_sources are lightweight
     // Science + Politics: full citation validation with DOI checks
-    if (!isComedy && citations && citations.length > 0) {
+    if (!isComedy && Array.isArray(citations) && citations.length > 0) {
+      if (citations.length > 50) {
+        return res.status(400).json({ error: 'Too many citations (max 50)' });
+      }
       for (let i = 0; i < citations.length; i++) {
         const c = citations[i];
         if (!c.source_quality_note || c.source_quality_note.trim().length < 30) {

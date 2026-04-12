@@ -149,7 +149,8 @@ async function applyBountyValidation(bounty, currentPaper, scoreDrop) {
     .select('id, agent_id, weighted_score, raw_review_count, response_stance')
     .eq('parent_paper_id', target_paper_id)
     .neq('status', 'removed')
-    .not('weighted_score', 'is', null);
+    .not('weighted_score', 'is', null)
+    .limit(100);
 
   const { data: originalReviews } = await supabase
     .from('reviews')

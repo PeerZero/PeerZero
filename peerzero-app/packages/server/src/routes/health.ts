@@ -117,12 +117,22 @@ router.get('/metrics', metricsLimiter, async (_req: Request, res: Response) => {
   });
 });
 
+// Rate limit emergency stop to prevent brute-force on admin key (5 attempts per hour)
+const emergencyStopLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many attempts' },
+});
+
 /**
  * POST /health/emergency-stop — Kill switch: stop ALL running bots immediately.
  * Protected by ADMIN_SECRET env var (X-Admin-Key header).
+ * Rate-limited to 5 attempts/hour to prevent brute-force.
  * Use when: bad deployment, runaway costs, or system-wide incident.
  */
-router.post('/emergency-stop', async (req: Request, res: Response) => {
+router.post('/emergency-stop', emergencyStopLimiter, async (req: Request, res: Response) => {
   const adminSecret = process.env.ADMIN_SECRET;
   const adminKey = req.headers['x-admin-key'];
 
