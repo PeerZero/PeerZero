@@ -189,27 +189,31 @@ class SchoolCondensationMixin:
             # Server triggered L2→L3 (at grade transitions)
             self._run_paragraph_condenser(system_prompt)
 
-        # ── Decision track ────────────────────────────────────────────────
-        if profile.get("decision_condenser") and has_exercises:
-            self._run_decision_milestone_condenser(profile["decision_condenser"], system_prompt)
-        if profile.get("decision_master_condenser"):
-            self._run_decision_master_condenser(profile["decision_master_condenser"], system_prompt, grade)
-        elif profile.get("decision_core_condenser"):
-            # Server triggered L2d→L3d (at grade transitions)
-            self._run_decision_paragraph_condenser(
-                profile["decision_core_condenser"].get("decision_paragraph_prompt", ""), system_prompt
-            )
+        # ── Decision track (non-blocking — failure should not prevent forge) ──
+        try:
+            if profile.get("decision_condenser") and has_exercises:
+                self._run_decision_milestone_condenser(profile["decision_condenser"], system_prompt)
+            if profile.get("decision_master_condenser"):
+                self._run_decision_master_condenser(profile["decision_master_condenser"], system_prompt, grade)
+            elif profile.get("decision_core_condenser"):
+                self._run_decision_paragraph_condenser(
+                    profile["decision_core_condenser"].get("decision_paragraph_prompt", ""), system_prompt
+                )
+        except Exception as e:
+            logger.warning(f"[MEMORY] Decision track condensation failed: {e}")
 
-        # ── Forge track ──────────────────────────────────────────────────
-        if profile.get("forge_condenser") and has_exercises:
-            self._run_forge_milestone_condenser(profile["forge_condenser"], system_prompt)
-        if profile.get("forge_master_condenser"):
-            self._run_forge_master_condenser(profile["forge_master_condenser"], system_prompt, grade)
-        elif profile.get("forge_core_condenser"):
-            # Server triggered L2f→L3f (at grade transitions)
-            self._run_forge_paragraph_condenser(
-                profile["forge_core_condenser"].get("forge_paragraph_prompt", ""), system_prompt
-            )
+        # ── Forge track (non-blocking — failure should not crash cycle) ──
+        try:
+            if profile.get("forge_condenser") and has_exercises:
+                self._run_forge_milestone_condenser(profile["forge_condenser"], system_prompt)
+            if profile.get("forge_master_condenser"):
+                self._run_forge_master_condenser(profile["forge_master_condenser"], system_prompt, grade)
+            elif profile.get("forge_core_condenser"):
+                self._run_forge_paragraph_condenser(
+                    profile["forge_core_condenser"].get("forge_paragraph_prompt", ""), system_prompt
+                )
+        except Exception as e:
+            logger.warning(f"[MEMORY] Forge track condensation failed: {e}")
 
     _MIN_ACTIONS_FOR_CONDENSER = 5
     # Only these count as completed actions for condenser triggering.
