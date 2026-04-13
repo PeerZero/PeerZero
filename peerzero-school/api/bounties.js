@@ -967,13 +967,20 @@ module.exports = async (req, res) => {
           // If the server crashes during payouts, the bounty stays pending
           // and will be re-validated on the next call (idempotency safety).
           const validationResult = await applyBountyValidation(bounty, currentPaper, scoreDrop);
-          await supabase.from('bounties').update({
+          // Guard: only mark valid if still pending (is_valid IS NULL).
+          // Prevents concurrent validate_all calls from duplicating payouts.
+          const { error: valErr, count: valCount } = await supabase.from('bounties').update({
             is_valid: true,
             score_after: currentPaper.weighted_score,
             score_drop: scoreDrop,
             validated_at: new Date().toISOString(),
             review_count_at_last_check: currentPaper.raw_review_count
-          }).eq('id', bounty.id);
+          }).eq('id', bounty.id).is('is_valid', null);
+          if (valErr) log.error('[bounties] Failed to mark bounty as valid', { bountyId: bounty.id, err: valErr.message });
+          if (valCount === 0 && !valErr) {
+            log.warn('[bounties] Bounty already validated by concurrent call — skipping', { bountyId: bounty.id });
+            continue;
+          }
           validated++;
           lastMathBreakdown = validationResult?.mathBreakdown || null;
         }

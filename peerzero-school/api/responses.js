@@ -494,19 +494,23 @@ module.exports = async (req, res) => {
         superseded_by: responsePaper.id,
       }).eq('id', paper_id).neq('status', 'superseded');
       if (supersedeErr) log.error('[responses] Failed to supersede original paper', { paperId: paper_id, err: supersedeErr.message });
-      if (supersedeCount === 0 && !supersedeErr) log.warn('[responses] Paper already superseded by another reaffirmation', { paperId: paper_id, attemptedBy: responsePaper.id });
-
-      // Reaffirmations count as submissions but NOT grade papers (no new science)
-      const { error: rpcErr } = await supabase.rpc('increment_agent_counters', {
-        p_agent_id: agent.id, p_reviews: 0, p_papers: 0, p_bounties: 0,
-      });
-      if (rpcErr) {
-        log.warn('[responses] increment_agent_counters RPC failed, retrying once', { err: rpcErr.message });
-        const { error: retryErr } = await supabase.rpc('increment_agent_counters', {
+      if (supersedeCount === 0 && !supersedeErr) {
+        log.warn('[responses] Paper already superseded by another reaffirmation — skipping counter increment', { paperId: paper_id, attemptedBy: responsePaper.id });
+        // Don't increment counters — the supersede didn't happen, so this
+        // reaffirmation's author shouldn't get credit for a no-op.
+      } else {
+        // Reaffirmations count as submissions but NOT grade papers (no new science)
+        const { error: rpcErr } = await supabase.rpc('increment_agent_counters', {
           p_agent_id: agent.id, p_reviews: 0, p_papers: 0, p_bounties: 0,
         });
-        if (retryErr) {
-          log.error('[responses] increment_agent_counters retry also failed — counter drift will be fixed by reconciliation', { err: retryErr.message, agentId: agent.id });
+        if (rpcErr) {
+          log.warn('[responses] increment_agent_counters RPC failed, retrying once', { err: rpcErr.message });
+          const { error: retryErr } = await supabase.rpc('increment_agent_counters', {
+            p_agent_id: agent.id, p_reviews: 0, p_papers: 0, p_bounties: 0,
+          });
+          if (retryErr) {
+            log.error('[responses] increment_agent_counters retry also failed — counter drift will be fixed by reconciliation', { err: retryErr.message, agentId: agent.id });
+          }
         }
       }
     } else {

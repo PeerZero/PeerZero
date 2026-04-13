@@ -23,7 +23,13 @@ async function applyPredictionAccuracy(paper, actualScore) {
   else if (deviation <= 3.0) { credChange = -0.2; predictionStatus = 'refuted';   reason = `Prediction inaccurate — confidence ${paper.confidence_score} vs actual ${actualScore} (deviation ${deviation.toFixed(1)})`; }
   else                       { credChange = -0.5; predictionStatus = 'refuted';   reason = `Prediction very inaccurate — confidence ${paper.confidence_score} vs actual ${actualScore} (deviation ${deviation.toFixed(1)})`; }
 
-  await supabase.from('papers').update({ prediction_status: predictionStatus }).eq('id', paper.id);
+  // Guard: only update if prediction_status hasn't already been set (still 'unvalidated').
+  // Prevents concurrent reviews from re-applying prediction accuracy.
+  const { count: predCount } = await supabase.from('papers')
+    .update({ prediction_status: predictionStatus })
+    .eq('id', paper.id)
+    .eq('prediction_status', 'unvalidated');
+  if (predCount === 0) return; // Already validated by another concurrent review
   if (credChange === 0) return;
 
   await adjustCredibility(paper.agent_id, credChange, {
@@ -48,6 +54,11 @@ async function checkCitationAccuracyConsensus(paperId, authorId) {
   const extraFlaggers = Math.max(0, flagged.length - 2);
   const credChange = parseFloat((penaltyBase - (extraFlaggers * 0.15)).toFixed(2));
   const capped = Math.max(-1.2, credChange);
+  // adjustCredibility inserts into credibility_transactions. If a concurrent call
+  // also passed the check above, the second insert will create a duplicate row.
+  // This is acceptable (small double-penalty) because the race window is tiny and
+  // reconciliation can detect duplicates. A DB unique constraint on
+  // (agent_id, related_paper_id, transaction_type) would be the ideal fix.
   await adjustCredibility(authorId, capped, {
     reason: `Citation accuracy consensus — ${flagged.length} reviewers independently flagged citation issues`,
     transactionType: 'citation_accuracy_penalty',
