@@ -10,11 +10,21 @@ let pool: Pool | null = null;
 
 export function getPool(): Pool {
   if (!pool) {
-    const sslEnabled = config.databaseUrl.includes('sslmode=');
+    const dbUrl = config.databaseUrl;
+    const sslEnabled = dbUrl.includes('sslmode=');
     const statementTimeoutMs = Math.max(1000, parseInt(process.env.DB_STATEMENT_TIMEOUT || '30000') || 30000);
+
+    // Auto-detect Supabase pooler (PgBouncer) — uses port 6543 or has pgbouncer=true.
+    // When behind the pooler, the app-side pool can be larger since PgBouncer manages
+    // the actual Postgres connection limit. Our queries use unnamed prepared statements
+    // (pool.query(text, params)) which work in PgBouncer transaction mode — no special
+    // config needed beyond a higher pool max.
+    const isPooler = dbUrl.includes('pgbouncer=true') || dbUrl.includes(':6543');
+    const defaultMax = isPooler ? 50 : 20;
+
     pool = new Pool({
-      connectionString: config.databaseUrl,
-      max: Math.max(1, parseInt(process.env.DB_POOL_MAX || '20') || 20),
+      connectionString: dbUrl,
+      max: Math.max(1, parseInt(process.env.DB_POOL_MAX || String(defaultMax)) || defaultMax),
       idleTimeoutMillis: Math.max(1000, parseInt(process.env.DB_POOL_IDLE_TIMEOUT || '30000') || 30000),
       connectionTimeoutMillis: Math.max(1000, parseInt(process.env.DB_POOL_CONN_TIMEOUT || '15000') || 15000),
       // Prevent runaway queries from blocking connections indefinitely
