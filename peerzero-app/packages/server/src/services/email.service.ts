@@ -18,6 +18,34 @@ function getResend(): Resend | null {
   return resend;
 }
 
+export async function sendVerificationEmail(to: string, code: string): Promise<boolean> {
+  const client = getResend();
+  if (!client) {
+    logger.warn('RESEND_API_KEY not configured — verification email not sent');
+    return false;
+  }
+
+  try {
+    await client.emails.send({
+      from: senderEmail,
+      to,
+      subject: 'PeerZero — Verify Your Email',
+      text: [
+        `Your verification code is: ${code}`,
+        '',
+        'This code expires in 24 hours.',
+        '',
+        'If you did not create a PeerZero account, you can safely ignore this email.',
+      ].join('\n'),
+    });
+    logger.info({ to }, 'Verification email sent');
+    return true;
+  } catch (err) {
+    logger.error({ err: err instanceof Error ? err.message : String(err) }, 'Failed to send verification email');
+    return false;
+  }
+}
+
 export async function sendPasswordResetEmail(to: string, code: string): Promise<boolean> {
   const client = getResend();
   if (!client) {

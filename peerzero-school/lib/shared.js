@@ -39,13 +39,14 @@ function getSupabase() {
         'Missing required environment variables: SUPABASE_URL and SUPABASE_SERVICE_KEY must be set'
       );
     }
-    // SECURITY: Warn if ADMIN_SECRET is missing or weak in production.
-    // ADMIN_SECRET protects the /api/reconcile endpoint.
+    // SECURITY: Block startup if ADMIN_SECRET is missing or weak in production.
+    // ADMIN_SECRET protects the /api/reconcile endpoint (cron jobs, admin actions).
     if (process.env.NODE_ENV === 'production' || process.env.VERCEL_ENV === 'production') {
       if (!process.env.ADMIN_SECRET) {
-        log.error('[STARTUP] ADMIN_SECRET is not set — /api/reconcile will reject all requests');
-      } else if (process.env.ADMIN_SECRET.length < 32) {
-        log.error('[STARTUP] ADMIN_SECRET is too short (< 32 chars) — weak against brute force');
+        throw new Error('ADMIN_SECRET is not set — required in production to protect /api/reconcile');
+      }
+      if (process.env.ADMIN_SECRET.length < 32) {
+        throw new Error('ADMIN_SECRET is too short (< 32 chars) — minimum 32 characters required in production');
       }
     }
 

@@ -11,11 +11,12 @@ import { queryOne, queryRows, query } from '../db/client';
 import { AppError } from '../middleware/error-handler';
 import { JwtPayload } from '../middleware/auth';
 import { logger } from '../lib/logger';
-import { sendPasswordResetEmail } from './email.service';
+import { sendPasswordResetEmail, sendVerificationEmail } from './email.service';
 
 const SALT_ROUNDS = 12;
 
-// ── Redis-backed password reset codes ──
+// ── Redis-backed verification & password reset codes ──
+const VERIFICATION_CODE_TTL_SECONDS = 24 * 60 * 60; // 24 hours
 const RESET_CODE_TTL_SECONDS = 15 * 60; // 15 minutes
 
 let redis: IORedis | null = null;
@@ -27,6 +28,10 @@ function getRedis(): IORedis {
     });
   }
   return redis;
+}
+
+function verificationCodeKey(email: string): string {
+  return `verify:${email.toLowerCase()}`;
 }
 
 function resetCodeKey(email: string): string {
@@ -68,6 +73,21 @@ export async function registerUser(email: string, password: string, displayName?
   }
 
   const tokens = await issueTokens(user!.id, user!.email);
+
+  // Send verification email (fire-and-forget — don't block registration)
+  const verificationCode = crypto.randomBytes(8).toString('hex'); // 16-char hex
+  const codeHash = crypto.createHash('sha256').update(verificationCode).digest('hex');
+  try {
+    const r = getRedis();
+    await r.set(verificationCodeKey(email), codeHash, 'EX', VERIFICATION_CODE_TTL_SECONDS);
+    sendVerificationEmail(email, verificationCode).catch((err) => {
+      logger.error({ err: err instanceof Error ? err.message : err }, 'Verification email failed to send');
+    });
+  } catch {
+    // Redis unavailable — user can request resend later
+    logger.warn('Redis unavailable — verification email not queued');
+  }
+
   return { user: user!, tokens };
 }
 
@@ -110,6 +130,48 @@ export async function refreshTokens(refreshToken: string): Promise<TokenPair> {
 
 export async function revokeRefreshTokens(userId: string): Promise<void> {
   await query('DELETE FROM refresh_tokens WHERE user_id = $1', [userId]);
+}
+
+export async function verifyEmail(email: string, code: string): Promise<void> {
+  const r = getRedis();
+  const storedHash = await r.get(verificationCodeKey(email));
+  if (!storedHash) {
+    throw new AppError(400, 'Invalid or expired verification code');
+  }
+
+  const codeHash = crypto.createHash('sha256').update(code).digest('hex');
+  if (!crypto.timingSafeEqual(Buffer.from(storedHash, 'hex'), Buffer.from(codeHash, 'hex'))) {
+    throw new AppError(400, 'Invalid or expired verification code');
+  }
+
+  const result = await queryOne(
+    'UPDATE users SET email_verified = TRUE, email_verification_token_hash = NULL, updated_at = NOW() WHERE email = $1 AND email_verified = FALSE RETURNING id',
+    [email],
+  );
+  if (!result) {
+    throw new AppError(400, 'Email already verified or account not found');
+  }
+
+  // Clear the verification code
+  await r.del(verificationCodeKey(email));
+}
+
+export async function resendVerificationEmail(userId: string): Promise<void> {
+  const user = await queryOne<{ email: string; email_verified: boolean }>(
+    'SELECT email, email_verified FROM users WHERE id = $1',
+    [userId],
+  );
+  if (!user) throw new AppError(404, 'User not found');
+  if (user.email_verified) throw new AppError(400, 'Email already verified');
+
+  const verificationCode = crypto.randomBytes(8).toString('hex');
+  const codeHash = crypto.createHash('sha256').update(verificationCode).digest('hex');
+  const r = getRedis();
+  await r.set(verificationCodeKey(user.email), codeHash, 'EX', VERIFICATION_CODE_TTL_SECONDS);
+  const sent = await sendVerificationEmail(user.email, verificationCode);
+  if (!sent) {
+    throw new AppError(500, 'Failed to send verification email');
+  }
 }
 
 async function issueTokens(userId: string, email: string): Promise<TokenPair> {
@@ -236,8 +298,8 @@ export async function resetPassword(email: string, code: string, newPassword: st
 }
 
 export async function getUserProfile(userId: string) {
-  const user = await queryOne<{ id: string; email: string; display_name: string | null; language: string; created_at: string }>(
-    'SELECT id, email, display_name, language, created_at FROM users WHERE id = $1',
+  const user = await queryOne<{ id: string; email: string; display_name: string | null; language: string; email_verified: boolean; created_at: string }>(
+    'SELECT id, email, display_name, language, email_verified, created_at FROM users WHERE id = $1',
     [userId],
   );
   if (!user) throw new AppError(404, 'User not found');

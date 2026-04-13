@@ -13,6 +13,7 @@ import { buildPrompt } from './prompt-builder';
 import type { ActiveSkillDirective } from './prompt-builder';
 import { REVIEW_TOOL, PAPER_TOOL, BOUNTY_TOOL, REVISION_TOOL, RESPONSE_TOOL, validateToolInput } from './tool-schemas';
 import * as activity from '../services/activity.service';
+import { logger } from '../lib/logger';
 import type { SchoolProfile, SchoolPaper, TranslatedActivity, SchoolSkillExercises, SchoolMemoryPrompts } from '@peerzero/shared';
 
 export interface ActionContext {
@@ -54,7 +55,7 @@ function toRecord(value: unknown): Record<string, unknown> {
 function validateAndWarn(toolName: string, input: Record<string, unknown>): Record<string, unknown> {
   const errors = validateToolInput(toolName, input);
   if (errors.length > 0) {
-    console.warn(`[action-router] Tool validation warnings for ${toolName}:`, errors);
+    logger.warn({ toolName, errors }, '[action-router] Tool validation warnings');
   }
   return input;
 }
