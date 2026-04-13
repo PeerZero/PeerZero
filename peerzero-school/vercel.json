@@ -30,6 +30,10 @@
     {
       "src": "api/**/*.js",
       "use": "@vercel/node"
+    },
+    {
+      "src": "api-404.json",
+      "use": "@vercel/static"
     }
   ],
   "headers": [
@@ -116,7 +120,11 @@
     },
     {
       "src": "/api/(.*)",
-      "dest": "/api/not-found.js"
+      "dest": "/api-404.json",
+      "status": 404,
+      "headers": {
+        "Content-Type": "application/json"
+      }
     },
     {
       "src": "/(.*)",
