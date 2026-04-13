@@ -301,8 +301,8 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
         for uid in stale:
             try:
                 self._conv_memory_engines[uid].close()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(f"[CONV_MEMORY] Engine close failed for user {uid}: {e}")
             del self._conv_memory_engines[uid]
             logger.debug(f"[CONV_MEMORY] Evicted stale engine for user: {uid}")
 

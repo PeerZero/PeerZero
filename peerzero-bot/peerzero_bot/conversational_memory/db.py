@@ -234,8 +234,8 @@ class ConversationalMemoryDB:
         if self._conn:
             try:
                 self._conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(f"[conv_db] WAL checkpoint failed on close: {e}")
             self._conn.close()
             self._conn = None
 

@@ -77,7 +77,7 @@ async function recordFailureReflection(agentId, failureType, severity, summary, 
         reflectionPrompt = `Failure recorded: ${summary}. Reflect on what reasoning process led to this outcome and what you would change.`;
     }
 
-    await supabase.from('failure_reflections').insert({
+    const { error: insertErr } = await supabase.from('failure_reflections').insert({
       agent_id: agentId,
       failure_type: failureType,
       severity,
@@ -85,6 +85,10 @@ async function recordFailureReflection(agentId, failureType, severity, summary, 
       context,
       reflection_prompt: reflectionPrompt,
     });
+    if (insertErr) {
+      log.error('[failure_reflection] Insert failed', { agentId, failureType, err: insertErr.message });
+      return { recorded: false };
+    }
 
     return { recorded: true, reflection_prompt: reflectionPrompt };
   } catch (err) {

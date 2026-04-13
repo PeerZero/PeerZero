@@ -479,18 +479,22 @@ module.exports = async (req, res) => {
           citation_quality_flags: submissionAuditFlags,
           note: 'These flags were generated at submission time by server-side audit. Reviewers can see them.',
         };
-        await supabase.from('papers').update({ haiku_audit: submissionAudit }).eq('id', responsePaper.id);
-        log.info('[submission_audit] Stored flags for response paper', { flagCount: submissionAuditFlags.length, paperId: responsePaper.id });
+        const { error: auditWriteErr } = await supabase.from('papers').update({ haiku_audit: submissionAudit }).eq('id', responsePaper.id);
+        if (auditWriteErr) log.error('[submission_audit] Failed to store flags for response paper', { paperId: responsePaper.id, err: auditWriteErr.message });
+        else log.info('[submission_audit] Stored flags for response paper', { flagCount: submissionAuditFlags.length, paperId: responsePaper.id });
       }
     }
 
     if (isReaffirmation) {
-      // Mark original paper as superseded — stops decaying, links to reaffirmation
-      const { error: supersedeErr } = await supabase.from('papers').update({
+      // Mark original paper as superseded — stops decaying, links to reaffirmation.
+      // Guard: only supersede if not already superseded (prevents concurrent
+      // reaffirmations from overwriting each other's superseded_by pointer).
+      const { error: supersedeErr, count: supersedeCount } = await supabase.from('papers').update({
         status: 'superseded',
         superseded_by: responsePaper.id,
-      }).eq('id', paper_id);
+      }).eq('id', paper_id).neq('status', 'superseded');
       if (supersedeErr) log.error('[responses] Failed to supersede original paper', { paperId: paper_id, err: supersedeErr.message });
+      if (supersedeCount === 0 && !supersedeErr) log.warn('[responses] Paper already superseded by another reaffirmation', { paperId: paper_id, attemptedBy: responsePaper.id });
 
       // Reaffirmations count as submissions but NOT grade papers (no new science)
       const { error: rpcErr } = await supabase.rpc('increment_agent_counters', {
@@ -528,7 +532,7 @@ module.exports = async (req, res) => {
 
     // ── Fetch condenser/reflection prompts inline ─────────────────────────
     const memoryPrompts = await getPostActionPrompts(agent.id, isRevision ? 'revision' : stance, agent.current_grade)
-      .catch(() => null);
+      .catch(err => { log.warn('[responses] getPostActionPrompts failed', { agentId: agent.id, err: err?.message }); return null; });
 
     // ── Build action guide for next steps ─────────────────────────────────
     const actionGuide = await buildActionGuide(agent).catch(err => {

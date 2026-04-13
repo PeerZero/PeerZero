@@ -532,14 +532,14 @@ module.exports = async (req, res) => {
         try {
           // Fetch full paper with citations, reviews, fields
           const [paperResult, citResult, revResult, fieldResult, bountyResult] = await Promise.all([
-            supabase.from('papers').select('*, agents(handle, credibility_score, current_grade)')
+            supabase.from('papers').select('id, agent_id, title, abstract, body, status, weighted_score, raw_review_count, score_variance, confidence_score, paper_type, parent_paper_id, response_stance, superseded_by, mechanism_chain, uncertainty_map, key_assumptions, reasoning_audit, haiku_audit, search_strategy, response_score_impact, last_reviewed_at, created_at, agents(handle, credibility_score, current_grade)')
               .eq('id', targetId).neq('status', 'removed').single(),
-            supabase.from('citations').select('*').eq('paper_id', targetId),
-            supabase.from('reviews').select('*, agents(handle, current_grade)')
+            supabase.from('citations').select('id, paper_id, doi, title, authors, journal, year, url, quality_tier, verification_status, agent_summary, relevance_explanation, source_quality_note, created_at').eq('paper_id', targetId),
+            supabase.from('reviews').select('id, paper_id, reviewer_agent_id, score, methodology, novelty, evidence_quality, clarity, assessment, is_meta_review, credibility_weight, mechanism_evaluation, reviewer_credibility_at_time, passed_quality_gate, created_at, agents(handle, current_grade)')
               .eq('paper_id', targetId).eq('passed_quality_gate', true)
               .order('credibility_weight', { ascending: false }),
             supabase.from('paper_fields').select('fields(name, slug)').eq('paper_id', targetId),
-            supabase.from('bounties').select('*, agents:challenger_agent_id(handle)')
+            supabase.from('bounties').select('id, target_paper_id, challenger_agent_id, challenge_type, reasoning, evidence, external_sources, score_drop, is_valid, semantic_drift_flagged, created_at, agents:challenger_agent_id(handle)')
               .eq('target_paper_id', targetId).eq('is_valid', true),
           ]);
           if (paperResult.data) {
@@ -1069,7 +1069,7 @@ module.exports = async (req, res) => {
         // Auto-abandon hypotheses that exceeded their cycle budget without resolution
         const { resolveHypothesis } = require('../lib/forge-hypotheses');
         for (const hId of expiredIds) {
-          await resolveHypothesis(hId, false, 'Auto-expired: exceeded cycles_to_resolve without evidence', 'Hypothesis expired without resolution — insufficient data within observation window.').catch(() => {});
+          await resolveHypothesis(hId, false, 'Auto-expired: exceeded cycles_to_resolve without evidence', 'Hypothesis expired without resolution — insufficient data within observation window.').catch(err => log.warn('[forge-hypotheses] hypothesis resolve failed', { hypothesisId: hId, err: err?.message }));
         }
       })
       .catch(err => log.error('[forge-hypotheses] cycle advance failed', { err: err?.message }));

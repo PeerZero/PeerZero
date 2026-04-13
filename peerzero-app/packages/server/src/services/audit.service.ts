@@ -56,6 +56,56 @@ export async function purgeExpiredAuditLogs(): Promise<number> {
     } catch (taskErr) {
       logger.error({ err: taskErr instanceof Error ? taskErr.message : taskErr }, 'Failed to purge terminal bot_tasks');
     }
+    // Purge stale pending/processing tasks stuck for >24 hours (orphaned from crashed bots)
+    try {
+      const staleResult = await query(
+        `DELETE FROM bot_tasks WHERE status IN ('pending','processing') AND updated_at < NOW() - INTERVAL '24 hours'`,
+        [],
+      );
+      const staleDeleted = (staleResult as { rowCount?: number }).rowCount || 0;
+      if (staleDeleted > 0) {
+        logger.info({ deleted: staleDeleted }, 'Purged stale pending/processing bot_tasks');
+      }
+    } catch (staleErr) {
+      logger.error({ err: staleErr instanceof Error ? staleErr.message : staleErr }, 'Failed to purge stale bot_tasks');
+    }
+    // Purge soft-deleted external_activity_log entries older than 90 days
+    // and active entries older than 180 days
+    try {
+      const extResult = await query(
+        `DELETE FROM external_activity_log
+         WHERE (deleted_at IS NOT NULL AND deleted_at < NOW() - INTERVAL '90 days')
+            OR created_at < NOW() - INTERVAL '180 days'`,
+        [],
+      );
+      const extDeleted = (extResult as { rowCount?: number }).rowCount || 0;
+      if (extDeleted > 0) {
+        logger.info({ deleted: extDeleted }, 'Purged external activity log entries');
+      }
+    } catch (extErr) {
+      logger.error({ err: extErr instanceof Error ? extErr.message : extErr }, 'Failed to purge external activity logs');
+    }
+    // Trim bot_voice_cache to last 50 entries per bot
+    try {
+      const voiceResult = await query(
+        `DELETE FROM bot_voice_cache WHERE id IN (
+           SELECT bvc.id FROM bot_voice_cache bvc
+           WHERE bvc.created_at < (
+             SELECT created_at FROM bot_voice_cache bvc2
+             WHERE bvc2.bot_id = bvc.bot_id
+             ORDER BY created_at DESC
+             LIMIT 1 OFFSET 49
+           )
+         )`,
+        [],
+      );
+      const voiceDeleted = (voiceResult as { rowCount?: number }).rowCount || 0;
+      if (voiceDeleted > 0) {
+        logger.info({ deleted: voiceDeleted }, 'Trimmed bot_voice_cache to 50 per bot');
+      }
+    } catch (voiceErr) {
+      logger.error({ err: voiceErr instanceof Error ? voiceErr.message : voiceErr }, 'Failed to trim bot_voice_cache');
+    }
     return deleted;
   } catch (err) {
     logger.error({ err: err instanceof Error ? err.message : err }, 'Failed to purge audit logs');

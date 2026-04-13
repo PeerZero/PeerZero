@@ -189,8 +189,8 @@ class SleepConsolidation:
                         f"(SELECT rowid FROM {table} ORDER BY rowid DESC LIMIT ?)",
                         (_LOG_ROW_CAP,),
                     )
-            except Exception:
-                pass  # Table may not exist in older schemas
+            except Exception as e:
+                logger.debug(f"[sleep] Log table cleanup skipped for {table}: {e}")
 
         conn.commit()
         self._graph.log_sleep(stats)

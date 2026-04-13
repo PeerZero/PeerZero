@@ -10,6 +10,7 @@ import { encrypt, decrypt } from './encryption.service';
 import { getSchoolAdapter } from '../adapters/adapter.factory';
 import type { BotSummary, BotDetail, BotStatus } from '@peerzero/shared';
 import { SUPPORTED_MODEL_IDS, BOT_STATUSES, sanitizeAvatarConfig, getGradePriceCents, DEFAULT_FAST_MODELS, validateBotName } from '@peerzero/shared';
+import { logger } from '../lib/logger';
 
 // DB row shape for getBotDetail query (includes columns not in BotDetail)
 interface BotDetailRow extends BotDetail {
@@ -374,10 +375,16 @@ export async function setBotStatus(botId: string, status: string, errorMessage?:
   if (!(BOT_STATUSES as readonly string[]).includes(status)) {
     throw new Error(`Invalid bot status: ${status}`);
   }
-  await query(
-    'UPDATE bots SET status = $1, error_message = $2, updated_at = NOW() WHERE id = $3',
+  // Guard: don't overwrite if already in the target status with the same error
+  // (prevents stale concurrent transitions from clobbering each other)
+  const result = await query(
+    `UPDATE bots SET status = $1, error_message = $2, updated_at = NOW()
+     WHERE id = $3 AND NOT (status = $1 AND COALESCE(error_message, '') = COALESCE($2, ''))`,
     [status, errorMessage || null, botId],
   );
+  if ((result.rowCount ?? 0) === 0) {
+    logger.debug({ botId, status }, 'setBotStatus skipped — already in target state');
+  }
 }
 
 export async function getDecryptedSchoolKey(botId: string): Promise<{ apiKey: string; handle: string; baseUrl: string } | null> {

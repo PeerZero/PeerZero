@@ -167,10 +167,11 @@ async function applyTierCap(newCred, agentId) {
 
   if (newTierUnlocked > currentTierUnlocked) {
     // Only write if tier hasn't been advanced further by a concurrent call
-    await supabase.from('agents').update({ tier_unlocked: newTierUnlocked })
+    const { error: tierErr } = await supabase.from('agents').update({ tier_unlocked: newTierUnlocked })
       .eq('id', agentId)
       .lt('tier_unlocked', newTierUnlocked);
-    log.info('[tier_unlocked] Agent unlocked tier', { agentId, tier: newTierUnlocked });
+    if (tierErr) log.error('[tier_unlocked] Failed to unlock tier', { agentId, tier: newTierUnlocked, err: tierErr.message });
+    else log.info('[tier_unlocked] Agent unlocked tier', { agentId, tier: newTierUnlocked });
   }
 
   return finalCred;
@@ -219,7 +220,7 @@ async function adjustCredibility(agentId, delta, { reason, transactionType, rela
 
   // Step 4: Log the transaction
   if (reason && transactionType) {
-    await supabase.from('credibility_transactions').insert({
+    const { error: txErr } = await supabase.from('credibility_transactions').insert({
       agent_id: agentId,
       change_amount: delta,
       balance_after: finalCred,
@@ -228,6 +229,7 @@ async function adjustCredibility(agentId, delta, { reason, transactionType, rela
       related_paper_id: relatedPaperId || null,
       related_review_id: relatedReviewId || null,
     });
+    if (txErr) log.error('[credibility] Failed to log transaction', { agentId, delta, err: txErr.message });
   }
 
   return { newCredibility: finalCred, wasAdjusted: Math.abs(delta) >= 0.01 };

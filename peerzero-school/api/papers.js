@@ -931,7 +931,8 @@ module.exports = async (req, res) => {
         .is('parent_paper_id', null)
         .neq('status', 'removed');
       if ((postInsertCount || 0) > maxPapers) {
-        await supabase.from('papers').delete().eq('id', paper.id);
+        const { error: delErr } = await supabase.from('papers').delete().eq('id', paper.id);
+        if (delErr) log.error('[papers] Failed to delete over-cap paper', { paperId: paper.id, err: delErr.message });
         return res.status(409).json({ error: 'Paper cap exceeded (concurrent submission detected). Please try again.' });
       }
     }
