@@ -43,6 +43,19 @@ export async function purgeExpiredAuditLogs(): Promise<number> {
     } catch (actErr) {
       logger.error({ err: actErr instanceof Error ? actErr.message : actErr }, 'Failed to purge activity logs');
     }
+    // Purge terminal bot_tasks older than 90 days
+    try {
+      const taskResult = await query(
+        `DELETE FROM bot_tasks WHERE status IN ('completed','failed','expired') AND updated_at < NOW() - INTERVAL '90 days'`,
+        [],
+      );
+      const taskDeleted = (taskResult as { rowCount?: number }).rowCount || 0;
+      if (taskDeleted > 0) {
+        logger.info({ deleted: taskDeleted }, 'Purged terminal bot_tasks entries');
+      }
+    } catch (taskErr) {
+      logger.error({ err: taskErr instanceof Error ? taskErr.message : taskErr }, 'Failed to purge terminal bot_tasks');
+    }
     return deleted;
   } catch (err) {
     logger.error({ err: err instanceof Error ? err.message : err }, 'Failed to purge audit logs');

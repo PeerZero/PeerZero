@@ -143,18 +143,31 @@ export async function storeCore(
 ): Promise<void> {
   const { encrypted, iv } = encrypt(coreIdentity);
 
-  // Auto-increment version
-  const latest = await queryOne<{ version: number }>(
-    'SELECT version FROM bot_memory_core WHERE bot_id = $1 ORDER BY version DESC LIMIT 1',
-    [botId],
-  );
-  const nextVersion = (latest?.version || 0) + 1;
+  // Auto-increment version with duplicate key retry (handles concurrent writes)
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const latest = await queryOne<{ version: number }>(
+      'SELECT version FROM bot_memory_core WHERE bot_id = $1 ORDER BY version DESC LIMIT 1',
+      [botId],
+    );
+    const nextVersion = (latest?.version || 0) + 1;
 
-  await query(
-    `INSERT INTO bot_memory_core (bot_id, encrypted_core, core_iv, trigger_label, version)
-     VALUES ($1, $2, $3, $4, $5)`,
-    [botId, encrypted, iv, triggerLabel || null, nextVersion],
-  );
+    try {
+      await query(
+        `INSERT INTO bot_memory_core (bot_id, encrypted_core, core_iv, trigger_label, version)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [botId, encrypted, iv, triggerLabel || null, nextVersion],
+      );
+      return; // success
+    } catch (err: unknown) {
+      const pgErr = err as { code?: string };
+      if (pgErr.code === '23505' && attempt < 2) {
+        // Duplicate key — another concurrent write incremented the version; retry
+        logger.debug({ botId, version: nextVersion }, 'Core version conflict, retrying');
+        continue;
+      }
+      throw err;
+    }
+  }
 }
 
 export async function getLatestCore(botId: string): Promise<MemoryCore | null> {
@@ -259,19 +272,31 @@ export async function storeSelfAuthored(
 ): Promise<void> {
   const { encrypted, iv } = encrypt(plaintextBlock);
 
-  // Auto-increment version
-  const latest = await queryOne<{ version: number }>(
-    'SELECT version FROM bot_memory_self_authored WHERE bot_id = $1 ORDER BY version DESC LIMIT 1',
-    [botId],
-  );
-  const nextVersion = (latest?.version || 0) + 1;
+  // Auto-increment version with duplicate key retry (handles concurrent writes)
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const latest = await queryOne<{ version: number }>(
+      'SELECT version FROM bot_memory_self_authored WHERE bot_id = $1 ORDER BY version DESC LIMIT 1',
+      [botId],
+    );
+    const nextVersion = (latest?.version || 0) + 1;
 
-  await query(
-    `INSERT INTO bot_memory_self_authored (bot_id, encrypted_block, block_iv, trigger_type, version)
-     VALUES ($1, $2, $3, $4, $5)`,
-    [botId, encrypted, iv, triggerType, nextVersion],
-  );
-  logger.debug({ botId, version: nextVersion, triggerType }, 'Stored self-authored identity block');
+    try {
+      await query(
+        `INSERT INTO bot_memory_self_authored (bot_id, encrypted_block, block_iv, trigger_type, version)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [botId, encrypted, iv, triggerType, nextVersion],
+      );
+      logger.debug({ botId, version: nextVersion, triggerType }, 'Stored self-authored identity block');
+      return; // success
+    } catch (err: unknown) {
+      const pgErr = err as { code?: string };
+      if (pgErr.code === '23505' && attempt < 2) {
+        logger.debug({ botId, version: nextVersion }, 'Self-authored version conflict, retrying');
+        continue;
+      }
+      throw err;
+    }
+  }
 }
 
 /**

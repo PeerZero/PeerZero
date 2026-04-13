@@ -912,8 +912,17 @@ class MemoryManager:
     # ── Platform condenser template cache ─────────────────────────────────
 
     def get_cached_platform_condensers(self) -> Optional[dict]:
-        """Get cached condenser templates from last server fetch."""
-        return self._storage.read("platform_condensation", "condenser_cache", None)
+        """Get cached condenser templates from last server fetch. Expires after 24h."""
+        cached = self._storage.read("platform_condensation", "condenser_cache", None)
+        if cached and cached.get('cached_at'):
+            from datetime import datetime as _dt, timedelta as _td
+            try:
+                cached_time = _dt.fromisoformat(cached['cached_at'])
+                if _dt.utcnow() - cached_time.replace(tzinfo=None) > _td(hours=24):
+                    return None  # Force re-fetch
+            except (ValueError, TypeError):
+                return None  # Corrupted timestamp — force re-fetch
+        return cached
 
     def cache_platform_condensers(self, condensers: dict):
         """Cache condenser templates fetched from the School server."""

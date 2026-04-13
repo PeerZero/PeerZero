@@ -117,16 +117,16 @@ class Graph:
         return self.get_node(node_id)
 
     def add_observation(self, node_id: str, observation: str) -> dict | None:
-        node = self.get_node(node_id)
-        if not node:
-            return None
-        observations = json.loads(node["raw_observations"] or "[]")
-        observations.append(observation)
-        self._db.execute(
-            "UPDATE nodes SET raw_observations = ? WHERE id = ?",
-            (json.dumps(observations), node_id),
-        )
-        self._db.commit()
+        with self._db.conn:
+            node = self.get_node(node_id)
+            if not node:
+                return None
+            observations = json.loads(node["raw_observations"] or "[]")
+            observations.append(observation)
+            self._db.execute(
+                "UPDATE nodes SET raw_observations = ? WHERE id = ?",
+                (json.dumps(observations), node_id),
+            )
         return self.get_node(node_id)
 
     def set_enriched_portrait(self, node_id: str, portrait: str):
@@ -169,32 +169,33 @@ class Graph:
         provenance: str = "conversation",
     ) -> tuple[dict, bool]:
         """Find existing node by label or create a new one. Returns (node, created)."""
-        existing = self.find_node_by_label(label)
-        w = weight if weight is not None else self._config.weights.passing_mention
-        effective_weight = w * self._config.identity_multiplier(identity_relevance)
+        with self._db.conn:
+            existing = self.find_node_by_label(label)
+            w = weight if weight is not None else self._config.weights.passing_mention
+            effective_weight = w * self._config.identity_multiplier(identity_relevance)
 
-        if existing:
-            self.reinforce_node(existing["id"], effective_weight)
-            if observation:
-                self.add_observation(existing["id"], observation)
-            # Upgrade identity relevance (neutral < self/user < relational)
-            if identity_relevance != "neutral" and existing["identity_relevance"] != "relational":
-                if identity_relevance == "relational":
-                    self.set_identity_relevance(existing["id"], "relational")
-                elif (existing["identity_relevance"] != "neutral"
-                      and existing["identity_relevance"] != identity_relevance):
-                    self.set_identity_relevance(existing["id"], "relational")
-                elif existing["identity_relevance"] == "neutral":
-                    self.set_identity_relevance(existing["id"], identity_relevance)
-            return self.get_node(existing["id"]), False
+            if existing:
+                self.reinforce_node(existing["id"], effective_weight)
+                if observation:
+                    self.add_observation(existing["id"], observation)
+                # Upgrade identity relevance (neutral < self/user < relational)
+                if identity_relevance != "neutral" and existing["identity_relevance"] != "relational":
+                    if identity_relevance == "relational":
+                        self.set_identity_relevance(existing["id"], "relational")
+                    elif (existing["identity_relevance"] != "neutral"
+                          and existing["identity_relevance"] != identity_relevance):
+                        self.set_identity_relevance(existing["id"], "relational")
+                    elif existing["identity_relevance"] == "neutral":
+                        self.set_identity_relevance(existing["id"], identity_relevance)
+                return self.get_node(existing["id"]), False
 
-        safe_type = node_type if node_type in VALID_TYPES else "concept"
-        node = self.create_node(
-            label=label, node_type=safe_type, weight=effective_weight,
-            observation=observation, salience_flagged=salience_flagged,
-            identity_relevance=identity_relevance, provenance=provenance,
-        )
-        return node, True
+            safe_type = node_type if node_type in VALID_TYPES else "concept"
+            node = self.create_node(
+                label=label, node_type=safe_type, weight=effective_weight,
+                observation=observation, salience_flagged=salience_flagged,
+                identity_relevance=identity_relevance, provenance=provenance,
+            )
+            return node, True
 
     # ── Edge operations ──────────────────────────────────────────────────
 

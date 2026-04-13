@@ -116,7 +116,7 @@ async function logRateLimitedAction(agentId, action) {
       const cutoff = new Date(now - 90 * 24 * 60 * 60 * 1000).toISOString();
       supabase.from('rate_limit_log').delete().lt('created_at', cutoff)
         .then(({ error }) => { if (error) log.warn('[rate_limit_db] Purge failed', { err: error.message }); })
-        .catch(() => {});
+        .catch(err => log.debug('[rate_limit_db] Purge cleanup error', { err: err?.message }));
     }
   } catch (err) {
     log.error('[rate_limit_db] Log failed', { err: err?.message });

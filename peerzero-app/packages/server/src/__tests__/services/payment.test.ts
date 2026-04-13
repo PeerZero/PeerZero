@@ -216,8 +216,8 @@ describe('payment.service', () => {
       mockQueryOne.mockResolvedValueOnce({ id: 'user-1', email: 'test@test.com', stripe_customer_id: null });
       // Stripe customer create
       mockStripeCustomerCreate.mockResolvedValueOnce({ id: 'cus_new' });
-      // UPDATE user with customer ID
-      mockQuery.mockResolvedValueOnce({ rows: [] });
+      // UPDATE user with customer ID (atomic: WHERE stripe_customer_id IS NULL)
+      mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 1 });
       // INSERT purchase
       mockQueryOne.mockResolvedValueOnce({ id: 'purchase-1' });
       // Stripe session

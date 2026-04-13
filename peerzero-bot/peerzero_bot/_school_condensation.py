@@ -200,7 +200,11 @@ class SchoolCondensationMixin:
                     profile["decision_core_condenser"].get("decision_paragraph_prompt", ""), system_prompt
                 )
         except Exception as e:
-            logger.warning(f"[MEMORY] Decision track condensation failed: {e}")
+            self._condensation_failures += 1
+            if self._condensation_failures >= self._CONDENSATION_FAILURE_ALERT:
+                logger.error(f"[MEMORY] Decision track condensation failed {self._condensation_failures} consecutive times: {e}")
+            else:
+                logger.warning(f"[MEMORY] Decision track condensation failed: {e}")
 
         # ── Forge track (non-blocking — failure should not crash cycle) ──
         try:
@@ -213,7 +217,11 @@ class SchoolCondensationMixin:
                     profile["forge_core_condenser"].get("forge_paragraph_prompt", ""), system_prompt
                 )
         except Exception as e:
-            logger.warning(f"[MEMORY] Forge track condensation failed: {e}")
+            self._condensation_failures += 1
+            if self._condensation_failures >= self._CONDENSATION_FAILURE_ALERT:
+                logger.error(f"[MEMORY] Forge track condensation failed {self._condensation_failures} consecutive times: {e}")
+            else:
+                logger.warning(f"[MEMORY] Forge track condensation failed: {e}")
 
     _MIN_ACTIONS_FOR_CONDENSER = 5
     # Only these count as completed actions for condenser triggering.
@@ -261,13 +269,6 @@ class SchoolCondensationMixin:
             except Exception as e:
                 logger.warning(f"[MEMORY] Server backup failed: {e}")
             logger.info(f"[MEMORY] L1→L2: Condensed {len(exercises)} exercises into learning paragraph")
-        else:
-            self._condensation_failures += 1
-            if self._condensation_failures >= self._CONDENSATION_FAILURE_ALERT:
-                logger.error(
-                    f"[MEMORY] Condensation has failed {self._condensation_failures} consecutive times — "
-                    f"identity layers are NOT building. L1 exercises: {len(exercises)}"
-                )
 
             # Persistence check: does this paragraph echo patterns L4/L5 already claims?
             self._check_persistence(paragraph.strip(), "learning", system_prompt)
@@ -275,6 +276,13 @@ class SchoolCondensationMixin:
             # Cascade: check if L2→L3 should fire
             if len(self.memory.get_identity_paragraphs()) >= 5:
                 self._run_paragraph_condenser(system_prompt)
+        else:
+            self._condensation_failures += 1
+            if self._condensation_failures >= self._CONDENSATION_FAILURE_ALERT:
+                logger.error(
+                    f"[MEMORY] Condensation has failed {self._condensation_failures} consecutive times — "
+                    f"identity layers are NOT building. L1 exercises: {len(exercises)}"
+                )
 
     _PARAGRAPH_CONDENSER_THRESHOLD = 5  # L2 entries before condensing to L3
 
@@ -411,6 +419,15 @@ class SchoolCondensationMixin:
             # Cascade: check if L2d→L3d should fire
             if len(self.memory.get_decision_paragraphs()) >= self._DECISION_PARAGRAPH_THRESHOLD:
                 self._run_decision_paragraph_condenser(server_prompt, system_prompt)
+        else:
+            self._condensation_failures += 1
+            if self._condensation_failures >= self._CONDENSATION_FAILURE_ALERT:
+                logger.error(
+                    f"[MEMORY] Decision condensation has failed {self._condensation_failures} consecutive times — "
+                    f"identity layers are NOT building. L1 exercises: {len(exercises)}"
+                )
+            else:
+                logger.warning(f"[MEMORY] L1→L2d decision paragraph too short — skipping (consecutive failures: {self._condensation_failures})")
 
     def _run_decision_paragraph_condenser(self, server_prompt: str, system_prompt):
         """L2d→L3d: Condense decision paragraphs into a decision document."""
@@ -528,6 +545,15 @@ class SchoolCondensationMixin:
             # Cascade: check if L2f→L3f should fire
             if len(self.memory.get_forge_paragraphs()) >= self._FORGE_PARAGRAPH_THRESHOLD:
                 self._run_forge_paragraph_condenser(server_prompt, system_prompt)
+        else:
+            self._condensation_failures += 1
+            if self._condensation_failures >= self._CONDENSATION_FAILURE_ALERT:
+                logger.error(
+                    f"[MEMORY] Forge condensation has failed {self._condensation_failures} consecutive times — "
+                    f"identity layers are NOT building. L1 exercises: {len(exercises)}"
+                )
+            else:
+                logger.warning(f"[MEMORY] L1→L2f forge paragraph too short — skipping (consecutive failures: {self._condensation_failures})")
 
     def _run_forge_paragraph_condenser(self, server_prompt: str, system_prompt):
         """L2f→L3f: Condense forge paragraphs into a forge document."""

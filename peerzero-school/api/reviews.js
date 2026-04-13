@@ -269,7 +269,7 @@ module.exports = async (req, res) => {
   }
 
   if (req.method === 'POST') {
-    const { data: paper, error: paperErr } = await supabase.from('papers').select('*')
+    const { data: paper, error: paperErr } = await supabase.from('papers').select('id, title, abstract, body, agent_id, weighted_score, raw_review_count, parent_paper_id, status, confidence_score, submitted_at, last_reviewed_at, paper_type, field_slug, prediction_status, haiku_audit, haiku_audit_review_count, mechanism_chain, cross_study_connection, falsifiable_claim, uncertainty_map, key_assumptions')
       .eq('id', paper_id).neq('status', 'removed').single();
     if (paperErr || !paper) return res.status(404).json({ error: 'Paper not found' });
     if (paper.agent_id === agent.id) return res.status(403).json({ error: 'Cannot review your own paper' });
@@ -292,7 +292,7 @@ module.exports = async (req, res) => {
             logical_consistency_notes, overall_assessment,
             review_search_strategy } = req.body;
 
-    if (!score || isNaN(Number(score))) {
+    if (score === undefined || score === null || isNaN(Number(score))) {
       return res.status(400).json({ error: 'Score must be a number between 1.0 and 10.0' });
     }
     // Clamp to valid range instead of rejecting — saves bots an LLM call
@@ -594,12 +594,12 @@ module.exports = async (req, res) => {
       supabase.from('papers')
         .update({ haiku_audit: null, haiku_audit_review_count: null })
         .eq('id', paper_id)
-        .then(() => {})
+        .then(({ error }) => { if (error) log.error('[reviews] haiku_audit reset failed', { paper_id, error: error.message }); })
         .catch(err => log.error('[reviews] haiku_audit cache invalidation failed', { err: err?.message }));
     }
 
     // Parallelize independent post-review queries (was sequential — Audit #12)
-    const [{ data: finalAgent }, { count: liveReviewCount }, { data: agentPapersForTier }] = await Promise.all([
+    const [agentResult, reviewCountResult, papersResult] = await Promise.all([
       supabase.from('agents')
         .select('credibility_score, total_reviews_completed, valid_bounties').eq('id', agent.id).single(),
       supabase.from('reviews')
@@ -607,6 +607,12 @@ module.exports = async (req, res) => {
       supabase.from('papers')
         .select('id, response_stance, parent_paper_id').eq('agent_id', agent.id).neq('status', 'removed'),
     ]);
+    if (agentResult.error) log.error('[reviews] post-review agent fetch failed', { agent_id: agent.id, error: agentResult.error.message });
+    if (reviewCountResult.error) log.error('[reviews] post-review review count failed', { agent_id: agent.id, error: reviewCountResult.error.message });
+    if (papersResult.error) log.error('[reviews] post-review papers fetch failed', { agent_id: agent.id, error: papersResult.error.message });
+    const { data: finalAgent } = agentResult;
+    const { count: liveReviewCount } = reviewCountResult;
+    const { data: agentPapersForTier } = papersResult;
 
     const trueCred = finalAgent?.credibility_score || finalCred;
     const trueReviews  = liveReviewCount || 0;

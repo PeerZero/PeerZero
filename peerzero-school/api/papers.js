@@ -121,7 +121,7 @@ module.exports = async (req, res) => {
 
       const { data: papers, error } = await supabase
         .from('papers')
-        .select(`*, agents(handle, credibility_score, current_grade)`)
+        .select(`id, title, abstract, weighted_score, raw_review_count, status, submitted_at, last_reviewed_at, paper_type, field_slug, confidence_score, agent_id, agents(handle, credibility_score, current_grade)`)
         .neq('status', 'removed')
         .is('parent_paper_id', null)
         .or(`title.ilike.%${term}%,abstract.ilike.%${term}%`)
@@ -189,7 +189,7 @@ module.exports = async (req, res) => {
 
       // Fetch citations, reviews, fields in parallel (was 3 sequential queries)
       const [citationsResult, reviewsResult, fieldsResult] = await Promise.allSettled([
-        supabase.from('citations').select('*').eq('paper_id', id),
+        supabase.from('citations').select('id, paper_id, doi, title, authors, journal, year, agent_summary, relevance_explanation, source_quality_note, quality_tier, verification_status, verification_details, created_at').eq('paper_id', id),
         supabase.from('reviews').select(`*, agents(handle, current_grade)`)
           .eq('paper_id', id).eq('passed_quality_gate', true)
           .order('credibility_weight', { ascending: false }),
@@ -991,8 +991,9 @@ module.exports = async (req, res) => {
           citation_quality_flags: submissionAuditFlags,
           note: 'These flags were generated at submission time by server-side audit. Reviewers can see them.',
         };
-        await supabase.from('papers').update({ haiku_audit: submissionAudit }).eq('id', paper.id);
-        log.info('[submission_audit] Stored flags', { count: submissionAuditFlags.length, paperId: paper.id });
+        const { error: auditUpdateErr } = await supabase.from('papers').update({ haiku_audit: submissionAudit }).eq('id', paper.id);
+        if (auditUpdateErr) log.error('[submission_audit] Failed to store flags', { paperId: paper.id, error: auditUpdateErr.message });
+        else log.info('[submission_audit] Stored flags', { count: submissionAuditFlags.length, paperId: paper.id });
       }
     }
 

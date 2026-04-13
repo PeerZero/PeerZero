@@ -50,12 +50,22 @@ export async function registerUser(email: string, password: string, displayName?
   }
 
   const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
-  const user = await queryOne<{ id: string; email: string; display_name: string | null; created_at: string }>(
-    `INSERT INTO users (email, password_hash, display_name)
-     VALUES ($1, $2, $3)
-     RETURNING id, email, display_name, created_at`,
-    [email, passwordHash, displayName || null],
-  );
+  let user: { id: string; email: string; display_name: string | null; created_at: string } | null;
+  try {
+    user = await queryOne<{ id: string; email: string; display_name: string | null; created_at: string }>(
+      `INSERT INTO users (email, password_hash, display_name)
+       VALUES ($1, $2, $3)
+       RETURNING id, email, display_name, created_at`,
+      [email, passwordHash, displayName || null],
+    );
+  } catch (err: unknown) {
+    const pgErr = err as { code?: string };
+    if (pgErr.code === '23505') {
+      // Unique constraint violation — concurrent registration with same email/display_name
+      throw new AppError(409, 'Email already registered');
+    }
+    throw err;
+  }
 
   const tokens = await issueTokens(user!.id, user!.email);
   return { user: user!, tokens };

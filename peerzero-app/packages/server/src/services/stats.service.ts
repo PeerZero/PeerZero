@@ -55,7 +55,7 @@ export async function getBotStats(botId: string, days = 30): Promise<BotStats> {
          AND category = 'task'
        ORDER BY key`,
       [botId],
-    ).catch((err) => { logger.warn({ err: err instanceof Error ? err.message : err, botId }, 'Skill progress query failed'); return []; }),
+    ).catch((err) => { logger.error({ err: err instanceof Error ? err.message : err, botId }, 'Skill progress query failed'); return []; }),
 
     // Token usage trend (daily, within date range)
     queryRows<{ date: string; tokens: number }>(

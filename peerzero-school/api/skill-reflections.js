@@ -1,4 +1,4 @@
-const { getSupabase, setCorsHeaders, isCsrfRejected, enforceRateLimit, sanitizeErrorMessage } = require('../lib/shared');
+const { getSupabase, setCorsHeaders, isCsrfRejected, enforceRateLimit, sanitizeErrorMessage, sanitize } = require('../lib/shared');
 const { checkMockGuard } = require('../lib/mock-guard');
 const { storeReflection, getStoredReflections, getUncondensedExerciseCount, buildMilestoneCondenser } = require('../lib/skills');
 const { storeObservation, getObservations } = require('../lib/architecture-observations');
@@ -55,7 +55,7 @@ module.exports = async (req, res) => {
       if (!trigger_type) {
         return res.status(400).json({ error: 'trigger_type required (self_prediction_mismatch, grade_failure, reflection_inlet, condensation_regret)' });
       }
-      const result = await storeObservation(agent.id, observation_text.trim(), trigger_type, cycle_number || null);
+      const result = await storeObservation(agent.id, sanitize(observation_text.trim()), trigger_type, cycle_number || null);
       if (!result.stored) {
         return res.status(400).json({ error: result.error || 'Failed to store observation' });
       }
@@ -98,7 +98,7 @@ module.exports = async (req, res) => {
     }
 
     try {
-      const trackValue = track === 'decision' ? 'decision' : 'learning';
+      const trackValue = ['decision', 'forge'].includes(track) ? track : 'learning';
       const result = await storeReflection(agent.id, interaction_type, condensed_paragraph.trim(), interaction_id, trackValue);
 
       if (result.error) {

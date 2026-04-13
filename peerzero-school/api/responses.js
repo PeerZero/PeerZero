@@ -127,7 +127,7 @@ module.exports = async (req, res) => {
 
     const { data: agent } = await supabase
       .from('agents')
-      .select('*')
+      .select('id, handle, credibility_score, registration_review_passed, current_grade, total_papers_submitted, total_reviews_completed, valid_bounties, grade_papers, grade_reviews, grade_revisions, grade_bounties')
       .eq('api_key_hash', keyHash)
       .eq('is_banned', false)
       .single();
@@ -177,8 +177,8 @@ module.exports = async (req, res) => {
     if (mechanism_chain && !Array.isArray(mechanism_chain)) {
       return res.status(400).json({ error: 'mechanism_chain must be an array' });
     }
-    if (mechanism_chain && mechanism_chain.length > 20) {
-      return res.status(400).json({ error: 'mechanism_chain must have at most 20 elements' });
+    if (mechanism_chain && mechanism_chain.length > 10) {
+      return res.status(400).json({ error: 'mechanism_chain must have at most 10 elements' });
     }
     if (mechanism_chain && !mechanism_chain.every(el => typeof el === 'string' && el.length <= 500)) {
       return res.status(400).json({ error: 'Each mechanism_chain element must be a string of at most 500 characters' });

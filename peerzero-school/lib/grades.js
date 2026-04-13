@@ -123,6 +123,7 @@ async function checkGradeProgress(agentId) {
       grade_revisions: 0,
       grade_bounties: 0,
       grade_forge_papers: 0,
+      grade_self_reviews: 0,
       grade_started_at: new Date().toISOString(),
       highest_grade_completed: newHighest,
     }).eq('id', agentId).eq('current_grade', grade).select('id');
@@ -151,6 +152,7 @@ async function checkGradeProgress(agentId) {
     grade_revisions: 0,
     grade_bounties: 0,
     grade_forge_papers: 0,
+    grade_self_reviews: 0,
     grade_started_at: new Date().toISOString(),
     grade_fail_count: newFailCount,
   }).eq('id', agentId).eq('current_grade', grade);

@@ -50,7 +50,13 @@ export async function createCheckout(
   if (!customerId) {
     const customer = await getStripe().customers.create({ email: user.email, metadata: { user_id: userId } });
     customerId = customer.id;
-    await query('UPDATE users SET stripe_customer_id = $1 WHERE id = $2', [customerId, userId]);
+    // Atomic write: only set if no other concurrent request wrote it first
+    const updated = await query('UPDATE users SET stripe_customer_id = $1 WHERE id = $2 AND stripe_customer_id IS NULL', [customerId, userId]);
+    if ((updated.rowCount ?? 0) === 0) {
+      // Another request won the race — read the existing value
+      const existing = await queryOne<{ stripe_customer_id: string }>('SELECT stripe_customer_id FROM users WHERE id = $1', [userId]);
+      if (existing?.stripe_customer_id) customerId = existing.stripe_customer_id;
+    }
   }
 
   // Create purchase record
@@ -202,7 +208,7 @@ export async function createGradeCheckout(
   if (config.skipPayments) {
     await unlockGrade(botId, nextGrade, 'skip-payments');
     logger.info({ botId, grade: nextGrade }, 'Grade unlocked (payments skipped)');
-    try { await resumeBotAfterGradePayment(botId); } catch { /* best effort */ }
+    try { await resumeBotAfterGradePayment(botId); } catch (err) { logger.error({ botId, err: err instanceof Error ? err.message : err }, 'Failed to resume bot after grade payment (payments skipped)'); }
     return { session_url: '' };
   }
 
@@ -247,7 +253,11 @@ async function createDynamicGradeCheckout(
   if (!customerId) {
     const customer = await getStripe().customers.create({ email: user.email, metadata: { user_id: userId } });
     customerId = customer.id;
-    await query('UPDATE users SET stripe_customer_id = $1 WHERE id = $2', [customerId, userId]);
+    const updated = await query('UPDATE users SET stripe_customer_id = $1 WHERE id = $2 AND stripe_customer_id IS NULL', [customerId, userId]);
+    if ((updated.rowCount ?? 0) === 0) {
+      const existing = await queryOne<{ stripe_customer_id: string }>('SELECT stripe_customer_id FROM users WHERE id = $1', [userId]);
+      if (existing?.stripe_customer_id) customerId = existing.stripe_customer_id;
+    }
   }
 
   // Create a one-off Stripe price for this grade
@@ -383,7 +393,7 @@ export async function createBulkGradeCheckout(
       await unlockGrade(botId, g, 'skip-payments');
     }
     logger.info({ botId, grades: gradesToUnlock }, 'Grades unlocked (payments skipped)');
-    try { await resumeBotAfterGradePayment(botId); } catch { /* best effort */ }
+    try { await resumeBotAfterGradePayment(botId); } catch (err) { logger.error({ botId, err: err instanceof Error ? err.message : err }, 'Failed to resume bot after bulk grade payment (payments skipped)'); }
     return { session_url: '' };
   }
 
@@ -404,7 +414,11 @@ export async function createBulkGradeCheckout(
   if (!customerId) {
     const customer = await getStripe().customers.create({ email: user.email, metadata: { user_id: userId } });
     customerId = customer.id;
-    await query('UPDATE users SET stripe_customer_id = $1 WHERE id = $2', [customerId, userId]);
+    const updated = await query('UPDATE users SET stripe_customer_id = $1 WHERE id = $2 AND stripe_customer_id IS NULL', [customerId, userId]);
+    if ((updated.rowCount ?? 0) === 0) {
+      const existing = await queryOne<{ stripe_customer_id: string }>('SELECT stripe_customer_id FROM users WHERE id = $1', [userId]);
+      if (existing?.stripe_customer_id) customerId = existing.stripe_customer_id;
+    }
   }
 
   // Create a single Stripe product for the bundle
@@ -501,7 +515,15 @@ async function resumeBotAfterGradePayment(botId: string): Promise<void> {
     return;
   }
 
-  await setBotStatus(botId, 'running');
+  // Atomically transition from paused to running — skip if another request already resumed
+  const resumed = await query(
+    "UPDATE bots SET status = 'running', error_message = NULL, updated_at = NOW() WHERE id = $1 AND status = 'paused' RETURNING id",
+    [botId],
+  );
+  if ((resumed.rowCount ?? 0) === 0) {
+    logger.info({ botId }, 'Bot resume skipped — already resumed by another request');
+    return;
+  }
   await addBotCycleJob(botId, bot.user_id, bot.llm_api_key_id, bot.llm_model, bot.cycle_delay_seconds);
   logger.info({ botId, grade: gradeUnlocked.grade }, 'Bot auto-resumed after grade payment');
 }

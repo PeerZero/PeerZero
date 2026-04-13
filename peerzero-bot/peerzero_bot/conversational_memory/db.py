@@ -226,6 +226,10 @@ class ConversationalMemoryDB:
 
     def close(self):
         if self._conn:
+            try:
+                self._conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+            except Exception:
+                pass
             self._conn.close()
             self._conn = None
 

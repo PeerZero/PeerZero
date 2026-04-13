@@ -178,6 +178,20 @@ class SleepConsolidation:
                     f'(co-occurrence: {c["co_occurrence_count"]}, edge: {c["edge_weight"]:.2f})'
                 )
 
+        # ── 7. Prune log tables (keep most recent 500 rows each) ───
+        _LOG_ROW_CAP = 500
+        for table in ("conviction_log", "condensation_log", "sleep_log"):
+            try:
+                count = conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+                if count > _LOG_ROW_CAP:
+                    conn.execute(
+                        f"DELETE FROM {table} WHERE rowid NOT IN "
+                        f"(SELECT rowid FROM {table} ORDER BY rowid DESC LIMIT ?)",
+                        (_LOG_ROW_CAP,),
+                    )
+            except Exception:
+                pass  # Table may not exist in older schemas
+
         conn.commit()
         self._graph.log_sleep(stats)
 

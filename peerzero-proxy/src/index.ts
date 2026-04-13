@@ -92,7 +92,8 @@ async function isRateLimited(
       });
       const result = (await resp.json()) as { limited: boolean };
       return result.limited;
-    } catch {
+    } catch (e) {
+      console.warn('Rate limiter DO fallback:', e);
       // DO unreachable — fall through to in-memory fallback
     }
   }
@@ -107,7 +108,8 @@ async function isRateLimited(
       await kv.put(kvKey, String(newCount), { expirationTtl: RATE_WINDOW_S });
       if (newCount > RATE_LIMIT) return true;
       return false;
-    } catch {
+    } catch (e) {
+      console.warn('Rate limiter KV fallback:', e);
       // KV failure — fall back to in-memory
     }
   }
@@ -324,6 +326,7 @@ export default {
         method: "POST",
         headers,
         body: JSON.stringify(body),
+        signal: AbortSignal.timeout(180_000),
       });
 
       // Stream the response back unchanged
@@ -405,8 +408,11 @@ function buildResponseHeaders(request: Request, env: Env): Record<string, string
     // CORS headers
     ...(allowOrigin ? { "Access-Control-Allow-Origin": allowOrigin } : {}),
     "Access-Control-Allow-Methods": "POST, OPTIONS",
+    // X-LLM-Key is listed for backward compatibility with clients using the direct-key flow.
+    // Once all clients migrate to session tokens (X-Session-Token), X-LLM-Key can be removed.
     "Access-Control-Allow-Headers": "Content-Type, X-PeerZero-Proxy-Key, X-LLM-Provider, X-LLM-Key, X-Session-Token, anthropic-beta",
     // Security headers
+    "Content-Security-Policy": "default-src 'none'",
     "X-Content-Type-Options": "nosniff",
     "X-Frame-Options": "DENY",
     "Strict-Transport-Security": "max-age=63072000; includeSubDomains; preload",

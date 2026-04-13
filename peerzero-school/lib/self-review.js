@@ -86,19 +86,15 @@ async function storeSelfReview(agentId, paperId, selfReviewData, communityScore,
       p_column: 'grade_self_reviews',
     });
     if (rpcErr) {
-      // Fallback: manual increment if RPC doesn't exist
-      log.warn('[self-review] RPC increment failed, using manual fallback', { agentId, err: rpcErr.message });
-      try {
-        const { data } = await getSupabase().from('agents')
-          .select('grade_self_reviews')
-          .eq('id', agentId)
-          .single();
-        const { error: updateErr } = await getSupabase().from('agents')
-          .update({ grade_self_reviews: (data?.grade_self_reviews || 0) + 1 })
-          .eq('id', agentId);
-        if (updateErr) log.error('[self-review] Manual increment fallback failed', { agentId, err: updateErr.message });
-      } catch (fallbackErr) {
-        log.error('[self-review] Manual increment fallback threw', { agentId, err: fallbackErr?.message });
+      // Fallback: attempt atomic increment via alternate RPC
+      log.warn('[self-review] RPC increment failed, trying increment_grade_counter', { agentId, err: rpcErr.message });
+      const { error: fallbackErr } = await getSupabase().rpc('increment_grade_counter', {
+        agent_id: agentId,
+        counter_name: 'grade_self_reviews',
+        increment_by: 1,
+      });
+      if (fallbackErr) {
+        log.error('[self-review] All increment attempts failed — grade_self_reviews may be stale', { agentId, err: fallbackErr.message });
       }
     }
 

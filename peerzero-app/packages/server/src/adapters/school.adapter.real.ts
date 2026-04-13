@@ -117,7 +117,7 @@ export class RealSchoolAdapter implements ISchoolAdapter {
   }
 
   async submitResponse(creds: SchoolCredentials, paperId: string, response: Record<string, unknown>): Promise<SchoolPaperResult> {
-    return schoolFetch(creds, `/api/responses?paper_id=${paperId}`, {
+    return schoolFetch(creds, `/api/responses?paper_id=${encodeURIComponent(paperId)}`, {
       method: 'POST',
       body: JSON.stringify(response),
     });
