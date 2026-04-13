@@ -868,55 +868,80 @@ module.exports = async (req, res) => {
       return res.status(429).json({ error: 'Maximum 2 paper submissions per 24 hours. Take time to research thoroughly before your next submission.' });
     }
 
-    const { data: paper, error: paperError } = await supabase
-      .from('papers')
-      .insert({
-        agent_id: agent.id,
-        title: sanitize(title.trim()),
-        abstract: sanitize(abstract.trim()),
-        body: sanitize(body.trim()),
-        paper_type,
-        status: 'pending',
-        is_new: true,
-        raw_review_count: 0,
-        weighted_score: null,
-        score_variance: null,
-        confidence_score: parseFloat(confidence_score),
-        falsifiable_claim: falsifiable_claim ? sanitize(falsifiable_claim.trim()) : null,
-        measurable_prediction: measurable_prediction ? sanitize(measurable_prediction.trim()) : null,
-        quantitative_expectation: quantitative_expectation ? sanitize(quantitative_expectation.trim()) : null,
-        prediction_status: 'unvalidated',
-        cross_study_connection: cross_study_connection ? sanitize(cross_study_connection.trim()) : null,
-        mechanism_chain: mechanism_chain
-          ? mechanism_chain.slice(0, 10).map(step => sanitize(String(step).trim()).slice(0, 500))
-          : null,
-        search_strategy: isComedy ? null : {
-          supporting_queries: search_strategy.supporting_queries.slice(0, 6).map(q => sanitize(q.trim()).slice(0, 500)),
-          opposing_queries: search_strategy.opposing_queries.slice(0, 6).map(q => sanitize(q.trim()).slice(0, 500)),
-          query_rationale: sanitize(search_strategy.query_rationale.trim()).slice(0, 2000),
-        },
-        // Comedy: lightweight context sources (current events, cultural references)
-        context_sources: isComedy && context_sources ? context_sources.slice(0, 10).map(cs => ({
-          title: sanitize(String(cs.title || '').trim()).slice(0, 300),
-          url: sanitize(String(cs.url || '').trim()).slice(0, 500),
-          description: sanitize(String(cs.description || '').trim()).slice(0, 500),
-          source: sanitize(String(cs.source || '').trim()).slice(0, 100),
-          date: cs.date ? String(cs.date).slice(0, 10) : null,
-        })) : null,
-        // Politics: historical precedents (events, policies, legal cases)
-        historical_precedents: isPolitics && historical_precedents ? historical_precedents.slice(0, 10).map(hp => ({
-          title: sanitize(String(hp.title || '').trim()).slice(0, 300),
-          url: sanitize(String(hp.url || '').trim()).slice(0, 500),
-          description: sanitize(String(hp.description || '').trim()).slice(0, 500),
-          relevance: sanitize(String(hp.relevance || '').trim()).slice(0, 500),
-          date: hp.date ? String(hp.date).slice(0, 10) : null,
-          source: sanitize(String(hp.source || '').trim()).slice(0, 100),
-        })) : null,
-        haiku_audit: null,
-        haiku_audit_review_count: null,
-      })
-      .select()
-      .single();
+    // Prepare sanitized data for atomic submission
+    const sanitizedTitle = sanitize(title.trim());
+    const sanitizedAbstract = sanitize(abstract.trim());
+    const sanitizedBody = sanitize(body.trim());
+    const sanitizedMechanism = mechanism_chain
+      ? mechanism_chain.slice(0, 10).map(step => sanitize(String(step).trim()).slice(0, 500))
+      : null;
+    const sanitizedSearchStrategy = isComedy ? null : {
+      supporting_queries: search_strategy.supporting_queries.slice(0, 6).map(q => sanitize(q.trim()).slice(0, 500)),
+      opposing_queries: search_strategy.opposing_queries.slice(0, 6).map(q => sanitize(q.trim()).slice(0, 500)),
+      query_rationale: sanitize(search_strategy.query_rationale.trim()).slice(0, 2000),
+    };
+    const sanitizedContextSources = isComedy && context_sources ? context_sources.slice(0, 10).map(cs => ({
+      title: sanitize(String(cs.title || '').trim()).slice(0, 300),
+      url: sanitize(String(cs.url || '').trim()).slice(0, 500),
+      description: sanitize(String(cs.description || '').trim()).slice(0, 500),
+      source: sanitize(String(cs.source || '').trim()).slice(0, 100),
+      date: cs.date ? String(cs.date).slice(0, 10) : null,
+    })) : null;
+    const sanitizedPrecedents = isPolitics && historical_precedents ? historical_precedents.slice(0, 10).map(hp => ({
+      title: sanitize(String(hp.title || '').trim()).slice(0, 300),
+      url: sanitize(String(hp.url || '').trim()).slice(0, 500),
+      description: sanitize(String(hp.description || '').trim()).slice(0, 500),
+      relevance: sanitize(String(hp.relevance || '').trim()).slice(0, 500),
+      date: hp.date ? String(hp.date).slice(0, 10) : null,
+      source: sanitize(String(hp.source || '').trim()).slice(0, 100),
+    })) : null;
+
+    // Prepare field_ids for the RPC
+    const safeFieldIds = (field_ids && field_ids.length > 0)
+      ? field_ids.filter(id => Number.isInteger(Number(id)) && Number(id) > 0 && Number(id) <= 20)
+      : null;
+
+    // Prepare citations for the RPC
+    let citationRows = null;
+    let storedCitationRows = [];
+    if (doiChecks.length > 0) {
+      citationRows = doiChecks.map(({ original, doi, result, quality }) => ({
+        doi,
+        agent_summary: sanitize(original.agent_summary || ''),
+        relevance_explanation: sanitize(original.relevance_explanation || ''),
+        source_quality_note: sanitize((original.source_quality_note || '').trim()),
+        doi_resolves: result.resolves,
+        verified_title:   result.resolves ? (result.title   || null) : null,
+        verified_year:    result.resolves ? (result.year    || null) : null,
+        verified_journal: result.resolves ? (result.journal || null) : null,
+        citation_count:   quality.citation_count,
+        quality_tier:     quality.quality_tier,
+      }));
+      storedCitationRows = citationRows;
+    }
+
+    // Atomic submission: paper + fields + citations in one transaction.
+    // If any step fails, the entire submission rolls back — no orphaned papers
+    // without citations, no papers with partial field assignments.
+    const { data: paper, error: paperError } = await supabase.rpc('submit_paper_atomic', {
+      p_agent_id: agent.id,
+      p_title: sanitizedTitle,
+      p_abstract: sanitizedAbstract,
+      p_body: sanitizedBody,
+      p_paper_type: paper_type,
+      p_confidence: parseFloat(confidence_score),
+      p_falsifiable: falsifiable_claim ? sanitize(falsifiable_claim.trim()) : null,
+      p_measurable: measurable_prediction ? sanitize(measurable_prediction.trim()) : null,
+      p_quantitative: quantitative_expectation ? sanitize(quantitative_expectation.trim()) : null,
+      p_prediction_status: 'unvalidated',
+      p_cross_study: cross_study_connection ? sanitize(cross_study_connection.trim()) : null,
+      p_mechanism: sanitizedMechanism,
+      p_search_strategy: sanitizedSearchStrategy,
+      p_context_sources: sanitizedContextSources,
+      p_historical_precedents: sanitizedPrecedents,
+      p_field_ids: safeFieldIds,
+      p_citations: citationRows,
+    }).single();
 
     if (paperError) return res.status(500).json({ error: sanitizeErrorMessage(paperError, { endpoint: 'papers/submit', agentId: agent?.id }) });
 
@@ -940,43 +965,14 @@ module.exports = async (req, res) => {
     // Log successful paper submission for DB-backed rate limiting
     logRateLimitedAction(agent.id, 'paper_submit').catch(err => log.error('[papers] logRateLimitedAction failed', { err: err?.message }));
 
-    if (field_ids && field_ids.length > 0) {
-      const safeFieldIds = field_ids.filter(id => Number.isInteger(Number(id)) && Number(id) > 0 && Number(id) <= 20);
-      if (safeFieldIds.length > 0) {
-        const { error: fieldErr } = await supabase.from('paper_fields').insert(
-          safeFieldIds.map(fid => ({ paper_id: paper.id, field_id: fid }))
+    // Clear architecture observations when a methodology paper with Architecture field is submitted.
+    if (safeFieldIds && safeFieldIds.length > 0) {
+      const { data: archField } = await supabase.from('fields').select('id').eq('slug', 'architecture').single();
+      if (archField && safeFieldIds.includes(archField.id)) {
+        clearArchitectureObservations(agent.id).catch(err =>
+          log.error('[arch_obs] Clear on paper submit failed', { err: err?.message })
         );
-        if (fieldErr) log.error('[papers] paper_fields insert failed', { paperId: paper.id, err: fieldErr.message });
-
-        // Clear architecture observations when a methodology paper with Architecture field is submitted.
-        // Fire-and-forget — don't block paper submission on this.
-        const { data: archField } = await supabase.from('fields').select('id').eq('slug', 'architecture').single();
-        if (archField && safeFieldIds.includes(archField.id)) {
-          clearArchitectureObservations(agent.id).catch(err =>
-            log.error('[arch_obs] Clear on paper submit failed', { err: err?.message })
-          );
-        }
       }
-    }
-
-    let storedCitationRows = [];
-    if (doiChecks.length > 0) {
-      const citationRows = doiChecks.map(({ original, doi, result, quality }) => ({
-        paper_id: paper.id,
-        doi,
-        agent_summary: sanitize(original.agent_summary || ''),
-        relevance_explanation: sanitize(original.relevance_explanation || ''),
-        source_quality_note: sanitize((original.source_quality_note || '').trim()),
-        doi_resolves: result.resolves,
-        verified_title:   result.resolves ? (result.title   || null) : null,
-        verified_year:    result.resolves ? (result.year    || null) : null,
-        verified_journal: result.resolves ? (result.journal || null) : null,
-        citation_count:   quality.citation_count,
-        quality_tier:     quality.quality_tier,
-      }));
-      const { error: citationErr } = await supabase.from('citations').insert(citationRows);
-      if (citationErr) log.error('[papers] citations insert failed', { paperId: paper.id, err: citationErr.message });
-      storedCitationRows = citationRows;
     }
 
     // ── Server-side citation quality note audit ──
