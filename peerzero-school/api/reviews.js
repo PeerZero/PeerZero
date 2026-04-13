@@ -54,16 +54,18 @@ async function checkCitationAccuracyConsensus(paperId, authorId) {
   const extraFlaggers = Math.max(0, flagged.length - 2);
   const credChange = parseFloat((penaltyBase - (extraFlaggers * 0.15)).toFixed(2));
   const capped = Math.max(-1.2, credChange);
-  // adjustCredibility inserts into credibility_transactions. If a concurrent call
-  // also passed the check above, the second insert will create a duplicate row.
-  // This is acceptable (small double-penalty) because the race window is tiny and
-  // reconciliation can detect duplicates. A DB unique constraint on
-  // (agent_id, related_paper_id, transaction_type) would be the ideal fix.
-  await adjustCredibility(authorId, capped, {
+  // Migration 032 adds a partial unique index on credibility_transactions
+  // for citation_accuracy_penalty, so the second concurrent insert will fail
+  // with a unique violation instead of creating a duplicate penalty.
+  // The credibility RPC still applies (atomic increment), but the transaction
+  // log insert will fail — adjustCredibility logs the error and returns.
+  // Net effect: only the first penalty sticks.
+  const credResult = await adjustCredibility(authorId, capped, {
     reason: `Citation accuracy consensus — ${flagged.length} reviewers independently flagged citation issues`,
     transactionType: 'citation_accuracy_penalty',
     relatedPaperId: paperId,
   });
+  if (!credResult) return; // RPC failed or unique violation on transaction insert
   // Record structured failure reflection for citation penalty
   recordFailureReflection(authorId, 'citation_penalty', 'failure',
     `Citation accuracy penalty: ${flagged.length} reviewers flagged issues on paper ${paperId.slice(0, 8)}`,
