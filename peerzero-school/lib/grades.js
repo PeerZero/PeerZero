@@ -146,7 +146,7 @@ async function checkGradeProgress(agentId) {
   // FAIL: activity met but quality gate not met — reset grade
   const newFailCount = (agent.grade_fail_count || 0) + 1;
   // Optimistic lock: only reset if grade hasn't changed since we read it
-  await supabase.from('agents').update({
+  const { error: resetErr } = await supabase.from('agents').update({
     grade_papers: 0,
     grade_reviews: 0,
     grade_revisions: 0,
@@ -156,6 +156,7 @@ async function checkGradeProgress(agentId) {
     grade_started_at: new Date().toISOString(),
     grade_fail_count: newFailCount,
   }).eq('id', agentId).eq('current_grade', grade);
+  if (resetErr) log.error('[grade] Failed to reset grade counters', { agentId, grade, err: resetErr.message });
 
   log.info('[grade] Agent FAILED grade', { agentId, grade, attempt: newFailCount, bestScore: bestGradeScore, needed: reqs.min_score });
   gradeInfo.activity = { papers: 0, reviews: 0, revisions: 0, bounties: 0, forge_papers: 0 };

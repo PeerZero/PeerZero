@@ -817,12 +817,13 @@ module.exports = async (req, res) => {
             weights += w;
           }
           const newScore = weights > 0 ? parseFloat((total / weights).toFixed(2)) : null;
-          await supabase.from('papers').update({
+          const { error: fixErr } = await supabase.from('papers').update({
             raw_review_count: reviews.length,
             weighted_score: newScore,
             last_reviewed_at: new Date().toISOString(),
           }).eq('id', sp.paper_id);
-          stuckReviewsFixed++;
+          if (fixErr) log.error('[reconcile] Failed to fix stuck review', { paperId: sp.paper_id, err: fixErr.message });
+          else stuckReviewsFixed++;
           log.info('[reconcile] Fixed stuck review', { paperId: sp.paper_id, expectedReviews: reviews.length, hadCount: sp.raw_review_count });
         }
       }

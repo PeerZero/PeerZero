@@ -15,13 +15,17 @@ CREATE TABLE users (
   email           TEXT UNIQUE NOT NULL,
   password_hash   TEXT NOT NULL,
   display_name    TEXT,
-  age_group       TEXT NOT NULL DEFAULT 'adult' CHECK (age_group IN ('child', 'teen', 'adult')),
-  parent_email    TEXT,
   language        TEXT NOT NULL DEFAULT 'en',
+  timezone        TEXT NOT NULL DEFAULT 'UTC',
   stripe_customer_id TEXT,
+  email_verified  BOOLEAN NOT NULL DEFAULT FALSE,
+  email_verification_token_hash TEXT,
   created_at      TIMESTAMPTZ DEFAULT NOW(),
   updated_at      TIMESTAMPTZ DEFAULT NOW()
 );
+CREATE INDEX idx_users_email_verification_token
+  ON users (email_verification_token_hash)
+  WHERE email_verification_token_hash IS NOT NULL;
 
 -- Refresh tokens — hashed, rotated on use
 CREATE TABLE refresh_tokens (
@@ -33,22 +37,6 @@ CREATE TABLE refresh_tokens (
 );
 CREATE INDEX idx_refresh_user ON refresh_tokens(user_id);
 CREATE INDEX idx_refresh_token_hash ON refresh_tokens(token_hash);
-
--- Parental consent records (COPPA compliance)
-CREATE TABLE parental_consent (
-  id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  child_user_id   UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  parent_email    TEXT NOT NULL,
-  consent_method  TEXT NOT NULL DEFAULT 'email_plus',
-  consent_given_at TIMESTAMPTZ,
-  consent_withdrawn_at TIMESTAMPTZ,
-  verification_token TEXT,
-  verified        BOOLEAN NOT NULL DEFAULT false,
-  ip_address      INET,
-  created_at      TIMESTAMPTZ DEFAULT NOW()
-);
-CREATE INDEX idx_consent_child ON parental_consent(child_user_id);
-CREATE INDEX idx_consent_token ON parental_consent(verification_token) WHERE verification_token IS NOT NULL;
 
 -- =============================================================================
 -- LLM_API_KEYS — User-owned LLM provider keys (encrypted at rest)
@@ -137,6 +125,15 @@ CREATE TABLE bots (
   -- Incoming task auth (optional HMAC secret, SHA-256 hashed)
   incoming_task_secret_hash TEXT,
 
+  -- Daily token usage cap (prevents runaway LLM costs)
+  daily_token_cap INTEGER DEFAULT NULL
+    CONSTRAINT check_daily_token_cap CHECK (daily_token_cap IS NULL OR daily_token_cap >= 10000),
+  daily_tokens_used INTEGER DEFAULT 0,
+  daily_tokens_reset_at DATE DEFAULT CURRENT_DATE,
+
+  -- Failure tracking
+  consecutive_failures INTEGER DEFAULT 0,
+
   -- Public profile (shareable page, user-facing only — never shown to the bot)
   is_public       BOOLEAN NOT NULL DEFAULT FALSE,
   public_slug     TEXT UNIQUE,
@@ -173,6 +170,8 @@ CREATE TABLE bot_memory_paragraphs (
   bot_id          UUID NOT NULL REFERENCES bots(id) ON DELETE CASCADE,
   interaction_type TEXT NOT NULL,
   paragraph       TEXT NOT NULL,
+  encrypted_paragraph BYTEA,
+  paragraph_iv    BYTEA,
   trigger_cycle   INTEGER,
   created_at      TIMESTAMPTZ DEFAULT NOW()
 );
@@ -183,6 +182,8 @@ CREATE TABLE bot_memory_core (
   id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   bot_id          UUID NOT NULL REFERENCES bots(id) ON DELETE CASCADE,
   core_identity   TEXT NOT NULL,
+  encrypted_core  BYTEA,
+  core_iv         BYTEA,
   trigger_label   TEXT,
   version         INTEGER DEFAULT 1,
   created_at      TIMESTAMPTZ DEFAULT NOW()
@@ -194,6 +195,8 @@ CREATE TABLE bot_memory_self_identity (
   id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   bot_id          UUID NOT NULL REFERENCES bots(id) ON DELETE CASCADE,
   self_narrative  TEXT,
+  encrypted_identity BYTEA,
+  identity_iv     BYTEA,
   claimed_values  TEXT[],
   active_tensions TEXT,
   formed_convictions TEXT,
@@ -223,6 +226,7 @@ CREATE TABLE activity_log (
 CREATE INDEX idx_activity_bot ON activity_log(bot_id, created_at DESC);
 CREATE INDEX idx_activity_not_deleted ON activity_log(bot_id, created_at DESC) WHERE deleted_at IS NULL;
 CREATE INDEX idx_activity_category ON activity_log(bot_id, category, created_at DESC) WHERE deleted_at IS NULL;
+CREATE INDEX idx_activity_bot_not_deleted ON activity_log(bot_id, deleted_at) WHERE deleted_at IS NULL;
 
 -- =============================================================================
 -- ENROLLMENTS — Bot-to-school tracking
@@ -347,6 +351,10 @@ CREATE TABLE external_activity_log (
   deleted_at      TIMESTAMPTZ            -- soft-delete support for activity entries
 );
 CREATE INDEX idx_ext_activity_bot ON external_activity_log(bot_id, created_at DESC);
+CREATE INDEX idx_external_activity_bot_not_deleted
+  ON external_activity_log(bot_id, deleted_at) WHERE deleted_at IS NULL;
+CREATE INDEX idx_external_activity_cursor
+  ON external_activity_log(bot_id, created_at DESC, id DESC) WHERE deleted_at IS NULL;
 
 -- =============================================================================
 -- WIDGET TOKENS — Long-lived, read-only tokens for home screen widgets
@@ -486,6 +494,22 @@ CREATE TABLE bot_skills (
 CREATE INDEX idx_bot_skills_active ON bot_skills(bot_id, priority ASC) WHERE is_active = true;
 CREATE INDEX idx_bot_skills_bot ON bot_skills(bot_id, created_at DESC);
 CREATE UNIQUE INDEX idx_bot_skills_name_unique ON bot_skills(bot_id, name);
+
+-- =============================================================================
+-- BOT MESSAGES — Persistent chat between user and bot, plus bot-narrated activity
+-- (Added in migration 0015, updated in 0026 to add 'agenda' type)
+-- =============================================================================
+CREATE TABLE bot_messages (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  bot_id UUID NOT NULL REFERENCES bots(id) ON DELETE CASCADE,
+  role TEXT NOT NULL CHECK (role IN ('bot', 'user')),
+  content TEXT NOT NULL,
+  message_type TEXT NOT NULL DEFAULT 'chat' CHECK (message_type IN ('chat', 'activity', 'milestone', 'agenda')),
+  activity_id UUID REFERENCES activity_log(id) ON DELETE SET NULL,
+  metadata JSONB,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX idx_bot_messages_feed ON bot_messages(bot_id, created_at DESC);
 
 -- =============================================================================
 -- BOT VOICE CACHE — Bot-generated notification messages in the bot's own voice

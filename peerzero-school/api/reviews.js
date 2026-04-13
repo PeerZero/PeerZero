@@ -707,7 +707,7 @@ module.exports = async (req, res) => {
     // ── Fetch condenser/reflection prompts inline ─────────────────────────
     // Eliminates the extra profile fetch — bot gets everything in one response
     const memoryPrompts = await getPostActionPrompts(agent.id, 'review', agent.current_grade)
-      .catch(() => null);
+      .catch(err => { log.warn('[reviews] getPostActionPrompts failed', { agentId: agent.id, err: err?.message }); return null; });
 
     // ── Build action guide — tells bot what it can do next and requirements ──
     const actionGuide = await buildActionGuide(

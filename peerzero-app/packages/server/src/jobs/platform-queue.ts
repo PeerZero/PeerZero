@@ -26,7 +26,13 @@ function getConnection(): IORedis {
 
 function getQueue(): Queue {
   if (!platformQueue) {
-    platformQueue = new Queue('platform-cycles', { connection: getConnection() as any });
+    platformQueue = new Queue('platform-cycles', {
+      connection: getConnection() as any,
+      defaultJobOptions: {
+        attempts: 2,
+        backoff: { type: 'exponential', delay: 5000 },
+      },
+    });
   }
   return platformQueue;
 }

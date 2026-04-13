@@ -91,8 +91,11 @@ def _rank_by_relevance(papers: list, paper_context: str, llm_fast) -> list:
             if isinstance(indices, list) and len(indices) >= 6:
                 selected = []
                 seen = set()
-                for idx in indices:
-                    i = int(idx) - 1
+                for idx in indices[:50]:  # Cap iteration to prevent runaway
+                    try:
+                        i = int(idx) - 1
+                    except (ValueError, TypeError):
+                        continue
                     if 0 <= i < len(papers) and i not in seen:
                         selected.append(papers[i])
                         seen.add(i)

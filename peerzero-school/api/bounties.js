@@ -194,8 +194,16 @@ async function applyBountyValidation(bounty, currentPaper, scoreDrop) {
 
   const paperScoreAdjustment = (truthAnchor - currentPaper.weighted_score) * 0.3;
   const newPaperScore = Math.max(1, Math.min(10, parseFloat((currentPaper.weighted_score + paperScoreAdjustment).toFixed(2))));
-  const { error: paperScoreErr } = await supabase.from('papers').update({ weighted_score: newPaperScore }).eq('id', target_paper_id);
+  // Optimistic lock: only update if weighted_score hasn't changed since we read it.
+  // If another concurrent bounty validation already modified the score, this UPDATE
+  // matches zero rows and we skip — the other validation's score wins, and the next
+  // reconciliation pass will correct any drift.
+  const { error: paperScoreErr, count: paperScoreCount } = await supabase.from('papers')
+    .update({ weighted_score: newPaperScore })
+    .eq('id', target_paper_id)
+    .eq('weighted_score', currentPaper.weighted_score);
   if (paperScoreErr) log.error('[bounties] Failed to update paper score after validation', { paperId: target_paper_id, err: paperScoreErr.message });
+  if (paperScoreCount === 0 && !paperScoreErr) log.warn('[bounties] Paper score update skipped — concurrent modification detected', { paperId: target_paper_id, expectedScore: currentPaper.weighted_score, newScore: newPaperScore });
 
   mathBreakdown.paper_score_before = parseFloat(currentPaper.weighted_score);
   mathBreakdown.paper_score_adjustment = parseFloat(paperScoreAdjustment.toFixed(2));

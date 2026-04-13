@@ -450,7 +450,7 @@ async function runAggregation(triggeredBy = 'cron') {
 
     // Insert config proposals
     for (const p of proposals) {
-      await supabase.from('forge_config_proposals').insert({
+      const { error: propErr } = await supabase.from('forge_config_proposals').insert({
         aggregation_run_id: run.id,
         config_category: p.config_category,
         proposal_key: p.proposal_key,
@@ -461,6 +461,7 @@ async function runAggregation(triggeredBy = 'cron') {
         consensus_strength: p.consensus_strength,
         requires_human_review: p.requires_human_review,
       });
+      if (propErr) log.error('[forge-aggregation] Failed to insert proposal', { key: p.proposal_key, err: propErr.message });
     }
 
     // Auto-apply safe proposals with sufficient consensus.
@@ -490,15 +491,16 @@ async function runAggregation(triggeredBy = 'cron') {
     }
 
     // Update the run as complete
-    await supabase.from('forge_aggregation_runs')
+    const { error: runErr } = await supabase.from('forge_aggregation_runs')
       .update({
         status: 'complete',
-        papers_scanned: qualified.length + (proposals.length === 0 ? 0 : 0), // scanned = all in window
+        papers_scanned: qualified.length,
         papers_qualified: qualified.length,
         summary: { ...summary, auto_applied: autoApplied },
         completed_at: new Date().toISOString(),
       })
       .eq('id', run.id);
+    if (runErr) log.error('[forge-aggregation] Failed to mark run complete', { runId: run.id, err: runErr.message });
 
     log.info('[forge-aggregation] aggregation complete', {
       generation: generationNumber,
@@ -562,7 +564,7 @@ async function applyProposal(proposalId, appliedBy = 'auto') {
     }, { onConflict: 'key' });
 
   // Record in history
-  await supabase.from('forge_config_history').insert({
+  const { error: histErr } = await supabase.from('forge_config_history').insert({
     proposal_id: proposalId,
     config_key: configKey,
     old_value: oldValue ? JSON.parse(oldValue) : null,
@@ -571,10 +573,11 @@ async function applyProposal(proposalId, appliedBy = 'auto') {
     change_reason: `Forge aggregation gen ${generation}: ${proposal.config_category} / ${proposal.proposal_key} (consensus ${proposal.consensus_strength}, ${proposal.supporting_bot_count} bots)`,
     applied_by: appliedBy,
   });
+  if (histErr) log.error('[forge-aggregation] Failed to record config history', { proposalId, configKey, err: histErr.message });
 
   // Update proposal status
   const newStatus = appliedBy === 'auto' ? 'auto_applied' : 'approved';
-  await supabase.from('forge_config_proposals')
+  const { error: statusErr } = await supabase.from('forge_config_proposals')
     .update({
       status: newStatus,
       applied_at: new Date().toISOString(),
@@ -582,6 +585,7 @@ async function applyProposal(proposalId, appliedBy = 'auto') {
       reviewed_by: appliedBy !== 'auto' ? appliedBy : undefined,
     })
     .eq('id', proposalId);
+  if (statusErr) log.error('[forge-aggregation] Failed to update proposal status', { proposalId, err: statusErr.message });
 
   // Clear internals cache so changes take effect
   clearInternalsCache();

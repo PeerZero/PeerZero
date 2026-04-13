@@ -172,14 +172,14 @@ runMigrations()
     purgeExpiredAuditLogs().catch(() => {});
     auditPurgeInterval = setInterval(() => purgeExpiredAuditLogs().catch(() => {}), 24 * 60 * 60 * 1000);
 
-    // Clean up old BullMQ completed/failed jobs on startup and weekly (Audit #3)
+    // Clean up old BullMQ completed/failed jobs on startup and daily
     if (config.redisUrl) {
-      cleanupOldJobs(30).catch(() => {});
-      cleanupOldPlatformJobs(30).catch(() => {});
+      cleanupOldJobs(14).catch(() => {});
+      cleanupOldPlatformJobs(14).catch(() => {});
       jobCleanupInterval = setInterval(() => {
-        cleanupOldJobs(30).catch(() => {});
-        cleanupOldPlatformJobs(30).catch(() => {});
-      }, 7 * 24 * 60 * 60 * 1000);
+        cleanupOldJobs(14).catch(() => {});
+        cleanupOldPlatformJobs(14).catch(() => {});
+      }, 24 * 60 * 60 * 1000);
     }
   })
   .catch((err) => {
