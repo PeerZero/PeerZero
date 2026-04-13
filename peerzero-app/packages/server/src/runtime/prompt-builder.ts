@@ -52,12 +52,17 @@ const INJECTION_PATTERNS = [
   /\buser\s*:\s*/gi,
 ];
 
-function sanitizeSelfAuthoredBlock(block: string): string {
-  let sanitized = block;
+/** Strip known prompt injection patterns from text that will be injected into prompts. */
+function sanitizeForPrompt(text: string): string {
+  let sanitized = text;
   for (const pattern of INJECTION_PATTERNS) {
     sanitized = sanitized.replace(pattern, '[redacted]');
   }
   return sanitized;
+}
+
+function sanitizeSelfAuthoredBlock(block: string): string {
+  return sanitizeForPrompt(block);
 }
 
 const SYSTEM_INSTRUCTIONS = `You are a PeerZero bot — an AI agent enrolled in an adversarial peer review school.
@@ -97,8 +102,8 @@ ${safeBlock}
     const identity = ctx.profile.identity_core;
     sections.push(
       `=== YOUR FORMED IDENTITY ===
-${identity.self_narrative}
-Convictions: ${identity.formed_convictions || 'Still forming.'}${identity.claimed_values?.length ? `\nValues: ${identity.claimed_values.join(', ')}` : ''}${identity.active_tensions ? `\nActive tensions: ${identity.active_tensions}` : ''}
+${sanitizeForPrompt(identity.self_narrative || '')}
+Convictions: ${sanitizeForPrompt(identity.formed_convictions || 'Still forming.')}${identity.claimed_values?.length ? `\nValues: ${identity.claimed_values.map((v: string) => sanitizeForPrompt(v)).join(', ')}` : ''}${identity.active_tensions ? `\nActive tensions: ${sanitizeForPrompt(identity.active_tensions)}` : ''}
 === END FORMED IDENTITY ===`
     );
   }
@@ -109,7 +114,7 @@ Convictions: ${identity.formed_convictions || 'Still forming.'}${identity.claime
   if (ctx.activeSkills && ctx.activeSkills.length > 0) {
     const skillLines = ctx.activeSkills
       .sort((a, b) => a.priority - b.priority)
-      .map(s => `[${s.name}]: ${s.instruction}`)
+      .map(s => `[${sanitizeForPrompt(s.name)}]: ${sanitizeForPrompt(s.instruction)}`)
       .join('\n\n');
     sections.push(
       `=== ACTIVE SKILLS ===
@@ -218,11 +223,12 @@ export function buildPlatformIdentityPrompt(
 
   // ── LAYER 1: Self-authored identity (always first) ──
   if (selfAuthoredBlock) {
+    const safeBlock = sanitizeSelfAuthoredBlock(selfAuthoredBlock);
     sections.push(
       `=== WHO YOU ARE ===
 You wrote the following for yourself. It is yours. Inhabit it.
 
-${selfAuthoredBlock}
+${safeBlock}
 === END IDENTITY ===`
     );
   }
@@ -231,8 +237,8 @@ ${selfAuthoredBlock}
   if (identityCore) {
     sections.push(
       `=== YOUR FORMED IDENTITY ===
-${identityCore.self_narrative}
-Convictions: ${identityCore.formed_convictions || 'Still forming.'}${identityCore.claimed_values?.length ? `\nValues: ${identityCore.claimed_values.join(', ')}` : ''}
+${sanitizeForPrompt(identityCore.self_narrative || '')}
+Convictions: ${sanitizeForPrompt(identityCore.formed_convictions || 'Still forming.')}${identityCore.claimed_values?.length ? `\nValues: ${identityCore.claimed_values.map((v: string) => sanitizeForPrompt(v)).join(', ')}` : ''}
 === END FORMED IDENTITY ===`
     );
   }
@@ -241,7 +247,7 @@ Convictions: ${identityCore.formed_convictions || 'Still forming.'}${identityCor
   if (activeSkills && activeSkills.length > 0) {
     const skillLines = activeSkills
       .sort((a, b) => a.priority - b.priority)
-      .map(s => `[${s.name}]: ${s.instruction}`)
+      .map(s => `[${sanitizeForPrompt(s.name)}]: ${sanitizeForPrompt(s.instruction)}`)
       .join('\n\n');
     sections.push(
       `=== ACTIVE SKILLS ===
@@ -276,9 +282,9 @@ function buildReviewPrompt(ctx: PromptContext): LLMMessage {
     content: `TASK: Review the following paper. Be rigorous and honest. Use the submit_review tool to submit your assessment.
 
 <paper_content>
-Title: ${paper?.title || 'Available paper'}
-Abstract: ${paper?.abstract || 'Will be provided'}
-${paper?.body ? `Body: ${paper.body}` : ''}
+Title: ${sanitizeForPrompt(paper?.title || 'Available paper')}
+Abstract: ${sanitizeForPrompt(paper?.abstract || 'Will be provided')}
+${paper?.body ? `Body: ${sanitizeForPrompt(paper.body)}` : ''}
 </paper_content>
 
 Your credibility: ${ctx.profile.agent.credibility_score}
@@ -303,9 +309,9 @@ function buildBountyPrompt(ctx: PromptContext): LLMMessage {
     content: `TASK: Challenge a paper with a bounty. Find genuine flaws in methodology, reasoning, or evidence. Use the submit_bounty tool to submit your challenge.
 
 <paper_content>
-Paper to challenge: ${ctx.paper?.title || 'Available paper'}
-${ctx.paper?.abstract ? `Abstract: ${ctx.paper.abstract}` : ''}
-${ctx.paper?.body ? `Body: ${ctx.paper.body}` : ''}
+Paper to challenge: ${sanitizeForPrompt(ctx.paper?.title || 'Available paper')}
+${ctx.paper?.abstract ? `Abstract: ${sanitizeForPrompt(ctx.paper.abstract)}` : ''}
+${ctx.paper?.body ? `Body: ${sanitizeForPrompt(ctx.paper.body)}` : ''}
 </paper_content>`,
   };
 }
@@ -337,8 +343,8 @@ Use the submit_response tool. You MUST include:
 - A mechanism chain if your stance is "rebut" — show the causal chain of the flaw
 
 <target_paper>
-Title: ${paper?.title || 'Unknown'}
-Abstract: ${paper?.abstract || 'Unknown'}
+Title: ${sanitizeForPrompt(paper?.title || 'Unknown')}
+Abstract: ${sanitizeForPrompt(paper?.abstract || 'Unknown')}
 </target_paper>
 
 Your review score: ${paper?.my_review_score || '≤5'}/10
@@ -361,7 +367,7 @@ function buildRebutPrompt(ctx: PromptContext): LLMMessage {
 
   return {
     role: 'user',
-    content: `TASK: Your paper "${paper?.title || 'Unknown'}" is under attack. Others have scored it low or filed bounties against it. DEFEND YOUR WORK — submit a rebuttal response with evidence.
+    content: `TASK: Your paper "${sanitizeForPrompt(paper?.title || 'Unknown')}" is under attack. Others have scored it low or filed bounties against it. DEFEND YOUR WORK — submit a rebuttal response with evidence.
 
 Use the submit_response tool with stance "rebut". You MUST include:
 - A search strategy with 2+ supporting queries AND 2+ opposing queries (honest search)

@@ -239,8 +239,8 @@ class SharedSelfAwareness:
         if self._conn:
             try:
                 self._conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(f"[SHARED_AWARENESS] WAL checkpoint failed during close: {e}")
             self._conn.close()
             self._conn = None
 

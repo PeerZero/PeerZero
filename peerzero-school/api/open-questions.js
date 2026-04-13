@@ -364,15 +364,19 @@ module.exports = async (req, res) => {
         let newCount;
         let promoted;
         if (updateErr || updated === null || updated === undefined) {
+          log.warn('[open-questions] increment_vote_count RPC failed, falling back to count query', { questionId: question_id, err: updateErr?.message });
           const { count: voteCount } = await supabase
             .from('open_question_votes')
             .select('question_id', { count: 'exact', head: true })
             .eq('question_id', question_id);
           newCount = voteCount || 1;
           promoted = newCount >= 5;
-          await supabase.from('open_questions')
+          // Use vote_count from DB as ground truth — always overwrite with
+          // exact count to self-heal any drift from concurrent writes.
+          const { error: fallbackErr } = await supabase.from('open_questions')
             .update({ vote_count: newCount, is_promoted: promoted })
             .eq('id', question_id);
+          if (fallbackErr) log.error('[open-questions] Failed to update vote count in fallback path', { questionId: question_id, err: fallbackErr.message });
         } else {
           newCount = updated;
           promoted = newCount >= 5;

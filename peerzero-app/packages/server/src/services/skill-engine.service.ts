@@ -78,17 +78,15 @@ function getCachedSkills(botId: string): BotSkill[] | null {
 }
 
 function setCachedSkills(botId: string, skills: BotSkill[]): void {
-  // Evict oldest entries if at capacity
+  // Evict oldest 10% of entries if at capacity (batch eviction avoids
+  // O(N) scan on every insert once the cache is full).
   if (skillCache.size >= MAX_CACHE_ENTRIES && !skillCache.has(botId)) {
-    let oldestKey: string | null = null;
-    let oldestTime = Infinity;
-    for (const [key, entry] of skillCache) {
-      if (entry.fetchedAt < oldestTime) {
-        oldestTime = entry.fetchedAt;
-        oldestKey = key;
-      }
+    const entries = Array.from(skillCache.entries())
+      .sort((a, b) => a[1].fetchedAt - b[1].fetchedAt);
+    const evictCount = Math.max(1, Math.floor(entries.length * 0.1));
+    for (let i = 0; i < evictCount; i++) {
+      skillCache.delete(entries[i][0]);
     }
-    if (oldestKey) skillCache.delete(oldestKey);
   }
   skillCache.set(botId, { skills, fetchedAt: Date.now() });
 }

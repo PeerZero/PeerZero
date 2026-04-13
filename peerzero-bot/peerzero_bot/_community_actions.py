@@ -53,7 +53,7 @@ class CommunityActionsMixin:
                 elif isinstance(full, list) and full:
                     reviews = full[0].get("reviews", []) if isinstance(full[0], dict) else []
             except Exception as e:
-                logger.debug(f"[RATE] Failed to fetch paper {paper_id}: {e}")
+                logger.warning(f"[RATE] Failed to fetch paper {paper_id}: {e}")
                 continue
 
             # Extract bot's own review for context (so LLM knows what we thought)
@@ -95,14 +95,14 @@ class CommunityActionsMixin:
                         logger.info(f"[RATE] 403 on paper {paper_id} — removing stale tracked ID")
                         self.memory.remove_tracked_review_id(paper_id)
                         break  # skip remaining reviews on this paper
-                    logger.debug(f"[RATE] Failed to rate review: {e}")
+                    logger.warning(f"[RATE] Failed to rate review: {e}")
 
     def _do_red_team_responses(self, system_prompt):
         """File red team interrogations on bounties against our papers."""
         try:
             my_papers = self.school.get_my_papers()
         except Exception as e:
-            logger.debug(f"[RED_TEAM] Failed to fetch my papers: {e}")
+            logger.warning(f"[RED_TEAM] Failed to fetch my papers: {e}")
             return
 
         originals = [p for p in my_papers if not p.get("parent_paper_id")]
@@ -114,7 +114,7 @@ class CommunityActionsMixin:
             try:
                 bounties = self.school.get_bounties(params={"paper_id": paper_id})
             except Exception as e:
-                logger.debug(f"[COMMUNITY] Failed to fetch bounties for paper {paper_id}: {e}")
+                logger.warning(f"[COMMUNITY] Failed to fetch bounties for paper {paper_id}: {e}")
                 continue
 
             for b in (bounties if isinstance(bounties, list) else []):
@@ -150,7 +150,7 @@ class CommunityActionsMixin:
             try:
                 bounties = self.school.get_bounties(params={"paper_id": paper_id})
             except Exception as e:
-                logger.debug(f"[COMMUNITY] Failed to fetch bounties for paper {paper_id}: {e}")
+                logger.warning(f"[COMMUNITY] Failed to fetch bounties for paper {paper_id}: {e}")
                 continue
 
             for b in (bounties if isinstance(bounties, list) else []):
@@ -182,14 +182,14 @@ class CommunityActionsMixin:
                         logger.info(f"[JURY] Voted {vote} on red team response")
                         return  # one vote per cycle
                     except Exception as e:
-                        logger.debug(f"[JURY] Failed: {e}")
+                        logger.warning(f"[JURY] Failed: {e}")
 
     def _do_open_questions(self, system_prompt):
         """Vote on open questions and occasionally post new ones."""
         try:
             questions = self.school.get_open_questions()
         except Exception as e:
-            logger.debug(f"[OPEN_Q] Failed to fetch open questions: {e}")
+            logger.warning(f"[OPEN_Q] Failed to fetch open questions: {e}")
             return
 
         # Vote on well-formed questions (one per cycle)
@@ -204,7 +204,7 @@ class CommunityActionsMixin:
                     logger.info(f"[QUESTIONS] Voted on: {title[:50]}...")
                     break
                 except Exception as e:
-                    logger.debug(f"[QUESTIONS] Vote failed: {e}")
+                    logger.warning(f"[QUESTIONS] Vote failed: {e}")
 
         # 10% chance to post a new question
         if random.random() < 0.1 and len(questions) < 50:
@@ -218,7 +218,7 @@ class CommunityActionsMixin:
                     self.school.submit_open_question(q_data)
                     logger.info(f"[QUESTIONS] Posted: {q_data['title'][:50]}...")
             except Exception as e:
-                logger.debug(f"[QUESTIONS] Post failed: {e}")
+                logger.warning(f"[QUESTIONS] Post failed: {e}")
 
     def _do_structural_bounties(self, system_prompt, profile: dict):
         """File structural bounties (no_mechanism_chain, weak_source_quality) on bountyable papers."""
@@ -241,4 +241,4 @@ class CommunityActionsMixin:
                     status = getattr(getattr(e, "response", None), "status_code", None)
                     if status == 409:
                         continue
-                    logger.debug(f"[BOUNTY] Structural bounty failed: {e}")
+                    logger.warning(f"[BOUNTY] Structural bounty failed: {e}")

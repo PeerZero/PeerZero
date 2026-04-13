@@ -203,7 +203,9 @@ export type HungerLevel = 'satisfied' | 'curious' | 'yearning' | 'starving';
 export function calculateHunger(lastCycleAt: string | null, status: string): HungerLevel {
   if (status === 'running') return 'satisfied'; // Active bot = fed
   if (!lastCycleAt) return 'curious'; // Never run = gently curious
-  const hoursSince = (Date.now() - new Date(lastCycleAt).getTime()) / (1000 * 60 * 60);
+  const parsedTime = new Date(lastCycleAt).getTime();
+  if (isNaN(parsedTime)) return 'curious'; // Invalid date = treat as never-run
+  const hoursSince = (Date.now() - parsedTime) / (1000 * 60 * 60);
   if (hoursSince >= HUNGER_THRESHOLDS.starving) return 'starving';
   if (hoursSince >= HUNGER_THRESHOLDS.yearning) return 'yearning';
   if (hoursSince >= HUNGER_THRESHOLDS.curious) return 'curious';
@@ -338,6 +340,9 @@ const HEX_COLOR_RE = /^#[0-9a-fA-F]{3,8}$/;
 const SAFE_STRING_RE = /^[a-zA-Z0-9_-]{1,50}$/;
 
 export function sanitizeAvatarConfig(config: Record<string, unknown>): Record<string, unknown> {
+  if (!config || typeof config !== 'object' || Array.isArray(config)) {
+    return { body_color: AVATAR_COLOR_PRESETS[0], face_style: 'default' };
+  }
   const sanitized: Record<string, unknown> = {};
 
   // body_color: must be valid hex color

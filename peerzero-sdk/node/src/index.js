@@ -349,6 +349,7 @@ function fetchText(url) {
         chunks.push(chunk);
       });
       res.on('end', () => settle(resolve, Buffer.concat(chunks).toString()));
+      res.on('error', err => settle(reject, new VerificationError(`Response stream error from ${url}: ${err.message}`)));
     });
     req.on('error', err => settle(reject, new VerificationError(`Failed to fetch ${url}: ${err.message}`)));
     req.on('timeout', () => { req.destroy(); settle(reject, new VerificationError(`Timeout fetching ${url}`)); });
