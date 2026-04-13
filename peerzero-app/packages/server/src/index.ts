@@ -125,6 +125,11 @@ app.use('/api/platforms', platformRoutes);
 app.use('/api/skills', skillRoutes);
 app.use('/health', healthRoutes);
 
+// ── 404 catch-all for unknown routes ──
+app.use((_req, res) => {
+  res.status(404).json({ error: 'Not found' });
+});
+
 // ── Sentry error handler (captures exceptions before the custom error handler) ──
 if (process.env.SENTRY_DSN) {
   Sentry.setupExpressErrorHandler(app);

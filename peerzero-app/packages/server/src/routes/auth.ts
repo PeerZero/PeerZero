@@ -4,7 +4,7 @@
 
 import { Router, Request, Response } from 'express';
 import rateLimit from 'express-rate-limit';
-import { registerUser, loginUser, refreshTokens, revokeRefreshTokens, getUserProfile, updateProfile, changePassword, deleteAccount, forgotPassword, resetPassword } from '../services/auth.service';
+import { registerUser, loginUser, refreshTokens, revokeRefreshTokens, getUserProfile, updateProfile, changePassword, deleteAccount, forgotPassword, resetPassword, verifyEmail, resendVerificationEmail } from '../services/auth.service';
 import { requireAuth } from '../middleware/auth';
 import { validateBody } from '../middleware/validate';
 import { UpdateProfileSchema } from '../lib/schemas';
@@ -101,6 +101,21 @@ router.post('/reset-password', resetPasswordLimiter, async (req: Request, res: R
   }
   await resetPassword(email, code, new_password);
   res.json({ message: 'Password reset successfully' });
+});
+
+router.post('/verify-email', async (req: Request, res: Response) => {
+  const { email, code } = req.body;
+  if (!email || !code) {
+    res.status(400).json({ error: 'email and code are required' });
+    return;
+  }
+  await verifyEmail(email, code);
+  res.json({ message: 'Email verified successfully' });
+});
+
+router.post('/resend-verification', requireAuth, async (req: Request, res: Response) => {
+  await resendVerificationEmail(req.user!.userId);
+  res.json({ message: 'Verification email sent' });
 });
 
 router.post('/refresh', refreshLimiter, async (req: Request, res: Response) => {

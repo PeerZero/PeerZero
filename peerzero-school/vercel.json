@@ -115,6 +115,10 @@
       "dest": "/pitch.js"
     },
     {
+      "src": "/api/(.*)",
+      "dest": "/api/not-found.js"
+    },
+    {
       "src": "/(.*)",
       "dest": "/index.html"
     }
