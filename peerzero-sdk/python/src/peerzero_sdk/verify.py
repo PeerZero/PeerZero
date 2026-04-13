@@ -22,6 +22,8 @@ from urllib.parse import urlparse
 
 import httpx
 from cryptography.exceptions import InvalidSignature
+import threading
+
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 from cryptography.hazmat.primitives.serialization import load_pem_public_key
 
@@ -61,6 +63,7 @@ _rate_limiter = {
 _cached_key: Optional[Ed25519PublicKey] = None
 _cached_key_url: Optional[str] = None
 _cached_key_time: float = 0.0
+_state_lock = threading.Lock()  # Guards rate limiter + key cache for thread safety
 
 
 class VerificationError(Exception):
@@ -133,16 +136,17 @@ class ParsedAgentCard:
 
 def _consume_rate_token() -> None:
     """Consume a rate-limit token, raising if exhausted."""
-    now = time.monotonic()
-    elapsed = now - _rate_limiter["last_refill"]
-    if elapsed >= _rate_limiter["interval_s"]:
-        _rate_limiter["tokens"] = _rate_limiter["max_tokens"]
-        _rate_limiter["last_refill"] = now
-    if _rate_limiter["tokens"] <= 0:
-        raise VerificationError(
-            "Rate limit exceeded: too many public key fetches. Try again later."
-        )
-    _rate_limiter["tokens"] -= 1
+    with _state_lock:
+        now = time.monotonic()
+        elapsed = now - _rate_limiter["last_refill"]
+        if elapsed >= _rate_limiter["interval_s"]:
+            _rate_limiter["tokens"] = _rate_limiter["max_tokens"]
+            _rate_limiter["last_refill"] = now
+        if _rate_limiter["tokens"] <= 0:
+            raise VerificationError(
+                "Rate limit exceeded: too many public key fetches. Try again later."
+            )
+        _rate_limiter["tokens"] -= 1
 
 
 def get_public_key(
@@ -180,10 +184,11 @@ def get_public_key(
     base = school_url.rstrip("/")
     url = f"{base}/.well-known/peerzero-public-key.pem"
 
-    # Check cache (with TTL)
-    now = time.monotonic()
-    if _cached_key is not None and _cached_key_url == url and (now - _cached_key_time) < _KEY_TTL_S:
-        return _cached_key
+    # Check cache (with TTL) — lock protects concurrent reads/writes
+    with _state_lock:
+        now = time.monotonic()
+        if _cached_key is not None and _cached_key_url == url and (now - _cached_key_time) < _KEY_TTL_S:
+            return _cached_key
 
     # Rate limit
     _consume_rate_token()
@@ -210,9 +215,10 @@ def get_public_key(
     if not isinstance(key, Ed25519PublicKey):
         raise VerificationError(f"Expected Ed25519 key, got {type(key).__name__}")
 
-    _cached_key = key
-    _cached_key_url = url
-    _cached_key_time = time.monotonic()
+    with _state_lock:
+        _cached_key = key
+        _cached_key_url = url
+        _cached_key_time = time.monotonic()
     return key
 
 

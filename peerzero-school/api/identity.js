@@ -240,10 +240,11 @@ module.exports = async (req, res) => {
         .limit(1);
 
       if (oldest && oldest.length > 0) {
-        await supabase
+        const { error: delErr } = await supabase
           .from('agent_identity_cores')
           .delete()
           .eq('id', oldest[0].id);
+        if (delErr) log.error('[identity] Failed to delete old identity core version', { id: oldest[0].id, err: delErr.message });
       }
     }
 

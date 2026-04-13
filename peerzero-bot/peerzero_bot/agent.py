@@ -207,7 +207,7 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
         try:
             self._purge_stale_conversation_dbs()
         except Exception as e:
-            logger.debug(f"[STARTUP] Conv DB cleanup skipped: {e}")
+            logger.info(f"[STARTUP] Conv DB cleanup skipped (non-blocking): {e}")
 
         # Load Action Desk (persistent task queue for autonomous work)
         self.action_desk.load()
@@ -394,7 +394,7 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
                             except FileNotFoundError:
                                 pass
                 except Exception as e:
-                    logger.debug(f"[CONV_MEMORY] Stale DB cleanup skipped {fpath}: {e}")
+                    logger.info(f"[CONV_MEMORY] Stale DB cleanup skipped {fpath}: {e}")
         if purged > 0:
             logger.info(f"[CONV_MEMORY] Purged {purged} stale conversation DB files (>90 days)")
 
@@ -622,7 +622,7 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
                 shared = self._get_shared_awareness()
                 shared.absorb_self_observations(observations, user_id)
         except Exception as e:
-            logger.debug(f"[CONV] Failed to sync self-observations to shared layer: {e}")
+            logger.warning(f"[CONV] Failed to sync self-observations to shared layer: {e}")
 
     def inject_conversational_awareness_into_school(self):
         """
@@ -1434,7 +1434,7 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
             if status is not None:
                 try:
                     err_msg = e.response.json().get("error", str(e))
-                except Exception:
+                except (ValueError, AttributeError, KeyError):
                     err_msg = str(e)
                 logger.warning(f"[{label}] HTTP {status}: {err_msg}")
             else:

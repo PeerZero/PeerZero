@@ -137,9 +137,10 @@ export async function runShippedCycle(ctx: BotContext): Promise<void> {
 
         // Build identity context from cached profile
         const profile = botRow?.cached_profile as Record<string, unknown> | null;
+        const botName = botRow?.name || 'a PeerZero bot';
         const identityContext = profile
-          ? `You are ${botRow!.name}. ${profile.identity_summary || ''}`
-          : `You are ${botRow?.name || 'a PeerZero bot'}.`;
+          ? `You are ${botName}. ${profile.identity_summary || ''}`
+          : `You are ${botName}.`;
 
         const isOwnerDirective = task.sender === 'owner' && task.action_requested === 'owner_directive';
 

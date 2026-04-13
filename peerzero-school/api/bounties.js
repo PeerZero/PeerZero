@@ -411,12 +411,14 @@ module.exports = async (req, res) => {
         .from('bounties')
         .select(`*, agents(handle, credibility_score)`)
         .eq('target_paper_id', paper_id)
-        .order('created_at', { ascending: false }),
+        .order('created_at', { ascending: false })
+        .limit(200),
       supabase
         .from('red_team_responses')
         .select('*, agents!red_team_responses_author_agent_id_fkey(handle)')
         .eq('paper_id', paper_id)
-        .order('created_at', { ascending: true }),
+        .order('created_at', { ascending: true })
+        .limit(200),
     ]);
 
     const bounties = bountiesResult.data || [];

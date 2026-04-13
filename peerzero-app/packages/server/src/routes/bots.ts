@@ -16,6 +16,7 @@ import * as directiveService from '../services/directive.service';
 import * as taskService from '../services/task.service';
 import { broadcastMessage, broadcastStatusChange } from '../websocket/activity-stream';
 import { addBotCycleJob, removeBotJobs, isQueueAvailable } from '../jobs/queue';
+import { logger } from '../lib/logger';
 import { logAudit } from '../services/audit.service';
 import * as platformService from '../services/platform.service';
 import type { ActivityCategory, FocusChunk } from '@peerzero/shared';
@@ -74,12 +75,16 @@ router.patch('/:id', userRateLimit('write'), validateBody(UpdateBotSchema), asyn
     if (req.body.mode !== currentBot.mode) {
       if (currentBot.mode === 'shipped') {
         // Leaving shipped: expire pending tasks so they don't become orphans
-        const { query: dbQuery } = await import('../db/client');
-        await dbQuery(
-          `UPDATE bot_tasks SET status = 'expired', error = 'Mode changed to school', updated_at = now()
-           WHERE bot_id = $1 AND status IN ('pending', 'processing')`,
-          [req.params.id],
-        );
+        try {
+          const { query: dbQuery } = await import('../db/client');
+          await dbQuery(
+            `UPDATE bot_tasks SET status = 'expired', error = 'Mode changed to school', updated_at = now()
+             WHERE bot_id = $1 AND status IN ('pending', 'processing')`,
+            [req.params.id],
+          );
+        } catch (err) {
+          logger.error({ botId: req.params.id, err }, '[bots] Failed to expire tasks on mode change');
+        }
       }
       // Remove cycle jobs for either direction (they'll be re-created on start)
       await removeBotJobs(req.params.id);

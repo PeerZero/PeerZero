@@ -130,6 +130,7 @@ interface SessionEntry {
 const sessionStore = new Map<string, SessionEntry>();
 const SESSION_TTL_MS = 60 * 60 * 1000;         // 1 hour
 const SESSION_CLEANUP_AGE_MS = 2 * 60 * 60 * 1000;  // 2 hours — remove stale entries
+const MAX_SESSIONS = 10_000;  // Cap to prevent memory exhaustion from session flooding
 
 function cleanupSessions(): void {
   const cutoff = Date.now() - SESSION_CLEANUP_AGE_MS;
@@ -202,6 +203,13 @@ export default {
       const llmKeyForSession = request.headers.get("X-LLM-Key");
       if (!llmKeyForSession || llmKeyForSession.length > 1024) {
         return jsonError("Missing or invalid X-LLM-Key header", 400, request, env);
+      }
+      // Enforce cap to prevent memory exhaustion from session flooding
+      if (sessionStore.size >= MAX_SESSIONS) {
+        cleanupSessions();
+        if (sessionStore.size >= MAX_SESSIONS) {
+          return jsonError("Too many active sessions — try again later", 503, request, env);
+        }
       }
       const sessionToken = crypto.randomUUID();
       const expiresAt = Date.now() + SESSION_TTL_MS;
@@ -372,6 +380,11 @@ export class RateLimiter {
       limit: number;
       windowMs: number;
     };
+
+    // Validate rate limit params to prevent NaN/Infinity poisoning
+    if (!Number.isFinite(limit) || !Number.isFinite(windowMs) || limit <= 0 || windowMs <= 0) {
+      return new Response(JSON.stringify({ error: "Invalid limit or windowMs" }), { status: 400 });
+    }
 
     const now = Date.now();
     if (now > this.resetAt) {
