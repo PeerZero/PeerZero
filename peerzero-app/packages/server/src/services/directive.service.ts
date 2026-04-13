@@ -139,7 +139,7 @@ Respond with ONLY valid JSON: {"is_directive": true/false, "summary": "brief tas
       directiveSummary: typeof parsed.summary === 'string' ? parsed.summary : content.trim(),
     };
   } catch (err) {
-    logger.debug({ err: err instanceof Error ? err.message : err }, 'LLM directive classification failed, defaulting to conversation');
+    logger.warn({ err: err instanceof Error ? err.message : err }, 'LLM directive classification failed, defaulting to conversation');
     // On failure, default to conversation (safer — don't create spurious tasks)
     return { isDirective: false, directiveSummary: '' };
   }

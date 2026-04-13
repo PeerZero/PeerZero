@@ -17,6 +17,29 @@ import * as memory from './memory.service';
 import { logger } from '../lib/logger';
 import type { BotMessage, MessageRole, MessageType } from '@peerzero/shared';
 
+/**
+ * Strip prompt injection patterns from user-supplied content before sending to LLM.
+ * Prevents stored injection via chat history or narration fields.
+ */
+function sanitizeForLLM(text: string): string {
+  if (!text) return text;
+  let clean = text;
+  const patterns = [
+    /\[INST\].*?\[\/INST\]/gis,
+    /<<SYS>>.*?<<\/SYS>>/gis,
+    /\[system\]/gi,
+    /^assistant:/gim,
+    /^human:/gim,
+    /ignore previous instructions/gi,
+    /disregard your instructions/gi,
+    /system\s*prompt/gi,
+    /\{\{.*?\}\}/gs,
+    /<\|.*?\|>/gs,
+  ];
+  for (const p of patterns) { clean = clean.replace(p, '[REDACTED]'); }
+  return clean;
+}
+
 /** Store a message and return it. */
 export async function storeMessage(
   botId: string,
@@ -98,9 +121,10 @@ export async function generateChatReply(
     );
 
     // Build conversation history (reverse to chronological order)
+    // Sanitize content to prevent stored prompt injection via chat history
     const history = recentMessages.reverse().map(m => ({
       role: (m.role === 'user' ? 'user' : 'assistant') as 'user' | 'assistant',
-      content: m.content,
+      content: sanitizeForLLM(m.content),
     }));
 
     // Add the current user message
@@ -169,7 +193,7 @@ export async function narrateCycleActivity(
       },
       {
         role: 'user' as const,
-        content: `What you just did: ${headline}. Result: ${summary}. Action type: ${actionType}.${contentText ? `\nBrief excerpt: ${contentText.slice(0, 200)}` : ''}`,
+        content: `What you just did: ${sanitizeForLLM(headline)}. Result: ${sanitizeForLLM(summary)}. Action type: ${actionType}.${contentText ? `\nBrief excerpt: ${sanitizeForLLM(contentText.slice(0, 200))}` : ''}`,
       },
     ];
 
@@ -256,8 +280,8 @@ export async function cleanupOldMessages(botId: string, keepCount = 500): Promis
        )`,
       [botId, keepCount],
     );
-  } catch {
-    // Non-critical
+  } catch (err) {
+    logger.debug({ botId, err: err instanceof Error ? err.message : err }, 'Message cleanup failed (non-critical)');
   }
 }
 

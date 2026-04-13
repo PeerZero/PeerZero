@@ -158,6 +158,9 @@ export function startPlatformWorker(): void {
       connection: getConnection() as any,
       concurrency: 3, // Lower than school (5) — school gets priority
       lockDuration: 3 * 60 * 1000, // 3 minutes — platform actions involve external HTTP calls
+      lockRenewTime: 60_000, // Renew lock every 60s to prevent expiry during long LLM calls
+      stalledInterval: 3 * 60 * 1000, // Match lock duration — don't mark jobs as stalled prematurely
+      maxStalledCount: 2, // Retry stalled jobs up to 2 times before failing
     },
   );
 
@@ -166,6 +169,21 @@ export function startPlatformWorker(): void {
   });
 
   logger.info('Platform cycle worker started');
+}
+
+/** Clean up old completed/failed BullMQ platform jobs. */
+export async function cleanupOldPlatformJobs(retentionDays: number = 30): Promise<{ completed: number; failed: number }> {
+  const queue = getQueue();
+  const grace = retentionDays * 24 * 60 * 60 * 1000;
+  const [completed, failed] = await Promise.all([
+    queue.clean(grace, 1000, 'completed'),
+    queue.clean(grace, 1000, 'failed'),
+  ]);
+  const counts = { completed: completed.length, failed: failed.length };
+  if (counts.completed > 0 || counts.failed > 0) {
+    logger.info(counts, 'Cleaned up old BullMQ platform jobs');
+  }
+  return counts;
 }
 
 /** Graceful shutdown. */

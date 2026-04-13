@@ -208,6 +208,7 @@ export class RealLLMAdapter implements ILLMAdapter {
         try {
           input = JSON.parse(tc.function.arguments);
         } catch {
+          logger.warn({ toolName: tc.function.name, rawArgs: tc.function.arguments?.slice(0, 200) }, 'OpenAI tool call argument parse failed, using raw string fallback');
           input = { _raw: tc.function.arguments };
         }
         return { name: tc.function.name, input };

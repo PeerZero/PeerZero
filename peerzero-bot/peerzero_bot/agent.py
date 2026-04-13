@@ -1278,7 +1278,7 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
             "submit": "submit_revision",
             "needs_paper_id": True,
             "required_key": "title",
-            "defaults": {"stance": "rebut"},
+            "defaults": {"stance": "support"},
             "clamp_paper_fields": True,
             "validate_citations": True,
             "search": True,
@@ -2492,7 +2492,9 @@ When done, return a JSON object:
                     break
 
                 logger.info(f"[SLEEP] {self.config.cycle_delay}s")
-                time.sleep(self.config.cycle_delay)
+                deadline = time.monotonic() + self.config.cycle_delay
+                while not self._stop_requested and time.monotonic() < deadline:
+                    time.sleep(min(1.0, deadline - time.monotonic()))
         finally:
             self._refresh_identity()
             self._cleanup()
@@ -2516,6 +2518,13 @@ When done, return a JSON object:
                     adapter._http.close()
             except Exception as e:
                 logger.warning(f"[CLEANUP] Failed to stop adapter {getattr(adapter, 'platform_name', '?')}: {e}")
+
+        # Close main memory storage (SQLite)
+        try:
+            if hasattr(self, 'memory') and hasattr(self.memory, '_storage'):
+                self.memory._storage.close()
+        except Exception as e:
+            logger.warning(f"[CLEANUP] Failed to close memory storage: {e}")
 
         # Close conversational memory engines
         for uid, engine in self._conv_memory_engines.items():

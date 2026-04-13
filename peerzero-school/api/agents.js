@@ -1,5 +1,5 @@
 const crypto = require('crypto');
-const { getSupabase, setCorsHeaders, enforceRateLimit, sanitizeErrorMessage, checkGradeProgress, getGradeRequirements, applyTimeDecay, recordFailureReflection, getUnresolvedFailures, resolveFailureReflections, getTierRequirements, getTierCapValue } = require('../lib/shared');
+const { getSupabase, setCorsHeaders, isCsrfRejected, enforceRateLimit, sanitizeErrorMessage, checkGradeProgress, getGradeRequirements, applyTimeDecay, recordFailureReflection, getUnresolvedFailures, resolveFailureReflections, getTierRequirements, getTierCapValue } = require('../lib/shared');
 const { getSkillProfile, getPortableProfile, buildCoreCondenserPrompt, buildMasterCondenser, buildMilestoneCondenser, getUncondensedExerciseCount, getIdentityCore, buildActiveFocus, buildDecisionMilestoneCondenser, buildDecisionCoreCondenserPrompt, buildDecisionMasterCondenser, buildForgeMilestoneCondenser, buildForgeCoreCondenserPrompt, buildForgeMasterCondenser } = require('../lib/skills');
 const { getTierInfo } = require('../lib/tier-display');
 const { buildCoaching } = require('../lib/coaching');
@@ -18,6 +18,12 @@ const supabase = getSupabase();
 module.exports = async (req, res) => {
   setCorsHeaders(req, res);
   if (req.method === 'OPTIONS') return res.status(200).end();
+
+  // SECURITY: CSRF protection for state-changing requests
+  // (API-key-authenticated requests are exempt — isCsrfRejected checks for x-api-key)
+  if (isCsrfRejected(req)) {
+    return res.status(403).json({ error: 'Forbidden — origin not allowed' });
+  }
 
   const rl = enforceRateLimit(req);
   if (rl.limited) return res.status(rl.response.status).json(rl.response.body);
@@ -141,10 +147,11 @@ module.exports = async (req, res) => {
       // ── Reviewable papers ───────────────────────────────────────────────
       (async () => {
         try {
-          // Get IDs of papers this bot already reviewed
+          // Get IDs of papers this bot already reviewed (capped — sufficient for exclusion set)
           const { data: myReviews } = await supabase.from('reviews')
             .select('paper_id')
-            .eq('reviewer_agent_id', agent.id);
+            .eq('reviewer_agent_id', agent.id)
+            .limit(500);
           const reviewedIds = new Set((myReviews || []).map(r => r.paper_id));
 
           // Get IDs of bot's own papers
@@ -175,11 +182,12 @@ module.exports = async (req, res) => {
       // ── Bountyable papers ───────────────────────────────────────────────
       (async () => {
         try {
-          // Get papers this bot has reviewed
+          // Get papers this bot has reviewed (capped — sufficient for bounty eligibility check)
           const { data: myReviews } = await supabase.from('reviews')
             .select('paper_id')
             .eq('reviewer_agent_id', agent.id)
-            .eq('passed_quality_gate', true);
+            .eq('passed_quality_gate', true)
+            .limit(500);
           const reviewedIds = new Set((myReviews || []).map(r => r.paper_id));
           if (reviewedIds.size === 0) return [];
 
@@ -367,9 +375,11 @@ module.exports = async (req, res) => {
     // ── Bounty status counts ──────────────────────────────────────────────
     // Compute validated/pending/failed so bots can make informed decisions
     // about whether to keep filing bounties or switch to other actions.
+    // Limit to 500 — sufficient for bounty status computation; prevents unbounded fetch
     const { data: agentBounties } = await supabase.from('bounties')
       .select('id, is_valid, validated_at')
-      .eq('challenger_agent_id', agent.id);
+      .eq('challenger_agent_id', agent.id)
+      .limit(500);
     const bountyStatus = { validated: 0, pending: 0, failed: 0 };
     for (const b of (agentBounties || [])) {
       if (b.is_valid === true) bountyStatus.validated++;
@@ -461,7 +471,7 @@ module.exports = async (req, res) => {
       : currentGrade >= 6 ? 0.10
       : 0.05;
     if (canSelfReview && nextAction === 'review' && Math.random() < selfReviewRate) {
-      selfReviewTarget = await selectSelfReviewTarget(agent.id, myPaperList).catch(() => null);
+      selfReviewTarget = await selectSelfReviewTarget(agent.id, myPaperList).catch(err => { log.warn('[profile] selectSelfReviewTarget failed', { agentId: agent.id, err: err?.message }); return null; });
       if (selfReviewTarget) {
         nextAction = 'self_review';
       }
@@ -865,10 +875,10 @@ module.exports = async (req, res) => {
     // Build coaching, skill profile, uncondensed count, identity core, grade progress, and recent feedback in parallel
     const [coaching, skillProfile, uncondensedCount, identityCore, gradeResult, recentFeedback, unresolvedFailures, topPapersExemplars, researchHistory, validatedBountyExamples, archObsCount, calibrationFeedback, selfReviewCoaching, hypothesisSummary, decisionCoachingData, bountyRejectionHistory] = await Promise.all([
       buildCoaching(agent.id, credibility, reviews, bounties, papers, revisions),
-      getSkillProfile(agent.id).catch(() => null),
-      getUncondensedExerciseCount(agent.id).catch(() => 0),
-      getIdentityCore(agent.id).catch(() => null),
-      checkGradeProgress(agent.id).catch(() => null),
+      getSkillProfile(agent.id).catch(err => { log.error('[profile] getSkillProfile failed', { agentId: agent.id, err: err?.message }); return null; }),
+      getUncondensedExerciseCount(agent.id).catch(err => { log.error('[profile] getUncondensedExerciseCount failed', { agentId: agent.id, err: err?.message }); return 0; }),
+      getIdentityCore(agent.id).catch(err => { log.error('[profile] getIdentityCore failed', { agentId: agent.id, err: err?.message }); return null; }),
+      checkGradeProgress(agent.id).catch(err => { log.error('[profile] checkGradeProgress failed', { agentId: agent.id, err: err?.message }); return null; }),
       // Fetch recent reviews and bounties on the agent's papers for general memory
       (async () => {
         try {
@@ -1049,7 +1059,11 @@ module.exports = async (req, res) => {
 
     // ── Cycle-level operations (non-blocking, fire-and-forget) ──────────
     // Advance forge hypothesis cycle counters and auto-abandon expired ones.
+    // Advance persistence signal cycle counters and expire stale signals.
     // Resolve the most recent unresolved decision rationale with latest feedback.
+    advancePersistenceCycles(agent.id)
+      .catch(err => log.error('[persistence] cycle advance failed', { agentId: agent.id, err: err?.message }));
+
     advanceHypothesisCycles(agent.id)
       .then(async (expiredIds) => {
         // Auto-abandon hypotheses that exceeded their cycle budget without resolution
@@ -1316,7 +1330,7 @@ module.exports = async (req, res) => {
       decision_coaching: decisionCoachingData,  // Feature 9: patterns from decision rationale history
       // ── Persistence signal system ──────────────────────────────────────
       persistence_check: buildPersistenceCheckConfig(),  // Detection prompt + INHABIT framing for bot-side comparison
-      persistence_signals: await getActivePersistenceSignals(agent.id, 10).catch(() => []),  // Active signals for identity context injection
+      persistence_signals: await getActivePersistenceSignals(agent.id, 10).catch(err => { log.error('[profile] getActivePersistenceSignals failed', { agentId: agent.id, err: err?.message }); return []; }),  // Active signals for identity context injection
     };
 
     // Profile performance logging (Audit #6 — observability for timeout risk)
@@ -1365,6 +1379,13 @@ module.exports = async (req, res) => {
       if (!signal.pattern || !signal.track) {
         return res.status(400).json({ error: 'Missing required fields: pattern, track' });
       }
+      // Validate types and enforce length limits to prevent oversized payloads
+      if (typeof signal.pattern !== 'string') return res.status(400).json({ error: 'pattern must be a string' });
+      if (typeof signal.track !== 'string') return res.status(400).json({ error: 'track must be a string' });
+      signal.pattern = signal.pattern.slice(0, 500);
+      if (signal.evidence && typeof signal.evidence === 'string') signal.evidence = signal.evidence.slice(0, 500);
+      if (signal.context && typeof signal.context === 'string') signal.context = signal.context.slice(0, 500);
+      if (signal.source && typeof signal.source === 'string') signal.source = signal.source.slice(0, 500);
       const stored = await storePersistenceSignal(agentPS.id, signal);
       return res.json({ stored: !!stored, signal_id: stored?.id || null });
     } catch (err) {

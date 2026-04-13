@@ -90,7 +90,7 @@ export class WebhookPlatformAdapter implements IPlatformAdapter {
         rate_limit: info.rate_limit || (caps.rate_limit as number) || null,
       };
     } catch (err) {
-      logger.warn({ platform: creds.platformName, err }, 'Webhook discover failed, using config events');
+      logger.error({ platform: creds.platformName, err }, 'Webhook discover failed, using config events');
       // Fall back to events from the stored config (from platform_registry.default_config)
       const events = (creds.config.events as string[]) || [];
       return {

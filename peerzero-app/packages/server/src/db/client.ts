@@ -11,11 +11,14 @@ let pool: Pool | null = null;
 export function getPool(): Pool {
   if (!pool) {
     const sslEnabled = config.databaseUrl.includes('sslmode=');
+    const statementTimeoutMs = Math.max(1000, parseInt(process.env.DB_STATEMENT_TIMEOUT || '30000') || 30000);
     pool = new Pool({
       connectionString: config.databaseUrl,
       max: Math.max(1, parseInt(process.env.DB_POOL_MAX || '20') || 20),
       idleTimeoutMillis: Math.max(1000, parseInt(process.env.DB_POOL_IDLE_TIMEOUT || '30000') || 30000),
       connectionTimeoutMillis: Math.max(1000, parseInt(process.env.DB_POOL_CONN_TIMEOUT || '15000') || 15000),
+      // Prevent runaway queries from blocking connections indefinitely
+      statement_timeout: statementTimeoutMs,
       ...(sslEnabled && { ssl: { rejectUnauthorized: process.env.NODE_ENV === 'production' } }),
     });
   }

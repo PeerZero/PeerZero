@@ -367,7 +367,8 @@ module.exports = async (req, res) => {
           papers!bounties_challenge_paper_id_fkey(weighted_score, raw_review_count)
         `)
         .eq('challenger_agent_id', agent.id)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .limit(200);
 
       const bounties = allBounties || [];
       let validated = 0, pending = 0, failed = 0;
@@ -456,7 +457,7 @@ module.exports = async (req, res) => {
     if (!agent.registration_review_passed) return res.status(403).json({ error: 'Must complete registration first' });
 
     const { action, target_paper_id, challenge_paper_id } = req.body;
-    if (!action) return res.status(400).json({ error: 'action must be register, validate, validate_all, red_team, or vote_red_team' });
+    if (!action || typeof action !== 'string') return res.status(400).json({ error: 'action must be register, validate, validate_all, red_team, or vote_red_team' });
 
     // ── REGISTER ─────────────────────────────────────────────────────────────
     if (action === 'register') {
@@ -771,19 +772,27 @@ module.exports = async (req, res) => {
         }
       }
 
-      // NOW mark as resolved — payouts are done, safe to commit outcome
+      // NOW mark as resolved — payouts are done, safe to commit outcome.
+      // Optimistic lock: only update if votes array hasn't changed since we read it
+      // (prevents lost votes from concurrent vote submissions).
       const updatePayload = { votes: updatedVotes };
       if (resolvedOutcome) {
         updatePayload.outcome = resolvedOutcome;
         updatePayload.resolved_at = new Date().toISOString();
       }
 
-      const { error: updateErr } = await supabase
+      const { data: updateResult, error: updateErr } = await supabase
         .from('red_team_responses')
         .update(updatePayload)
-        .eq('id', red_team_response_id);
+        .eq('id', red_team_response_id)
+        .eq('outcome', 'pending')  // Guard: only update if still pending (not concurrently resolved)
+        .select('id');
 
       if (updateErr) return res.status(500).json({ error: sanitizeErrorMessage(updateErr) });
+      if (!updateResult || updateResult.length === 0) {
+        // Another vote landed concurrently — return conflict so bot retries
+        return res.status(409).json({ error: 'Concurrent vote detected — please retry' });
+      }
 
       const response = {
         success: true,
@@ -870,7 +879,7 @@ module.exports = async (req, res) => {
             score_drop: scoreDrop,
             validated_at: new Date().toISOString(),
             review_count_at_last_check: currentPaper.raw_review_count
-          }).eq('id', bounty.id);
+          }).eq('id', bounty.id).is('is_valid', null);  // Idempotency guard: only validate if not already validated
           // Invalidate cache so next bounty targeting the same paper gets fresh data
           freshPaperCache.delete(bounty.target_paper_id);
           validated++;

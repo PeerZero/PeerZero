@@ -192,8 +192,28 @@ router.post('/:id/tasks/send', requireAuth, userRateLimit('write'), async (req: 
   }
 
   const { target_url, action_requested, payload, deadline, conversation_id, turn_number } = req.body;
-  if (!target_url || !action_requested) {
-    res.status(400).json({ error: 'target_url and action_requested required' });
+  if (!target_url || typeof target_url !== 'string' || target_url.length > 2048) {
+    res.status(400).json({ error: 'target_url required (string, max 2048 chars)' });
+    return;
+  }
+  if (!action_requested || typeof action_requested !== 'string' || action_requested.length > 200) {
+    res.status(400).json({ error: 'action_requested required (string, max 200 chars)' });
+    return;
+  }
+  if (payload !== undefined && (typeof payload !== 'object' || payload === null || Array.isArray(payload))) {
+    res.status(400).json({ error: 'payload must be a JSON object' });
+    return;
+  }
+  if (deadline !== undefined && (typeof deadline !== 'string' || isNaN(Date.parse(deadline)))) {
+    res.status(400).json({ error: 'deadline must be a valid ISO 8601 date string' });
+    return;
+  }
+  if (conversation_id !== undefined && (typeof conversation_id !== 'string' || conversation_id.length > 200)) {
+    res.status(400).json({ error: 'conversation_id must be a string (max 200 chars)' });
+    return;
+  }
+  if (turn_number !== undefined && (typeof turn_number !== 'number' || !Number.isFinite(turn_number) || turn_number < 0)) {
+    res.status(400).json({ error: 'turn_number must be a non-negative number' });
     return;
   }
 
@@ -301,8 +321,16 @@ router.post('/:id/task-progress', async (req: Request, res: Response) => {
   }
 
   const { task_id, agenda, status } = req.body;
-  if (!task_id) {
-    res.status(400).json({ error: 'task_id required' });
+  if (!task_id || typeof task_id !== 'string' || task_id.length > 200) {
+    res.status(400).json({ error: 'task_id required (string, max 200 chars)' });
+    return;
+  }
+  if (agenda !== undefined && (typeof agenda !== 'object' || agenda === null || Array.isArray(agenda))) {
+    res.status(400).json({ error: 'agenda must be a JSON object' });
+    return;
+  }
+  if (status !== undefined && (typeof status !== 'string' || !['completed', 'failed'].includes(status))) {
+    res.status(400).json({ error: "status must be 'completed' or 'failed'" });
     return;
   }
 

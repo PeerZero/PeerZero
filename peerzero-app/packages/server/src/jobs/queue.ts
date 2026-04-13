@@ -285,14 +285,25 @@ export function startWorker(): void {
   logger.info('Bot cycle worker started');
 }
 
-/** Clear stale bot cycle locks left over from a crashed worker. */
+/** Clear stale bot cycle locks left over from a crashed worker.
+ * Only deletes keys without a TTL (orphaned locks). Keys with an active TTL
+ * belong to a live worker and will expire naturally. */
 async function clearStaleLocks(): Promise<void> {
   try {
     const redis = getConnection();
     const keys = await redis.keys('botlock:cycle:*');
-    if (keys.length > 0) {
-      await redis.del(...keys);
-      logger.info({ cleared: keys.length }, 'Cleared stale bot cycle locks on startup');
+    if (keys.length === 0) return;
+    const staleKeys: string[] = [];
+    for (const key of keys) {
+      const ttl = await redis.ttl(key);
+      // ttl = -1 means no expiry (orphaned), ttl = -2 means key doesn't exist
+      if (ttl === -1) {
+        staleKeys.push(key);
+      }
+    }
+    if (staleKeys.length > 0) {
+      await redis.del(...staleKeys);
+      logger.info({ cleared: staleKeys.length, total: keys.length }, 'Cleared stale bot cycle locks on startup (skipped keys with active TTL)');
     }
   } catch (err) {
     logger.warn({ err: err instanceof Error ? err.message : err }, 'Failed to clear stale locks');

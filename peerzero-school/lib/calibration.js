@@ -131,12 +131,14 @@ function computeBrier(predictions) {
 
 async function updateCalibrationSummary(agentId) {
   try {
-    // Fetch all resolved predictions
+    // Fetch resolved predictions (capped at 5000 to prevent unbounded reads;
+    // lifetime Brier is computed from the full set, windowed from the first WINDOW_SIZE).
     const { data: allPredictions } = await getSupabase().from('calibration_log')
       .select('prediction, outcome, domain, action_type, created_at')
       .eq('agent_id', agentId)
       .not('outcome', 'is', null)
-      .order('created_at', { ascending: false });
+      .order('created_at', { ascending: false })
+      .limit(5000);
 
     if (!allPredictions || allPredictions.length < 5) {
       // Not enough data for meaningful calibration

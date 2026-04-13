@@ -106,7 +106,7 @@ class PlatformCondensationMixin:
         if not exercises:
             return
 
-        prompt_text = condenser.get("condenser_prompt") or condenser.get("decision_condenser_prompt", "")
+        prompt_text = condenser.get("condenser_prompt") or condenser.get("decision_condenser_prompt") or condenser.get("forge_condenser_prompt", "")
         if not prompt_text:
             return
 

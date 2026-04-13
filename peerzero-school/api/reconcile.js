@@ -212,13 +212,19 @@ module.exports = async (req, res) => {
 
     // Simple delete with filter for each table
     const purges = [
-      ['credibility_transactions', supabase.from('credibility_transactions').delete().lt('created_at', cutoff)],
-      ['calibration_log', supabase.from('calibration_log').delete().lt('created_at', cutoff)],
+      // credibility_transactions excluded from purge — purging old transactions would break
+      // the credibility integrity check (check_credibility_integrity) which sums all
+      // transactions to verify the current credibility_score is correct.
+      ['calibration_log', supabase.from('calibration_log').delete().lt('created_at', cutoff).not('outcome', 'is', null)],
       ['decision_rationales', supabase.from('decision_rationales').delete().lt('created_at', cutoff)],
       ['self_reviews', supabase.from('self_reviews').delete().lt('created_at', cutoff)],
       ['rate_limit_log', supabase.from('rate_limit_log').delete().lt('created_at', cutoff)],
       // Only purge resolved/abandoned forge hypotheses — active ones are still in use
       ['forge_hypotheses', supabase.from('forge_hypotheses').delete().lt('created_at', cutoff).in('status', ['resolved', 'abandoned'])],
+      // Additional audit/analytics tables
+      ['persistence_signals', supabase.from('persistence_signals').delete().lt('created_at', cutoff)],
+      ['failure_reflections', supabase.from('failure_reflections').delete().lt('created_at', cutoff)],
+      ['bot_architecture_observations', supabase.from('bot_architecture_observations').delete().lt('created_at', cutoff)],
       // Meta-forge aggregation tables — purge old runs and applied/rejected proposals
       ['forge_aggregation_runs', supabase.from('forge_aggregation_runs').delete().lt('created_at', cutoff)],
       ['forge_config_proposals', supabase.from('forge_config_proposals').delete().lt('created_at', cutoff).in('status', ['applied', 'rejected'])],
@@ -254,7 +260,7 @@ module.exports = async (req, res) => {
           (SELECT COUNT(*) FROM citations c
            LEFT JOIN papers p ON p.id = c.paper_id AND p.status != 'removed'
            WHERE p.id IS NULL) AS orphan_citations
-      ` }).catch(() => ({ data: null }));
+      ` }).catch(err => { log.error('[reconcile] orphan count query failed', { err: err?.message }); return { data: null, error: err }; });
 
       const counts = orphanCounts?.[0] || {};
       return res.json({
@@ -436,7 +442,7 @@ module.exports = async (req, res) => {
         WHERE outcome IS NOT NULL
         GROUP BY agent_id
         HAVING COUNT(*) >= 5
-      ` }).catch(() => ({ data: null }));
+      ` }).catch(err => { log.error('[reconcile] calibration agents query failed', { err: err?.message }); return { data: null, error: err }; });
 
       const summaryAgentIds = new Set((summaries || []).map(s => s.agent_id));
       for (const row of (agentsWithPredictions || [])) {
@@ -794,7 +800,7 @@ module.exports = async (req, res) => {
       WHERE p.status != 'removed'
       GROUP BY p.id, p.raw_review_count
       HAVING COUNT(r.id) > COALESCE(p.raw_review_count, 0)
-    ` }).catch(() => ({ data: null }));
+    ` }).catch(err => { log.error('[reconcile] stuck papers query failed', { err: err?.message }); return { data: null, error: err }; });
 
     if (stuckPapers && stuckPapers.length > 0 && !verifyOnly) {
       for (const sp of stuckPapers) {

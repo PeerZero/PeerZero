@@ -32,6 +32,8 @@ class SqliteStorage:
 
         self._db_path = self._base / "memory.db"
         self._conn = sqlite3.connect(str(self._db_path), timeout=30.0)
+        self._conn.execute("PRAGMA journal_mode = WAL")
+        self._conn.execute("PRAGMA busy_timeout = 30000")
         self._db_path.chmod(stat.S_IRUSR | stat.S_IWUSR)
 
         self._conn.execute("""
@@ -105,13 +107,14 @@ class SqliteStorage:
         self._conn.commit()
 
     def append(self, namespace: str, key: str, entry: dict, max_entries: int = 0):
-        items = self.read(namespace, key, [])
-        if not isinstance(items, list):
-            items = []
-        items.append(entry)
-        if max_entries > 0 and len(items) > max_entries:
-            items = items[-max_entries:]
-        self.write(namespace, key, items)
+        with self._conn:
+            items = self.read(namespace, key, [])
+            if not isinstance(items, list):
+                items = []
+            items.append(entry)
+            if max_entries > 0 and len(items) > max_entries:
+                items = items[-max_entries:]
+            self.write(namespace, key, items)
 
     def clear(self, namespace: str, key: str):
         self.write(namespace, key, [])

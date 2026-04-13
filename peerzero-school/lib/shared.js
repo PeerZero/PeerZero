@@ -109,6 +109,7 @@ function setCorsHeaders(req, res) {
   res.setHeader('Access-Control-Max-Age', '86400');
 
   // SECURITY: Set security headers here (not only in vercel.json) so they work on any platform
+  res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-Frame-Options', 'DENY');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');

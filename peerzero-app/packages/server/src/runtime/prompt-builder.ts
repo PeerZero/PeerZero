@@ -400,12 +400,13 @@ Respond with JSON:
 
   // Decision track L1→L2d
   if (ctx.type === 'decision' && ctx.profile.decision_condenser) {
-    const dc = ctx.profile.decision_condenser;
+    const dc = ctx.profile.decision_condenser as unknown as Record<string, unknown>;
+    const dcPrompt = (dc.decision_condenser_prompt || dc.condenser_prompt || dc) as string;
     return {
       role: 'user',
       content: `TASK: Decision track condensation (L1→L2d).
 
-${dc.condenser_prompt || dc}
+${dcPrompt}
 
 Respond with JSON:
 {
@@ -416,12 +417,13 @@ Respond with JSON:
 
   // Forge track L1→L2f
   if (ctx.type === 'forge' && ctx.profile.forge_condenser) {
-    const fc = ctx.profile.forge_condenser;
+    const fc = ctx.profile.forge_condenser as unknown as Record<string, unknown>;
+    const fcPrompt = (fc.forge_condenser_prompt || fc.condenser_prompt || fc) as string;
     return {
       role: 'user',
       content: `TASK: Forge track condensation (L1→L2f).
 
-${fc.condenser_prompt || fc}
+${fcPrompt}
 
 Respond with JSON:
 {

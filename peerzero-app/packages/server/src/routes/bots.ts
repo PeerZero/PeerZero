@@ -104,8 +104,8 @@ router.delete('/:id', userRateLimit('write'), async (req: Request, res: Response
 // Enroll bot in school
 router.post('/:id/enroll', userRateLimit('write'), async (req: Request, res: Response) => {
   const { school_id } = req.body;
-  if (!school_id) {
-    res.status(400).json({ error: 'school_id required' });
+  if (!school_id || typeof school_id !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(school_id)) {
+    res.status(400).json({ error: 'school_id required (valid UUID)' });
     return;
   }
   const result = await botService.enrollBotInSchool(req.user!.userId, req.params.id, school_id);

@@ -84,11 +84,11 @@ export class A2APlatformAdapter implements IPlatformAdapter {
         rate_limit: (caps.rate_limit as number) || null,
       };
     } catch (err) {
-      logger.warn({ platform: creds.platformName, err }, 'A2A discover failed, returning defaults');
-      // Fallback capabilities — platform is reachable but card may not have full info
+      logger.error({ platform: creds.platformName, err }, 'A2A discover failed, returning restrictive defaults');
+      // Fallback capabilities — fail closed: deny all actions until discovery succeeds
       return {
-        can_post: true,
-        can_comment: true,
+        can_post: false,
+        can_comment: false,
         can_vote: false,
         can_debate: false,
         content_types: ['text'],

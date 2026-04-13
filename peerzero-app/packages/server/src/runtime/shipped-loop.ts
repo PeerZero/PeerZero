@@ -33,20 +33,23 @@ async function deliverOutgoingTask(
 ): Promise<void> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 10000);
-  const response = await fetch(targetUrl, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      sender,
-      action_requested: actionRequested,
-      payload,
-      ...(callbackUrl ? { callback_url: callbackUrl } : {}),
-    }),
-    signal: controller.signal,
-  });
-  clearTimeout(timeout);
-  if (!response.ok) {
-    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+  try {
+    const response = await fetch(targetUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sender,
+        action_requested: actionRequested,
+        payload,
+        ...(callbackUrl ? { callback_url: callbackUrl } : {}),
+      }),
+      signal: controller.signal,
+    });
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+  } finally {
+    clearTimeout(timeout);
   }
 }
 
@@ -306,10 +309,15 @@ export async function runShippedCycle(ctx: BotContext): Promise<void> {
 
   for (const task of outgoingTasks) {
     try {
-      await query(
-        `UPDATE bot_tasks SET status = 'processing', updated_at = now() WHERE id = $1`,
+      // Atomically claim the task — skip if another worker already picked it up
+      const claimed = await query(
+        `UPDATE bot_tasks SET status = 'processing', updated_at = now() WHERE id = $1 AND status = 'pending'`,
         [task.id],
       );
+      if ((claimed.rowCount ?? 0) === 0) {
+        logger.debug({ taskId: task.id }, 'Outgoing task already claimed by another worker, skipping');
+        continue;
+      }
 
       await deliverOutgoingTask(
         task.target,

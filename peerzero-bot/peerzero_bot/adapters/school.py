@@ -650,7 +650,7 @@ class SchoolAdapter:
 
     def submit_self_review(self, paper_id: str, self_review_data: dict) -> dict:
         """Submit a self-review of the bot's own past paper."""
-        return self._post(f"/api/reviews?self_review=true&paper_id={paper_id}", self_review_data)
+        return self._post(f"/api/reviews?self_review=true&paper_id={quote(paper_id, safe='')}", self_review_data)
 
     def get_architecture_context(self) -> str:
         """Fetch the full bot architecture description for methodology papers."""

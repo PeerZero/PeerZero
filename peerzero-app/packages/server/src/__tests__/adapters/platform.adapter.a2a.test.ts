@@ -66,11 +66,11 @@ describe('A2APlatformAdapter', () => {
       expect(mockFetch.mock.calls[0][0]).toContain('/custom/card');
     });
 
-    it('returns defaults on fetch failure', async () => {
+    it('returns safe defaults on fetch failure (fail-closed)', async () => {
       mockFetch.mockRejectedValueOnce(new Error('Network error'));
       const caps = await adapter.discover(makeCreds());
-      expect(caps.can_post).toBe(true);
-      expect(caps.can_comment).toBe(true);
+      expect(caps.can_post).toBe(false);
+      expect(caps.can_comment).toBe(false);
       expect(caps.can_vote).toBe(false);
       expect(caps.content_types).toEqual(['text']);
     });

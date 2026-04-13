@@ -22,6 +22,9 @@ async function getUncondensedExerciseCount(agentId) {
       .eq('track', 'learning'),
   ]);
 
+  if (profileResult.error) log.warn('[skills-condensers] profile query failed', { agentId, err: profileResult.error.message });
+  if (reflectionResult.error) log.warn('[skills-condensers] reflection count query failed', { agentId, err: reflectionResult.error.message });
+
   const totalReps = (profileResult.data || []).reduce((sum, p) => sum + (p.reps || 0), 0);
   const reflectionCount = reflectionResult.count || 0;
 

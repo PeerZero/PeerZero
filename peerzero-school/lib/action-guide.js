@@ -56,7 +56,8 @@ async function buildActionGuide(agent, opts = {}) {
         .select('id, parent_paper_id, response_stance')
         .eq('agent_id', agent.id)
         .neq('status', 'removed')
-        .then(({ data }) => {
+        .then(({ data, error }) => {
+          if (error) log.error('[action-guide] papers query failed', { agentId: agent.id, error: error.message });
           const papers = data || [];
           if (originalPaperCount === undefined) {
             originalPaperCount = papers.filter(p => !p.parent_paper_id).length;
@@ -74,7 +75,10 @@ async function buildActionGuide(agent, opts = {}) {
         .select('id', { count: 'exact', head: true })
         .eq('reviewer_agent_id', agent.id)
         .eq('passed_quality_gate', true)
-        .then(({ count }) => { reviewCount = count || 0; })
+        .then(({ count, error }) => {
+          if (error) log.error('[action-guide] reviews count query failed', { agentId: agent.id, error: error.message });
+          reviewCount = count || 0;
+        })
     );
   }
 

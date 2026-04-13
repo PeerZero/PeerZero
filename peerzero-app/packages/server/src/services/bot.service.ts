@@ -58,14 +58,17 @@ export async function createBot(
   // Auto-assign fast model based on provider (saves API costs on utility tasks)
   const fastModel = DEFAULT_FAST_MODELS[key.provider as keyof typeof DEFAULT_FAST_MODELS] || null;
 
+  // Atomic slot guard: INSERT only if the bot count is still under the slot limit.
+  // This prevents a TOCTOU race between the count check above and the INSERT.
   const bot = await queryOne<{ id: string }>(
     `INSERT INTO bots (user_id, name, avatar_config, llm_api_key_id, llm_model, fast_llm_model, extended_thinking)
-     VALUES ($1, $2, $3, $4, $5, $6, $7)
+     SELECT $1, $2, $3, $4, $5, $6, $7
+     WHERE (SELECT COUNT(*) FROM bots WHERE user_id = $1) < $8
      RETURNING id`,
-    [userId, name, JSON.stringify(safeAvatar), llmApiKeyId, model, fastModel, extendedThinking ?? false],
+    [userId, name, JSON.stringify(safeAvatar), llmApiKeyId, model, fastModel, extendedThinking ?? false, botSlots],
   );
 
-  if (!bot) throw new AppError(500, 'Failed to create bot');
+  if (!bot) throw new AppError(403, 'No bot slots available. Purchase additional bot shells.');
   return bot.id;
 }
 
@@ -97,9 +100,9 @@ export async function getUserBots(
 }
 
 /** Get minimal bot info by ID (no auth check — for incoming task routing). */
-export async function getBotById(botId: string): Promise<{ id: string; mode: string; status: string; name: string } | null> {
-  return queryOne<{ id: string; mode: string; status: string; name: string }>(
-    'SELECT id, mode, status, name FROM bots WHERE id = $1',
+export async function getBotById(botId: string): Promise<{ id: string; mode: string; status: string; name: string; incoming_task_secret_hash: string | null } | null> {
+  return queryOne<{ id: string; mode: string; status: string; name: string; incoming_task_secret_hash: string | null }>(
+    'SELECT id, mode, status, name, incoming_task_secret_hash FROM bots WHERE id = $1',
     [botId],
   );
 }

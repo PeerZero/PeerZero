@@ -12,7 +12,7 @@ async function getSkillProfile(agentId) {
 
   const { data: skills } = await supabase
     .from('agent_skill_profiles')
-    .select('*')
+    .select('skill_key, strength, reliability, reps, streak, best_streak')
     .eq('agent_id', agentId)
     .order('strength', { ascending: false });
 
@@ -175,9 +175,10 @@ async function getStoredReflections(agentId) {
   const supabase = getSupabase();
   const { data } = await supabase
     .from('agent_skill_reflections')
-    .select('*')
+    .select('id, interaction_type, condensed_paragraph, interaction_id, track, created_at')
     .eq('agent_id', agentId)
-    .order('created_at', { ascending: true });
+    .order('created_at', { ascending: true })
+    .limit(100);
   return data || [];
 }
 
@@ -208,7 +209,7 @@ async function storeReflection(agentId, interactionType, condensedParagraph, int
       interaction_type: interactionType,
       condensed_paragraph: condensedParagraph,
       interaction_id: interactionId || null,
-      track: track === 'decision' ? 'decision' : 'learning',
+      track: ['decision', 'forge'].includes(track) ? track : 'learning',
     })
     .select()
     .single();

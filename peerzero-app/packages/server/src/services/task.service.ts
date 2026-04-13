@@ -49,7 +49,9 @@ export async function createTask(params: CreateTaskParams): Promise<TaskRow> {
     `INSERT INTO bot_tasks (bot_id, request_id, direction, sender, target, action_requested,
        payload, callback_url, deadline, conversation_id, turn_number)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-     RETURNING *`,
+     RETURNING id, bot_id, request_id, direction, sender, target, action_requested,
+       payload, callback_url, deadline, conversation_id, turn_number,
+       status, result, error, created_at, completed_at`,
     [
       params.botId,
       requestId,
@@ -71,7 +73,10 @@ export async function createTask(params: CreateTaskParams): Promise<TaskRow> {
 /** Get pending incoming tasks for a bot (for shipped-loop processing). */
 export async function getPendingTasks(botId: string, limit = 5): Promise<TaskRow[]> {
   return queryRows<TaskRow>(
-    `SELECT * FROM bot_tasks
+    `SELECT id, bot_id, request_id, direction, sender, target, action_requested,
+       payload, callback_url, deadline, conversation_id, turn_number,
+       status, result, error, created_at, completed_at
+     FROM bot_tasks
      WHERE bot_id = $1 AND direction = 'incoming' AND status = 'pending'
      ORDER BY created_at ASC LIMIT $2`,
     [botId, limit],
@@ -118,7 +123,10 @@ export async function listTasks(
   const where = conditions.join(' AND ');
   const [rows, countResult] = await Promise.all([
     queryRows<TaskRow>(
-      `SELECT * FROM bot_tasks WHERE ${where} ORDER BY created_at DESC LIMIT $${idx++} OFFSET $${idx}`,
+      `SELECT id, bot_id, request_id, direction, sender, target, action_requested,
+         payload, callback_url, deadline, conversation_id, turn_number,
+         status, result, error, created_at, completed_at
+       FROM bot_tasks WHERE ${where} ORDER BY created_at DESC LIMIT $${idx++} OFFSET $${idx}`,
       [...params, limit, offset],
     ),
     queryOne<{ count: number }>(
@@ -133,7 +141,10 @@ export async function listTasks(
 /** Get a specific task by request_id. */
 export async function getTaskByRequestId(requestId: string): Promise<TaskRow | null> {
   return queryOne<TaskRow>(
-    'SELECT * FROM bot_tasks WHERE request_id = $1',
+    `SELECT id, bot_id, request_id, direction, sender, target, action_requested,
+       payload, callback_url, deadline, conversation_id, turn_number,
+       status, result, error, created_at, completed_at
+     FROM bot_tasks WHERE request_id = $1`,
     [requestId],
   );
 }
@@ -141,7 +152,10 @@ export async function getTaskByRequestId(requestId: string): Promise<TaskRow | n
 /** Get conversation thread (all tasks in a conversation). */
 export async function getConversationThread(conversationId: string): Promise<TaskRow[]> {
   return queryRows<TaskRow>(
-    `SELECT * FROM bot_tasks WHERE conversation_id = $1 ORDER BY turn_number ASC`,
+    `SELECT id, bot_id, request_id, direction, sender, target, action_requested,
+       payload, callback_url, deadline, conversation_id, turn_number,
+       status, result, error, created_at, completed_at
+     FROM bot_tasks WHERE conversation_id = $1 ORDER BY turn_number ASC LIMIT 100`,
     [conversationId],
   );
 }

@@ -271,8 +271,8 @@ class MCPServerConnection:
             except subprocess.TimeoutExpired:
                 self._process.kill()
                 self._process.wait()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"[MCP:{self.name}] Cleanup error: {e}")
             logger.info(f"[MCP:{self.name}] Server stopped")
         self._process = None
         self._initialized = False
@@ -464,8 +464,8 @@ class MCPHttpConnection:
         """Close the HTTP client."""
         try:
             self._http.close()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"[MCP:{self.name}] Cleanup error: {e}")
         self._initialized = False
         logger.info(f"[MCP:{self.name}] HTTP connection closed")
 
@@ -515,8 +515,8 @@ class MCPHttpConnection:
                 json=notification,
                 headers={"Content-Type": "application/json"},
             )
-        except Exception:
-            pass  # Notifications are fire-and-forget
+        except Exception as e:
+            logger.debug(f"[MCP:{self.name}] Notification send error: {e}")  # fire-and-forget
 
 
 # ── Shared helpers ────────────────────────────────────────────────────────────

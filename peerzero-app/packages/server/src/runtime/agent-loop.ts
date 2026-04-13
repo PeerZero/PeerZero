@@ -344,8 +344,8 @@ function determineAction(profile: SchoolProfile): string {
     case 'submit_paper':  return 'paper';
     case 'file_bounty':   return 'bounty';
     case 'reaffirm':      return 'reaffirmation';
-    case 'forge_paper':   return 'review'; // forge not yet implemented in App — fallback to review
-    case 'self_review':   return 'review'; // self-review not yet implemented in App — fallback to review
+    case 'forge_paper':   logger.warn({ action }, 'forge_paper not yet implemented in App — falling back to review'); return 'review';
+    case 'self_review':   logger.warn({ action }, 'self_review not yet implemented in App — falling back to review'); return 'review';
     case 'sleep':         return 'sleep';
     case 'review': {
       // Reaffirmation is maintenance, not progression — the tier logic doesn't
