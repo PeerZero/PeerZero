@@ -23,6 +23,9 @@ Pick 2-3 audits per session. For each audit, search all 3 systems (peerzero-scho
 | Twice yearly | #3 Unbounded Growth, #7 Stale Cache, #9 Degradation, #11 Dead Code, #12 N+1 Queries, #18 Data Integrity |
 | After major features | #13 Input Validation, #14 Cross-System Contracts, #15 Error UX, #24 HTTP Security Headers |
 | Pre-launch / post-incident | #17 Load & Concurrency, #19 Recovery & Rollback, #21 User Journey Smoke Test, #22 Monitoring & Alerting |
+| Pre-launch (once) | #25 Email Deliverability, #26 Mobile App Store Readiness, #27 Payment & Billing Edge Cases, #32 License Compliance, #33 Env Var Validation, #36 Accessibility |
+| Monthly | #28 Platform Provider Limits, #30 BYOK Key Lifecycle, #34 Redis & Queue Production Config |
+| Quarterly | #29 Timezone/Unicode/Locale, #31 WebSocket Resilience, #35 Database Migration Safety |
 
 ---
 
