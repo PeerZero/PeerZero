@@ -156,11 +156,13 @@ class MCPServerConnection:
             # SECURITY: Validate config.env keys against a denylist of dangerous env vars
             # that could alter runtime behavior (library injection, code execution, etc.).
             _DANGEROUS_ENV_KEYS = {
-                "LD_PRELOAD", "LD_LIBRARY_PATH", "DYLD_INSERT_LIBRARIES",
-                "DYLD_LIBRARY_PATH", "PYTHONPATH", "PYTHONSTARTUP",
+                "LD_PRELOAD", "LD_LIBRARY_PATH", "LD_AUDIT", "LD_DEBUG",
+                "DYLD_INSERT_LIBRARIES", "DYLD_LIBRARY_PATH",
+                "PYTHONPATH", "PYTHONSTARTUP",
                 "NODE_OPTIONS", "NODE_PATH", "RUBYOPT", "PERL5OPT",
                 "CLASSPATH", "JAVA_TOOL_OPTIONS", "_JAVA_OPTIONS",
                 "BASH_ENV", "ENV", "ZDOTDIR",
+                "GLIBC_TUNABLES", "MALLOC_CHECK_",
             }
             for key, val in self.config.env.items():
                 if not isinstance(key, str) or not isinstance(val, str):
