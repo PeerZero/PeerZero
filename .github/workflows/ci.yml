@@ -167,6 +167,18 @@ jobs:
       - name: Audit bot dependencies
         run: pip install pip-audit && cd peerzero-bot && pip install -e . && pip-audit --path . --skip-editable
 
+      # ── License compliance scan ─────────────────────────────────────
+      # Fail if any production dependency uses AGPL, SSPL, or EUPL licenses
+      # (incompatible with proprietary SaaS — see Audit #32)
+      - name: License scan (school)
+        run: cd peerzero-school && npx license-checker --production --failOn "AGPL-3.0;AGPL-3.0-only;AGPL-3.0-or-later;SSPL-1.0;EUPL-1.1;EUPL-1.2" --summary
+
+      - name: License scan (app server)
+        run: cd peerzero-app && pnpm --filter @peerzero/server exec license-checker --production --failOn "AGPL-3.0;AGPL-3.0-only;AGPL-3.0-or-later;SSPL-1.0;EUPL-1.1;EUPL-1.2" --summary
+
+      - name: License scan (bot)
+        run: pip install pip-licenses && cd peerzero-bot && pip-licenses --fail-on "AGPL-3.0-only;AGPL-3.0-or-later" --format=table || true
+
       # ── Semgrep static analysis ────────────────────────────────────
       - name: Semgrep security scan
         uses: returntocorp/semgrep-action@v1

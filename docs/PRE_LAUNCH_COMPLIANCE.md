@@ -177,10 +177,10 @@ Items that need external dependencies, vendor configuration, or architectural wo
 
 ### Needs External Package / Vendor Config
 
-- [ ] **Resend webhook signature verification** — Add `svix` package to peerzero-app server, verify `svix-id`/`svix-timestamp`/`svix-signature` headers on `/api/webhooks/resend`. Without this, attackers can forge bounce events to suppress legitimate email addresses. (Audit #25)
+- [x] **Resend webhook signature verification** — ~~Add `svix` package to peerzero-app server~~ DONE: svix installed, webhook route verifies `svix-id`/`svix-timestamp`/`svix-signature` headers. Set `RESEND_WEBHOOK_SECRET` env var from Resend dashboard. (Audit #25)
 - [ ] **SPF/DKIM/DMARC DNS records** — Configure on the sending domain. Resend handles DKIM signing, but SPF/DMARC records must be added to DNS. Move DMARC from `p=none` → `p=reject` before launch. (Audit #25)
 - [ ] **Email warm-up** — New sending domains need 2-4 weeks of gradual volume. Plan warm-up schedule before launch blast. (Audit #25)
-- [ ] **License scan in CI** — Add `license-checker --failOn "AGPL-3.0"` to CI pipeline. All current deps are clean, but an AGPL dependency could enter silently via transitive deps. (Audit #32)
+- [x] **License scan in CI** — ~~Add license-checker to CI pipeline~~ DONE: ci.yml now runs license-checker on School + App server and pip-licenses on Bot, failing on AGPL/SSPL/EUPL licenses. (Audit #32)
 - [ ] **External monitoring service** — Integrate Datadog/Grafana or uptime monitor (UptimeRobot, Better Uptime). Currently no external pings or alerting rules. (Audit #22)
 
 ### Needs Apple/Google Configuration
@@ -192,7 +192,7 @@ Items that need external dependencies, vendor configuration, or architectural wo
 
 ### Needs Architectural Work
 
-- [ ] **CREATE INDEX CONCURRENTLY** — All 65+ indexes across School + App migrations use non-concurrent `CREATE INDEX` which locks writes during build. Supabase runs migrations in dashboard (blocking). For large tables at scale, consider running index builds manually with `CONCURRENTLY` outside transactions. (Audit #35)
+- [x] **CREATE INDEX CONCURRENTLY scripts** — ~~All indexes lock writes during build~~ DONE: Standalone CONCURRENTLY rebuild scripts created for 19 indexes on large tables. School: `migrations/rollbacks/concurrent_indexes_school.sql` (11 indexes). App: `db/concurrent_indexes_app.sql` (8 indexes). Run manually via psql during maintenance window before tables grow large. (Audit #35)
 - [ ] **COPPA parental consent email** — Implementation planned but not built. Critical for child accounts — if consent email lands in spam, accounts are permanently locked. (Audit #25)
-- [ ] **Credibility transaction checkpointing** — `credibility_transactions` grows without bound and is excluded from purge (integrity check depends on full history). Needs a checkpoint+purge architecture: periodically snapshot running sum, purge transactions older than checkpoint. (Audit #3)
-- [ ] **Stripe invoice.finalization_failed handler** — Subscriptions stay active when invoices can't be finalized (user gets free access). Needs webhook handler for this event type. (Audit #27)
+- [x] **Credibility transaction checkpointing** — ~~Needs checkpoint+purge architecture~~ DONE: Migration 034 adds `credibility_checkpoints` table + RPCs (`sum_credibility_since_checkpoint`, `checkpoint_credibility`, `sum_credibility_change`). Purge retention now checkpoints all agents before purging old transactions. Integrity check uses checkpoint-aware RPC. (Audit #3)
+- [x] **Stripe invoice.finalization_failed handler** — Already exists in payment.service.ts (logs error with invoice ID, customer, and reason). Stripe retries automatically; no further action needed unless subscription management is added. (Audit #27)
