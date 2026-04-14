@@ -31,6 +31,8 @@ function getQueue(): Queue {
       defaultJobOptions: {
         attempts: 2,
         backoff: { type: 'exponential', delay: 5000 },
+        removeOnComplete: 50,
+        removeOnFail: 25,
       },
     });
   }

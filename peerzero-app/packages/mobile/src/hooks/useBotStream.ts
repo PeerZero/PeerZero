@@ -209,26 +209,28 @@ export function useBotStream({
           return;
         }
 
-        // Normal disconnect — exponential backoff reconnect
+        // Normal disconnect — exponential backoff with jitter to prevent thundering herd
+        const jitter = reconnectDelay.current * (0.5 + Math.random() * 0.5);
         reconnectTimer.current = setTimeout(() => {
           if (mountedRef.current) {
             reconnectDelay.current = Math.min(reconnectDelay.current * 2, MAX_RECONNECT_DELAY);
             connect();
           }
-        }, reconnectDelay.current);
+        }, jitter);
       };
 
       ws.onerror = () => {
         // onclose will fire after onerror, handling reconnect
       };
     } catch {
-      // Connection failed — schedule retry
+      // Connection failed — schedule retry with jitter
+      const catchJitter = reconnectDelay.current * (0.5 + Math.random() * 0.5);
       reconnectTimer.current = setTimeout(() => {
         if (mountedRef.current) {
           reconnectDelay.current = Math.min(reconnectDelay.current * 2, MAX_RECONNECT_DELAY);
           connect();
         }
-      }, reconnectDelay.current);
+      }, catchJitter);
     }
   }, [botId, enabled]);
 

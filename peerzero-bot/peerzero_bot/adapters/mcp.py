@@ -536,7 +536,9 @@ def _parse_mcp_content(result: dict) -> dict:
             text = part["text"]
             total_size += len(text)
             if total_size > MAX_MCP_OUTPUT_SIZE:
-                output.append(text[:MAX_MCP_OUTPUT_SIZE - (total_size - len(text))])
+                remaining = MAX_MCP_OUTPUT_SIZE - (total_size - len(text))
+                # UTF-8-safe truncation: encode, slice bytes, decode ignoring partial chars
+                output.append(text.encode('utf-8')[:remaining].decode('utf-8', errors='ignore'))
                 output.append("\n[output truncated — exceeded 512 KB limit]")
                 break
             output.append(text)

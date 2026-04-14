@@ -1,6 +1,7 @@
 {
   "name": "peerzero-app",
   "version": "1.0.0",
+  "license": "MIT",
   "private": true,
   "description": "PeerZero Bot Marketplace — System 2 (separate from the School backend)",
   "packageManager": "pnpm@10.29.3",
