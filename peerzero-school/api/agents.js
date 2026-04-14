@@ -934,84 +934,103 @@ module.exports = async (req, res) => {
             .order('weighted_score', { ascending: false })
             .limit(5);
           if (!topPapers || topPapers.length === 0) return undefined;
-          // Fetch top 2 reviews per exemplar paper so bots see what reviewers praised
-          const enriched = [];
-          for (const p of topPapers) {
-            const { data: topRevs } = await supabase.from('reviews')
-              .select('score, overall_assessment, methodology_notes')
-              .eq('paper_id', p.id)
-              .eq('passed_quality_gate', true)
-              .order('score', { ascending: false })
-              .limit(2);
-            enriched.push({
-              title: p.title,
-              score: parseFloat(p.weighted_score),
-              abstract: (p.abstract || '').slice(0, 800),
-              falsifiable_claim: p.falsifiable_claim || null,
-              cross_study_connection: (p.cross_study_connection || '').slice(0, 400) || null,
-              mechanism_chain: Array.isArray(p.mechanism_chain) ? p.mechanism_chain : null,
-              body_excerpt: (p.body || '').slice(0, 600),
-              top_reviews: (topRevs || []).map(r => ({
-                score: r.score,
-                assessment: (r.overall_assessment || '').slice(0, 500),
-                methodology: (r.methodology_notes || '').slice(0, 300),
-              })),
-            });
+          // Batch fetch top reviews for all exemplar papers (not N+1)
+          const exemplarIds = topPapers.map(p => p.id);
+          const { data: allExemplarRevs } = await supabase.from('reviews')
+            .select('paper_id, score, overall_assessment, methodology_notes')
+            .in('paper_id', exemplarIds)
+            .eq('passed_quality_gate', true)
+            .order('score', { ascending: false })
+            .limit(10);  // ~2 per paper
+          const revsByPaper = {};
+          for (const r of (allExemplarRevs || [])) {
+            (revsByPaper[r.paper_id] = revsByPaper[r.paper_id] || []).push(r);
           }
+          const enriched = topPapers.map(p => ({
+            title: p.title,
+            score: parseFloat(p.weighted_score),
+            abstract: (p.abstract || '').slice(0, 800),
+            falsifiable_claim: p.falsifiable_claim || null,
+            cross_study_connection: (p.cross_study_connection || '').slice(0, 400) || null,
+            mechanism_chain: Array.isArray(p.mechanism_chain) ? p.mechanism_chain : null,
+            body_excerpt: (p.body || '').slice(0, 600),
+            top_reviews: ((revsByPaper[p.id] || []).slice(0, 2)).map(r => ({
+              score: r.score,
+              assessment: (r.overall_assessment || '').slice(0, 500),
+              methodology: (r.methodology_notes || '').slice(0, 300),
+            })),
+          }));
           return enriched;
         } catch (err) { log.error('[profile] top-scoring exemplars fetch failed', { agentId: agent.id, err: err?.message }); return undefined; }
       })(),
       // ── Bot's own research history ───────────────────────────────────────
       // The bot's prior papers with scores + reviewer feedback + bounties so
       // it can learn from what worked, what got challenged, and why.
+      // Batched: fetch all reviews/bounties/citations for up to 10 papers in 3 queries (not N+1).
       (async () => {
         try {
           if (originalPapers.length === 0) return undefined;
-          const history = [];
-          for (const p of originalPapers.slice(0, 10)) {
+          const historyPapers = originalPapers.slice(0, 10);
+          const paperIds = historyPapers.map(p => p.id);
+
+          // Batch fetch all reviews, bounties, and citations for these papers
+          const [allReviews, allBounties, allCitations] = await Promise.all([
+            supabase.from('reviews')
+              .select('paper_id, score, overall_assessment, methodology_notes, reviewer_credibility_at_time, credibility_weight')
+              .in('paper_id', paperIds)
+              .eq('passed_quality_gate', true)
+              .order('created_at', { ascending: false })
+              .limit(30),  // ~3 per paper
+            supabase.from('bounties')
+              .select('target_paper_id, challenge_type, score_drop, reasoning')
+              .in('target_paper_id', paperIds)
+              .eq('is_valid', true)
+              .limit(30),
+            supabase.from('citations')
+              .select('paper_id, quality_tier')
+              .in('paper_id', paperIds)
+              .limit(200),
+          ]);
+
+          // Group results by paper_id
+          const reviewsByPaper = {};
+          for (const r of (allReviews.data || [])) {
+            (reviewsByPaper[r.paper_id] = reviewsByPaper[r.paper_id] || []).push(r);
+          }
+          const bountiesByPaper = {};
+          for (const b of (allBounties.data || [])) {
+            (bountiesByPaper[b.target_paper_id] = bountiesByPaper[b.target_paper_id] || []).push(b);
+          }
+          const citsByPaper = {};
+          for (const c of (allCitations.data || [])) {
+            (citsByPaper[c.paper_id] = citsByPaper[c.paper_id] || []).push(c);
+          }
+
+          const history = historyPapers.map(p => {
             const score = p.weighted_score ? parseFloat(p.weighted_score) : null;
-            // Get top 3 reviews, bounties, and citation quality for this paper
-            const [reviewResult, bountyResult, citResult] = await Promise.all([
-              supabase.from('reviews')
-                .select('score, overall_assessment, methodology_notes, reviewer_credibility_at_time, credibility_weight')
-                .eq('paper_id', p.id)
-                .eq('passed_quality_gate', true)
-                .order('created_at', { ascending: false })
-                .limit(3),
-              supabase.from('bounties')
-                .select('challenge_type, score_drop, is_valid, reasoning')
-                .eq('target_paper_id', p.id)
-                .eq('is_valid', true)
-                .limit(3),
-              supabase.from('citations')
-                .select('quality_tier')
-                .eq('paper_id', p.id),
-            ]);
-            const reviewSummaries = (reviewResult.data || []).map(r => ({
-              score: r.score,
-              reviewer_credibility: r.reviewer_credibility_at_time,
-              credibility_weight: r.credibility_weight ? parseFloat(r.credibility_weight) : undefined,
-              assessment: (r.overall_assessment || '').slice(0, 500),
-              methodology: (r.methodology_notes || '').slice(0, 300),
-            }));
-            const bountyList = (bountyResult.data || []).map(b => ({
-              challenge_type: b.challenge_type,
-              score_drop: b.score_drop,
-              reasoning: (b.reasoning || '').slice(0, 300),
-            }));
-            const citationGrade = citResult.data && citResult.data.length > 0
-              ? computeCitationQualityGrade(citResult.data)
-              : undefined;
-            history.push({
+            const paperReviews = (reviewsByPaper[p.id] || []).slice(0, 3);
+            const paperBounties = (bountiesByPaper[p.id] || []).slice(0, 3);
+            const paperCits = citsByPaper[p.id] || [];
+            return {
               title: p.title,
               score,
               status: p.status,
               review_count: p.raw_review_count || 0,
-              citation_quality_grade: citationGrade,
-              top_feedback: reviewSummaries.length > 0 ? reviewSummaries : undefined,
-              bounties_received: bountyList.length > 0 ? bountyList : undefined,
-            });
-          }
+              citation_quality_grade: paperCits.length > 0 ? computeCitationQualityGrade(paperCits) : undefined,
+              top_feedback: paperReviews.length > 0 ? paperReviews.map(r => ({
+                score: r.score,
+                reviewer_credibility: r.reviewer_credibility_at_time,
+                credibility_weight: r.credibility_weight ? parseFloat(r.credibility_weight) : undefined,
+                assessment: (r.overall_assessment || '').slice(0, 500),
+                methodology: (r.methodology_notes || '').slice(0, 300),
+              })) : undefined,
+              bounties_received: paperBounties.length > 0 ? paperBounties.map(b => ({
+                challenge_type: b.challenge_type,
+                score_drop: b.score_drop,
+                reasoning: (b.reasoning || '').slice(0, 300),
+              })) : undefined,
+            };
+          });
           return history.length > 0 ? history : undefined;
         } catch (err) { log.error('[profile] research history fetch failed', { agentId: agent.id, err: err?.message }); return undefined; }
       })(),

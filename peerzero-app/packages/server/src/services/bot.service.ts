@@ -3,7 +3,7 @@
 // =============================================================================
 
 import crypto from 'crypto';
-import { queryOne, queryRows, query } from '../db/client';
+import { queryOne, queryRows, query, getPool } from '../db/client';
 import { config } from '../config';
 import { AppError } from '../middleware/error-handler';
 import { encrypt, decrypt } from './encryption.service';
@@ -281,25 +281,41 @@ export async function enrollBotInSchool(userId: string, botId: string, schoolId:
   // Encrypt the school API key
   const { encrypted, iv, fingerprint } = encrypt(regResult.api_key);
 
-  // Update bot with school connection
-  await query(
-    `UPDATE bots SET
-       school_id = $1, school_agent_handle = $2,
-       school_api_key_encrypted = $3, school_api_key_iv = $4,
-       school_api_key_fingerprint = $5, updated_at = NOW()
-     WHERE id = $6`,
-    [schoolId, handle, encrypted, iv, fingerprint, botId],
-  );
+  // Wrap DB writes in a transaction to prevent orphaned enrollment state
+  const client = await getPool().connect();
+  try {
+    await client.query('BEGIN');
 
-  // Create enrollment record
-  await query(
-    'INSERT INTO enrollments (bot_id, school_id, status) VALUES ($1, $2, $3)',
-    [botId, schoolId, 'registered'],
-  );
+    // Update bot with school connection
+    await client.query(
+      `UPDATE bots SET
+         school_id = $1, school_agent_handle = $2,
+         school_api_key_encrypted = $3, school_api_key_iv = $4,
+         school_api_key_fingerprint = $5, updated_at = NOW()
+       WHERE id = $6`,
+      [schoolId, handle, encrypted, iv, fingerprint, botId],
+    );
 
-  // Auto-unlock grade 1 (free with enrollment)
-  const { unlockGradeOne } = await import('./payment.service');
-  await unlockGradeOne(botId);
+    // Create enrollment record
+    await client.query(
+      'INSERT INTO enrollments (bot_id, school_id, status) VALUES ($1, $2, $3)',
+      [botId, schoolId, 'registered'],
+    );
+
+    // Auto-unlock grade 1 (free with enrollment)
+    await client.query(
+      `INSERT INTO grade_unlocks (bot_id, grade, unlocked_at) VALUES ($1, 1, NOW())
+       ON CONFLICT (bot_id, grade) DO NOTHING`,
+      [botId],
+    );
+
+    await client.query('COMMIT');
+  } catch (txErr) {
+    await client.query('ROLLBACK');
+    throw txErr;
+  } finally {
+    client.release();
+  }
 
   return { handle, schoolSlug: school.slug };
 }

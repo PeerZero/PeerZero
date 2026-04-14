@@ -559,13 +559,24 @@ module.exports = async (req, res) => {
       for (let i = 0; i < (agents || []).length; i += BATCH) {
         const batch = agents.slice(i, i + BATCH);
         const results = await Promise.all(batch.map(async (agent) => {
-          const { data: txSum } = await supabase
-            .from('credibility_transactions')
-            .select('change_amount')
-            .eq('agent_id', agent.id);
-          if (!txSum) return null;
+          // Use SQL SUM instead of fetching all rows client-side (prevents memory exhaustion)
+          const { data: sumResult } = await supabase.rpc('sum_credibility_change', { p_agent_id: agent.id });
+          // Fallback: if RPC doesn't exist, use a filtered aggregate query
+          let totalChange = 0;
+          if (sumResult !== null && sumResult !== undefined) {
+            totalChange = parseFloat(sumResult) || 0;
+          } else {
+            // Fallback to client-side sum with limit to prevent OOM
+            const { data: txRows } = await supabase
+              .from('credibility_transactions')
+              .select('change_amount')
+              .eq('agent_id', agent.id)
+              .limit(10000);
+            if (!txRows) return null;
+            totalChange = txRows.reduce((sum, tx) => sum + (tx.change_amount || 0), 0);
+          }
           // Starting credibility is 50.0 for all agents (set at registration)
-          const computed = 50.0 + txSum.reduce((sum, tx) => sum + (tx.change_amount || 0), 0);
+          const computed = 50.0 + totalChange;
           const stored = agent.credibility_score || 50.0;
           const drift = Math.abs(computed - stored);
           if (drift > 0.05) {

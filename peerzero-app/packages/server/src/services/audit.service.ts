@@ -106,6 +106,32 @@ export async function purgeExpiredAuditLogs(): Promise<number> {
     } catch (voiceErr) {
       logger.error({ err: voiceErr instanceof Error ? voiceErr.message : voiceErr }, 'Failed to trim bot_voice_cache');
     }
+    // Purge expired refresh tokens (abandoned sessions never used again)
+    try {
+      const rtResult = await query(
+        `DELETE FROM refresh_tokens WHERE expires_at < NOW()`,
+        [],
+      );
+      const rtDeleted = (rtResult as { rowCount?: number }).rowCount || 0;
+      if (rtDeleted > 0) {
+        logger.info({ deleted: rtDeleted }, 'Purged expired refresh tokens');
+      }
+    } catch (rtErr) {
+      logger.error({ err: rtErr instanceof Error ? rtErr.message : rtErr }, 'Failed to purge expired refresh tokens');
+    }
+    // Hard-delete soft-deleted bot_memory_exercises older than 90 days
+    try {
+      const memResult = await query(
+        `DELETE FROM bot_memory_exercises WHERE deleted_at IS NOT NULL AND deleted_at < NOW() - INTERVAL '90 days'`,
+        [],
+      );
+      const memDeleted = (memResult as { rowCount?: number }).rowCount || 0;
+      if (memDeleted > 0) {
+        logger.info({ deleted: memDeleted }, 'Purged soft-deleted bot memory exercises');
+      }
+    } catch (memErr) {
+      logger.error({ err: memErr instanceof Error ? memErr.message : memErr }, 'Failed to purge soft-deleted memory exercises');
+    }
     return deleted;
   } catch (err) {
     logger.error({ err: err instanceof Error ? err.message : err }, 'Failed to purge audit logs');

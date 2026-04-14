@@ -7,7 +7,7 @@ import rateLimit from 'express-rate-limit';
 import { registerUser, loginUser, refreshTokens, revokeRefreshTokens, getUserProfile, updateProfile, changePassword, deleteAccount, forgotPassword, resetPassword, verifyEmail, resendVerificationEmail } from '../services/auth.service';
 import { requireAuth } from '../middleware/auth';
 import { validateBody } from '../middleware/validate';
-import { UpdateProfileSchema } from '../lib/schemas';
+import { UpdateProfileSchema, RegisterSchema, LoginSchema, ChangePasswordSchema, ForgotPasswordSchema, ResetPasswordSchema, VerifyEmailSchema } from '../lib/schemas';
 import { removeBotJobs } from '../jobs/queue';
 import { logAudit } from '../services/audit.service';
 import { queryRows, queryOne } from '../db/client';
@@ -44,33 +44,16 @@ const exportDataLimiter = rateLimit({
   message: { error: 'Too many export requests. Try again later.' },
 });
 
-router.post('/register', async (req: Request, res: Response) => {
+router.post('/register', validateBody(RegisterSchema), async (req: Request, res: Response) => {
   const { email, password, display_name } = req.body;
-  if (!email || !password) {
-    res.status(400).json({ error: 'Email and password required' });
-    return;
-  }
-  if (typeof email !== 'string' || email.length > 254 || !/^[^\s@]+@[^\s@]+\.[a-zA-Z]{2,}$/.test(email) || email.split('@')[1].length < 4) {
-    res.status(400).json({ error: 'Invalid email format' });
-    return;
-  }
-  if (typeof password !== 'string' || password.length < 8) {
-    res.status(400).json({ error: 'Password must be at least 8 characters' });
-    return;
-  }
-
   const result = await registerUser(email, password, display_name);
 
   const profile = await getUserProfile(result.user.id);
   res.status(201).json({ access_token: result.tokens.accessToken, refresh_token: result.tokens.refreshToken, user: profile });
 });
 
-router.post('/login', async (req: Request, res: Response) => {
+router.post('/login', validateBody(LoginSchema), async (req: Request, res: Response) => {
   const { email, password } = req.body;
-  if (!email || !password) {
-    res.status(400).json({ error: 'Email and password required' });
-    return;
-  }
   try {
     const { user, tokens } = await loginUser(email, password);
     logAudit({ userId: user.id, action: 'auth.login', entityType: 'user', entityId: user.id, ipAddress: req.ip });
@@ -83,32 +66,20 @@ router.post('/login', async (req: Request, res: Response) => {
   }
 });
 
-router.post('/forgot-password', async (req: Request, res: Response) => {
+router.post('/forgot-password', validateBody(ForgotPasswordSchema), async (req: Request, res: Response) => {
   const { email } = req.body;
-  if (!email || typeof email !== 'string') {
-    res.status(400).json({ error: 'Email is required' });
-    return;
-  }
   await forgotPassword(email);
   res.json({ message: 'If an account exists with that email, a reset code has been sent.' });
 });
 
-router.post('/reset-password', resetPasswordLimiter, async (req: Request, res: Response) => {
+router.post('/reset-password', resetPasswordLimiter, validateBody(ResetPasswordSchema), async (req: Request, res: Response) => {
   const { email, code, new_password } = req.body;
-  if (!email || !code || !new_password) {
-    res.status(400).json({ error: 'email, code, and new_password are required' });
-    return;
-  }
   await resetPassword(email, code, new_password);
   res.json({ message: 'Password reset successfully' });
 });
 
-router.post('/verify-email', async (req: Request, res: Response) => {
+router.post('/verify-email', validateBody(VerifyEmailSchema), async (req: Request, res: Response) => {
   const { email, code } = req.body;
-  if (!email || !code) {
-    res.status(400).json({ error: 'email and code are required' });
-    return;
-  }
   await verifyEmail(email, code);
   res.json({ message: 'Email verified successfully' });
 });
@@ -147,12 +118,8 @@ router.patch('/profile', requireAuth, validateBody(UpdateProfileSchema), async (
   res.json(profile);
 });
 
-router.patch('/password', requireAuth, async (req: Request, res: Response) => {
+router.patch('/password', requireAuth, validateBody(ChangePasswordSchema), async (req: Request, res: Response) => {
   const { current_password, new_password } = req.body;
-  if (!current_password || !new_password) {
-    res.status(400).json({ error: 'current_password and new_password required' });
-    return;
-  }
   await changePassword(req.user!.userId, current_password, new_password);
   logAudit({ userId: req.user!.userId, action: 'auth.password_change', entityType: 'user', entityId: req.user!.userId, ipAddress: req.ip });
   // Issue new tokens since all old refresh tokens were revoked

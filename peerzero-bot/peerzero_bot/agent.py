@@ -2483,8 +2483,20 @@ When done, return a JSON object:
                 except KeyboardInterrupt:
                     logger.info("\n[STOP] Interrupted by user")
                     break
+                except (ConnectionError, TimeoutError, OSError, httpx.HTTPStatusError,
+                        httpx.ConnectError, httpx.ReadTimeout, CircuitOpenError) as e:
+                    # Transient network/IO errors — safe to retry next cycle
+                    logger.warning(f"[TRANSIENT] Cycle failed (will retry): {e}")
                 except Exception as e:
+                    # Could be a code bug (TypeError, KeyError, etc.) — track consecutive failures
+                    self._consecutive_code_errors = getattr(self, "_consecutive_code_errors", 0) + 1
                     logger.error(f"[ERROR] Cycle failed: {e}", exc_info=True)
+                    if self._consecutive_code_errors >= 5:
+                        logger.error(f"[FATAL] {self._consecutive_code_errors} consecutive non-transient failures — stopping to prevent resource waste")
+                        break
+                else:
+                    # Cycle succeeded — reset code error counter
+                    self._consecutive_code_errors = 0
 
                 if self.config.max_cycles > 0 and self.cycle_count >= self.config.max_cycles:
                     logger.info(f"[STOP] Reached max cycles ({self.config.max_cycles})")
