@@ -19,7 +19,7 @@
 import { getSchoolAdapter, getLLMAdapter } from '../adapters/adapter.factory';
 import { logger } from '../lib/logger';
 import { getDecryptedSchoolKey, setBotStatus, isBotGradeUnlocked } from '../services/bot.service';
-import { getDecryptedKey } from '../services/api-key.service';
+import { getDecryptedKey, markKeyInvalid } from '../services/api-key.service';
 import * as memory from '../services/memory.service';
 import * as activity from '../services/activity.service';
 import { query, queryOne } from '../db/client';
@@ -317,9 +317,15 @@ export async function runOneCycle(ctx: BotContext): Promise<void> {
       errorMsg,
     );
 
-    // If it's an auth error, stop the bot
+    // If it's an auth error, stop the bot and mark the key invalid
     if (errorMsg.includes('401') || errorMsg.includes('403')) {
       await setBotStatus(ctx.botId, 'error', `School rejected request: ${errorMsg.slice(0, 200)}`);
+      // Mark the LLM API key as invalid so the UI shows the key needs replacing
+      if (errorMsg.includes('401') && ctx.llmApiKeyId) {
+        await markKeyInvalid(ctx.llmApiKeyId).catch((e) => {
+          logger.warn({ err: e instanceof Error ? e.message : e }, 'Failed to mark API key as invalid');
+        });
+      }
     }
     throw err;
   }

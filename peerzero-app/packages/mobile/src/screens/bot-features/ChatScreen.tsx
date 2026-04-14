@@ -371,7 +371,7 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
       keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
     >
       {/* Filter tabs */}
-      <View style={styles.tabBar}>
+      <View style={styles.tabBar} accessibilityRole="tablist">
         {([
           { key: 'all' as FilterTab, label: 'All' },
           { key: 'chat' as FilterTab, label: 'Chat', count: chatCount },
@@ -382,6 +382,9 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
             style={[styles.tab, activeTab === tab.key && styles.tabActive]}
             onPress={() => setActiveTab(tab.key)}
             activeOpacity={0.7}
+            accessibilityRole="tab"
+            accessibilityLabel={`${tab.label} messages${tab.count ? ` (${tab.count})` : ''}`}
+            accessibilityState={{ selected: activeTab === tab.key }}
           >
             <Text style={[styles.tabText, activeTab === tab.key && styles.tabTextActive]}>
               {tab.label}
@@ -413,6 +416,9 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
         data={filteredMessages}
         keyExtractor={item => item.id}
         renderItem={renderMessage}
+        accessibilityRole="list"
+        accessibilityLabel="Chat messages"
+        accessibilityLiveRegion="polite"
         contentContainerStyle={[
           styles.messageList,
           filteredMessages.length === 0 && styles.emptyList,
@@ -487,6 +493,9 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
             onPress={handleSend}
             disabled={!inputText.trim() || sending}
             activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel={sending ? 'Sending message' : 'Send message'}
+            accessibilityState={{ disabled: !inputText.trim() || sending }}
             accessibilityRole="button"
             accessibilityLabel="Send message"
           >

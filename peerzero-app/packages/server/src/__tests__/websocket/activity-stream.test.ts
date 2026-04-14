@@ -36,6 +36,14 @@ class FakeWebSocket extends EventEmitter {
     this.readyState = 3; // CLOSED
   }
 
+  terminate() {
+    this.readyState = 3; // CLOSED
+  }
+
+  ping() {
+    // Simulate server-side ping for heartbeat
+  }
+
   // Simulate receiving a message
   receiveMessage(data: string) {
     this.emit('message', Buffer.from(data));

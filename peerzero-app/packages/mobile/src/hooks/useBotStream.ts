@@ -17,7 +17,7 @@
 // =============================================================================
 
 import { useEffect, useRef, useCallback, useState } from 'react';
-import { Platform } from 'react-native';
+import { Platform, AppState, type AppStateStatus } from 'react-native';
 import Constants from 'expo-constants';
 import type { ActivityEntry, BotMessage } from '@peerzero/shared';
 
@@ -233,6 +233,22 @@ export function useBotStream({
       }, catchJitter);
     }
   }, [botId, enabled]);
+
+  // Reconnect when app returns to foreground — iOS/Android kill TCP connections
+  // on background, so the WebSocket is likely dead when we come back
+  useEffect(() => {
+    const handleAppState = (nextState: AppStateStatus) => {
+      if (nextState === 'active' && mountedRef.current && botId && enabled) {
+        // If the socket is not connected, reconnect immediately
+        if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+          reconnectDelay.current = INITIAL_RECONNECT_DELAY;
+          connect();
+        }
+      }
+    };
+    const sub = AppState.addEventListener('change', handleAppState);
+    return () => sub.remove();
+  }, [botId, enabled, connect]);
 
   useEffect(() => {
     mountedRef.current = true;

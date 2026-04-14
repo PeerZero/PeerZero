@@ -179,8 +179,33 @@ function getTotalConnections(): number {
   return total;
 }
 
+const HEARTBEAT_INTERVAL_MS = 30_000; // Ping every 30s (shorter than typical proxy idle timeouts of 60s)
+const PONG_TIMEOUT_MS = 10_000; // If no pong within 10s, consider connection dead
+
 export function setupWebSocket(server: Server): void {
   const wss = new WebSocketServer({ server, path: '/ws' });
+
+  // Track liveness per connection for heartbeat
+  const aliveMap = new WeakMap<WebSocket, boolean>();
+
+  // Heartbeat: ping all clients every 30s — detect half-open/dead connections
+  // that readyState alone cannot catch (NAT timeout, mobile radio drop, proxy kill)
+  const heartbeatInterval = setInterval(() => {
+    for (const botClients of clients.values()) {
+      for (const client of botClients) {
+        if (aliveMap.get(client.ws) === false) {
+          // Missed the last pong — connection is dead, terminate it
+          client.ws.terminate();
+          continue;
+        }
+        // Mark as not-alive, then send ping — pong handler will mark alive again
+        aliveMap.set(client.ws, false);
+        if (client.ws.readyState === WebSocket.OPEN) {
+          client.ws.ping();
+        }
+      }
+    }
+  }, HEARTBEAT_INTERVAL_MS);
 
   // Periodic cleanup of stale connections (every 30s)
   const cleanupInterval = setInterval(() => {
@@ -207,8 +232,11 @@ export function setupWebSocket(server: Server): void {
     }
   }, 30_000);
 
-  // Clean up interval when server closes
-  server.on('close', () => clearInterval(cleanupInterval));
+  // Clean up intervals when server closes
+  server.on('close', () => {
+    clearInterval(cleanupInterval);
+    clearInterval(heartbeatInterval);
+  });
 
   // Build allowed-origin checker from CORS config (same source as Express CORS)
   const allowedOrigins = config.corsOrigins.split(',').map(s => s.trim()).filter(Boolean);
@@ -318,6 +346,10 @@ export function setupWebSocket(server: Server): void {
               userConnectionCounts.set(payload.userId, currentCount - 1);
             }
           });
+
+          // Register pong handler for heartbeat liveness detection
+          aliveMap.set(ws, true);
+          ws.on('pong', () => { aliveMap.set(ws, true); });
 
           // Send initial connected message
           ws.send(JSON.stringify({ type: 'connected', bot_id: botId }));
