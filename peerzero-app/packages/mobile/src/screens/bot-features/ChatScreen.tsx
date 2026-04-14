@@ -496,8 +496,6 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
             accessibilityRole="button"
             accessibilityLabel={sending ? 'Sending message' : 'Send message'}
             accessibilityState={{ disabled: !inputText.trim() || sending }}
-            accessibilityRole="button"
-            accessibilityLabel="Send message"
           >
             {sending ? (
               <ActivityIndicator size="small" color="#fff" />
