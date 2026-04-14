@@ -38,6 +38,14 @@ const MAX_TOTAL_CONNECTIONS = 500; // Global limit
 // Track per-user connection counts for limits
 const userConnectionCounts: Map<string, number> = new Map();
 
+// Monotonic sequence counter per bot — allows clients to detect missed messages after reconnect
+const botSequence: Map<string, number> = new Map();
+function nextSeq(botId: string): number {
+  const seq = (botSequence.get(botId) || 0) + 1;
+  botSequence.set(botId, seq);
+  return seq;
+}
+
 // ── Redis pub/sub for multi-instance federation ──────────────────────────────
 // Pub/sub requires a dedicated subscriber connection (subscribing puts the
 // connection into subscriber mode, so it can't be shared with BullMQ or other
@@ -351,8 +359,8 @@ export function setupWebSocket(server: Server): void {
           aliveMap.set(ws, true);
           ws.on('pong', () => { aliveMap.set(ws, true); });
 
-          // Send initial connected message
-          ws.send(JSON.stringify({ type: 'connected', bot_id: botId }));
+          // Send initial connected message with current sequence so client knows where it is
+          ws.send(JSON.stringify({ type: 'connected', bot_id: botId, seq: botSequence.get(botId) || 0 }));
         } catch (err) {
           logger.error({ err: err instanceof Error ? err.message : err }, 'WebSocket auth handler error');
           try { ws.close(4000, 'Internal server error'); } catch { /* already closed */ }
@@ -371,7 +379,7 @@ export function setupWebSocket(server: Server): void {
 
 /** Broadcast activity to all clients watching a specific bot. */
 export function broadcastActivity(botId: string, userId: string, data: Record<string, unknown>): void {
-  const payload = JSON.stringify({ type: 'activity', ...data });
+  const payload = JSON.stringify({ type: 'activity', seq: nextSeq(botId), ...data });
   publishOrLocal(botId, userId, payload);
 }
 
@@ -382,18 +390,18 @@ export function broadcastStatusChange(botId: string, userId: string, status: str
 
 /** Broadcast a new chat message (activity narration, milestone, or user chat). */
 export function broadcastMessage(botId: string, userId: string, message: BotMessage | Record<string, unknown>): void {
-  const payload = JSON.stringify({ type: 'message', message });
+  const payload = JSON.stringify({ type: 'message', seq: nextSeq(botId), message });
   publishOrLocal(botId, userId, payload);
 }
 
 /** Broadcast an agenda state update (action desk step completed/failed). */
 export function broadcastAgendaUpdate(botId: string, userId: string, messageId: string, agendaState: Record<string, unknown>): void {
-  const payload = JSON.stringify({ type: 'agenda_update', message_id: messageId, agenda: agendaState });
+  const payload = JSON.stringify({ type: 'agenda_update', seq: nextSeq(botId), message_id: messageId, agenda: agendaState });
   publishOrLocal(botId, userId, payload);
 }
 
 /** Broadcast external activity (phone-home from self-hosted bots). */
 export function broadcastExternalActivity(botId: string, userId: string, data: Record<string, unknown>): void {
-  const payload = JSON.stringify({ type: 'external_activity', ...data });
+  const payload = JSON.stringify({ type: 'external_activity', seq: nextSeq(botId), ...data });
   publishOrLocal(botId, userId, payload);
 }

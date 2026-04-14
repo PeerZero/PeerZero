@@ -222,7 +222,7 @@ export default function LogScreen({ route }: LogScreenProps) {
     const mood = item.translated?.mood || 'neutral';
     const icon = ACTION_ICONS[item.action_type] || '?';
     return (
-      <TouchableOpacity style={styles.entry} onLongPress={() => handleDeleteItem(item)}>
+      <TouchableOpacity style={styles.entry} onLongPress={() => handleDeleteItem(item)} accessibilityHint="Long press to delete">
         <View style={[styles.moodBar, { backgroundColor: MOOD_COLORS[mood] }]} />
         <View style={styles.actionIcon}>
           <Text style={styles.actionIconText}>{icon}</Text>
@@ -367,7 +367,7 @@ export default function LogScreen({ route }: LogScreenProps) {
   };
 
   const renderExternalEntry = ({ item }: { item: ExternalActivityEntry }) => (
-    <TouchableOpacity style={styles.entry} onLongPress={() => handleDeleteExtItem(item)}>
+    <TouchableOpacity style={styles.entry} onLongPress={() => handleDeleteExtItem(item)} accessibilityHint="Long press to delete">
       <View style={[styles.moodBar, { backgroundColor: colors.accent.secondary }]} />
       <View style={styles.actionIcon}>
         <Text style={styles.actionIconText}>E</Text>

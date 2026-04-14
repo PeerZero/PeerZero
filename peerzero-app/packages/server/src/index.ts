@@ -125,6 +125,34 @@ app.use('/api/platforms', platformRoutes);
 app.use('/api/skills', skillRoutes);
 app.use('/health', healthRoutes);
 
+// ── Well-known files for Universal Links (iOS) and App Links (Android) ──
+app.get('/.well-known/apple-app-site-association', (_req, res) => {
+  res.json({
+    applinks: {
+      apps: [],
+      details: [{
+        appID: 'TEAM_ID.com.peerzero.app', // Replace TEAM_ID with Apple Developer Team ID
+        paths: ['/bot/*', '/invite/*', '/verify/*'],
+      }],
+    },
+    webcredentials: {
+      apps: ['TEAM_ID.com.peerzero.app'],
+    },
+  });
+});
+
+app.get('/.well-known/assetlinks.json', (_req, res) => {
+  res.json([{
+    relation: ['delegate_permission/common.handle_all_urls'],
+    target: {
+      namespace: 'android_app',
+      package_name: 'com.peerzero.app',
+      // Replace with production signing certificate SHA-256 fingerprint
+      sha256_cert_fingerprints: ['REPLACE_WITH_PRODUCTION_SHA256_FINGERPRINT'],
+    },
+  }]);
+});
+
 // ── 404 catch-all for unknown routes ──
 app.use((_req, res) => {
   res.status(404).json({ error: 'Not found' });

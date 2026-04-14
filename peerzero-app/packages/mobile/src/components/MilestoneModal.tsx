@@ -178,11 +178,14 @@ export default function MilestoneModal({ visible, milestone, onDismiss }: Milest
       onRequestClose={onDismiss}
     >
       <Animated.View style={[styles.overlay, { opacity: fadeAnim }]}>
-        <Animated.View style={[
-          styles.modal,
-          isGraduation && styles.modalGraduation,
-          { transform: [{ scale: scaleAnim }] },
-        ]}>
+        <Animated.View
+          style={[
+            styles.modal,
+            isGraduation && styles.modalGraduation,
+            { transform: [{ scale: scaleAnim }] },
+          ]}
+          accessibilityViewIsModal={true}
+        >
           <ScrollView
             contentContainerStyle={styles.scrollContent}
             showsVerticalScrollIndicator={false}

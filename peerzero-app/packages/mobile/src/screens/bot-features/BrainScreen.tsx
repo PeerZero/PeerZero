@@ -214,6 +214,7 @@ export default function BrainScreen({ route }: BrainScreenProps) {
               onPress={() => switchTab(tab.key)}
               activeOpacity={0.7}
               accessibilityRole="tab"
+              accessibilityLabel={tab.label}
               accessibilityState={{ selected: isActive }}
             >
               <Text style={[s.tabIcon, { color: isActive ? tabColor : colors.text.tertiary + '60' }]}>

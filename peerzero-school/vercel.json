@@ -14,6 +14,11 @@
       "schedule": "30 4 * * 0"
     }
   ],
+  "functions": {
+    "api/**/*.js": {
+      "maxDuration": 300
+    }
+  },
   "builds": [
     {
       "src": "index.html",

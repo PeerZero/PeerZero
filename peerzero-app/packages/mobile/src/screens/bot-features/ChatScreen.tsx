@@ -520,7 +520,7 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
           activeOpacity={1}
           onPress={() => setSettingsVisible(false)}
         >
-          <TouchableOpacity activeOpacity={1} style={styles.modalSheet}>
+          <TouchableOpacity activeOpacity={1} style={styles.modalSheet} accessibilityViewIsModal={true}>
             <View style={styles.modalHandle} />
             <Text style={styles.modalTitle}>Chat Settings</Text>
             <Text style={styles.modalSubtitle}>
