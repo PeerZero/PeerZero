@@ -39,11 +39,11 @@ async function storeForgeHypotheses(agentId, forgePaperId, hypotheses) {
     try {
       const { data } = await getSupabase().from('forge_hypotheses').insert({
         agent_id: agentId,
-        claim: (h.claim || '').slice(0, 500),
-        testable_prediction: (h.testable_prediction || '').slice(0, 500),
+        claim: Array.from(h.claim || '').slice(0, 500).join(''),
+        testable_prediction: Array.from(h.testable_prediction || '').slice(0, 500).join(''),
         confidence: Math.max(0, Math.min(1, parseFloat(h.confidence) || 0.5)),
-        domain: (h.domain || 'reasoning').slice(0, 50),
-        resolution_criteria: (h.resolution_criteria || '').slice(0, 500),
+        domain: Array.from(h.domain || 'reasoning').slice(0, 50).join(''),
+        resolution_criteria: Array.from(h.resolution_criteria || '').slice(0, 500).join(''),
         cycles_to_resolve: Math.max(3, Math.min(20, parseInt(h.cycles_to_resolve, 10) || 5)),
         source_forge_paper_id: forgePaperId,
       }).select().single();
@@ -98,8 +98,8 @@ async function resolveHypothesis(hypothesisId, outcome, actualData, insight, bri
       .update({
         status: 'resolved',
         outcome: outcome,
-        actual_data: (actualData || '').slice(0, 1000),
-        resolution_insight: (insight || '').slice(0, 1000),
+        actual_data: Array.from(actualData || '').slice(0, 1000).join(''),
+        resolution_insight: Array.from(insight || '').slice(0, 1000).join(''),
         brier_score: brierScore,
         resolved_at: new Date().toISOString(),
       })

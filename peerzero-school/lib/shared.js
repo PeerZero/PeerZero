@@ -66,6 +66,21 @@ function getSupabase() {
   return _supabase;
 }
 
+// ── Startup warnings for optional-but-important env vars ──────────────
+// On Vercel serverless, each function is a separate cold start. These
+// warnings log once per cold start so operators see what's degraded.
+if (process.env.NODE_ENV === 'production' || process.env.VERCEL_ENV === 'production') {
+  if (!process.env.ANTHROPIC_API_KEY) {
+    console.warn('[startup] ANTHROPIC_API_KEY not set — haiku audit, reasoning evaluation, and bounty validation will be skipped');
+  }
+  if (!process.env.PROFILE_SIGNING_PRIVATE_KEY) {
+    console.warn('[startup] PROFILE_SIGNING_PRIVATE_KEY not set — portable profiles will be unsigned (verification will fail)');
+  }
+  if (!process.env.CRON_SECRET) {
+    console.warn('[startup] CRON_SECRET not set — Vercel cron jobs may not authenticate properly');
+  }
+}
+
 // ── CORS + CSRF + request validation (stays here — small, HTTP-specific) ──
 // Allowed origins loaded from school config (schools/*.js).
 let _schoolConfig;

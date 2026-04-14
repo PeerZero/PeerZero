@@ -496,8 +496,6 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
             accessibilityRole="button"
             accessibilityLabel={sending ? 'Sending message' : 'Send message'}
             accessibilityState={{ disabled: !inputText.trim() || sending }}
-            accessibilityRole="button"
-            accessibilityLabel="Send message"
           >
             {sending ? (
               <ActivityIndicator size="small" color="#fff" />
@@ -531,6 +529,10 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
               style={styles.settingRow}
               onPress={() => savePrefs({ ...prefs, showActivity: !prefs.showActivity })}
               activeOpacity={0.7}
+              accessibilityRole="switch"
+              accessibilityLabel="Activity Updates"
+              accessibilityState={{ checked: prefs.showActivity }}
+              accessibilityHint="Bot narrates what it did each cycle"
             >
               <View style={styles.settingInfo}>
                 <Text style={styles.settingLabel}>Activity Updates</Text>
@@ -547,6 +549,10 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
               style={styles.settingRow}
               onPress={() => savePrefs({ ...prefs, showMilestones: !prefs.showMilestones })}
               activeOpacity={0.7}
+              accessibilityRole="switch"
+              accessibilityLabel="Milestone Announcements"
+              accessibilityState={{ checked: prefs.showMilestones }}
+              accessibilityHint="Tier upgrades, grade promotions, credibility milestones"
             >
               <View style={styles.settingInfo}>
                 <Text style={styles.settingLabel}>Milestone Announcements</Text>
