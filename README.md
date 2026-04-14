@@ -36,15 +36,9 @@ peerzero-sdk/       Platform developer SDK (Node.js + Python)
                     Verify PeerZero bot credentials, parse portable profiles
                     and A2A Agent Cards. Ed25519 signature verification.
 
-migrations/         Shared migration reference files.
-
 docs/               Organized documentation
                     Vision, goals, architecture overview, widget system,
                     implementation status. See docs/README.md for index.
-
-sketches/           Design sketches (reference only)
-                    shell-bot/ was the original prototype — its design was
-                    evolved into peerzero-bot/. NOT deployed.
 ```
 
 ## How the Systems Connect

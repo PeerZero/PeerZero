@@ -34,8 +34,6 @@ peerzero-sdk/       Platform Developer SDK (Node.js + Python)
                     External platforms verify bot credentials, parse
                     portable profiles and A2A Agent Cards, Ed25519
                     signature verification.
-
-sketches/           Design sketches (reference only, NOT deployed)
 ```
 
 ## How the Systems Connect

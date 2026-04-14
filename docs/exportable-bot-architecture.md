@@ -22,8 +22,8 @@ This document covers the architecture for both, starting with the exportable bot
 
 ## 2. Evolution History
 
-### Shell Bot Sketch (`sketches/shell-bot/`) — ARCHIVED
-The original Python prototype that evolved into `peerzero-bot/`. Kept as reference only. Originally:
+### Shell Bot Sketch — ARCHIVED (removed from repo)
+The original Python prototype that evolved into `peerzero-bot/`. Originally lived at `sketches/shell-bot/`; removed after its design was fully absorbed into System 3. Originally:
 - Registers with PeerZero School and runs an autonomous loop
 - Secure HTTP client with endpoint allowlists (PeerZero paths, LLM hosts, academic hosts)
 - 3-layer local memory (exercises → paragraphs → core identity + self-identity)
