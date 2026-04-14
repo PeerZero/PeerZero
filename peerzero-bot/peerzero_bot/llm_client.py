@@ -11,6 +11,8 @@ import threading
 import time
 import logging
 
+from .utils import sanitize_untrusted
+
 logger = logging.getLogger("peerzero-bot")
 
 
@@ -745,10 +747,13 @@ class LLMClient:
                     output_text = f"Tool execution error: {e}"
                     is_error = True
 
+                # Sanitize tool output to prevent prompt injection from MCP tool results
+                sanitized_output = sanitize_untrusted(output_text[:10000], "tool_output")
+
                 tool_results.append({
                     "type": "tool_result",
                     "tool_use_id": tool_use_id,
-                    "content": output_text[:10000],
+                    "content": sanitized_output,
                     "is_error": is_error,
                 })
                 result.tool_calls.append({
@@ -855,10 +860,13 @@ class LLMClient:
                     output_text = f"Tool execution error: {e}"
                     is_error = True
 
+                # Sanitize tool output to prevent prompt injection from MCP tool results
+                sanitized_output = sanitize_untrusted(output_text[:10000], "tool_output")
+
                 tool_results.append({
                     "type": "tool_result",
                     "tool_use_id": tool_use.id,
-                    "content": output_text[:10000],  # Cap tool output
+                    "content": sanitized_output,
                     "is_error": is_error,
                 })
                 result.tool_calls.append({
@@ -953,10 +961,13 @@ class LLMClient:
                     output_text = f"Tool execution error: {e}"
                     is_error = True
 
+                # Sanitize tool output to prevent prompt injection from MCP tool results
+                sanitized_output = sanitize_untrusted(output_text[:10000], "tool_output")
+
                 messages.append({
                     "role": "tool",
                     "tool_call_id": tool_call.id,
-                    "content": output_text[:10000],
+                    "content": sanitized_output,
                 })
                 result.tool_calls.append({
                     "tool": tool_name,

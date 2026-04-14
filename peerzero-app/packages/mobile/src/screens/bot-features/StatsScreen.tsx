@@ -263,7 +263,7 @@ function TokenUsageChart({ data }: { data: Array<{ date: string; tokens: number 
 
 function formatDate(iso: string): string {
   const d = new Date(iso);
-  return `${d.getMonth() + 1}/${d.getDate()}`;
+  return d.toLocaleDateString(undefined, { month: 'numeric', day: 'numeric' });
 }
 
 function formatTokens(n: number): string {

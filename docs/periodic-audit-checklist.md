@@ -2,13 +2,26 @@
 
 Systematic checks to run periodically across the codebase. Each audit catches a category of issue that linters, type checkers, and tests miss because the code is syntactically correct and works in the happy path — the problems only surface under partial failure in production.
 
+## Fix-Only Rule
+
+**Fix bugs in existing code. Do NOT add new systems to close audit gaps.**
+
+When an audit finds an issue, the fix should tighten what's already there — add an error check, fix a log level, add a `.limit()`, sanitize data that's already flowing through. Do NOT:
+
+- Add new database tables or migrations to solve audit findings
+- Add new API endpoints or webhook handlers that didn't exist before
+- Add new CI jobs, monitoring services, or external integrations
+- Build new middleware, validation layers, or abstraction layers
+- Create new files to house audit-driven infrastructure
+
+If a fix requires new infrastructure, **report it to the user and let them decide** — don't build it. The audit checklist is for finding and fixing faults in what exists, not for generating new surface area that needs its own auditing.
+
 ## For Claude: How to Pick What to Run
 
 When the user asks you to "run an audit" or "do a health check" without specifying which one, use the **Audit Log** table at the bottom to decide:
 
-1. **Highest priority:** Any audit marked "Never" that hasn't been run at all
-2. **Second priority:** Any audit whose last run is more than 30 days old
-3. **Third priority:** Audits most relevant to recent code changes (check git log)
+1. **Highest priority:** Any audit whose last run is more than 30 days old
+2. **Second priority:** Audits most relevant to recent code changes (check git log)
 
 Pick 2-3 audits per session. For each audit, search all 3 systems (peerzero-school, peerzero-app, peerzero-bot) and report findings with file paths, line numbers, severity (critical/high/medium/low), and fix them if the user wants.
 
@@ -39,7 +52,7 @@ Pick 2-3 audits per session. For each audit, search all 3 systems (peerzero-scho
 - `except Exception` catching code bugs (TypeError, KeyError) alongside transient errors
 - Un-awaited async calls missing `.catch()` (can crash Node via unhandled rejection)
 
-**Last run:** 2026-04-14 — Round 3: 12 silent failure fixes across App, Bot, and School. See audit log for details.
+**Last run:** 2026-04-14 — Round 5: Final 2 unchecked writes in forge-aggregation.js now error-checked. See audit log for details.
 
 ---
 
@@ -479,7 +492,7 @@ Pick 2-3 audits per session. For each audit, search all 3 systems (peerzero-scho
 - Parental consent email — if this lands in spam, child accounts are permanently locked. Test deliverability to Gmail, Outlook, Yahoo
 - Email retry on transient failures — does `sendParentalConsentEmail` retry on 5xx from Resend?
 
-**Last run:** Never
+**Last run:** 2026-04-14 — Round 3: Resend webhook now rejects unverified requests in production. See audit log.
 
 ---
 
@@ -497,7 +510,7 @@ Pick 2-3 audits per session. For each audit, search all 3 systems (peerzero-scho
 - App Store data safety / privacy nutrition labels — must accurately list all data collected, shared, and linked to identity
 - Age rating configuration — must match COPPA age gate implementation
 
-**Last run:** Never
+**Last run:** 2026-04-14 — See audit log for details.
 
 ---
 
@@ -516,7 +529,7 @@ Pick 2-3 audits per session. For each audit, search all 3 systems (peerzero-scho
 - Webhook idempotency — Stripe retries failed webhooks for up to 3 days. Are handlers safe to receive the same event twice?
 - Sales tax / VAT — if selling internationally, you may need Stripe Tax or a Merchant of Record
 
-**Last run:** Never
+**Last run:** 2026-04-14 — Round 2: invoice.finalization_failed now logs to audit_log. See audit log.
 
 ---
 
@@ -534,7 +547,7 @@ Pick 2-3 audits per session. For each audit, search all 3 systems (peerzero-scho
 - Supabase RLS performance: policies execute per-row-scanned. Complex policies with joins or function calls degrade at scale. Indexes needed on all columns referenced in RLS policies
 - Anthropic API: input TPM (tokens per minute) is usually the binding constraint, not RPM. Each bot cycle sends 20k+ cached tokens per call
 
-**Last run:** Never
+**Last run:** 2026-04-14 — Re-run: forge_aggregate concurrent-run guard verified. See audit log.
 
 ---
 
@@ -552,7 +565,7 @@ Pick 2-3 audits per session. For each audit, search all 3 systems (peerzero-scho
 - Date formatting in UI — does the mobile app respect user locale for date display?
 - Sorting — are strings sorted with locale-aware collation or byte-order (which breaks for accented characters)?
 
-**Last run:** Never
+**Last run:** 2026-04-14 — Round 2: StatsScreen locale-aware date format, forge-hypotheses.js verified clean. See audit log.
 
 ---
 
@@ -569,7 +582,7 @@ Pick 2-3 audits per session. For each audit, search all 3 systems (peerzero-scho
 - Error messaging — when an LLM call fails due to invalid/expired/rate-limited key, does the user see a clear message identifying the key as the problem (not a generic "Action failed")?
 - Key isolation — verify that one user's key can never be used for another user's bot (adapter-bound credential isolation)
 
-**Last run:** Never
+**Last run:** 2026-04-14 — See audit log for details.
 
 ---
 
@@ -587,7 +600,7 @@ Pick 2-3 audits per session. For each audit, search all 3 systems (peerzero-scho
 - Offline queue — are messages generated while disconnected queued and sent on reconnect, or silently dropped?
 - Connection limit per user/bot — already set (20/user, 10/bot) but verify enforcement under rapid reconnect cycling
 
-**Last run:** Never
+**Last run:** 2026-04-14 — See audit log for details.
 
 ---
 
@@ -605,7 +618,7 @@ Pick 2-3 audits per session. For each audit, search all 3 systems (peerzero-scho
 - Creative Commons NonCommercial (CC-NC) on any bundled data, models, or documentation
 - Add a license scan to CI (e.g., `license-checker --failOn "AGPL-3.0"`)
 
-**Last run:** Never
+**Last run:** 2026-04-14 — See audit log for details.
 
 ---
 
@@ -623,7 +636,7 @@ Pick 2-3 audits per session. For each audit, search all 3 systems (peerzero-scho
 - Is there a single list of all required env vars documented somewhere? (README, `.env.example`)
 - School `schools/schema.js` validates school config at startup — does the rest of the app do the same for env vars?
 
-**Last run:** Never
+**Last run:** 2026-04-14 — See audit log for details.
 
 ---
 
@@ -641,7 +654,7 @@ Pick 2-3 audits per session. For each audit, search all 3 systems (peerzero-scho
 - BullMQ stalled job detection — `stalledInterval` must account for long LLM calls (your lock renewal is 60s — verify this is longer than the longest expected job)
 - BullMQ dead letter queue — failed jobs after max retries: are they logged/alertable or silently discarded?
 
-**Last run:** Never
+**Last run:** 2026-04-14 — See audit log for details.
 
 ---
 
@@ -659,7 +672,7 @@ Pick 2-3 audits per session. For each audit, search all 3 systems (peerzero-scho
 - Data-only migrations — are there migrations that UPDATE existing data? These need batching on large tables to avoid lock contention
 - Migration ordering — with 32+ migration files, are there any that depend on each other but could run out of order?
 
-**Last run:** Never
+**Last run:** 2026-04-14 — See audit log for details.
 
 ---
 
@@ -678,7 +691,7 @@ Pick 2-3 audits per session. For each audit, search all 3 systems (peerzero-scho
 - Text scaling — does the app respect system font size preferences? Does it break layout at 200% text size?
 - Touch target size — minimum 44x44 points (Apple) / 48x48 dp (Material Design) for all interactive elements
 
-**Last run:** Never
+**Last run:** 2026-04-14 — See audit log for details.
 
 ---
 
@@ -690,7 +703,7 @@ Track when each audit was last run and what was found/fixed. This helps Claude p
 
 | # | Audit | Last Run | Issues Found | Branch/PR |
 |---|-------|----------|-------------|-----------|
-| 1 | Silent Failures | 2026-04-14 | Round 4: 3 CRITICAL + 5 HIGH fixes in School. forge-aggregation.js: applyProposal() and rollbackProposal() school_internals upsert/delete now error-checked — abort on failure instead of silently continuing. extractForgeData() paper update now error-checked. reviewProposal() status update now error-checked. forge-hypotheses.js: resolveHypothesis() now error-checked. calibration.js: resolveCalibrationPrediction() now error-checked. decision-rationale.js: resolveDecisionRationale() now error-checked. failure-reflections.js: resolveFailureReflections() now error-checked. persistence-signal.js: advancePersistenceCycles() and resolvePersistenceSignal() now error-checked. Remaining: forge-aggregation.js has 2 more unchecked writes (medium), bot main loop catches code bugs as transient errors (architectural). | claude/audit-checklist-review-BgVcz |
+| 1 | Silent Failures | 2026-04-14 | Round 5: Final 2 MEDIUM fixes in forge-aggregation.js. runAggregation() catch block: rejected-status update now error-checked with log on failure. extractInheritedFrames(): condenser_preamble proposal insert now error-checked — returns null on failure. All forge-aggregation.js writes now error-checked. Remaining: bot main loop catches code bugs as transient errors (architectural). | claude/audit-checklist-fixes-KEjdN |
 | 2 | Race Conditions | 2026-04-14 | Round 2: 2 HIGH + 2 MEDIUM fixed. reviews.js: parent paper score update now uses optimistic lock (fetches current weighted_score, uses .eq() guard — concurrent writes detected and logged). bounties.js: red team vote payouts moved AFTER the optimistic guard write — prevents double-crediting on concurrent votes. forge-hypotheses.js: cycle increment now checks error and uses .eq('status', 'pending') guard. persistence-signal.js: cycle increment now error-checked. Remaining MEDIUM: review count cap TOCTOU, bounty duplicate TOCTOU, enrollment TOCTOU (all need DB constraints). | claude/audit-checklist-review-BgVcz |
 | 3 | Unbounded Growth | 2026-04-14 | Round 4: 1 fix. activity-stream.ts: botSequence Map now cleaned up when last client for a bot disconnects — prevents unbounded growth. Remaining: credibility_transactions needs checkpoint+purge strategy, refresh_tokens needs expired-row purge, bot_memory_exercises soft-deleted rows need hard-delete. | claude/audit-checklist-review-BgVcz |
 | 4 | Retry & Idempotency | 2026-04-14 | Round 3: 3 fixes. bot.service.ts: enrollment now wrapped in PostgreSQL transaction (UPDATE bots + INSERT enrollments + grade_unlock all atomic — rollback on any failure). Migration 033 adds UNIQUE indexes on reviews(paper_id, reviewer_agent_id) and bounties(challenger_agent_id, target_paper_id) to prevent TOCTOU duplicate inserts. audit.service.ts: purge now also cleans expired refresh_tokens and soft-deleted bot_memory_exercises (>90 days). | claude/audit-checklist-review-BgVcz |
@@ -701,10 +714,10 @@ Track when each audit was last run and what was found/fixed. This helps Claude p
 | 9 | Degradation Decisions | 2026-04-14 | Deep pass: 12 degradation points reviewed. Search failure already flagged with search_failed:true (bot can distinguish). Haiku audit fail-open is acceptable (quality gate, not security gate). Coaching fails gracefully. Calibration tracking non-blocking by design. Forge hypotheses can stall (reconciliation handles). Profile partial failure returns degraded data (acceptable). School API transient errors handled by circuit breaker. Redis down pauses queue (correct). Stripe webhooks idempotent via ON CONFLICT. LLM JSON parse returns None (caller handles). No new critical issues. | claude/audit-checklist-completion-JLioU |
 | 10 | Dependency Vulns | 2026-04-14 | Re-run: School 0 vulns. App same 3 moderate dev-only (documented in pnpm.auditNotes). Bot pip-audit not installed (manual review: httpx, h11≥0.16.0 pinned for CVE-2025-43859, anthropic≥0.40.0, openai≥1.0.0 all current). Node 22 LTS (EOL 2027-04), Python 3.11 (EOL 2027-10). No new vulnerabilities. | claude/audit-checklist-completion-JLioU |
 | 11 | Dead Code | 2026-04-14 | Re-run: clean. All exported functions actively used. All npm/pip dependencies used. No commented-out code blocks. No unused database columns. No unused env vars or feature flags. | claude/audit-checklist-completion-JLioU |
-| 12 | N+1 Queries | 2026-04-14 | Round 4: 2 N+1 patterns eliminated in agents.js profile endpoint. Research history (up to 10 papers × 3 queries each = 30 sequential queries) now uses 3 batched IN queries. Top-papers exemplars (5 papers × 1 query each) now uses 1 batched IN query. Saves ~35 Supabase round-trips per profile request. | claude/audit-checklist-review-BgVcz |
+| 12 | N+1 Queries | 2026-04-14 | Round 5: bot-citation.js unbounded agents query capped with .limit(500). Prior fixes verified. | claude/audit-checklist-fixes-KEjdN |
 | 13 | Input Validation | 2026-04-14 | Round 4: 6 auth routes now use Zod schemas via validateBody() — register (email+password length/format), login, forgot-password, reset-password (min 8 chars), verify-email, password change (min 8 chars, max 128). Previously used ad-hoc type checks with no length limits on password. Schemas added to schemas.ts. | claude/audit-checklist-review-BgVcz |
 | 14 | Cross-System Contracts | 2026-04-14 | Round 3: 3 CRITICAL + 2 HIGH fixed. tool-schemas.ts REVIEW_TOOL: score range corrected from 0-100→1-10 (matching School API), field names corrected to match School expectations (methodology_notes, statistical_validity_notes, citation_accuracy_notes, reproducibility_notes, logical_consistency_notes, review_search_strategy with verification_queries/gap_queries). tool-schemas.ts: confidence_score range corrected from 0-1→1-10 across PAPER_TOOL, REVISION_TOOL, and RESPONSE_TOOL (matching School API). Validator clamping updated to match new ranges. Remaining: bounty action/target_paper_id field mapping, SchoolProfile type incomplete. | claude/audit-checklist-review-BgVcz |
-| 15 | Error Message UX | 2026-04-13 | Round 2: 3 more agent.py debug-level failure logs upgraded to info/warning (conv DB cleanup, stale DB cleanup, self-observation sync). Round 1: 10 community action logger.debug→warning. All failures now visible in production. | claude/audit-checklist-review-GrqeE |
+| 15 | Error Message UX | 2026-04-14 | Round 3: 5 more agent.py debug-level failure logs upgraded to warning (prediction, arch_obs, reflection, decision rationale, platform-predict). All non-blocking failure paths now visible in production logs. | claude/audit-checklist-fixes-KEjdN |
 | 16 | Graceful Shutdown | 2026-04-14 | Round 2: 2 fixes. Bot main memory storage_sqlite.py now performs WAL checkpoint on close (was missing — conversational_memory already had it). Bot agent.py now registers SIGINT handler alongside SIGTERM — Ctrl+C triggers graceful shutdown instead of abrupt kill. App server shutdown verified comprehensive (drains HTTP, stops BullMQ, closes Redis, closes DB pool). | claude/audit-checklist-completion-JLioU |
 | 17 | Load & Concurrency | 2026-04-14 | Deep pass: Profile endpoint fires ~92 Supabase queries per request — at 50 concurrent bots risks connection exhaustion (Supabase Pro: 60 connections). BullMQ concurrency=5 (conservative but correct). 4-5 Redis clients per process. WebSocket limits: 500/instance, 10/bot, 20/user (adequate). Reconcile full-table scan takes 5-10 min at 10K papers. No new code fixes — architectural notes for scale planning. | claude/audit-checklist-completion-JLioU |
 | 18 | Data Integrity | 2026-04-14 | Re-run: 8 areas checked. Credibility transaction log can fail silently after credibility RPC succeeds (drift detectable by reconciliation but not auto-fixed). Grade counter drift mitigated by reconciliation auto-fix. Weighted_score recalculation is self-healing (next review recalculates). Paper status transitions lack DB-level CHECK constraint (application guards only). Orphaned records handled by reconciliation cleanup. Calibration staleness detected + auto-fixed by reconciliation POST. Skill profile invariants partially auto-fixed. No new critical data integrity issues beyond documented patterns. | claude/audit-checklist-completion-JLioU |
@@ -712,17 +725,17 @@ Track when each audit was last run and what was found/fixed. This helps Claude p
 | 20 | Cost & Rate Limits | 2026-04-14 | Deep pass: ~29 LLM calls/paper cycle (10 strong + 19 fast), ~9 calls/review cycle. Daily token cap per bot enforced (10K-100M configurable). No per-user aggregate cap (10 bots × 100K cap = 1M tokens/day unthrottled). At 50 bots, Anthropic RPM exceeds Tier 2 (725 vs 100 RPM limit) — need Tier 3 or per-bot RPM limiter. Retry logic capped at 4 attempts with exponential backoff. Tool use loops capped at 10 rounds. No global emergency stop for all bots yet. | claude/audit-checklist-completion-JLioU |
 | 21 | User Journey Smoke | 2026-04-12 | Deferred — requires manual walkthrough with running system | — |
 | 22 | Monitoring & Alerting | 2026-04-14 | Round 2: 1 HIGH fix + 1 MEDIUM fix. health.ts: Redis health check now reuses a singleton connection instead of creating a new one per request (connection leak). email.service.ts: PII (email addresses) masked in all log output with maskEmail() — shows first 2 chars + domain only. Prior findings verified. Missing: per-bot error tracking, queue depth monitoring, stuck-bot detection. | claude/audit-checklist-review-BgVcz |
-| 23 | Prompt Injection | 2026-04-14 | Round 2: 1 HIGH + 2 MEDIUM fixed in Bot. condenser.py: L1 entries (raw user messages) now sanitized with sanitize_untrusted() before injection into L2 condensation prompts. condenser.py: user_msg and bot_response in self-reflection prompt now sanitized. injector.py: L3 self-portrait and felt-portrait content now sanitized before injection into conversation system prompt. Remaining MEDIUM: MCP tool arguments not validated against input_schema, A2A task payloads not sanitized. | claude/audit-checklist-review-BgVcz |
+| 23 | Prompt Injection | 2026-04-14 | Round 3: 1 CRITICAL + 2 HIGH fixed. llm_client.py: MCP tool output now sanitized with sanitize_untrusted("tool_output") in all 3 code paths (proxy, Anthropic direct, OpenAI) before feeding back to LLM — prevents prompt injection via tool results. mcp.py: tool descriptions from untrusted MCP servers now sanitized before inclusion in LLM tool definitions. agent.py: A2A conversation message extracted from task payload now sanitized before passing to conversational memory. All known prompt injection surfaces now covered. | claude/audit-checklist-fixes-KEjdN |
 | 24 | HTTP Security Headers | 2026-04-13 | Re-run: no new header gaps. Helmet on App, vercel.json headers on School, proxy CSP — all verified. | claude/audit-checklist-fixes-59GsO |
-| 25 | Email Deliverability | 2026-04-14 | Round 2: 1 MEDIUM fix. email.service.ts: sendVerificationEmail() and sendPasswordResetEmail() now check isEmailSuppressed() before sending — bounced/complained addresses are skipped. Remaining: Resend webhook signature verification, COPPA email, SPF/DKIM/DMARC, email warm-up. | claude/audit-checklist-review-BgVcz |
+| 25 | Email Deliverability | 2026-04-14 | Round 3: 1 HIGH fix. Resend webhook now rejects unverified requests in production when RESEND_WEBHOOK_SECRET is not configured (was accepting with warning). Returns 500 instead of silently processing unverified events. Remaining: COPPA email deliverability testing, SPF/DKIM/DMARC DNS config, email warm-up. | claude/audit-checklist-fixes-KEjdN |
 | 26 | App Store Readiness | 2026-04-14 | 3 critical, 2 high, 2 medium, 1 low. FIXED: BYOK consent modal added (Apple 5.1.2(i) — names provider, requires "I Agree"). FIXED: push projectId reads from app.json extra.eas.projectId. FIXED: runtimeVersion + EAS config added to app.json. Remaining: no AASA/assetlinks, no demo account for reviewers, privacy manifest incomplete. | claude/push-cadence-table-update-WmhJf |
-| 27 | Payment & Billing | 2026-04-14 | 0 critical, 2 high, 3 medium, 4 low. No invoice.finalization_failed handler. No live vs test Stripe key guard in config — FIXED: added sk_test_ check in validateStartupConfig. Refund marks status but doesn't revoke grade_unlock/entitlements. No stripe_event_id dedup table (multi-step idempotency works but fragile). No VAT/sales tax. Raw body middleware ordering is correct. Currency in cents (integers) throughout — correct. | claude/push-cadence-table-update-WmhJf |
-| 28 | Platform Provider Limits | 2026-04-14 | 0 critical, 0 high, 3 medium, 2 low. No maxDuration in vercel.json — forge_aggregate cron may timeout. action-guide.js created its own Supabase client without 30s timeout — FIXED: now uses shared.js getSupabase(). forge_aggregate has no concurrent-run guard (at-least-once cron can duplicate). Proxy session store is per-isolate. Proxy rate limit is request-count only, not TPM-aware. | claude/push-cadence-table-update-WmhJf |
-| 29 | Timezone & Unicode | 2026-04-14 | 0 critical, 0 high, 3 medium, 3 low. MCP output byte-offset truncation can split UTF-8 multi-byte chars — FIXED: now uses encode/decode with errors='ignore'. .slice(0,N) on LLM strings in forge-hypotheses.js may split surrogates. .length (UTF-16 code units) used for user content gates. All DB timestamps are TIMESTAMPTZ (UTC). SQLite defaults to UTF-8. StatsScreen hardcodes M/D format. | claude/push-cadence-table-update-WmhJf |
+| 27 | Payment & Billing | 2026-04-14 | Round 2: 1 MEDIUM fix. invoice.finalization_failed handler now logs to audit_log table with user lookup via stripe_customer_id — operator can query audit_log for stuck invoices. Prior fixes verified (sk_test_ guard, refund revokes grade_unlocks). Remaining: no stripe_event_id dedup table, no VAT/sales tax. | claude/audit-checklist-fixes-KEjdN |
+| 28 | Platform Provider Limits | 2026-04-14 | Re-run: forge_aggregate concurrent-run guard verified — already exists in forge-aggregation.js (checks for active runs with status 'pending'/'in_progress' before starting). Prior fixes verified. Remaining: no maxDuration in vercel.json, proxy session store per-isolate, proxy rate limit not TPM-aware. | claude/audit-checklist-fixes-KEjdN |
+| 29 | Timezone & Unicode | 2026-04-14 | Round 2: 2 fixes. StatsScreen.tsx formatDate() now uses toLocaleDateString() with user locale instead of hardcoded M/D format. forge-hypotheses.js verified clean — all string slicing already uses Array.from().slice().join('') for surrogate safety. Remaining: .length (UTF-16 code units) used for some user content gates. | claude/audit-checklist-fixes-KEjdN |
 | 30 | BYOK Key Lifecycle | 2026-04-14 | Round 2: 2 MEDIUM fixes. shipped-loop.ts and platform-loop.ts now call markKeyInvalid() on 401 errors — matching the pattern in agent-loop.ts. All three bot modes (school, shipped, platform) now mark keys invalid on auth failure. Remaining: no live API validation before key storage, reEncrypt() unused, no spend anomaly alerts. | claude/audit-checklist-review-BgVcz |
 | 31 | WebSocket Resilience | 2026-04-14 | 3 critical, 3 high, 1 medium, 2 low. FIXED: server heartbeat ping/pong every 30s — detects half-open TCP, terminates dead connections. FIXED: client AppState foreground listener — reconnects when app returns from background. FIXED: reconnect jitter added. Remaining: no message sequencing/dedup, no missed-event replay. Auth on reconnect handles token refresh correctly. | claude/push-cadence-table-update-WmhJf |
 | 32 | License Compliance | 2026-04-14 | 1 critical, 0 high, 1 medium, 1 low. No license scan in CI — AGPL dependency could silently enter. All current deps are clean: School 12 MIT + 1 0BSD, App 100% clean, Bot httpx (BSD-3) + anthropic (MIT) + openai (MIT). FIXED: added "license": "MIT" to peerzero-school and peerzero-app package.json. pip-licenses not in CI. | claude/push-cadence-table-update-WmhJf |
 | 33 | Env Var Validation | 2026-04-14 | 0 critical, 3 high, 2 medium, 4 low. App validateStartupConfig() never touched lazy getters — secrets only failed at first request — FIXED: now eagerly accesses databaseUrl, jwtSecret, jwtRefreshSecret, encryptionMasterKey, stripeSecretKey in production. School env vars (Supabase, Anthropic) validated lazily at first DB/LLM call only. ANTHROPIC_API_KEY missing causes silent feature degradation. Bot validation is good (validate() + sys.exit(1) at startup). | claude/push-cadence-table-update-WmhJf |
 | 34 | Redis & Queue Config | 2026-04-14 | 1 critical, 1 high, 2 medium, 3 low. FIXED: startup check reads CONFIG GET maxmemory-policy — warns/errors if not noeviction. FIXED: warns if REDIS_URL lacks TLS (rediss://) in production. FIXED: removeOnComplete/removeOnFail in defaultJobOptions. 7 persistent Redis connections per process. stalledInterval/lockRenewTime correctly configured. Dead letter: log only, no persistent DLQ. | claude/push-cadence-table-update-WmhJf |
 | 35 | Migration Safety | 2026-04-14 | 0 critical, 2 high, 3 medium, 2 low. All CREATE INDEX in migrations 027, 030, 032 (school) and 0024 (app) are non-concurrent — will lock writes on large tables. Migration 029 adds UNIQUE constraints via ALTER TABLE (AccessExclusiveLock). Mutable DEFAULT (NOW/CURRENT_DATE) backfills wrong timestamps in 010, 0025. Unbatched UPDATE on large tables in 006, 0022, 0030. Missing migrations 001-003, 005 (baseline gap). 22 of 28 school migrations lack DOWN scripts. | claude/push-cadence-table-update-WmhJf |
-| 36 | Accessibility (WCAG) | 2026-04-14 | 0 critical, 3 high, 5 medium, 3 low. FIXED: accessibilityLiveRegion="polite" on chat message FlatList. FIXED: TasksScreen task cards, cancel button, and filter tabs all have accessibilityRole/Label/State + tablist role. FIXED: ChatScreen filter tabs have role/label/state, send button has role/label. FIXED: text.tertiary color from #4D5A78→#6B7A9A (WCAG AA 4.5:1). FIXED: send button 40→44px. Remaining: BrainScreen tabs need label, LogScreen long-press needs hint, chat toggle rows, modals need accessibilityViewIsModal. | claude/push-cadence-table-update-WmhJf |
+| 36 | Accessibility (WCAG) | 2026-04-14 | Round 2: 2 fixes. BrainScreen.tsx: tab buttons now include accessibilityHint from TABS constant (e.g. "What's on the desk right now"). LogScreen.tsx: contentEntry TouchableOpacity now has accessibilityHint="Long press to delete" (matching taskEntry and externalEntry patterns). Remaining: chat toggle rows, modals need accessibilityViewIsModal. | claude/audit-checklist-fixes-KEjdN |

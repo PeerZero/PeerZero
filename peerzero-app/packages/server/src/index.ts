@@ -147,7 +147,9 @@ app.post('/api/webhooks/resend', async (req, res) => {
         return;
       }
     } else if (process.env.NODE_ENV === 'production') {
-      logger.warn('RESEND_WEBHOOK_SECRET not configured — accepting unverified webhook (set secret in production)');
+      logger.error('RESEND_WEBHOOK_SECRET not configured — rejecting unverified webhook in production');
+      res.status(500).json({ error: 'Webhook secret not configured' });
+      return;
     }
     const { handleResendWebhook } = await import('./services/email.service');
     await handleResendWebhook(req.body);

@@ -267,6 +267,7 @@ export default function LogScreen({ route }: LogScreenProps) {
         style={styles.contentEntry}
         onPress={() => toggleExpand(item.id)}
         onLongPress={() => handleDeleteItem(item)}
+        accessibilityHint="Long press to delete"
       >
         <View style={[styles.moodBar, { backgroundColor: MOOD_COLORS[mood] }]} />
         <View style={styles.entryContent}>

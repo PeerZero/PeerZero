@@ -215,6 +215,7 @@ export default function BrainScreen({ route }: BrainScreenProps) {
               activeOpacity={0.7}
               accessibilityRole="tab"
               accessibilityLabel={tab.label}
+              accessibilityHint={tab.hint}
               accessibilityState={{ selected: isActive }}
             >
               <Text style={[s.tabIcon, { color: isActive ? tabColor : colors.text.tertiary + '60' }]}>

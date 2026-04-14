@@ -32,6 +32,7 @@ from typing import Optional
 
 import httpx
 
+from ..utils import sanitize_untrusted
 from .base import (
     PlatformCapabilities, PlatformContext,
     PlatformAction, PlatformResult,
@@ -58,7 +59,7 @@ class MCPTool:
         """Convert to LLM-compatible tool definition."""
         return {
             "name": f"mcp__{self.server_name}__{self.name}",
-            "description": f"[{self.server_name}] {self.description}",
+            "description": sanitize_untrusted(f"[{self.server_name}] {self.description}", "mcp_tool_desc"),
             "input_schema": self.input_schema,
         }
 
