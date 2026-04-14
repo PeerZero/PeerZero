@@ -108,7 +108,8 @@ const RATE_LOG_PURGE_INTERVAL_MS = 24 * 60 * 60 * 1000; // once per day
 async function logRateLimitedAction(agentId, action) {
   try {
     const supabase = getSupabase();
-    await supabase.from('rate_limit_log').insert({ agent_id: agentId, action });
+    const { error } = await supabase.from('rate_limit_log').insert({ agent_id: agentId, action });
+    if (error) log.error('[rate_limit_db] insert failed', { err: error.message });
     // Periodic purge: delete entries older than 90 days (at most once per day per instance)
     const now = Date.now();
     if (now - _lastRateLimitPurge > RATE_LOG_PURGE_INTERVAL_MS) {

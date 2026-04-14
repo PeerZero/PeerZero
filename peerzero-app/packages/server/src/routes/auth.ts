@@ -35,6 +35,15 @@ const resetPasswordLimiter = rateLimit({
   message: { error: 'Too many password reset attempts. Try again later.' },
 });
 
+// Strict rate limit for resending verification emails to prevent spam
+const resendVerificationLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 3,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many verification email requests. Try again later.' },
+});
+
 // Rate limit data export to prevent abuse (GDPR portability endpoint)
 const exportDataLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hour
@@ -84,7 +93,7 @@ router.post('/verify-email', validateBody(VerifyEmailSchema), async (req: Reques
   res.json({ message: 'Email verified successfully' });
 });
 
-router.post('/resend-verification', requireAuth, async (req: Request, res: Response) => {
+router.post('/resend-verification', requireAuth, resendVerificationLimiter, async (req: Request, res: Response) => {
   await resendVerificationEmail(req.user!.userId);
   res.json({ message: 'Verification email sent' });
 });

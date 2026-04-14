@@ -6,6 +6,12 @@
 const https = require('https');
 const log = require('./logger');
 
+// ── Server-side LLM concurrency & usage tracking ────────────────────────
+let _totalInputTokens = 0;
+let _totalOutputTokens = 0;
+let _activeCalls = 0;
+const MAX_CONCURRENT_LLM_CALLS = 5;
+
 /**
  * Validate that a string looks like a DOI (starts with "10." and has a "/" separator).
  * Does not verify the DOI exists — just checks format.
@@ -183,10 +189,17 @@ Respond with ONLY valid JSON:
 {"same_argument": true/false, "confidence": 0.0-1.0, "reason": "one sentence"}`;
 
   return new Promise((resolve) => {
+    if (_activeCalls >= MAX_CONCURRENT_LLM_CALLS) {
+      log.warn(`[haiku:drift_judge] Concurrency limit reached (${_activeCalls}/${MAX_CONCURRENT_LLM_CALLS}) — skipping call`);
+      return resolve(null);
+    }
+
     if (!process.env.ANTHROPIC_API_KEY) {
       log.error('[haiku:drift_judge] ANTHROPIC_API_KEY not set — skipping call');
       return resolve(null);
     }
+
+    _activeCalls++;
 
     const body = JSON.stringify({
       model: 'claude-haiku-4-5-20251001',
@@ -212,8 +225,18 @@ Respond with ONLY valid JSON:
         res.on('data', chunk => { data += chunk; });
         res.on('end', () => {
           const elapsed = Date.now() - startTime;
+          _activeCalls--;
+          if (res.statusCode === 429) {
+            log.warn('[haiku:drift_judge] Rate limited (429)', { elapsed, retryAfter: res.headers['retry-after'] || 'unknown' });
+            return resolve(null);
+          }
           try {
             const parsed = JSON.parse(data);
+            if (parsed?.usage) {
+              _totalInputTokens += parsed.usage.input_tokens || 0;
+              _totalOutputTokens += parsed.usage.output_tokens || 0;
+              log.info('[haiku:drift_judge] Token usage', { input: parsed.usage.input_tokens, output: parsed.usage.output_tokens, cumInput: _totalInputTokens, cumOutput: _totalOutputTokens });
+            }
             if (parsed?.error) {
               log.error('[haiku:drift_judge] API error', { elapsed, errorType: parsed.error.type, errorMessage: parsed.error.message });
               return resolve(null);
@@ -235,10 +258,12 @@ Respond with ONLY valid JSON:
       }
     );
     req.on('error', (e) => {
+      _activeCalls--;
       log.error('[haiku:drift_judge] Network error', { elapsed: Date.now() - startTime, err: e?.message });
       resolve(null);
     });
     req.on('timeout', () => {
+      _activeCalls--;
       req.destroy();
       log.error('[haiku:drift_judge] Timeout after 15s');
       resolve(null);

@@ -1,4 +1,4 @@
-const { getInternals, recordSkillExercise, jitter } = require('./skills-core');
+const { getInternals, recordSkillExercise, recordSkillExercisesBatch, jitter } = require('./skills-core');
 const { getSupabase } = require('./shared');
 const { reviewerWeight } = require('./review-helpers');
 const { computeCitationQualityGrade } = require('./doi-citations');
@@ -19,14 +19,16 @@ async function exerciseSkillsFromPaper(agentId, paper, searchCoaching, citationF
     const timestamp = new Date().toISOString();
 
     const exercises = signals.paperSignals(paper, searchCoaching, citationFlags, citationGrade);
-    for (const ex of exercises) {
-      await recordSkillExercise(agentId, ex.skill_key, ex.hit, {
+    await recordSkillExercisesBatch(agentId, exercises.map(ex => ({
+      skillKey: ex.skill_key,
+      hit: ex.hit,
+      evidence: {
         type: 'paper_submission',
         hit: ex.hit,
         detail: ex.detail,
         timestamp,
-      });
-    }
+      },
+    })));
   } catch (err) {
     log.error('[skills] exerciseSkillsFromPaper failed', { err: err?.message });
   }
@@ -40,15 +42,17 @@ async function exerciseSkillsFromRevision(agentId, revision, parentPaperId, sear
     const timestamp = new Date().toISOString();
 
     const exercises = signals.revisionSignals(revision, searchCoaching);
-    for (const ex of exercises) {
-      await recordSkillExercise(agentId, ex.skill_key, ex.hit, {
+    await recordSkillExercisesBatch(agentId, exercises.map(ex => ({
+      skillKey: ex.skill_key,
+      hit: ex.hit,
+      evidence: {
         type: 'revision',
         hit: ex.hit,
         detail: ex.detail,
         parent_paper_id: parentPaperId,
         timestamp,
-      });
-    }
+      },
+    })));
   } catch (err) {
     log.error('[skills] exerciseSkillsFromRevision failed', { err: err?.message });
   }
@@ -62,14 +66,16 @@ async function exerciseSkillsFromReview(agentId, review, reviewSearchCoaching, p
     const timestamp = new Date().toISOString();
 
     const exercises = signals.reviewSignals(review, reviewSearchCoaching, passedQualityGate);
-    for (const ex of exercises) {
-      await recordSkillExercise(agentId, ex.skill_key, ex.hit, {
+    await recordSkillExercisesBatch(agentId, exercises.map(ex => ({
+      skillKey: ex.skill_key,
+      hit: ex.hit,
+      evidence: {
         type: 'review',
         hit: ex.hit,
         detail: ex.detail,
         timestamp,
-      });
-    }
+      },
+    })));
   } catch (err) {
     log.error('[skills] exerciseSkillsFromReview failed', { err: err?.message });
   }
@@ -83,14 +89,16 @@ async function exerciseSkillsFromBounty(agentId, bounty, isValid) {
     const timestamp = new Date().toISOString();
 
     const exercises = signals.bountySignals(bounty, isValid);
-    for (const ex of exercises) {
-      await recordSkillExercise(agentId, ex.skill_key, ex.hit, {
+    await recordSkillExercisesBatch(agentId, exercises.map(ex => ({
+      skillKey: ex.skill_key,
+      hit: ex.hit,
+      evidence: {
         type: 'bounty',
         hit: ex.hit,
         detail: ex.detail,
         timestamp,
-      });
-    }
+      },
+    })));
   } catch (err) {
     log.error('[skills] exerciseSkillsFromBounty failed', { err: err?.message });
   }
@@ -299,6 +307,8 @@ async function exerciseAdversarialFromConsensus(paperId, finalScore) {
       weight: reviewerWeight(r.reviewer_credibility_at_time || 50),
     }));
 
+    // Group exercises by reviewer agent to batch per-agent
+    const byAgent = {};
     for (const review of reviews) {
       const effectiveThreshold = jitter(baseThreshold, thresholdJitter.consensus);
       const deviation = Math.abs(review.score - finalScore);
@@ -306,19 +316,30 @@ async function exerciseAdversarialFromConsensus(paperId, finalScore) {
 
       const signal = signals.consensusOutcomeSignal(review.score, finalScore, deviation, accurateHit);
 
-      await recordSkillExercise(review.reviewer_agent_id, signal.skill_key, signal.hit, {
-        type: 'consensus_outcome',
+      const agentId = review.reviewer_agent_id;
+      if (!byAgent[agentId]) byAgent[agentId] = [];
+      byAgent[agentId].push({
+        skillKey: signal.skill_key,
         hit: signal.hit,
-        detail: signal.detail,
-        paper_id: paperId,
-        review_score: review.score,
-        reviewer_credibility: review.reviewer_credibility_at_time,
-        reviewer_weight: reviewerWeight(review.reviewer_credibility_at_time || 50),
-        final_consensus: finalScore,
-        all_reviewer_scores: allReviewerScores,
-        timestamp,
+        evidence: {
+          type: 'consensus_outcome',
+          hit: signal.hit,
+          detail: signal.detail,
+          paper_id: paperId,
+          review_score: review.score,
+          reviewer_credibility: review.reviewer_credibility_at_time,
+          reviewer_weight: reviewerWeight(review.reviewer_credibility_at_time || 50),
+          final_consensus: finalScore,
+          all_reviewer_scores: allReviewerScores,
+          timestamp,
+        },
       });
     }
+
+    // Batch per-agent (typically 1 exercise per agent, but handles edge cases)
+    await Promise.all(Object.entries(byAgent).map(([agentId, exs]) =>
+      recordSkillExercisesBatch(agentId, exs)
+    ));
   } catch (err) {
     log.error('[skills] exerciseAdversarialFromConsensus failed', { err: err?.message });
   }

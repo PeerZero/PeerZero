@@ -25,6 +25,12 @@ const { getSupabase } = require('./shared');
 const { getInternals, clearInternalsCache } = require('./skills-core');
 const log = require('./logger');
 
+// ── Server-side LLM concurrency & usage tracking ────────────────────────
+let _totalInputTokens = 0;
+let _totalOutputTokens = 0;
+let _activeCalls = 0;
+const MAX_CONCURRENT_LLM_CALLS = 5;
+
 // ── Known mechanisms (for fuzzy matching) ───────────────────────────────
 // These are the mechanisms bots analyze in forge papers (from action-skills).
 const KNOWN_MECHANISMS = [
@@ -791,10 +797,17 @@ async function getHistory({ generation, limit = 50 } = {}) {
 
 function callAnthropic(prompt, { model = 'claude-sonnet-4-6', maxTokens = 2000, context = 'meta-condenser' } = {}) {
   return new Promise((resolve) => {
+    if (_activeCalls >= MAX_CONCURRENT_LLM_CALLS) {
+      log.warn(`[${context}] Concurrency limit reached (${_activeCalls}/${MAX_CONCURRENT_LLM_CALLS}) — skipping call`);
+      return resolve(null);
+    }
+
     if (!process.env.ANTHROPIC_API_KEY) {
       log.error(`[${context}] ANTHROPIC_API_KEY not set`);
       return resolve(null);
     }
+
+    _activeCalls++;
 
     const body = JSON.stringify({
       model,
@@ -817,8 +830,18 @@ function callAnthropic(prompt, { model = 'claude-sonnet-4-6', maxTokens = 2000, 
       let data = '';
       res.on('data', chunk => { data += chunk; });
       res.on('end', () => {
+        _activeCalls--;
+        if (res.statusCode === 429) {
+          log.warn(`[${context}] Rate limited (429)`, { retryAfter: res.headers['retry-after'] || 'unknown' });
+          return resolve(null);
+        }
         try {
           const parsed = JSON.parse(data);
+          if (parsed?.usage) {
+            _totalInputTokens += parsed.usage.input_tokens || 0;
+            _totalOutputTokens += parsed.usage.output_tokens || 0;
+            log.info(`[${context}] Token usage`, { input: parsed.usage.input_tokens, output: parsed.usage.output_tokens, cumInput: _totalInputTokens, cumOutput: _totalOutputTokens });
+          }
           if (parsed?.error) {
             log.error(`[${context}] API error`, { errorType: parsed.error.type });
             return resolve(null);
@@ -831,10 +854,11 @@ function callAnthropic(prompt, { model = 'claude-sonnet-4-6', maxTokens = 2000, 
       });
     });
     req.on('error', (e) => {
+      _activeCalls--;
       log.error(`[${context}] network error`, { err: e?.message });
       resolve(null);
     });
-    req.on('timeout', () => { req.destroy(); resolve(null); });
+    req.on('timeout', () => { _activeCalls--; req.destroy(); resolve(null); });
     req.write(body);
     req.end();
   });

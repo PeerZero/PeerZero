@@ -70,24 +70,34 @@ async function advanceHypothesisCycles(agentId) {
 
     if (!pending || pending.length === 0) return [];
 
-    // Atomic increment — avoids read-modify-write race if two cycles overlap
+    // Optimistic-lock increment: only update if cycles_elapsed hasn't changed
+    // since our read. If another worker already incremented, the update matches
+    // 0 rows and we skip — no double-increment.
     const expired = [];
     for (const h of pending) {
+      const prevElapsed = h.cycles_elapsed || 0;
       const { data: updated, error: incErr } = await getSupabase().from('forge_hypotheses')
-        .update({ cycles_elapsed: (h.cycles_elapsed || 0) + 1 })
+        .update({ cycles_elapsed: prevElapsed + 1 })
         .eq('id', h.id)
         .eq('status', 'pending')
-        .select('id, cycles_elapsed, cycles_to_resolve')
-        .single();
+        .eq('cycles_elapsed', prevElapsed)  // optimistic lock
+        .select('id, cycles_elapsed, cycles_to_resolve');
 
       if (incErr) {
         log.warn('[forge-hypotheses] cycle increment failed', { id: h.id, err: incErr.message });
         continue;
       }
 
+      // If no rows returned, another worker already incremented — skip
+      if (!updated || updated.length === 0) {
+        log.info('[forge-hypotheses] cycle increment skipped (concurrent update)', { id: h.id });
+        continue;
+      }
+
+      const row = updated[0];
       // Mark as ready for resolution if elapsed >= target
-      if (updated && updated.cycles_elapsed >= updated.cycles_to_resolve) {
-        expired.push(updated.id);
+      if (row.cycles_elapsed >= row.cycles_to_resolve) {
+        expired.push(row.id);
       }
     }
 

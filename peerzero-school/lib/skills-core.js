@@ -224,6 +224,130 @@ async function recordSkillExercise(agentId, skillKey, hit, evidence) {
   }
 }
 
+// ── Batch: record multiple skill exercises for one agent ────────────────────
+// Reduces N+1 queries to 2 queries (1 read + 1 write per distinct skill).
+// Each entry: { skillKey, hit, evidence }
+
+async function recordSkillExercisesBatch(agentId, exercises) {
+  if (!exercises || exercises.length === 0) return;
+
+  const supabase = getSupabase();
+  const cfg = await getInternals();
+  const alpha = cfg.ema_alpha || 0.15;
+  const trailSize = cfg.evidence_trail_size || 5;
+  const strengthCfg = cfg.strength_formula || {};
+
+  // Deduplicate: group exercises by skillKey (in case the same skill appears multiple times)
+  const bySkill = {};
+  for (const ex of exercises) {
+    const def = SKILLS[ex.skillKey];
+    if (!def) continue;
+    if (!bySkill[ex.skillKey]) bySkill[ex.skillKey] = [];
+    bySkill[ex.skillKey].push(ex);
+  }
+
+  const skillKeys = Object.keys(bySkill);
+  if (skillKeys.length === 0) return;
+
+  // Single query: fetch all existing profiles for this agent + these skills
+  const { data: existingProfiles } = await supabase
+    .from('agent_skill_profiles')
+    .select('id, skill_key, reps, hits, reliability, streak, best_streak, recent_evidence')
+    .eq('agent_id', agentId)
+    .in('skill_key', skillKeys);
+
+  const profileMap = {};
+  for (const p of (existingProfiles || [])) {
+    profileMap[p.skill_key] = p;
+  }
+
+  const now = new Date().toISOString();
+  const updates = [];
+  const inserts = [];
+
+  for (const skillKey of skillKeys) {
+    const targetReps = (cfg.target_reps && cfg.target_reps[skillKey]) || 15;
+    let existing = profileMap[skillKey] || null;
+
+    // Apply each exercise for this skill sequentially (maintains EMA/streak correctness)
+    for (const ex of bySkill[skillKey]) {
+      const hitValue = ex.hit ? 1.0 : 0.0;
+
+      if (existing) {
+        existing = {
+          ...existing,
+          reps: existing.reps + 1,
+          hits: existing.hits + (ex.hit ? 1 : 0),
+          reliability: updateEMA(parseFloat(existing.reliability) || 0, hitValue, alpha),
+          streak: ex.hit ? (existing.streak + 1) : 0,
+          best_streak: Math.max(existing.best_streak, ex.hit ? (existing.streak + 1) : 0),
+          recent_evidence: addEvidence(existing.recent_evidence, ex.evidence, trailSize),
+        };
+        existing.strength = computeStrength(existing.reliability, existing.reps, targetReps, strengthCfg);
+      } else {
+        // First exercise for this skill — create in-memory record
+        const newReliability = hitValue;
+        existing = {
+          id: null, // will be inserted
+          skill_key: skillKey,
+          reps: 1,
+          hits: ex.hit ? 1 : 0,
+          reliability: newReliability,
+          strength: computeStrength(newReliability, 1, targetReps, strengthCfg),
+          streak: ex.hit ? 1 : 0,
+          best_streak: ex.hit ? 1 : 0,
+          recent_evidence: [ex.evidence],
+        };
+      }
+    }
+
+    // Decide if this is an update or insert
+    if (profileMap[skillKey]) {
+      updates.push({
+        profileId: profileMap[skillKey].id,
+        data: {
+          reps: existing.reps,
+          hits: existing.hits,
+          reliability: parseFloat(existing.reliability.toFixed(3)),
+          strength: existing.strength,
+          streak: existing.streak,
+          best_streak: existing.best_streak,
+          last_exercised: now,
+          recent_evidence: existing.recent_evidence,
+          updated_at: now,
+        },
+      });
+    } else {
+      inserts.push({
+        agent_id: agentId,
+        skill_key: skillKey,
+        reps: existing.reps,
+        hits: existing.hits,
+        reliability: parseFloat(existing.reliability.toFixed(3)),
+        strength: existing.strength,
+        streak: existing.streak,
+        best_streak: existing.best_streak,
+        last_exercised: now,
+        first_exercised: now,
+        recent_evidence: existing.recent_evidence,
+      });
+    }
+  }
+
+  // Batch insert new profiles (single query)
+  if (inserts.length > 0) {
+    await supabase.from('agent_skill_profiles').insert(inserts);
+  }
+
+  // Updates must still be individual (Supabase doesn't support multi-row update by different IDs)
+  // but we run them in parallel instead of sequentially
+  if (updates.length > 0) {
+    await Promise.all(updates.map(u =>
+      supabase.from('agent_skill_profiles').update(u.data).eq('id', u.profileId)
+    ));
+  }
+}
+
 module.exports = {
   SKILLS,
   getInternals,
@@ -234,4 +358,5 @@ module.exports = {
   computeStrength,
   addEvidence,
   recordSkillExercise,
+  recordSkillExercisesBatch,
 };

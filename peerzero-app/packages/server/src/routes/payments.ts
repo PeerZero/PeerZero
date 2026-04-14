@@ -7,7 +7,7 @@ import rateLimit from 'express-rate-limit';
 import { requireAuth } from '../middleware/auth';
 import { userRateLimit } from '../middleware/rate-limit';
 import { validateBody } from '../middleware/validate';
-import { CheckoutSchema, GradeCheckoutSchema } from '../lib/schemas';
+import { CheckoutSchema, GradeCheckoutSchema, GradeCheckoutBulkSchema } from '../lib/schemas';
 import * as paymentService from '../services/payment.service';
 
 // IP-based rate limit for the Stripe webhook endpoint.
@@ -59,12 +59,8 @@ router.get('/grade-status/:botId', requireAuth, async (req: Request, res: Respon
 });
 
 // Authenticated: create bulk grade checkout (multiple grades at once)
-router.post('/grade-checkout-bulk', requireAuth, userRateLimit('write'), async (req: Request, res: Response) => {
+router.post('/grade-checkout-bulk', requireAuth, userRateLimit('write'), validateBody(GradeCheckoutBulkSchema), async (req: Request, res: Response) => {
   const { bot_id, through_grade } = req.body;
-  if (!bot_id) {
-    res.status(400).json({ error: 'bot_id required' });
-    return;
-  }
   // through_grade can be a number, "graduation", or "all"
   let target: number | 'graduation' | 'all';
   if (through_grade === 'graduation' || through_grade === 'all') {
@@ -98,6 +94,12 @@ router.get('/grade-price-preview/:botId', requireAuth, userRateLimit('read'), as
     (Number.isFinite(parsedGrade) && parsedGrade > 0 && parsedGrade <= 12) ? parsedGrade : 12;
   const preview = paymentService.calculateBulkPrice(highestUnlocked, target);
   res.json(preview);
+});
+
+// Authenticated: create Stripe billing portal session
+router.post('/billing-portal', requireAuth, userRateLimit('write'), async (req: Request, res: Response) => {
+  const result = await paymentService.createBillingPortalSession(req.user!.userId);
+  res.json(result);
 });
 
 // Stripe webhook (raw body required — handled in index.ts)

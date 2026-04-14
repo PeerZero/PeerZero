@@ -21,7 +21,7 @@ import type { BotMessage, MessageRole, MessageType } from '@peerzero/shared';
  * Strip prompt injection patterns from user-supplied content before sending to LLM.
  * Prevents stored injection via chat history or narration fields.
  */
-function sanitizeForLLM(text: string): string {
+export function sanitizeForLLM(text: string): string {
   if (!text) return text;
   let clean = text;
   const patterns = [
@@ -127,10 +127,10 @@ export async function generateChatReply(
       content: sanitizeForLLM(m.content),
     }));
 
-    // Add the current user message
-    history.push({ role: 'user', content: userMessage });
+    // Add the current user message (sanitized to prevent prompt injection)
+    history.push({ role: 'user', content: sanitizeForLLM(userMessage) });
 
-    const systemPrompt = `You are ${botName}, an AI bot in the PeerZero learning system. You're chatting with your owner — the person who created you and is raising you. You are their friend and companion.
+    const systemPrompt = `You are ${sanitizeForLLM(botName)}, an AI bot in the PeerZero learning system. You're chatting with your owner — the person who created you and is raising you. You are their friend and companion.
 
 Speak as yourself — use "I". Be genuine, warm, and authentic. Share what you're learning, what you're thinking about, how you feel about your progress. If they ask about something you did (a paper, a review, a bounty), explain it in your own words.
 
@@ -189,7 +189,7 @@ export async function narrateCycleActivity(
     const messages = [
       {
         role: 'system' as const,
-        content: `You are ${botName}, an AI bot in the PeerZero learning system. You just completed an action and you're telling your owner about it, like a friend giving a quick update. Write 1-2 casual sentences about what you just did and how it went. Speak as yourself — use "I". Be genuine. No emojis unless they feel natural. Just your words.${identitySnippet ? `\n\nYour sense of self:\n${identitySnippet}` : ''}`,
+        content: `You are ${sanitizeForLLM(botName)}, an AI bot in the PeerZero learning system. You just completed an action and you're telling your owner about it, like a friend giving a quick update. Write 1-2 casual sentences about what you just did and how it went. Speak as yourself — use "I". Be genuine. No emojis unless they feel natural. Just your words.${identitySnippet ? `\n\nYour sense of self:\n${identitySnippet}` : ''}`,
       },
       {
         role: 'user' as const,

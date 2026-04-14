@@ -9,14 +9,32 @@ const https = require('https');
 const { getSupabase } = require('./shared');
 const log = require('./logger');
 
+// ── Server-side LLM usage tracking ──────────────────────────────────────
+let _totalInputTokens = 0;
+let _totalOutputTokens = 0;
+let _activeCalls = 0;
+const MAX_CONCURRENT_LLM_CALLS = 5;
+
+/** Return cumulative token usage since last cold start */
+function getServerLLMUsage() {
+  return { input_tokens: _totalInputTokens, output_tokens: _totalOutputTokens };
+}
+
 // ── Haiku audit ───────────────────────────────────────────────────────────────
 function callAnthropicHaiku(prompt, context = 'unknown') {
   const startTime = Date.now();
   return new Promise((resolve) => {
+    if (_activeCalls >= MAX_CONCURRENT_LLM_CALLS) {
+      log.warn(`[haiku:${context}] Concurrency limit reached (${_activeCalls}/${MAX_CONCURRENT_LLM_CALLS}) — skipping call`);
+      return resolve(null);
+    }
+
     if (!process.env.ANTHROPIC_API_KEY) {
       log.error(`[haiku:${context}] ANTHROPIC_API_KEY not set — skipping call`);
       return resolve(null);
     }
+
+    _activeCalls++;
 
     const body = JSON.stringify({
       model: 'claude-haiku-4-5-20251001',
@@ -42,8 +60,18 @@ function callAnthropicHaiku(prompt, context = 'unknown') {
         res.on('data', chunk => { data += chunk; });
         res.on('end', () => {
           const elapsed = Date.now() - startTime;
+          _activeCalls--;
+          if (res.statusCode === 429) {
+            log.warn(`[haiku:${context}] Rate limited (429)`, { elapsed, retryAfter: res.headers['retry-after'] || 'unknown' });
+            return resolve(null);
+          }
           try {
             const parsed = JSON.parse(data);
+            if (parsed?.usage) {
+              _totalInputTokens += parsed.usage.input_tokens || 0;
+              _totalOutputTokens += parsed.usage.output_tokens || 0;
+              log.info(`[haiku:${context}] Token usage`, { input: parsed.usage.input_tokens, output: parsed.usage.output_tokens, cumInput: _totalInputTokens, cumOutput: _totalOutputTokens });
+            }
             if (parsed?.error) {
               log.error(`[haiku:${context}] API error`, { elapsed, errorType: parsed.error.type, errorMessage: parsed.error.message });
               return resolve(null);
@@ -61,10 +89,12 @@ function callAnthropicHaiku(prompt, context = 'unknown') {
       }
     );
     req.on('error', (e) => {
+      _activeCalls--;
       log.error(`[haiku:${context}] Network error`, { elapsed: Date.now() - startTime, err: e?.message });
       resolve(null);
     });
     req.on('timeout', () => {
+      _activeCalls--;
       req.destroy();
       log.error(`[haiku:${context}] Timeout after 25s`);
       resolve(null);
@@ -178,4 +208,5 @@ module.exports = {
   callAnthropicHaiku,
   generateHaikuAudit,
   getOrGenerateHaikuAudit,
+  getServerLLMUsage,
 };

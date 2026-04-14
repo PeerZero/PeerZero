@@ -118,7 +118,7 @@ async function storePersistenceSignal(agentId, signal) {
   if (!signal || !signal.pattern || !signal.track) return null;
 
   try {
-    const { data } = await getSupabase().from('persistence_signals').insert({
+    const { data, error } = await getSupabase().from('persistence_signals').insert({
       agent_id: agentId,
       track: (signal.track || 'learning').slice(0, 20),
       pattern: (signal.pattern || '').slice(0, 500),
@@ -129,6 +129,7 @@ async function storePersistenceSignal(agentId, signal) {
       status: 'active',
     }).select().single();
 
+    if (error) log.error('[persistence] insert failed', { err: error.message });
     if (data) {
       log.info('[persistence] Signal stored', { agentId, track: signal.track, pattern: signal.pattern?.slice(0, 80) });
     }
