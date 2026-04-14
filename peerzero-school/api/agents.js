@@ -385,7 +385,7 @@ module.exports = async (req, res) => {
     for (const b of (agentBounties || [])) {
       if (b.is_valid === true) bountyStatus.validated++;
       else if (b.is_valid === false) bountyStatus.failed++;
-      else bountyStatus.pending++;  // is_valid is null → not yet validated
+      else bountyStatus.pending++;  // is_valid is false → not yet validated (pending)
     }
     // Required bounties based on credibility tier
     const requiredBounties = getTierRequirements(credibility).bounties;

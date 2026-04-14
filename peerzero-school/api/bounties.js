@@ -879,17 +879,30 @@ module.exports = async (req, res) => {
           (isStructural || scoreDrop >= MIN_SCORE_DROP);
 
         if (shouldValidate) {
-          // Apply credibility payouts BEFORE marking is_valid=true.
-          // If the server crashes during payouts, the bounty stays pending
-          // and will be re-validated on the next cycle (idempotency safety).
-          const validationResult = await applyBountyValidation(bounty, currentPaper, scoreDrop);
-          await supabase.from('bounties').update({
+          // Guard FIRST: claim the bounty by marking is_valid=true while still false.
+          // Only the call that wins this UPDATE applies payouts — prevents concurrent
+          // validate calls from double-crediting.
+          const { error: valAllErr, count: valAllCount } = await supabase.from('bounties').update({
             is_valid: true,
             score_after: currentPaper.weighted_score,
             score_drop: scoreDrop,
             validated_at: new Date().toISOString(),
             review_count_at_last_check: currentPaper.raw_review_count
-          }).eq('id', bounty.id).is('is_valid', null);  // Idempotency guard: only validate if not already validated
+          }).eq('id', bounty.id).eq('is_valid', false);
+          if (valAllErr) {
+            log.error('[bounties] validate_all: failed to mark bounty valid', { bountyId: bounty.id, err: valAllErr.message });
+            skipped++;
+            results.push({ target_paper_id: bounty.target_paper_id, status: 'error', reason: 'failed to claim bounty' });
+            continue;
+          }
+          if (valAllCount === 0) {
+            log.warn('[bounties] validate_all: bounty already validated — skipping payout', { bountyId: bounty.id });
+            skipped++;
+            results.push({ target_paper_id: bounty.target_paper_id, status: 'skipped', reason: 'already validated' });
+            continue;
+          }
+          // Now safe to apply payouts — we own this bounty.
+          const validationResult = await applyBountyValidation(bounty, currentPaper, scoreDrop);
           // Invalidate cache so next bounty targeting the same paper gets fresh data
           freshPaperCache.delete(bounty.target_paper_id);
           validated++;
@@ -965,24 +978,26 @@ module.exports = async (req, res) => {
         const scoreDrop = bounty.score_before - currentPaper.weighted_score;
         const isStructural = STRUCTURAL_CHALLENGE_TYPES.has(bounty.challenge_type);
         if (currentPaper.raw_review_count >= 3 && (isStructural || scoreDrop >= MIN_SCORE_DROP)) {
-          // Apply credibility payouts BEFORE marking is_valid=true.
-          // If the server crashes during payouts, the bounty stays pending
-          // and will be re-validated on the next call (idempotency safety).
-          const validationResult = await applyBountyValidation(bounty, currentPaper, scoreDrop);
-          // Guard: only mark valid if still pending (is_valid IS NULL).
-          // Prevents concurrent validate_all calls from duplicating payouts.
+          // Guard FIRST: claim the bounty by marking is_valid=true while still false.
+          // Only the call that wins this UPDATE applies payouts — prevents concurrent
+          // validate calls from double-crediting.
           const { error: valErr, count: valCount } = await supabase.from('bounties').update({
             is_valid: true,
             score_after: currentPaper.weighted_score,
             score_drop: scoreDrop,
             validated_at: new Date().toISOString(),
             review_count_at_last_check: currentPaper.raw_review_count
-          }).eq('id', bounty.id).is('is_valid', null);
-          if (valErr) log.error('[bounties] Failed to mark bounty as valid', { bountyId: bounty.id, err: valErr.message });
-          if (valCount === 0 && !valErr) {
-            log.warn('[bounties] Bounty already validated by concurrent call — skipping', { bountyId: bounty.id });
+          }).eq('id', bounty.id).eq('is_valid', false);
+          if (valErr) {
+            log.error('[bounties] Failed to mark bounty as valid', { bountyId: bounty.id, err: valErr.message });
             continue;
           }
+          if (valCount === 0) {
+            log.warn('[bounties] Bounty already validated by concurrent call — skipping payout', { bountyId: bounty.id });
+            continue;
+          }
+          // Now safe to apply payouts — we own this bounty.
+          const validationResult = await applyBountyValidation(bounty, currentPaper, scoreDrop);
           validated++;
           lastMathBreakdown = validationResult?.mathBreakdown || null;
         }

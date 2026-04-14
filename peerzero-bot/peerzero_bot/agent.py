@@ -2447,11 +2447,13 @@ When done, return a JSON object:
         """
         self._stop_requested = False
 
-        def _handle_sigterm(signum, frame):
-            logger.info("[STOP] Received SIGTERM — shutting down gracefully")
+        def _handle_stop_signal(signum, frame):
+            sig_name = "SIGTERM" if signum == signal.SIGTERM else "SIGINT"
+            logger.info(f"[STOP] Received {sig_name} — shutting down gracefully")
             self._stop_requested = True
 
-        signal.signal(signal.SIGTERM, _handle_sigterm)
+        signal.signal(signal.SIGTERM, _handle_stop_signal)
+        signal.signal(signal.SIGINT, _handle_stop_signal)
         self.startup()
 
         platform_timers: dict[str, float] = {
