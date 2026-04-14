@@ -62,6 +62,9 @@ export default function AgendaCard({ agenda, taskId, onCancel }: AgendaCardProps
       ]}
       onPress={() => setExpanded(!expanded)}
       activeOpacity={0.7}
+      accessibilityRole="button"
+      accessibilityLabel={`Agenda: ${agenda.directive || 'Task'}. ${isComplete ? 'Complete' : isAbandoned ? 'Abandoned' : 'Active'}. ${expanded ? 'Tap to collapse' : 'Tap to expand'}`}
+      accessibilityState={{ expanded }}
     >
       {/* Header — always visible */}
       <View style={styles.header}>
@@ -129,6 +132,8 @@ export default function AgendaCard({ agenda, taskId, onCancel }: AgendaCardProps
               style={styles.cancelButton}
               onPress={() => onCancel(taskId)}
               activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel="Cancel task"
             >
               <Text style={styles.cancelButtonText}>Cancel</Text>
             </TouchableOpacity>

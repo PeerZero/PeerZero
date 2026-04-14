@@ -249,6 +249,26 @@ class MCPServerConnection:
         if not self._initialized:
             return {"error": "Server not initialized"}
 
+        # Validate arguments against the tool's input_schema (basic structural check)
+        tool_def = next((t for t in self._tools if t.name == tool_name), None)
+        if tool_def and tool_def.input_schema:
+            schema = tool_def.input_schema
+            required = schema.get("required", [])
+            properties = schema.get("properties", {})
+            for field in required:
+                if field not in arguments:
+                    return {"error": f"Missing required argument: {field}"}
+            for key, val in arguments.items():
+                if key in properties:
+                    expected_type = properties[key].get("type")
+                    if expected_type == "string" and not isinstance(val, str):
+                        arguments[key] = str(val) if val is not None else ""
+                    elif expected_type == "number" and not isinstance(val, (int, float)):
+                        try:
+                            arguments[key] = float(val)
+                        except (TypeError, ValueError):
+                            return {"error": f"Argument '{key}' must be a number"}
+
         try:
             result = self._send_request("tools/call", {
                 "name": tool_name,

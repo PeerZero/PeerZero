@@ -35,7 +35,7 @@ from .base import (
     TaskMessage, TaskResponse,
 )
 from ..security import SecurityGateway, CredentialStore
-from ..utils import safe_error_msg
+from ..utils import safe_error_msg, sanitize_untrusted
 
 logger = logging.getLogger("peerzero-bot.a2a")
 
@@ -395,6 +395,15 @@ class A2AAdapter:
                 status="rejected",
                 error="Missing request_id or action_requested",
             )
+
+        # Sanitize untrusted fields from external agents (prompt injection defense)
+        task.action_requested = sanitize_untrusted(task.action_requested, "a2a_action")
+        if task.sender:
+            task.sender = sanitize_untrusted(task.sender, "a2a_sender")
+        if isinstance(task.payload, dict):
+            for k, v in task.payload.items():
+                if isinstance(v, str):
+                    task.payload[k] = sanitize_untrusted(v, f"a2a_payload_{k}")
 
         # Track conversation
         if task.conversation_id:

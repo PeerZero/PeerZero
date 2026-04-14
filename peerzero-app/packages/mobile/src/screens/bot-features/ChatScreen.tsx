@@ -285,6 +285,8 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
           style={[styles.compactUpdate, isMilestone && styles.compactMilestone]}
           onPress={() => toggleExpand(item.id)}
           activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel={`${isMilestone ? 'Milestone' : 'Update'}: ${(item.content || '').slice(0, 80)}. Tap to expand`}
         >
           <View style={[
             styles.compactIconWrap,
@@ -328,6 +330,9 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
           activeOpacity={isUpdate ? 0.7 : 1}
           onPress={isUpdate ? () => toggleExpand(item.id) : undefined}
           disabled={!isUpdate}
+          accessibilityRole={isUpdate ? "button" : "text"}
+          accessibilityLabel={`${isUser ? 'You' : 'Bot'}: ${(item.content || '').slice(0, 100)}${isUpdate ? '. Tap to collapse' : ''}`}
+          accessibilityState={{ disabled: !isUpdate }}
         >
           {/* Accent gradient bar for user messages */}
           {isUser && <View style={styles.userBubbleAccent} />}
