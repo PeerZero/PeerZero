@@ -192,10 +192,22 @@ export async function handleStripeWebhook(event: Stripe.Event): Promise<void> {
 
     case 'invoice.finalization_failed': {
       const invoice = event.data.object as Stripe.Invoice;
+      const customerId = typeof invoice.customer === 'string' ? invoice.customer : invoice.customer?.id;
+      const reason = invoice.last_finalization_error?.message || 'unknown';
       logger.error(
-        { invoiceId: invoice.id, customerId: invoice.customer, reason: invoice.last_finalization_error?.message },
+        { invoiceId: invoice.id, customerId, reason },
         'Invoice finalization failed — subscription may be stuck without payment',
       );
+      // Log to audit trail for operator visibility
+      if (customerId) {
+        const user = await queryOne<{ id: string }>('SELECT id FROM users WHERE stripe_customer_id = $1', [customerId]);
+        if (user) {
+          await query(
+            `INSERT INTO audit_log (user_id, action, entity_type, entity_id, metadata) VALUES ($1, 'invoice.finalization_failed', 'payment', uuid_generate_v4(), $2)`,
+            [user.id, JSON.stringify({ invoiceId: invoice.id, customerId, reason })],
+          );
+        }
+      }
       break;
     }
   }

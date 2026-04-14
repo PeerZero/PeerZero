@@ -71,7 +71,8 @@ async function detectBotCitation(textFields, citations, submittingAgentId) {
     .from('agents')
     .select('id, handle')
     .neq('id', submittingAgentId)
-    .eq('is_banned', false);
+    .eq('is_banned', false)
+    .limit(500);
 
   if (agents && agents.length > 0) {
     const lowerText = combinedText.toLowerCase();

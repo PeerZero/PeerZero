@@ -980,7 +980,7 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
                 self.memory.store_self_prediction(prediction.strip(), action, self.cycle_count)
                 logger.info(f"[PREDICTION] Cycle {self.cycle_count}: stored prediction for {action}")
         except Exception as e:
-            logger.debug(f"[PREDICTION] Cycle {self.cycle_count}: failed (non-blocking): {e}")
+            logger.warning(f"[PREDICTION] Cycle {self.cycle_count}: failed (non-blocking): {e}")
 
     def _resolve_prediction(self, profile: dict, system_prompt):
         """Compare last cycle's prediction against this cycle's feedback.
@@ -1100,7 +1100,7 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
             self.school.store_architecture_observation(text, trigger_type, self.cycle_count)
             logger.info(f"[ARCH_OBS] Cycle {self.cycle_count}: stored ({trigger_type}, {len(text)} chars)")
         except Exception as e:
-            logger.debug(f"[ARCH_OBS] Cycle {self.cycle_count}: failed (non-blocking): {e}")
+            logger.warning(f"[ARCH_OBS] Cycle {self.cycle_count}: failed (non-blocking): {e}")
 
     # ── Reflection inlet ──────────────────────────────────────────────────
 
@@ -1151,7 +1151,7 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
             else:
                 logger.debug(f"[REFLECTION] Cycle {self.cycle_count}: nothing to store")
         except Exception as e:
-            logger.debug(f"[REFLECTION] Cycle {self.cycle_count}: failed (non-blocking): {e}")
+            logger.warning(f"[REFLECTION] Cycle {self.cycle_count}: failed (non-blocking): {e}")
 
     # ── Decision rationale capture (Feature 9) ─────────────────────────
     # School version: detailed, submitted to server for pattern analysis.
@@ -1227,7 +1227,7 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
             })
             logger.info(f"[DECISION] Cycle {self.cycle_count}: rationale captured for {action}")
         except Exception as e:
-            logger.debug(f"[DECISION] Cycle {self.cycle_count}: rationale capture failed (non-blocking): {e}")
+            logger.warning(f"[DECISION] Cycle {self.cycle_count}: rationale capture failed (non-blocking): {e}")
 
     # ── School actions ────────────────────────────────────────────────────
 
@@ -1613,7 +1613,7 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
                 self.memory.store_self_prediction(prediction.strip(), f"platform:{action_type}", self.cycle_count)
                 logger.info(f"[PLATFORM-PREDICT] {platform_name}: stored prediction")
         except Exception as e:
-            logger.debug(f"[PLATFORM-PREDICT] {platform_name}: failed (non-blocking): {e}")
+            logger.warning(f"[PLATFORM-PREDICT] {platform_name}: failed (non-blocking): {e}")
 
     def _platform_reflect_post_action(self, system_prompt, action_type: str, platform_name: str):
         """Reflection after a platform action (exported reasoning habit).
@@ -2174,7 +2174,8 @@ When done, return a JSON object:
                     # a user message), route through conversational memory
                     # for relational understanding.
                     conv_result = None
-                    user_msg = task.payload.get("message", "") if isinstance(task.payload, dict) else ""
+                    raw_msg = task.payload.get("message", "") if isinstance(task.payload, dict) else ""
+                    user_msg = sanitize_untrusted(str(raw_msg), "a2a_conv_message") if raw_msg else ""
                     is_conversation = (
                         task.conversation_id
                         and user_msg

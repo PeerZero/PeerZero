@@ -537,9 +537,12 @@ async function runAggregation(triggeredBy = 'cron') {
     };
   } catch (err) {
     // Mark run as failed
-    await supabase.from('forge_aggregation_runs')
+    const { error: updateErr } = await supabase.from('forge_aggregation_runs')
       .update({ status: 'rejected', completed_at: new Date().toISOString() })
       .eq('id', run.id);
+    if (updateErr) {
+      log.error({ updateErr, runId: run.id }, 'Failed to mark aggregation run as rejected');
+    }
     throw err;
   }
 }
@@ -911,7 +914,7 @@ Do NOT include:
   }
 
   // Store as a condenser_preamble proposal requiring human review
-  const { data: proposal } = await supabase.from('forge_config_proposals').insert({
+  const { data: proposal, error: insertErr } = await supabase.from('forge_config_proposals').insert({
     aggregation_run_id: run.id,
     config_category: 'condenser_preamble',
     proposal_key: 'inherited_forge_frame',
@@ -927,6 +930,11 @@ Do NOT include:
     requires_human_review: true, // always — condenser preambles need testing
     status: 'pending',
   }).select().single();
+
+  if (insertErr) {
+    log.error({ insertErr, runId: run.id }, 'Failed to store condenser_preamble proposal');
+    return null;
+  }
 
   log.info('[meta-condenser] Frame extraction complete', {
     generation: generationNumber,
