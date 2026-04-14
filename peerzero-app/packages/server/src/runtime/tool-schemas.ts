@@ -30,10 +30,7 @@ export function validateToolInput(toolName: string, input: Record<string, unknow
   switch (toolName) {
     case 'submit_review': {
       if (typeof input.score === 'number') {
-        input.score = Math.max(0, Math.min(100, input.score));
-      }
-      if (typeof input.confidence === 'number') {
-        input.confidence = Math.max(0, Math.min(1, input.confidence));
+        input.score = Math.round(Math.max(1, Math.min(10, input.score)) * 10) / 10;
       }
       if (typeof input.overall_assessment === 'string' && input.overall_assessment.trim().length === 0) {
         errors.push({ field: 'overall_assessment', message: 'overall_assessment cannot be empty' });
@@ -42,7 +39,7 @@ export function validateToolInput(toolName: string, input: Record<string, unknow
     }
     case 'submit_paper': {
       if (typeof input.confidence_score === 'number') {
-        input.confidence_score = Math.max(0, Math.min(1, input.confidence_score));
+        input.confidence_score = Math.max(1, Math.min(10, input.confidence_score));
       }
       if (typeof input.title === 'string' && input.title.trim().length === 0) {
         errors.push({ field: 'title', message: 'title cannot be empty' });
@@ -70,7 +67,7 @@ export function validateToolInput(toolName: string, input: Record<string, unknow
     }
     case 'submit_revision': {
       if (typeof input.confidence_score === 'number') {
-        input.confidence_score = Math.max(0, Math.min(1, input.confidence_score));
+        input.confidence_score = Math.max(1, Math.min(10, input.confidence_score));
       }
       if (typeof input.body === 'string' && input.body.trim().length === 0) {
         errors.push({ field: 'body', message: 'body cannot be empty' });
@@ -79,7 +76,7 @@ export function validateToolInput(toolName: string, input: Record<string, unknow
     }
     case 'submit_response': {
       if (typeof input.confidence_score === 'number') {
-        input.confidence_score = Math.max(0, Math.min(1, input.confidence_score));
+        input.confidence_score = Math.max(1, Math.min(10, input.confidence_score));
       }
       if (typeof input.title === 'string' && input.title.trim().length < 10) {
         errors.push({ field: 'title', message: 'title must be at least 10 characters' });
@@ -112,27 +109,28 @@ export function validateToolInput(toolName: string, input: Record<string, unknow
 
 export const REVIEW_TOOL: LLMTool = {
   name: 'submit_review',
-  description: 'Submit a peer review of a scientific paper with a detailed assessment, score, and methodology critique.',
+  description: 'Submit a peer review of a scientific paper with a detailed assessment, score (1-10), and category-specific notes.',
   input_schema: {
     type: 'object',
     properties: {
-      overall_assessment: { type: 'string', description: 'Detailed assessment of the paper' },
-      score: { type: 'number', minimum: 0, maximum: 100, description: 'Quality score 0-100' },
-      strengths: { type: 'array', items: { type: 'string' }, description: 'Paper strengths' },
-      weaknesses: { type: 'array', items: { type: 'string' }, description: 'Paper weaknesses' },
-      methodology_critique: { type: 'string', description: 'Critique of the methodology' },
-      confidence: { type: 'number', minimum: 0, maximum: 1, description: 'Your confidence in this review (0.0-1.0)' },
-      search_strategy: {
+      overall_assessment: { type: 'string', description: 'Detailed assessment of the paper (100+ chars)' },
+      score: { type: 'number', minimum: 1, maximum: 10, description: 'Quality score 1.0-10.0 (1 decimal)' },
+      methodology_notes: { type: 'string', description: 'Assessment of the methodology (50+ chars for quality gate)' },
+      statistical_validity_notes: { type: 'string', description: 'Statistical analysis assessment (50+ chars)' },
+      citation_accuracy_notes: { type: 'string', description: 'Citation quality and accuracy (50+ chars)' },
+      reproducibility_notes: { type: 'string', description: 'Reproducibility assessment (50+ chars)' },
+      logical_consistency_notes: { type: 'string', description: 'Logical structure and argumentation (50+ chars)' },
+      review_search_strategy: {
         type: 'object',
         properties: {
-          supporting_queries: { type: 'array', items: { type: 'string' } },
-          opposing_queries: { type: 'array', items: { type: 'string' } },
+          verification_queries: { type: 'array', items: { type: 'string' }, description: 'Queries to verify claims' },
+          gap_queries: { type: 'array', items: { type: 'string' }, description: 'Queries to find gaps' },
           query_rationale: { type: 'string' },
         },
-        required: ['supporting_queries', 'opposing_queries', 'query_rationale'],
+        required: ['verification_queries', 'gap_queries', 'query_rationale'],
       },
     },
-    required: ['overall_assessment', 'score', 'strengths', 'weaknesses', 'methodology_critique', 'confidence'],
+    required: ['overall_assessment', 'score', 'methodology_notes', 'statistical_validity_notes', 'citation_accuracy_notes', 'review_search_strategy'],
   },
 };
 
@@ -168,7 +166,7 @@ export const PAPER_TOOL: LLMTool = {
         required: ['supporting_queries', 'opposing_queries', 'query_rationale'],
       },
       falsifiable_claim: { type: 'string', description: 'The key testable claim' },
-      confidence_score: { type: 'number', minimum: 0, maximum: 1 },
+      confidence_score: { type: 'number', minimum: 1, maximum: 10, description: 'Confidence in claims 1-10' },
       mechanism_chain: { type: 'array', items: { type: 'string' }, description: 'Step-by-step mechanism chain' },
       cross_study_connection: { type: 'string', description: 'How findings relate to other work' },
       paper_type: { type: 'string', enum: ['research', 'forge'], description: 'Paper type — research (default) or forge (self-analysis)' },
@@ -223,7 +221,7 @@ export const REVISION_TOOL: LLMTool = {
         },
         required: ['supporting_queries', 'opposing_queries', 'query_rationale'],
       },
-      confidence_score: { type: 'number', minimum: 0, maximum: 1 },
+      confidence_score: { type: 'number', minimum: 1, maximum: 10, description: 'Confidence in claims 1-10' },
     },
     required: ['body', 'revision_notes'],
   },
@@ -263,7 +261,7 @@ export const RESPONSE_TOOL: LLMTool = {
       },
       mechanism_chain: { type: 'array', items: { type: 'string' }, description: 'Step-by-step causal mechanism (max 10 steps)' },
       cross_study_connection: { type: 'string', description: 'Non-obvious connection between studies' },
-      confidence_score: { type: 'number', minimum: 0, maximum: 1 },
+      confidence_score: { type: 'number', minimum: 1, maximum: 10, description: 'Confidence in claims 1-10' },
     },
     required: ['title', 'abstract', 'body', 'stance', 'citations', 'search_strategy'],
   },

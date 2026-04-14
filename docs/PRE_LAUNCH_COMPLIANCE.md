@@ -168,3 +168,31 @@ PeerZero bots use Opus for all science and identity tasks. Users bring their own
 - Parameterized SQL queries everywhere
 - Layered security (CORS + CSRF + rate limiting + sanitization)
 - 90-day audit log retention enforcement
+
+---
+
+## Deferred from Audit Review (2026-04-14)
+
+Items that need external dependencies, vendor configuration, or architectural work beyond code changes.
+
+### Needs External Package / Vendor Config
+
+- [x] **Resend webhook signature verification** — ~~Add `svix` package to peerzero-app server~~ DONE: svix installed, webhook route verifies `svix-id`/`svix-timestamp`/`svix-signature` headers. Set `RESEND_WEBHOOK_SECRET` env var from Resend dashboard. (Audit #25)
+- [ ] **SPF/DKIM/DMARC DNS records** — Configure on the sending domain. Resend handles DKIM signing, but SPF/DMARC records must be added to DNS. Move DMARC from `p=none` → `p=reject` before launch. (Audit #25)
+- [ ] **Email warm-up** — New sending domains need 2-4 weeks of gradual volume. Plan warm-up schedule before launch blast. (Audit #25)
+- [x] **License scan in CI** — ~~Add license-checker to CI pipeline~~ DONE: ci.yml now runs license-checker on School + App server and pip-licenses on Bot, failing on AGPL/SSPL/EUPL licenses. (Audit #32)
+- [ ] **External monitoring service** — Integrate Datadog/Grafana or uptime monitor (UptimeRobot, Better Uptime). Currently no external pings or alerting rules. (Audit #22)
+
+### Needs Apple/Google Configuration
+
+- [ ] **AASA / assetlinks.json** — Replace placeholder `TEAM_ID` in apple-app-site-association and `REPLACE_WITH_PRODUCTION_SHA256_FINGERPRINT` in assetlinks.json with real values from Apple Developer and Google Play Console. (Audit #26)
+- [ ] **EAS project ID** — Replace `REPLACE_WITH_EAS_PROJECT_ID` in app.json with real Expo EAS project ID. (Audit #26)
+- [ ] **Demo account for App Store review** — Create working test credentials. Ensure Apple's IP range is not blocked by backend. (Audit #26)
+- [ ] **Privacy manifest / nutrition labels** — Accurately list all data collected, shared, and linked to identity for App Store data safety section. (Audit #26)
+
+### Needs Architectural Work
+
+- [x] **CREATE INDEX CONCURRENTLY scripts** — ~~All indexes lock writes during build~~ DONE: Standalone CONCURRENTLY rebuild scripts created for 19 indexes on large tables. School: `migrations/rollbacks/concurrent_indexes_school.sql` (11 indexes). App: `db/concurrent_indexes_app.sql` (8 indexes). Run manually via psql during maintenance window before tables grow large. (Audit #35)
+- [ ] **COPPA parental consent email** — Implementation planned but not built. Critical for child accounts — if consent email lands in spam, accounts are permanently locked. (Audit #25)
+- [x] **Credibility transaction checkpointing** — ~~Needs checkpoint+purge architecture~~ DONE: Migration 034 adds `credibility_checkpoints` table + RPCs (`sum_credibility_since_checkpoint`, `checkpoint_credibility`, `sum_credibility_change`). Purge retention now checkpoints all agents before purging old transactions. Integrity check uses checkpoint-aware RPC. (Audit #3)
+- [x] **Stripe invoice.finalization_failed handler** — Already exists in payment.service.ts (logs error with invoice ID, customer, and reason). Stripe retries automatically; no further action needed unless subscription management is added. (Audit #27)

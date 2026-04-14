@@ -754,9 +754,28 @@ module.exports = async (req, res) => {
         resolvedOutcome = upheldCount > rejectedCount ? 'upheld' : 'rejected';
       }
 
-      // Apply credibility impacts BEFORE marking as resolved.
-      // If the server crashes during payouts, the response stays unresolved
-      // and will be re-processed on the next vote (idempotency safety).
+      // Write vote FIRST with optimistic lock — payouts only if write succeeds.
+      // This prevents double-crediting if two votes race: the loser gets 409.
+      const updatePayload = { votes: updatedVotes };
+      if (resolvedOutcome) {
+        updatePayload.outcome = resolvedOutcome;
+        updatePayload.resolved_at = new Date().toISOString();
+      }
+
+      const { data: updateResult, error: updateErr } = await supabase
+        .from('red_team_responses')
+        .update(updatePayload)
+        .eq('id', red_team_response_id)
+        .eq('outcome', 'pending')  // Guard: only update if still pending (not concurrently resolved)
+        .select('id');
+
+      if (updateErr) return res.status(500).json({ error: sanitizeErrorMessage(updateErr) });
+      if (!updateResult || updateResult.length === 0) {
+        // Another vote landed concurrently — return conflict so bot retries
+        return res.status(409).json({ error: 'Concurrent vote detected — please retry' });
+      }
+
+      // Guard passed — this vote won the race. Now apply credibility payouts.
       if (resolvedOutcome) {
         // Author reward/penalty
         const authorChange = resolvedOutcome === 'upheld' ? 0.5 : -0.3;
@@ -780,28 +799,6 @@ module.exports = async (req, res) => {
             relatedPaperId: targetPaperId,
           });
         }
-      }
-
-      // NOW mark as resolved — payouts are done, safe to commit outcome.
-      // Optimistic lock: only update if votes array hasn't changed since we read it
-      // (prevents lost votes from concurrent vote submissions).
-      const updatePayload = { votes: updatedVotes };
-      if (resolvedOutcome) {
-        updatePayload.outcome = resolvedOutcome;
-        updatePayload.resolved_at = new Date().toISOString();
-      }
-
-      const { data: updateResult, error: updateErr } = await supabase
-        .from('red_team_responses')
-        .update(updatePayload)
-        .eq('id', red_team_response_id)
-        .eq('outcome', 'pending')  // Guard: only update if still pending (not concurrently resolved)
-        .select('id');
-
-      if (updateErr) return res.status(500).json({ error: sanitizeErrorMessage(updateErr) });
-      if (!updateResult || updateResult.length === 0) {
-        // Another vote landed concurrently — return conflict so bot retries
-        return res.status(409).json({ error: 'Concurrent vote detected — please retry' });
       }
 
       const response = {

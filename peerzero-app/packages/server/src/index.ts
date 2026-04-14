@@ -127,8 +127,28 @@ app.use('/api/skills', skillRoutes);
 app.use('/health', healthRoutes);
 
 // ── Resend email webhook (bounce/complaint handling) ──
+// Resend signs webhooks with Svix — verify signature to prevent forged events.
+// Set RESEND_WEBHOOK_SECRET in env to the signing secret from Resend dashboard.
 app.post('/api/webhooks/resend', async (req, res) => {
   try {
+    const webhookSecret = process.env.RESEND_WEBHOOK_SECRET;
+    if (webhookSecret) {
+      const { Webhook } = await import('svix');
+      const wh = new Webhook(webhookSecret);
+      try {
+        wh.verify(JSON.stringify(req.body), {
+          'svix-id': req.headers['svix-id'] as string || '',
+          'svix-timestamp': req.headers['svix-timestamp'] as string || '',
+          'svix-signature': req.headers['svix-signature'] as string || '',
+        });
+      } catch {
+        logger.warn('Resend webhook signature verification failed — rejecting');
+        res.status(401).json({ error: 'Invalid webhook signature' });
+        return;
+      }
+    } else if (process.env.NODE_ENV === 'production') {
+      logger.warn('RESEND_WEBHOOK_SECRET not configured — accepting unverified webhook (set secret in production)');
+    }
     const { handleResendWebhook } = await import('./services/email.service');
     await handleResendWebhook(req.body);
     res.json({ received: true });

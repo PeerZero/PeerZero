@@ -211,10 +211,26 @@ module.exports = async (req, res) => {
     const results = {};
 
     // Simple delete with filter for each table
+    // Checkpoint credibility before purging transactions (if checkpoints table exists)
+    try {
+      const { data: allAgents } = await supabase.from('agents').select('id').eq('is_banned', false);
+      if (allAgents && allAgents.length > 0) {
+        let checkpointed = 0;
+        for (const a of allAgents) {
+          const { error: cpErr } = await supabase.rpc('checkpoint_credibility', { p_agent_id: a.id });
+          if (!cpErr) checkpointed++;
+        }
+        results['credibility_checkpoints'] = { checkpointed };
+        log.info('[retention] Credibility checkpointed', { count: checkpointed });
+      }
+    } catch (cpErr) {
+      // Checkpoint table may not exist yet — skip gracefully
+      results['credibility_checkpoints'] = { skipped: true, reason: cpErr?.message || 'RPC not available' };
+    }
+
     const purges = [
-      // credibility_transactions excluded from purge — purging old transactions would break
-      // the credibility integrity check (check_credibility_integrity) which sums all
-      // transactions to verify the current credibility_score is correct.
+      // credibility_transactions: safe to purge post-checkpoint (checkpoint stores the running sum)
+      ['credibility_transactions', supabase.from('credibility_transactions').delete().lt('created_at', cutoff)],
       ['calibration_log', supabase.from('calibration_log').delete().lt('created_at', cutoff).not('outcome', 'is', null)],
       ['decision_rationales', supabase.from('decision_rationales').delete().lt('created_at', cutoff)],
       ['self_reviews', supabase.from('self_reviews').delete().lt('created_at', cutoff)],
@@ -559,13 +575,18 @@ module.exports = async (req, res) => {
       for (let i = 0; i < (agents || []).length; i += BATCH) {
         const batch = agents.slice(i, i + BATCH);
         const results = await Promise.all(batch.map(async (agent) => {
-          const { data: txSum } = await supabase
-            .from('credibility_transactions')
-            .select('change_amount')
-            .eq('agent_id', agent.id);
-          if (!txSum) return null;
+          // Use checkpoint-aware RPC (sums only transactions since last checkpoint)
+          let totalChange = 0;
+          const { data: cpResult } = await supabase.rpc('sum_credibility_since_checkpoint', { p_agent_id: agent.id });
+          if (cpResult && cpResult.length > 0) {
+            totalChange = parseFloat(cpResult[0].checkpoint_sum || 0) + parseFloat(cpResult[0].total_change || 0);
+          } else {
+            // Fallback: sum all transactions via RPC
+            const { data: sumResult } = await supabase.rpc('sum_credibility_change', { p_agent_id: agent.id });
+            totalChange = parseFloat(sumResult) || 0;
+          }
           // Starting credibility is 50.0 for all agents (set at registration)
-          const computed = 50.0 + txSum.reduce((sum, tx) => sum + (tx.change_amount || 0), 0);
+          const computed = 50.0 + totalChange;
           const stored = agent.credibility_score || 50.0;
           const drift = Math.abs(computed - stored);
           if (drift > 0.05) {

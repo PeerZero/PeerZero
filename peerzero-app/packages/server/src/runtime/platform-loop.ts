@@ -25,7 +25,7 @@ import { getPlatformAdapter } from '../adapters/platform.adapter.factory';
 import type { PlatformAction } from '../adapters/platform.adapter';
 import { getLLMAdapter } from '../adapters/adapter.factory';
 import { logger } from '../lib/logger';
-import { getDecryptedKey } from '../services/api-key.service';
+import { getDecryptedKey, markKeyInvalid } from '../services/api-key.service';
 import { getPlatformCredentials, updatePlatformCycleStatus } from '../services/platform.service';
 import { query, queryOne } from '../db/client';
 import { broadcastExternalActivity, broadcastMessage } from '../websocket/activity-stream';
@@ -294,6 +294,13 @@ export async function runPlatformCycle(ctx: PlatformCycleContext): Promise<void>
     const errorMsg = err instanceof Error ? err.message : String(err);
     logger.error({ botId: ctx.botId, platform: platCreds.platformName, err }, 'Platform cycle failed');
     await updatePlatformCycleStatus(ctx.platformId, 'error', errorMsg.slice(0, 500));
+
+    // Mark API key invalid on 401 so UI shows the key needs replacing
+    if (errorMsg.includes('401') && ctx.llmApiKeyId) {
+      await markKeyInvalid(ctx.llmApiKeyId).catch((e) => {
+        logger.warn({ err: e instanceof Error ? e.message : e }, 'Failed to mark API key as invalid');
+      });
+    }
     throw err;
   }
 }

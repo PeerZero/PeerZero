@@ -61,9 +61,10 @@ async function resolveCalibrationPrediction(agentId, actionType, outcome, domain
     const { data } = await query;
     if (!data || data.length === 0) return;
 
-    await getSupabase().from('calibration_log')
+    const { error: resolveErr } = await getSupabase().from('calibration_log')
       .update({ outcome: outcome ? 1 : 0, resolved_at: new Date().toISOString() })
       .eq('id', data[0].id);
+    if (resolveErr) log.error('[calibration] resolve write failed', { id: data[0].id, err: resolveErr.message });
   } catch (err) {
     log.error('[calibration] resolvePrediction failed', { err: err?.message });
   }

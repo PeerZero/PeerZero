@@ -178,9 +178,13 @@ async function extractForgeData(paperId, body) {
   if (!hasData) return null;
 
   try {
-    await getSupabase().from('papers')
+    const { error: forgeErr } = await getSupabase().from('papers')
       .update({ forge_data: forgeData })
       .eq('id', paperId);
+    if (forgeErr) {
+      log.error('[forge-aggregation] extractForgeData write failed', { paperId, err: forgeErr.message });
+      return null;
+    }
     return forgeData;
   } catch (err) {
     log.error('[forge-aggregation] extractForgeData failed', { paperId, err: err?.message });
@@ -568,12 +572,13 @@ async function applyProposal(proposalId, appliedBy = 'auto') {
 
   const oldValue = current?.value || null;
 
-  // Write new value
-  await supabase.from('school_internals')
+  // Write new value — MUST succeed or abort (config mutation)
+  const { error: writeErr } = await supabase.from('school_internals')
     .upsert({
       key: configKey,
       value: JSON.stringify(proposal.proposal_value),
     }, { onConflict: 'key' });
+  if (writeErr) throw new Error(`Failed to write config ${configKey}: ${writeErr.message}`);
 
   // Record in history
   const { error: histErr } = await supabase.from('forge_config_history').insert({
@@ -625,23 +630,26 @@ async function rollbackProposal(historyId, rolledBackBy) {
   if (error || !history) throw new Error('History record not found');
   if (history.rolled_back) throw new Error('Already rolled back');
 
-  // Restore old value (or delete if there was no old value)
+  // Restore old value (or delete if there was no old value) — MUST succeed or abort
   if (history.old_value !== null) {
-    await supabase.from('school_internals')
+    const { error: restoreErr } = await supabase.from('school_internals')
       .upsert({
         key: history.config_key,
         value: JSON.stringify(history.old_value),
       }, { onConflict: 'key' });
+    if (restoreErr) throw new Error(`Failed to restore config ${history.config_key}: ${restoreErr.message}`);
   } else {
-    await supabase.from('school_internals')
+    const { error: deleteErr } = await supabase.from('school_internals')
       .delete()
       .eq('key', history.config_key);
+    if (deleteErr) throw new Error(`Failed to delete config ${history.config_key}: ${deleteErr.message}`);
   }
 
   // Mark as rolled back
-  await supabase.from('forge_config_history')
+  const { error: markErr } = await supabase.from('forge_config_history')
     .update({ rolled_back: true, rolled_back_at: new Date().toISOString() })
     .eq('id', historyId);
+  if (markErr) log.error('[forge-aggregation] Failed to mark rollback status', { historyId, err: markErr.message });
 
   clearInternalsCache();
 
@@ -741,13 +749,14 @@ async function reviewProposal(proposalId, decision, reviewedBy, notes) {
   }
 
   const supabase = getSupabase();
-  await supabase.from('forge_config_proposals')
+  const { error: reviewErr } = await supabase.from('forge_config_proposals')
     .update({
       status: decision,
       reviewed_by: reviewedBy,
       review_notes: notes || null,
     })
     .eq('id', proposalId);
+  if (reviewErr) throw new Error(`Failed to update proposal status: ${reviewErr.message}`);
 
   // If approved, apply it
   if (decision === 'approved') {

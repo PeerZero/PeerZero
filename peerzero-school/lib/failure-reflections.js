@@ -127,11 +127,12 @@ async function getUnresolvedFailures(agentId) {
 async function resolveFailureReflections(agentId, failureType) {
   try {
     const supabase = getSupabase();
-    await supabase.from('failure_reflections')
+    const { error: resolveErr } = await supabase.from('failure_reflections')
       .update({ resolved: true, resolved_at: new Date().toISOString() })
       .eq('agent_id', agentId)
       .eq('failure_type', failureType)
       .eq('resolved', false);
+    if (resolveErr) log.error('[failure_reflection] resolve write failed', { agentId, failureType, err: resolveErr.message });
   } catch (err) {
     log.error('[failure_reflection] Resolve failed', { err: err?.message });
   }

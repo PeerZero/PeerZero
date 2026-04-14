@@ -113,6 +113,44 @@ export const UpdateProfileSchema = z.object({
   { message: 'At least one of display_name or language is required' },
 );
 
+// ── Auth routes ──────────────────────────────────────────────────────────
+
+export const RegisterSchema = z.object({
+  email: z.string().email().max(255),
+  password: z.string().min(8).max(128),
+  display_name: z.string().min(1).max(100).optional(),
+}).strict();
+
+export const LoginSchema = z.object({
+  email: z.string().email().max(255),
+  password: z.string().min(1).max(128),
+}).strict();
+
+export const ChangePasswordSchema = z.object({
+  current_password: z.string().min(1).max(128),
+  new_password: z.string().min(8).max(128),
+}).strict();
+
+export const ForgotPasswordSchema = z.object({
+  email: z.string().email().max(255),
+}).strict();
+
+export const ResetPasswordSchema = z.object({
+  email: z.string().email().max(255),
+  code: z.string().min(1).max(20),
+  new_password: z.string().min(8).max(128),
+}).strict();
+
+export const VerifyEmailSchema = z.object({
+  email: z.string().email().max(255),
+  code: z.string().min(1).max(20),
+}).strict();
+
+export const GradeCheckoutBulkSchema = z.object({
+  bot_id: z.string().min(1).max(100),
+  grades: z.array(z.number().int().min(1).max(20)).min(1).max(20),
+}).strict();
+
 // ── Task routes ───────────────────────────────────────────────────────────
 
 export const IncomingTaskSchema = z.object({

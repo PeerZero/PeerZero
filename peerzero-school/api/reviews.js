@@ -547,8 +547,13 @@ module.exports = async (req, res) => {
           for (const resp of (allResponses || [])) { totalImpact += parseFloat(resp.response_score_impact || 0); }
           totalImpact = Math.max(-1.5, Math.min(1.5, totalImpact));
           const newParentScore = Math.max(1, Math.min(10, parseFloat((baseScore + totalImpact).toFixed(2))));
-          const { error: parentScoreErr } = await supabase.from('papers').update({ weighted_score: newParentScore }).eq('id', paper.parent_paper_id);
+          // Fetch current parent score for optimistic lock — prevents concurrent reviews from clobbering each other
+          const { data: parentPaper } = await supabase.from('papers').select('weighted_score').eq('id', paper.parent_paper_id).single();
+          const lockQuery = supabase.from('papers').update({ weighted_score: newParentScore }).eq('id', paper.parent_paper_id);
+          if (parentPaper?.weighted_score != null) lockQuery.eq('weighted_score', parentPaper.weighted_score);
+          const { error: parentScoreErr, data: parentResult } = await lockQuery.select('id');
           if (parentScoreErr) log.error('[reviews] Failed to update parent paper score', { parentPaperId: paper.parent_paper_id, err: parentScoreErr.message });
+          else if (!parentResult || parentResult.length === 0) log.warn('[reviews] Parent paper score update lost to concurrent write — will self-heal on next review', { parentPaperId: paper.parent_paper_id });
         }
       }
     }

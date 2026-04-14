@@ -58,10 +58,23 @@ async function sendWithRetry(
   throw lastError;
 }
 
+/** Mask email for logging — show first 2 chars + domain, never full address. */
+function maskEmail(email: string): string {
+  const [local, domain] = email.split('@');
+  if (!domain) return '***';
+  return `${local.slice(0, 2)}***@${domain}`;
+}
+
 export async function sendVerificationEmail(to: string, code: string): Promise<boolean> {
   const client = getResend();
   if (!client) {
     logger.warn('RESEND_API_KEY not configured — verification email not sent');
+    return false;
+  }
+
+  // Skip suppressed addresses (hard-bounced or complained)
+  if (await isEmailSuppressed(to)) {
+    logger.info({ email: maskEmail(to) }, 'Skipping verification email — address suppressed');
     return false;
   }
 
@@ -79,7 +92,7 @@ export async function sendVerificationEmail(to: string, code: string): Promise<b
         EMAIL_FOOTER,
       ].join('\n'),
     });
-    logger.info({ to }, 'Verification email sent');
+    logger.info({ email: maskEmail(to) }, 'Verification email sent');
     return true;
   } catch (err) {
     logger.error({ err: err instanceof Error ? err.message : String(err) }, 'Failed to send verification email (all retries exhausted)');
@@ -91,6 +104,12 @@ export async function sendPasswordResetEmail(to: string, code: string): Promise<
   const client = getResend();
   if (!client) {
     logger.warn('RESEND_API_KEY not configured — password reset email not sent');
+    return false;
+  }
+
+  // Skip suppressed addresses (hard-bounced or complained)
+  if (await isEmailSuppressed(to)) {
+    logger.info({ email: maskEmail(to) }, 'Skipping password reset email — address suppressed');
     return false;
   }
 
@@ -108,7 +127,7 @@ export async function sendPasswordResetEmail(to: string, code: string): Promise<
         EMAIL_FOOTER,
       ].join('\n'),
     });
-    logger.info({ to }, 'Password reset email sent');
+    logger.info({ email: maskEmail(to) }, 'Password reset email sent');
     return true;
   } catch (err) {
     logger.error({ err: err instanceof Error ? err.message : String(err) }, 'Failed to send password reset email (all retries exhausted)');
@@ -142,7 +161,7 @@ export async function handleResendWebhook(event: {
            ON CONFLICT (email) DO UPDATE SET reason = 'hard_bounce', event_id = $2, suppressed_at = NOW()`,
           [email.toLowerCase(), event.data.email_id || 'unknown'],
         );
-        logger.warn({ email, eventId: event.data.email_id }, 'Email hard-bounced — address suppressed');
+        logger.warn({ email: maskEmail(email), eventId: event.data.email_id }, 'Email hard-bounced — address suppressed');
       }
       break;
     }
@@ -155,14 +174,14 @@ export async function handleResendWebhook(event: {
            ON CONFLICT (email) DO UPDATE SET reason = 'complaint', event_id = $2, suppressed_at = NOW()`,
           [email.toLowerCase(), event.data.email_id || 'unknown'],
         );
-        logger.warn({ email, eventId: event.data.email_id }, 'Email complaint received — address suppressed');
+        logger.warn({ email: maskEmail(email), eventId: event.data.email_id }, 'Email complaint received — address suppressed');
       }
       break;
     }
     case 'email.delivery_delayed': {
       // Soft bounce — log for monitoring but don't suppress yet
       for (const email of recipients) {
-        logger.info({ email, eventId: event.data.email_id }, 'Email delivery delayed (soft bounce)');
+        logger.info({ email: maskEmail(email), eventId: event.data.email_id }, 'Email delivery delayed (soft bounce)');
       }
       break;
     }
