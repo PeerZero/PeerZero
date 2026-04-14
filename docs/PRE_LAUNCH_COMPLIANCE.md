@@ -1,6 +1,6 @@
 # Pre-Launch Compliance Checklist
 
-Last updated: 2026-03-31
+Last updated: 2026-04-14
 
 Do these when the code is stable and you're preparing to launch. Not before.
 
@@ -29,6 +29,7 @@ PeerZero will be used by children (Tamagotchi-style bots). COPPA compliance is m
 - [x] **Child account restrictions** — BYOK managed by parent (add/delete key buttons hidden for child accounts), payments show "ask parent" prompt, push notifications default to all-off for child accounts (server-enforced via CHILD_NOTIFICATION_PREFS). Completed 2026-04-04.
 - [ ] **Parental controls dashboard** — Parent can review data, delete account, withdraw consent. Currently email-based only (`POST /parental-consent/withdraw`). Build parent dashboard later.
 - [ ] **Legal counsel review** — All compliance docs (Privacy Policy, ToS, DPIA, COPPA guide, AI Act classification) need review by a privacy attorney before launch.
+- [ ] **COPPA 2026 amendments** — FTC published final amendments effective **April 22, 2026**. Key changes: (a) opt-in consent required before sharing children's data with third parties (affects BYOK — Anthropic receives child-generated content), (b) data retention limited to what's "reasonably necessary", (c) new requirements for EdTech/school-authorized operators. Review `docs/COPPA_COMPLIANCE.md` against the final rule text.
 - [ ] **Penalties:** Up to $50,070 per violation. Epic Games paid $275M (2022).
 
 ## EU AI Act (Enforcement: August 2, 2026)
@@ -57,6 +58,9 @@ PeerZero will be used by children (Tamagotchi-style bots). COPPA compliance is m
 - [ ] **DPO appointment** — Required before processing EU users' data at scale.
 - [ ] **Sub-processor DPAs** — Execute Data Processing Agreements with Supabase, Vercel, Cloudflare, Anthropic, Stripe, Resend, Expo.
 - [ ] **SCCs for international transfers** — Standard Contractual Clauses with all US-based sub-processors for EU user data.
+- [ ] **Subprocessor list (public)** — GDPR Art. 28 requires listing all subprocessors. Publish at a stable URL (e.g., `/subprocessors`) with: Supabase (database, US), Vercel (hosting, US), Cloudflare (proxy/CDN, US), Anthropic (LLM API, US), Stripe (payments, US), Resend (email, US), Expo/EAS (push notifications, US). Notify users 30 days before adding new subprocessors.
+- [ ] **DSAR implementation (Art. 15-22)** — Data Subject Access Request: the existing `GET /api/users/export` endpoint returns user data, but must also include: all bot activity logs, all papers/reviews/bounties attributed to user's bots (cross-system from School), API key metadata (not the key itself), payment history, and parental consent records. Response deadline: 30 days. Automate as much as possible.
+- [ ] **Data portability (Art. 20)** — Right to receive personal data in a "structured, commonly used, machine-readable format." The export endpoint should return JSON (not just human-readable). Include: user profile, bot configurations, activity history, memory summaries (L2/L3 but NOT redacted L4/L5 identity — those are bot identity, not user personal data). Clarify in Privacy Policy what is "user data" vs "bot-generated artifacts."
 
 ## CCPA/CPRA (California)
 
@@ -72,9 +76,11 @@ PeerZero will be used by children (Tamagotchi-style bots). COPPA compliance is m
 
 ## App Store Compliance
 
+- [x] **Apple Guideline 5.1.2(i) — Third-party data disclosure** — BYOK sends user data to Anthropic/OpenAI. Consent modal added to SettingsScreen.tsx `handleAddKey()` — names the provider, explains data flow, requires explicit "I Agree" before key is stored. Completed 2026-04-14.
 - [ ] **Google Play Families Policy** — Enroll in Designed for Families program, update data safety section. See `docs/COPPA_COMPLIANCE.md` Section 7.
 - [ ] **Apple Kids category or age gate** — Implement documented age gate with parental consent. See `docs/COPPA_COMPLIANCE.md` Section 7.
 - [ ] **Update store listing** — Change age rating, update data safety section, add Terms of Service URL.
+- [ ] **Privacy nutrition labels** — App Store data safety / Apple privacy labels must list BYOK API keys (stored server-side) and bot conversation content sent to third-party LLMs. Currently only declares email, name, and purchase history.
 
 ## Security (Pre-Launch)
 
