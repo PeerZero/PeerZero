@@ -6,7 +6,48 @@
 import { queryOne, queryRows, query } from '../db/client';
 import { encrypt, decrypt } from './encryption.service';
 import { AppError } from '../middleware/error-handler';
+import { logger } from '../lib/logger';
 import type { LLMProvider, ApiKeyInfo } from '@peerzero/shared';
+
+/**
+ * Validate an API key by making a lightweight test call to the provider.
+ * Throws AppError if the key is invalid or the provider rejects it.
+ */
+async function validateKeyWithProvider(provider: LLMProvider, key: string): Promise<void> {
+  const timeout = AbortSignal.timeout(10_000);
+  try {
+    if (provider === 'anthropic') {
+      // Minimal request: count tokens for a tiny message (cheapest operation)
+      const res = await fetch('https://api.anthropic.com/v1/messages/count_tokens', {
+        method: 'POST',
+        headers: {
+          'x-api-key': key,
+          'anthropic-version': '2023-06-01',
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'claude-haiku-4-5-20251001',
+          messages: [{ role: 'user', content: 'test' }],
+        }),
+        signal: timeout,
+      });
+      if (res.status === 401) throw new AppError(400, 'Invalid Anthropic API key — authentication failed. Check that the key is correct and not revoked.');
+      if (res.status === 403) throw new AppError(400, 'Anthropic API key lacks permission. Check your key\'s access level.');
+      // 200 or other status = key is valid (even if rate limited)
+    } else if (provider === 'openai') {
+      const res = await fetch('https://api.openai.com/v1/models', {
+        headers: { 'Authorization': `Bearer ${key}` },
+        signal: timeout,
+      });
+      if (res.status === 401) throw new AppError(400, 'Invalid OpenAI API key — authentication failed. Check that the key is correct and not revoked.');
+      if (res.status === 403) throw new AppError(400, 'OpenAI API key lacks permission. Check your key\'s access level.');
+    }
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    // Network/timeout errors — don't block key storage, just warn
+    logger.warn({ err: err instanceof Error ? err.message : err, provider }, 'API key validation call failed — storing key without validation');
+  }
+}
 
 export async function addApiKey(
   userId: string,
@@ -14,6 +55,9 @@ export async function addApiKey(
   label: string,
   plaintextKey: string,
 ): Promise<ApiKeyInfo> {
+  // Validate the key with the provider before storing
+  await validateKeyWithProvider(provider, plaintextKey);
+
   // Encrypt immediately — plaintext never hits the database
   const { encrypted, iv, fingerprint } = encrypt(plaintextKey);
 

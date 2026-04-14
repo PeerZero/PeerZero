@@ -21,6 +21,14 @@ vi.mock('../../services/encryption.service', () => ({
   decrypt: vi.fn(() => 'decrypted-key'),
 }));
 
+vi.mock('../../lib/logger', () => ({
+  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
+}));
+
+// Mock global fetch so validateKeyWithProvider doesn't make real API calls
+const mockFetch = vi.fn().mockResolvedValue({ status: 200 });
+vi.stubGlobal('fetch', mockFetch);
+
 import { AppError } from '../../middleware/error-handler';
 import {
   addApiKey,

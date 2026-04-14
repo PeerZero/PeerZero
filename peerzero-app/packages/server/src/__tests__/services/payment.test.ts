@@ -372,8 +372,9 @@ describe('payment.service', () => {
       expect(entitlementInsert).toBeTruthy();
     });
 
-    it('handles charge.refunded by updating purchase status', async () => {
-      mockQuery.mockResolvedValueOnce({ rows: [] });
+    it('handles charge.refunded by updating status and revoking access', async () => {
+      // queryOne: UPDATE purchases ... RETURNING — returns the purchase row
+      mockQueryOne.mockResolvedValueOnce({ id: 'purchase-1', user_id: 'user-1', product_id: 'prod-1' });
 
       await handleStripeWebhook({
         type: 'charge.refunded',
@@ -382,10 +383,13 @@ describe('payment.service', () => {
         },
       } as any);
 
-      expect(mockQuery).toHaveBeenCalledWith(
+      // Verify the refund UPDATE was called
+      expect(mockQueryOne).toHaveBeenCalledWith(
         expect.stringContaining("status = 'refunded'"),
         ['pi_1'],
       );
+      // Verify DELETE calls were made (entitlements + grade_unlocks)
+      expect(mockQuery).toHaveBeenCalledTimes(2);
     });
 
     it('ignores unknown event types', async () => {

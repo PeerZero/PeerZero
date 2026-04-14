@@ -115,3 +115,68 @@ export async function sendPasswordResetEmail(to: string, code: string): Promise<
     return false;
   }
 }
+
+// ── Bounce/complaint webhook handling ─────────────────────────────────
+// Resend sends webhook events for bounced, complained, and delivery_delayed.
+// We suppress hard-bounced addresses to protect sender reputation.
+
+import { query, queryOne } from '../db/client';
+
+/**
+ * Handle a Resend webhook event. Called from the webhook route.
+ * See: https://resend.com/docs/dashboard/webhooks/introduction
+ */
+export async function handleResendWebhook(event: {
+  type: string;
+  data: { to?: string[]; email_id?: string; created_at?: string; [key: string]: unknown };
+}): Promise<void> {
+  const recipients = event.data?.to || [];
+
+  switch (event.type) {
+    case 'email.bounced': {
+      // Hard bounce — suppress this address from future sends
+      for (const email of recipients) {
+        await query(
+          `INSERT INTO suppressed_emails (email, reason, event_id, suppressed_at)
+           VALUES ($1, 'hard_bounce', $2, NOW())
+           ON CONFLICT (email) DO UPDATE SET reason = 'hard_bounce', event_id = $2, suppressed_at = NOW()`,
+          [email.toLowerCase(), event.data.email_id || 'unknown'],
+        );
+        logger.warn({ email, eventId: event.data.email_id }, 'Email hard-bounced — address suppressed');
+      }
+      break;
+    }
+    case 'email.complained': {
+      // Spam complaint — suppress immediately
+      for (const email of recipients) {
+        await query(
+          `INSERT INTO suppressed_emails (email, reason, event_id, suppressed_at)
+           VALUES ($1, 'complaint', $2, NOW())
+           ON CONFLICT (email) DO UPDATE SET reason = 'complaint', event_id = $2, suppressed_at = NOW()`,
+          [email.toLowerCase(), event.data.email_id || 'unknown'],
+        );
+        logger.warn({ email, eventId: event.data.email_id }, 'Email complaint received — address suppressed');
+      }
+      break;
+    }
+    case 'email.delivery_delayed': {
+      // Soft bounce — log for monitoring but don't suppress yet
+      for (const email of recipients) {
+        logger.info({ email, eventId: event.data.email_id }, 'Email delivery delayed (soft bounce)');
+      }
+      break;
+    }
+    default:
+      // Other events (delivered, opened, clicked) — ignore
+      break;
+  }
+}
+
+/** Check if an email address is suppressed (bounced/complained). */
+export async function isEmailSuppressed(email: string): Promise<boolean> {
+  const row = await queryOne<{ email: string }>(
+    'SELECT email FROM suppressed_emails WHERE email = $1',
+    [email.toLowerCase()],
+  );
+  return !!row;
+}

@@ -108,6 +108,7 @@ app.use(cors({
 
 // Raw body for Stripe webhooks (must come before express.json)
 app.use('/api/payments/webhook', express.raw({ type: 'application/json', limit: '5mb' }));
+// Resend webhook needs parsed JSON body
 app.use(express.json({ limit: '5mb' }));
 
 // ── Routes ──
@@ -124,6 +125,18 @@ app.use('/api/widgets', widgetRoutes);
 app.use('/api/platforms', platformRoutes);
 app.use('/api/skills', skillRoutes);
 app.use('/health', healthRoutes);
+
+// ── Resend email webhook (bounce/complaint handling) ──
+app.post('/api/webhooks/resend', async (req, res) => {
+  try {
+    const { handleResendWebhook } = await import('./services/email.service');
+    await handleResendWebhook(req.body);
+    res.json({ received: true });
+  } catch (err) {
+    logger.error({ err: err instanceof Error ? err.message : err }, 'Resend webhook handler failed');
+    res.status(500).json({ error: 'Webhook processing failed' });
+  }
+});
 
 // ── Well-known files for Universal Links (iOS) and App Links (Android) ──
 app.get('/.well-known/apple-app-site-association', (_req, res) => {

@@ -169,9 +169,32 @@ export async function handleStripeWebhook(event: Stripe.Event): Promise<void> {
 
     case 'charge.refunded': {
       const charge = event.data.object as Stripe.Charge;
-      await query(
-        `UPDATE purchases SET status = 'refunded' WHERE stripe_payment_id = $1`,
+      // Mark purchase as refunded
+      const refundedPurchase = await queryOne<{ id: string; user_id: string; product_id: string }>(
+        `UPDATE purchases SET status = 'refunded' WHERE stripe_payment_id = $1 AND status = 'completed'
+         RETURNING id, user_id, product_id`,
         [charge.payment_intent as string],
+      );
+      if (refundedPurchase) {
+        // Revoke entitlements and grade unlocks granted by this purchase
+        await query(
+          'DELETE FROM user_entitlements WHERE source_purchase_id = $1',
+          [refundedPurchase.id],
+        );
+        await query(
+          'DELETE FROM grade_unlocks WHERE purchase_id = $1',
+          [refundedPurchase.id],
+        );
+        logger.info({ purchaseId: refundedPurchase.id, userId: refundedPurchase.user_id }, 'Refund processed — entitlements and grade unlocks revoked');
+      }
+      break;
+    }
+
+    case 'invoice.finalization_failed': {
+      const invoice = event.data.object as Stripe.Invoice;
+      logger.error(
+        { invoiceId: invoice.id, customerId: invoice.customer, reason: invoice.last_finalization_error?.message },
+        'Invoice finalization failed — subscription may be stuck without payment',
       );
       break;
     }
