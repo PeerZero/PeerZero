@@ -155,17 +155,17 @@ export async function closeActivityStreamRedis(): Promise<void> {
   if (redisSub) {
     closing.push(
       redisSub.punsubscribe(`${WS_CHANNEL_PREFIX}*`)
-        .catch(() => {})
+        .catch((err) => { logger.debug({ err }, 'Redis punsubscribe failed during shutdown'); })
         .then(() => redisSub!.quit())
         .then(() => { redisSub = null; })
-        .catch(() => { redisSub = null; }),
+        .catch((err) => { logger.debug({ err }, 'Redis sub quit failed during shutdown'); redisSub = null; }),
     );
   }
   if (redisPub) {
     closing.push(
       redisPub.quit()
         .then(() => { redisPub = null; })
-        .catch(() => { redisPub = null; }),
+        .catch((err) => { logger.debug({ err }, 'Redis pub quit failed during shutdown'); redisPub = null; }),
     );
   }
   await Promise.all(closing);

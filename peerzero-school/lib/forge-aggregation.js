@@ -153,7 +153,7 @@ async function extractForgeData(paperId, body) {
   if (Array.isArray(body.mechanism_rankings) && body.mechanism_rankings.length > 0) {
     forgeData.mechanism_rankings = body.mechanism_rankings.slice(0, 15).map(r => ({
       mechanism: (String(r.mechanism || '')).slice(0, 200),
-      rank: parseInt(r.rank) || 0,
+      rank: parseInt(r.rank, 10) || 0,
       evidence: (String(r.evidence || '')).slice(0, 500),
     }));
     hasData = true;
@@ -534,7 +534,7 @@ async function applyProposal(proposalId, appliedBy = 'auto') {
   const supabase = getSupabase();
 
   const { data: proposal, error } = await supabase.from('forge_config_proposals')
-    .select('*, forge_aggregation_runs!inner(generation_number)')
+    .select('id, aggregation_run_id, config_key, proposed_value, consensus_strength, evidence_summary, status, reviewed_by, review_notes, created_at, forge_aggregation_runs!inner(generation_number)')
     .eq('id', proposalId)
     .single();
 
@@ -606,7 +606,7 @@ async function rollbackProposal(historyId, rolledBackBy) {
   const supabase = getSupabase();
 
   const { data: history, error } = await supabase.from('forge_config_history')
-    .select('*')
+    .select('id, config_key, old_value, new_value, change_reason, generation_number, proposal_id, rolled_back, rolled_back_at, rolled_back_by, created_at')
     .eq('id', historyId)
     .single();
 
@@ -688,7 +688,7 @@ async function buildInheritedContext() {
 async function listRuns({ status, limit = 20, offset = 0 } = {}) {
   const supabase = getSupabase();
   let query = supabase.from('forge_aggregation_runs')
-    .select('*')
+    .select('id, status, generation_number, config_key, window_start, window_end, paper_count, agent_count, completed_at, created_at')
     .order('generation_number', { ascending: false })
     .range(offset, offset + limit - 1);
 
@@ -705,11 +705,12 @@ async function getRunProposals(runId) {
   const supabase = getSupabase();
 
   const [runResult, proposalResult] = await Promise.all([
-    supabase.from('forge_aggregation_runs').select('*').eq('id', runId).single(),
+    supabase.from('forge_aggregation_runs').select('id, status, generation_number, config_key, window_start, window_end, paper_count, agent_count, completed_at, created_at').eq('id', runId).single(),
     supabase.from('forge_config_proposals')
-      .select('*')
+      .select('id, aggregation_run_id, config_key, proposed_value, consensus_strength, evidence_summary, status, reviewed_by, review_notes, created_at')
       .eq('aggregation_run_id', runId)
-      .order('consensus_strength', { ascending: false }),
+      .order('consensus_strength', { ascending: false })
+      .limit(200),
   ]);
 
   if (runResult.error || !runResult.data) throw new Error('Run not found');
@@ -749,7 +750,7 @@ async function reviewProposal(proposalId, decision, reviewedBy, notes) {
 async function getHistory({ generation, limit = 50 } = {}) {
   const supabase = getSupabase();
   let query = supabase.from('forge_config_history')
-    .select('*')
+    .select('id, config_key, old_value, new_value, change_reason, generation_number, proposal_id, rolled_back, rolled_back_at, created_at')
     .order('created_at', { ascending: false })
     .limit(limit);
 

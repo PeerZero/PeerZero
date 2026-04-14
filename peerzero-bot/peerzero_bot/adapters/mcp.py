@@ -516,7 +516,7 @@ class MCPHttpConnection:
                 headers={"Content-Type": "application/json"},
             )
         except Exception as e:
-            logger.debug(f"[MCP:{self.name}] Notification send error: {e}")  # fire-and-forget
+            logger.warning(f"[MCP:{self.name}] Notification send error: {e}")  # fire-and-forget
 
 
 # ── Shared helpers ────────────────────────────────────────────────────────────

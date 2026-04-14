@@ -39,7 +39,7 @@ Pick 2-3 audits per session. For each audit, search all 3 systems (peerzero-scho
 - `except Exception` catching code bugs (TypeError, KeyError) alongside transient errors
 - Un-awaited async calls missing `.catch()` (can crash Node via unhandled rejection)
 
-**Last run:** 2026-04-13 — Re-run: 3 critical, 8 high, 7 medium, 5 low found and fixed. See audit log for details.
+**Last run:** 2026-04-14 — Round 3: 12 silent failure fixes across App, Bot, and School. See audit log for details.
 
 ---
 
@@ -74,7 +74,7 @@ Pick 2-3 audits per session. For each audit, search all 3 systems (peerzero-scho
 - Orphan records: paper_fields/citations/reviews for deleted papers, activity_log for deleted bots
 - Memory leaks: in-process caches (LRU engines, rated_review_ids sets) that grow per session
 
-**Last run:** 2026-04-12 — Re-run: all 11 prior fixes verified. 4 new fixed: forge tables (aggregation_runs, config_proposals, config_history) added to retention purge; bot _rated_review_ids capped at 2000. 1 low (WebSocket cleanup race, mitigated).
+**Last run:** 2026-04-14 — Round 3: 6 unbounded queries capped with .limit(). See audit log for details.
 
 ---
 
@@ -129,7 +129,7 @@ Pick 2-3 audits per session. For each audit, search all 3 systems (peerzero-scho
 - Rate limit bypass: are all expensive endpoints rate-limited? (LLM calls, search, paper submission)
 - Unbounded loops or retries that could spin forever
 
-**Last run:** 2026-04-12 — Re-run: all 12 prior fixes verified. 1 new medium fixed (Expo push fetch timeout). 1 noted (mobile API client timeout, client-side).
+**Last run:** 2026-04-14 — Round 3: 7 browser fetch() calls in index.html now have AbortSignal.timeout(15000). Prior server-side fixes verified.
 
 ---
 
@@ -238,7 +238,7 @@ Pick 2-3 audits per session. For each audit, search all 3 systems (peerzero-scho
 - Full table scans in the audit log, activity log, or credibility transactions
 - PostgreSQL queries missing `EXPLAIN ANALYZE` verification for hot paths
 
-**Last run:** 2026-04-12 — Re-run: all prior fixes verified. 2 SELECT * narrowed (review-ratings agent query, bounty validate_all + .limit(200)). 5 composite indexes verified. Bounty fresh-paper-cache loop is suboptimal but by-design.
+**Last run:** 2026-04-14 — Round 3: 11 SELECT * narrowed to explicit columns. 6 unbounded queries capped. See audit log for details.
 
 ---
 
@@ -257,7 +257,7 @@ Pick 2-3 audits per session. For each audit, search all 3 systems (peerzero-scho
 - Integer overflow: scores, counts, or amounts that could be negative or extremely large
 - Array inputs without length limits (could a user submit 10,000 citations?)
 
-**Last run:** 2026-04-12 — Re-run: prior fixes verified. 7 App routes now have Zod validateBody() schemas (skills, platforms, payments, notifications, auth profile, tasks). School paper/review validation comprehensive (title/abstract/body length caps, score range, citations array cap, field_ids bounds).
+**Last run:** 2026-04-14 — Round 3: papers.js offset capped at 10000 (DoS prevention). 11 parseInt() calls given radix parameter. open-questions.js offset cap tightened. Prior fixes verified.
 
 ---
 
@@ -275,7 +275,7 @@ Pick 2-3 audits per session. For each audit, search all 3 systems (peerzero-scho
 - API versioning: if the School adds a required field, do all deployed bots handle it?
 - Condenser prompt format: does the School serve prompts in the shape the bot's condenser expects?
 
-**Last run:** 2026-04-12 — Re-run: 1 critical found and fixed. Platform condensers endpoint missing forge track — bot silently skipped forge condensation on platforms. All prior fixes (endpoint paths, field names, enum alignment) verified correct.
+**Last run:** 2026-04-14 — Round 2: App tool-schemas.ts missing paper_type enum and incomplete stance enum fixed. Prior fixes verified.
 
 ---
 
@@ -473,20 +473,20 @@ Track when each audit was last run and what was found/fixed. This helps Claude p
 
 | # | Audit | Last Run | Issues Found | Branch/PR |
 |---|-------|----------|-------------|-----------|
-| 1 | Silent Failures | 2026-04-13 | Round 2: 3 more fixed. identity.js DELETE on old identity cores now checks error (was silently ignored). bots.ts task expiry on mode change wrapped in try-catch (was unguarded). shared_awareness.py WAL checkpoint failure now logged instead of `except: pass`. Prior fire-and-forget patterns verified as intentionally non-blocking. | claude/audit-checklist-review-GrqeE |
+| 1 | Silent Failures | 2026-04-14 | Round 3: 12 fixes. App index.ts: 6 empty `.catch(() => {})` on startup cleanup jobs replaced with proper warn logging (audit purge, BullMQ cleanup). App activity-stream.ts: 3 empty catch blocks in Redis shutdown now log at debug level. Bot agent.py: prediction resolution, platform reflection, platform rationale upgraded from debug→warning. Bot sleep.py: log table cleanup upgraded from debug→warning. Bot mcp.py: notification send error upgraded from debug→warning. School agents.js: 6 `catch (e) { /* non-fatal */ }` blocks now log warnings. | claude/audit-checklist-completion-JLioU |
 | 2 | Race Conditions | 2026-04-13 | Re-run: 1 critical, 2 high fixed. Critical: bounties.js validate_all now guards `.is('is_valid', null)` — prevents concurrent validate_all from duplicating credibility payouts. High: reviews.js prediction_status update now has `.eq('prediction_status', 'unvalidated')` optimistic lock — prevents concurrent reviews re-applying prediction accuracy. High: responses.js reaffirmation supersede race now skips counter increment when supersedeCount=0 — prevents duplicate credit. Citation penalty TOCTOU documented (tiny race window, acceptable). | claude/audit-checklist-review-GrqeE |
-| 3 | Unbounded Growth | 2026-04-13 | Round 2: proxy session store capped at 10,000 entries (was unbounded — memory exhaustion risk from session flooding). Bounties + red_team_responses queries now have .limit(200) (were unbounded). Skill engine batch eviction from round 1 verified. | claude/audit-checklist-review-GrqeE |
+| 3 | Unbounded Growth | 2026-04-14 | Round 3: 6 unbounded queries capped. agents.js myPapers .limit(500). papers.js reviews per paper .limit(100). action-guide.js agent papers .limit(500) and .limit(200). forge-aggregation.js getRunProposals .limit(200). Prior fixes verified. | claude/audit-checklist-completion-JLioU |
 | 4 | Retry & Idempotency | 2026-04-13 | Re-run: citation penalty TOCTOU race eliminated — migration 032 adds partial unique index on credibility_transactions for citation_accuracy_penalty (agent_id, related_paper_id). Concurrent reviews that both pass the duplicate check now fail at DB level instead of double-penalizing. Prior fixes verified. | claude/audit-checklist-review-GrqeE |
 | 5 | Secret Exposure | 2026-04-13 | Re-run: 0 new issues. All error sanitization, CORS, token expiry, identity redaction, encryption verified. No SELECT * on sensitive tables. Incoming tasks optional-auth is by-design (documented). | claude/audit-checklist-review-GrqeE |
-| 6 | Timeout & Exhaustion | 2026-04-13 | Round 2: proxy DurableObject rate limit params now validated (rejects NaN/Infinity/negative). SDK node fetchText now handles response stream errors via res.on('error'). Prior timeout fixes verified. | claude/audit-checklist-review-GrqeE |
+| 6 | Timeout & Exhaustion | 2026-04-14 | Round 3: 7 browser fetch() calls in index.html now have AbortSignal.timeout(15000) — UI no longer hangs on slow API. Prior server-side timeout fixes verified. | claude/audit-checklist-completion-JLioU |
 | 7 | Stale Cache | 2026-04-13 | Re-run: no new issues. Platform condenser TTL check, prompt-builder key fix — all verified. | claude/audit-checklist-fixes-59GsO |
 | 8 | Authorization Gaps | 2026-04-13 | Re-run: 0 new issues. All routes verify ownership. CSRF mitigated by Bearer tokens. Rate limits comprehensive (auth: 10/15min, read: 200/min, write: 30/min). Emergency stop protected by constant-time admin key comparison. | claude/audit-checklist-review-GrqeE |
 | 9 | Degradation Decisions | 2026-04-13 | Re-run: no new issues. Fail-closed adapters, escalated logging — all verified. | claude/audit-checklist-fixes-59GsO |
 | 10 | Dependency Vulns | 2026-04-12 | Re-run: 0 new vulns. School clean, bot clean. App: same 3 moderate dev-only (esbuild CORS, vite path traversal, brace-expansion DoS) — all documented, no production risk. @sentry/node added since last run (clean). Node 22 LTS (EOL 2027-04), Python 3.11 (EOL 2027-10) both current. | claude/complete-readme-audits-3dG6T, claude/doc-audits-vxczt |
 | 11 | Dead Code | 2026-04-13 | Re-run: no new dead code found. All exports imported. Prior fixes verified. | claude/audit-checklist-fixes-59GsO |
-| 12 | N+1 Queries | 2026-04-13 | Re-run: agents.js action_target 3 SELECT * replaced with explicit columns. Prior fixes verified (.limit() caps, narrowed queries). | claude/audit-checklist-fixes-59GsO |
-| 13 | Input Validation | 2026-04-13 | Round 2: calculateHunger now handles invalid date strings (NaN guard). sanitizeAvatarConfig guards against null/non-object input. shipped-loop.ts botRow!.name replaced with safe optional chaining. agent.py bare `except Exception` narrowed to specific types. SDK python rate limiter + key cache now thread-safe (threading.Lock). Prior fixes verified. | claude/audit-checklist-review-GrqeE |
-| 14 | Cross-System Contracts | 2026-04-13 | Re-run: no new contract mismatches. Prior fixes verified (condensation branch fix, condenser key names, stance default, grade_self_reviews reset). | claude/audit-checklist-fixes-59GsO |
+| 12 | N+1 Queries | 2026-04-14 | Round 3: 11 SELECT * narrowed to explicit columns (register.js, identity.js, responses.js, skills-core.js, calibration.js, forge-aggregation.js ×6). Prior fixes verified. | claude/audit-checklist-completion-JLioU |
+| 13 | Input Validation | 2026-04-14 | Round 3: papers.js offset now capped at 10000 (was unbounded — DoS via large offset). 11 parseInt() calls across School now include radix parameter (reconcile.js, papers.js, open-questions.js, agents.js, forge-aggregation.js, forge-hypotheses.js, review-helpers.js). open-questions.js offset cap reduced from 100000→10000. Prior fixes verified. | claude/audit-checklist-completion-JLioU |
+| 14 | Cross-System Contracts | 2026-04-14 | Round 2: 2 contract fixes. App tool-schemas.ts: added paper_type enum ('research'|'forge') to PAPER_TOOL — forge papers can now be submitted through App-managed bot cycles. App tool-schemas.ts: added 'revision' and 'reaffirmation' to RESPONSE_TOOL stance enum — was missing 2 of 5 valid stances. Prior fixes verified. | claude/audit-checklist-completion-JLioU |
 | 15 | Error Message UX | 2026-04-13 | Round 2: 3 more agent.py debug-level failure logs upgraded to info/warning (conv DB cleanup, stale DB cleanup, self-observation sync). Round 1: 10 community action logger.debug→warning. All failures now visible in production. | claude/audit-checklist-review-GrqeE |
 | 16 | Graceful Shutdown | 2026-04-13 | Re-run: no new issues. Prior fixes verified (conv memory, sleep cleanup, db checkpoint all log warnings). | claude/audit-checklist-review-GrqeE |
 | 17 | Load & Concurrency | 2026-04-13 | Re-run: BullMQ job cleanup now daily (was weekly), retention 14d (was 30d). Platform queue now has defaultJobOptions with retry config. Prior fixes verified. | claude/audit-checklist-fixes-59GsO |
