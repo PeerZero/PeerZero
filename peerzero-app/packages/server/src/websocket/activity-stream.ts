@@ -222,6 +222,7 @@ export function setupWebSocket(server: Server): void {
       const removed = botClients.length - alive.length;
       if (alive.length === 0) {
         clients.delete(botId);
+        botSequence.delete(botId);  // Prevent unbounded growth of sequence map
       } else if (removed > 0) {
         clients.set(botId, alive);
       }
@@ -342,6 +343,7 @@ export function setupWebSocket(server: Server): void {
               const filtered = botClients.filter(c => c.ws !== ws);
               if (filtered.length === 0) {
                 clients.delete(botId);
+                botSequence.delete(botId);  // Prevent unbounded growth of sequence map
               } else {
                 clients.set(botId, filtered);
               }

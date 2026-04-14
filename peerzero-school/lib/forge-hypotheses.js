@@ -70,16 +70,24 @@ async function advanceHypothesisCycles(agentId) {
 
     if (!pending || pending.length === 0) return [];
 
+    // Atomic increment — avoids read-modify-write race if two cycles overlap
     const expired = [];
     for (const h of pending) {
-      const newElapsed = (h.cycles_elapsed || 0) + 1;
-      await getSupabase().from('forge_hypotheses')
-        .update({ cycles_elapsed: newElapsed })
-        .eq('id', h.id);
+      const { data: updated, error: incErr } = await getSupabase().from('forge_hypotheses')
+        .update({ cycles_elapsed: (h.cycles_elapsed || 0) + 1 })
+        .eq('id', h.id)
+        .eq('status', 'pending')
+        .select('id, cycles_elapsed, cycles_to_resolve')
+        .single();
+
+      if (incErr) {
+        log.warn('[forge-hypotheses] cycle increment failed', { id: h.id, err: incErr.message });
+        continue;
+      }
 
       // Mark as ready for resolution if elapsed >= target
-      if (newElapsed >= h.cycles_to_resolve) {
-        expired.push(h.id);
+      if (updated && updated.cycles_elapsed >= updated.cycles_to_resolve) {
+        expired.push(updated.id);
       }
     }
 
@@ -94,7 +102,7 @@ async function advanceHypothesisCycles(agentId) {
 
 async function resolveHypothesis(hypothesisId, outcome, actualData, insight, brierScore = null) {
   try {
-    await getSupabase().from('forge_hypotheses')
+    const { error: resolveErr } = await getSupabase().from('forge_hypotheses')
       .update({
         status: 'resolved',
         outcome: outcome,
@@ -104,6 +112,7 @@ async function resolveHypothesis(hypothesisId, outcome, actualData, insight, bri
         resolved_at: new Date().toISOString(),
       })
       .eq('id', hypothesisId);
+    if (resolveErr) log.error('[forge-hypotheses] resolve write failed', { hypothesisId, err: resolveErr.message });
   } catch (err) {
     log.error('[forge-hypotheses] resolve failed', { hypothesisId, err: err?.message });
   }

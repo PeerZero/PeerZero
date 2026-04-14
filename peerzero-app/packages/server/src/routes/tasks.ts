@@ -28,6 +28,15 @@ const incomingTaskLimiter = rateLimit({
   message: { error: 'Too many incoming tasks. Try again later.' },
 });
 
+// Phone-home endpoints — self-hosted bots polling for directives and reporting progress
+const phoneHomeLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 60,  // Generous: bots poll every ~30s, so 2/min typical, 60/min burst
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many phone-home requests. Try again later.' },
+});
+
 const router = Router();
 
 // ── Incoming task (from another agent — HMAC auth if secret configured) ──
@@ -251,7 +260,7 @@ router.post('/:id/tasks/send', requireAuth, userRateLimit('write'), async (req: 
 });
 
 // ── Poll owner directives (self-hosted bots via phone-home token) ──
-router.get('/:id/tasks/directives', async (req: Request, res: Response) => {
+router.get('/:id/tasks/directives', phoneHomeLimiter, async (req: Request, res: Response) => {
   // Auth via phone-home token (Bearer header)
   const authHeader = req.headers.authorization;
   if (!authHeader?.startsWith('Bearer ')) {
@@ -295,7 +304,7 @@ router.get('/:id/tasks/directives', async (req: Request, res: Response) => {
 });
 
 // ── Report agenda progress (self-hosted bots via phone-home token) ──
-router.post('/:id/task-progress', async (req: Request, res: Response) => {
+router.post('/:id/task-progress', phoneHomeLimiter, async (req: Request, res: Response) => {
   const authHeader = req.headers.authorization;
   if (!authHeader?.startsWith('Bearer ')) {
     res.status(401).json({ error: 'Missing phone-home token' });

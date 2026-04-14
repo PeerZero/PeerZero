@@ -178,14 +178,16 @@ async function advancePersistenceCycles(agentId) {
       const newCycles = (s.cycles_active || 0) + 1;
       if (newCycles >= MAX_SIGNAL_CYCLES) {
         // Expire — pattern may have resolved (or condensed away)
-        await getSupabase().from('persistence_signals')
+        const { error: expErr } = await getSupabase().from('persistence_signals')
           .update({ status: 'expired', cycles_active: newCycles })
           .eq('id', s.id);
-        log.info('[persistence] Signal expired', { id: s.id, cycles: newCycles });
+        if (expErr) log.warn('[persistence] expire write failed', { id: s.id, err: expErr.message });
+        else log.info('[persistence] Signal expired', { id: s.id, cycles: newCycles });
       } else {
-        await getSupabase().from('persistence_signals')
+        const { error: incErr } = await getSupabase().from('persistence_signals')
           .update({ cycles_active: newCycles })
           .eq('id', s.id);
+        if (incErr) log.warn('[persistence] cycle increment failed', { id: s.id, err: incErr.message });
       }
     }
   } catch (err) {
@@ -198,7 +200,7 @@ async function advancePersistenceCycles(agentId) {
 
 async function resolvePersistenceSignal(signalId, resolution, resolvedBy = null) {
   try {
-    await getSupabase().from('persistence_signals')
+    const { error: resolveErr } = await getSupabase().from('persistence_signals')
       .update({
         status: 'resolved',
         resolution: (resolution || '').slice(0, 500),
@@ -206,6 +208,7 @@ async function resolvePersistenceSignal(signalId, resolution, resolvedBy = null)
         resolved_at: new Date().toISOString(),
       })
       .eq('id', signalId);
+    if (resolveErr) log.error('[persistence] resolve write failed', { signalId, err: resolveErr.message });
   } catch (err) {
     log.error('[persistence] resolve failed', { signalId, err: err?.message });
   }

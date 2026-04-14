@@ -65,12 +65,13 @@ async function resolveDecisionRationale(agentId, actualOutcome, actionFilter = n
 
     if (!unresolved || unresolved.length === 0) return;
 
-    await getSupabase().from('decision_rationales')
+    const { error: resolveErr } = await getSupabase().from('decision_rationales')
       .update({
         actual_outcome: actualOutcome,
         resolved: true,
       })
       .eq('id', unresolved[0].id);
+    if (resolveErr) log.error('[decision-rationale] resolve write failed', { id: unresolved[0].id, err: resolveErr.message });
   } catch (err) {
     log.error('[decision-rationale] resolve failed', { err: err?.message });
   }

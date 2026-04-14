@@ -18,7 +18,7 @@ import { logger } from '../lib/logger';
 import { query, queryOne, queryRows } from '../db/client';
 import { schedulePlatformJobs } from '../jobs/platform-queue';
 import { getLLMAdapter } from '../adapters/adapter.factory';
-import { getDecryptedKey } from '../services/api-key.service';
+import { getDecryptedKey, markKeyInvalid } from '../services/api-key.service';
 import { updateAgendaMessage, storeMessage } from '../services/message.service';
 import { broadcastAgendaUpdate, broadcastMessage } from '../websocket/activity-stream';
 import type { BotContext } from './agent-loop';
@@ -256,6 +256,14 @@ export async function runShippedCycle(ctx: BotContext): Promise<void> {
           { botId: ctx.botId, taskId: task.id, err: errMsg },
           'Failed to process incoming task',
         );
+
+        // Mark API key invalid on 401 so UI shows the key needs replacing
+        if (errMsg.includes('401') && ctx.llmApiKeyId) {
+          await markKeyInvalid(ctx.llmApiKeyId).catch((e) => {
+            logger.warn({ err: e instanceof Error ? e.message : e }, 'Failed to mark API key as invalid');
+          });
+        }
+
         await query(
           `UPDATE bot_tasks SET status = 'failed', error = $2, updated_at = now() WHERE id = $1`,
           [task.id, errMsg],

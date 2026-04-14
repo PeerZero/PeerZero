@@ -87,7 +87,7 @@ class Injector:
                 "This is who you are. Everything below is filtered through this sense of self."
             )
             sections.append(
-                f"<self_portrait>\n{l3_self['content']}\n</self_portrait>\n\n{framing}"
+                f"<self_portrait>\n{sanitize_untrusted(l3_self['content'], 'self_portrait')}\n</self_portrait>\n\n{framing}"
             )
         elif self_observations:
             obs_text = "\n".join(f"- {sanitize_untrusted(o['observation'], 'observation')}" for o in self_observations)
@@ -101,7 +101,7 @@ class Injector:
         # 3. L3 Felt portrait (who they are)
         if l3_portrait and l3_portrait.get("content"):
             sections.append(
-                f"<felt_portrait>\n{l3_portrait['content']}\n</felt_portrait>\n\n"
+                f"<felt_portrait>\n{sanitize_untrusted(l3_portrait['content'], 'felt_portrait')}\n</felt_portrait>\n\n"
                 "Everything below speaks through this portrait."
             )
 

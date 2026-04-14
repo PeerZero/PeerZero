@@ -12,6 +12,19 @@ import { logger } from '../lib/logger';
 
 const router = Router();
 
+// Reuse a single Redis connection for health checks (avoids connection leak per request)
+let healthRedis: IORedis | null = null;
+function getHealthRedis(): IORedis | null {
+  if (!config.redisUrl) return null;
+  if (!healthRedis) {
+    healthRedis = new IORedis(config.redisUrl, { maxRetriesPerRequest: 1, connectTimeout: 3000 });
+    healthRedis.on('error', (err) => {
+      logger.debug({ err: err.message }, 'Health-check Redis error');
+    });
+  }
+  return healthRedis;
+}
+
 router.get('/', async (_req: Request, res: Response) => {
   const checks: Record<string, string> = { database: 'unknown', redis: 'unknown' };
   let healthy = true;
@@ -26,13 +39,11 @@ router.get('/', async (_req: Request, res: Response) => {
   }
 
   // Check Redis (optional — skip if not configured)
-  if (config.redisUrl) {
+  const redis = getHealthRedis();
+  if (redis) {
     try {
-      const redis = new IORedis(config.redisUrl, { lazyConnect: true, connectTimeout: 3000 });
-      await redis.connect();
       await redis.ping();
       checks.redis = 'ok';
-      await redis.quit();
     } catch {
       checks.redis = 'unhealthy';
       healthy = false;

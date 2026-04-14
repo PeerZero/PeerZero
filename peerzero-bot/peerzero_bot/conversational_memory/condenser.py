@@ -16,6 +16,7 @@ from typing import Callable
 
 from .config import ConversationalMemoryConfig
 from .graph import Graph, VALID_RELEVANCE
+from ..utils import sanitize_untrusted
 
 logger = logging.getLogger("peerzero-bot.conversational_memory")
 
@@ -120,7 +121,7 @@ Output structured JSON only. No preamble.
 }}"""
 
     async def run_l2(self, l1_entries: list[dict], active_nodes: list[dict]) -> dict | None:
-        l1_content = "\n---\n".join(e["content"] for e in l1_entries)
+        l1_content = "\n---\n".join(sanitize_untrusted(e["content"], "l1_entry") for e in l1_entries)
         self_portrait = self._graph.get_l3_self_portrait()
         sp_content = self_portrait["content"] if self_portrait else None
 
@@ -340,9 +341,9 @@ Maximum 600 words. Minimum 200 words."""
 
         return f"""You just had this exchange:
 
-User: "{user_msg}"
+User: "{sanitize_untrusted(user_msg, 'user_msg')}"
 
-You responded: "{bot_response}"
+You responded: "{sanitize_untrusted(bot_response, 'bot_response')}"
 
 {self_section}
 
