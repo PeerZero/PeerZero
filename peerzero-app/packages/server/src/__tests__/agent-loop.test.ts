@@ -43,6 +43,7 @@ vi.mock('../services/bot.service', () => ({
 
 vi.mock('../services/api-key.service', () => ({
   getDecryptedKey: vi.fn().mockResolvedValue('test-llm-key'),
+  markKeyInvalid: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock('../services/memory.service', () => ({

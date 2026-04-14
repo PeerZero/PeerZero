@@ -17,7 +17,7 @@ export const colors = {
   text: {
     primary: '#EAF0FA',     // Near-white with slight blue tone
     secondary: '#8B95B0',   // Muted — readable on dark bg
-    tertiary: '#4D5A78',    // Subtle labels, timestamps
+    tertiary: '#6B7A9A',    // Subtle labels, timestamps (WCAG AA 4.5:1 on #080C18)
     inverse: '#080C18',     // For use on light/accent backgrounds
     accent: '#38F5B5',      // For text that needs to pop (sparingly)
   },

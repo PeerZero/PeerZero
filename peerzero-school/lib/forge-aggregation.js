@@ -410,6 +410,18 @@ function aggregateProposals(qualifiedPapers) {
 async function runAggregation(triggeredBy = 'cron') {
   const supabase = getSupabase();
 
+  // Concurrent-run guard: skip if another aggregation is already in progress
+  const { data: activeRun } = await supabase
+    .from('forge_aggregation_runs')
+    .select('id')
+    .in('status', ['pending', 'in_progress'])
+    .limit(1)
+    .maybeSingle();
+  if (activeRun) {
+    log.info({ activeRunId: activeRun.id }, 'Skipping forge aggregation — another run is already in progress');
+    return { skipped: true, reason: 'concurrent_run' };
+  }
+
   // Determine window: pick up where the last completed run left off
   const { data: lastRun } = await supabase.from('forge_aggregation_runs')
     .select('window_end, generation_number')

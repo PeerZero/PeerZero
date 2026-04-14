@@ -18,11 +18,11 @@ Pick 2-3 audits per session. For each audit, search all 3 systems (peerzero-scho
 
 | Frequency | Audits |
 |-----------|--------|
-| Monthly | #1 Silent Failures, #5 Secrets, #10 Dependencies, #20 Cost & Rate Limits |
-| Quarterly | #2 Race Conditions, #4 Idempotency, #6 Timeouts, #8 Auth Gaps, #23 Prompt Injection |
-| Twice yearly | #3 Unbounded Growth, #7 Stale Cache, #9 Degradation, #11 Dead Code, #12 N+1 Queries, #18 Data Integrity |
-| After major features | #13 Input Validation, #14 Cross-System Contracts, #15 Error UX, #24 HTTP Security Headers |
-| Pre-launch / post-incident | #17 Load & Concurrency, #19 Recovery & Rollback, #21 User Journey Smoke Test, #22 Monitoring & Alerting |
+| Monthly | #1 Silent Failures, #5 Secrets, #10 Dependencies, #20 Cost & Rate Limits, #25 Email Deliverability |
+| Quarterly | #2 Race Conditions, #4 Idempotency, #6 Timeouts, #8 Auth Gaps, #23 Prompt Injection, #27 Payment & Billing, #30 BYOK Key Lifecycle, #31 WebSocket Resilience, #34 Redis & Queue Config |
+| Twice yearly | #3 Unbounded Growth, #7 Stale Cache, #9 Degradation, #11 Dead Code, #12 N+1 Queries, #18 Data Integrity, #29 Timezone & Unicode, #32 License Compliance, #35 Migration Safety, #36 Accessibility |
+| After major features | #13 Input Validation, #14 Cross-System Contracts, #15 Error UX, #24 HTTP Security Headers, #33 Env Var Validation |
+| Pre-launch / post-incident | #17 Load & Concurrency, #19 Recovery & Rollback, #21 User Journey Smoke Test, #22 Monitoring & Alerting, #26 App Store Readiness, #28 Platform Provider Limits |
 
 ---
 
@@ -465,6 +465,223 @@ Pick 2-3 audits per session. For each audit, search all 3 systems (peerzero-scho
 
 ---
 
+## 25. Email Deliverability & Transactional Email
+
+**What it catches:** Emails that land in spam, bounce silently, or never arrive — killing signup flows, password resets, and parental consent.
+
+**What to look for:**
+- SPF/DKIM/DMARC DNS records configured for your sending domain (Resend handles DKIM signing, but YOU must add the DNS records)
+- SPF record has a 10-lookup limit — exceeding it silently fails validation
+- DMARC policy starts at `p=none` (monitor), moves to `p=reject` before launch
+- Bounce handling — are hard bounces (invalid addresses) suppressed from future sends? Check Resend webhook for `bounced` events
+- Email warm-up — new sending domains need 2-4 weeks of gradual volume increase. Launching with a blast from a cold domain = spam folder
+- CAN-SPAM footer — physical mailing address and company name in transactional email templates
+- Parental consent email — if this lands in spam, child accounts are permanently locked. Test deliverability to Gmail, Outlook, Yahoo
+- Email retry on transient failures — does `sendParentalConsentEmail` retry on 5xx from Resend?
+
+**Last run:** Never
+
+---
+
+## 26. Mobile App Store Readiness
+
+**What it catches:** App store rejections and post-launch compliance failures that are impossible to detect from code review alone.
+
+**What to look for:**
+- Apple Guideline 5.1.2(i) — app sends user data to Anthropic (BYOK). Must show a consent modal naming Anthropic before first API call, not just privacy policy text
+- `apple-app-site-association` file at `/.well-known/` on your domain for Universal Links. SHA-256 fingerprint in Android `assetlinks.json` must match PRODUCTION signing cert, not dev
+- Push notification certificates/keys — APNs HTTP/2 key expiry, rotation plan
+- `Info.plist` permission strings — must clearly explain WHY each permission is needed (vague strings = rejection)
+- Demo account for App Store review team — working test credentials, Apple's IP range not blocked by backend
+- Expo OTA runtime version — native code changes require runtime version bump or OTA updates crash
+- App Store data safety / privacy nutrition labels — must accurately list all data collected, shared, and linked to identity
+- Age rating configuration — must match COPPA age gate implementation
+
+**Last run:** Never
+
+---
+
+## 27. Payment & Billing Edge Cases
+
+**What it catches:** Stripe integration issues that work in test mode but fail or lose money in production.
+
+**What to look for:**
+- Webhook body parsing — Stripe signature verification requires RAW body, not JSON-parsed. If Express `json()` middleware runs first, verification silently fails. Check middleware ordering
+- `invoice.finalization_failed` webhook handler — subscriptions stay active when invoices can't be finalized (user gets free access)
+- Proration on multiple plan changes in one billing period — negative prorations can accumulate
+- Dunning (failed payment retry) — what happens to bot access when payment fails? Is there a grace period?
+- Refund flow — is there a mechanism to process refunds? What happens to the bot when a charge is refunded?
+- Stripe test mode vs live mode key confusion — are test keys blocked in production env?
+- Currency handling — are amounts stored in cents (integers) not dollars (floats)?
+- Webhook idempotency — Stripe retries failed webhooks for up to 3 days. Are handlers safe to receive the same event twice?
+- Sales tax / VAT — if selling internationally, you may need Stripe Tax or a Merchant of Record
+
+**Last run:** Never
+
+---
+
+## 28. Platform Provider Limits
+
+**What it catches:** Hard limits imposed by Vercel, Supabase, Cloudflare, and Anthropic that you hit before your own rate limits — causing mysterious failures.
+
+**What to look for:**
+- Vercel serverless body size limit: 4.5 MB — large LLM responses or paper bodies can exceed this
+- Vercel cron job timing: can execute up to 59 minutes late, no retry on failure, must be idempotent
+- Supabase connection pool: keep PostgREST usage under 40% of available connections (leaves room for Auth and internal services). Free tier: 200 concurrent ceiling
+- Supabase Auth rate limits and email link prefetching — enterprise email security tools auto-click magic links/password reset links, consuming the OTP before the user does
+- Cloudflare Worker memory: 128 MB per isolate, shared across concurrent requests. Buffer responses as streams, not in-memory strings
+- Cloudflare Worker CPU time: 10ms on free, 30s on paid — LLM proxy preamble injection must not hit this
+- Supabase RLS performance: policies execute per-row-scanned. Complex policies with joins or function calls degrade at scale. Indexes needed on all columns referenced in RLS policies
+- Anthropic API: input TPM (tokens per minute) is usually the binding constraint, not RPM. Each bot cycle sends 20k+ cached tokens per call
+
+**Last run:** Never
+
+---
+
+## 29. Timezone, Unicode & Locale Handling
+
+**What it catches:** Bugs that only appear for non-US users, non-English text, or during daylight saving transitions.
+
+**What to look for:**
+- All timestamps stored as UTC in database? Check for `new Date()` used server-side (uses server timezone) vs `new Date().toISOString()` (UTC)
+- DST transitions — cron jobs or `setInterval` scheduled in local time can skip or double-fire during spring-forward/fall-back
+- Emoji in user-generated content — `string.length` returns wrong results for emoji outside BMP (multi-byte). Zero-width joiners create compound emoji that split incorrectly
+- Database text encoding — Supabase/PostgreSQL uses UTF-8 by default (good), but check SQLite `PRAGMA encoding`
+- Username/bot name fields with emoji — can break display, sorting, search, and URL generation
+- Paper/review content with non-Latin characters — does search, truncation, and display work correctly?
+- Date formatting in UI — does the mobile app respect user locale for date display?
+- Sorting — are strings sorted with locale-aware collation or byte-order (which breaks for accented characters)?
+
+**Last run:** Never
+
+---
+
+## 30. BYOK Key Lifecycle
+
+**What it catches:** API key management gaps specific to the bring-your-own-key model where users provide their Anthropic keys.
+
+**What to look for:**
+- Key validation on storage — is the key tested with a real API call before being accepted and encrypted? An invalid key causes silent failures on every subsequent LLM call
+- Key revocation UX — can the user delete/replace their stored key? What happens to running bots when the key is revoked?
+- Key scope/tier detection — a rate-limited (Tier 1) key will cause intermittent failures that look like bugs. Can you detect the user's tier?
+- Spend anomaly detection — unusual token usage patterns could indicate key compromise through your platform
+- Key rotation without bot restart — currently requires restart (noted in SECURITY_TODO). Is this documented for users?
+- Error messaging — when an LLM call fails due to invalid/expired/rate-limited key, does the user see a clear message identifying the key as the problem (not a generic "Action failed")?
+- Key isolation — verify that one user's key can never be used for another user's bot (adapter-bound credential isolation)
+
+**Last run:** Never
+
+---
+
+## 31. WebSocket Resilience
+
+**What it catches:** Real-time connection failures that only appear on mobile networks, behind corporate proxies, or during server restarts.
+
+**What to look for:**
+- Silent disconnect detection — TCP connections can be dead while `readyState === OPEN`. Application-level heartbeat/ping-pong with missed-pings threshold needed
+- Mobile background/foreground lifecycle — iOS suspends TCP connections within seconds of backgrounding. Carrier-grade NAT drops idle connections after ~30s. Must reconnect on foreground
+- Reconnection with exponential backoff + jitter — without jitter, server restart causes thousands of clients reconnecting simultaneously (thundering herd)
+- Proxy idle timeout — Nginx, ALB, and most reverse proxies default to 60s idle timeout. Heartbeat interval must be shorter than the shortest proxy timeout in your path
+- Authentication on reconnect — does the WebSocket re-authenticate after reconnect, or does it reuse a stale/expired token?
+- Message ordering and deduplication — can messages arrive out of order or duplicated after reconnect? Does the client handle this?
+- Offline queue — are messages generated while disconnected queued and sent on reconnect, or silently dropped?
+- Connection limit per user/bot — already set (20/user, 10/bot) but verify enforcement under rapid reconnect cycling
+
+**Last run:** Never
+
+---
+
+## 32. Open Source License Compliance
+
+**What it catches:** License violations that can legally require you to open-source your entire application or pay damages.
+
+**What to look for:**
+- AGPL-licensed dependencies — AGPL has NO SaaS loophole (unlike GPL). A single AGPL dependency in a SaaS product can require releasing your source code
+- Run `npx license-checker --production` in peerzero-school and peerzero-app
+- Run `pip-licenses` in peerzero-bot
+- Flag any AGPL, SSPL, or EUPL licenses — these are incompatible with proprietary SaaS
+- Check transitive dependencies too — a dependency-of-a-dependency can carry AGPL
+- GPL dependencies are OK for SaaS (SaaS loophole) but NOT OK if you distribute the software (which the bot package does if exported)
+- Creative Commons NonCommercial (CC-NC) on any bundled data, models, or documentation
+- Add a license scan to CI (e.g., `license-checker --failOn "AGPL-3.0"`)
+
+**Last run:** Never
+
+---
+
+## 33. Environment Variable Validation at Startup
+
+**What it catches:** Missing or malformed environment variables that cause cryptic runtime errors minutes or hours after deployment instead of immediate clear failures.
+
+**What to look for:**
+- Does the App server validate ALL required env vars at startup? (DB URL, Redis URL, Stripe keys, School URL, JWT secret, encryption key)
+- Does the School server validate required env vars at startup? (Supabase URL/key, admin secret, Anthropic key for haiku audit)
+- Does the Bot validate required config at startup? (API key, school URL, proxy URL)
+- Are env vars validated for FORMAT, not just presence? (URL must be valid URL, port must be number, secret must be >= 32 chars)
+- What happens when an optional env var is missing? Does it fail silently or log a warning?
+- Are there env vars checked at USAGE time that should be checked at startup? (e.g., `process.env.STRIPE_WEBHOOK_SECRET` only checked when a webhook arrives)
+- Is there a single list of all required env vars documented somewhere? (README, `.env.example`)
+- School `schools/schema.js` validates school config at startup — does the rest of the app do the same for env vars?
+
+**Last run:** Never
+
+---
+
+## 34. Redis & Queue Production Configuration
+
+**What it catches:** Redis and BullMQ misconfigurations that work in development but cause data loss or OOM crashes in production.
+
+**What to look for:**
+- Redis `maxmemory-policy` MUST be `noeviction` for BullMQ — any eviction policy can silently delete queue metadata, corrupting job state
+- BullMQ `removeOnComplete` and `removeOnFail` settings — without these, completed/failed jobs accumulate in Redis forever until OOM
+- Redis AOF rewrite memory — during rewrite, Redis buffers all new writes in memory. If rewrite takes too long, you OOM. RDB `fork()` can use 2x normal memory
+- Redis persistence mode — is it AOF, RDB, or both? AOF is safer for queue data (no data loss on crash). RDB alone can lose the last few minutes of data
+- Redis connection count — how many connections does your app open? (BullMQ workers, pub/sub, rate limiting, caching). Each BullMQ queue creates 2-3 connections
+- Redis password/ACL — is Redis authentication enabled in production? Is the connection string using TLS?
+- BullMQ stalled job detection — `stalledInterval` must account for long LLM calls (your lock renewal is 60s — verify this is longer than the longest expected job)
+- BullMQ dead letter queue — failed jobs after max retries: are they logged/alertable or silently discarded?
+
+**Last run:** Never
+
+---
+
+## 35. Database Migration Safety
+
+**What it catches:** Migrations that work on empty dev databases but lock tables, corrupt data, or cause downtime on production databases with real data.
+
+**What to look for:**
+- `ALTER TABLE ... ADD COLUMN ... NOT NULL` without `DEFAULT` — locks table and fails if rows exist
+- `ALTER TABLE ... ADD COLUMN ... DEFAULT <value>` on large tables — PostgreSQL 11+ handles this instantly for immutable defaults, but check for mutable defaults or expressions
+- Adding indexes without `CONCURRENTLY` — `CREATE INDEX` locks writes for the duration. `CREATE INDEX CONCURRENTLY` does not, but cannot run inside a transaction
+- Expand-contract pattern — dangerous schema changes need multiple deployments: (1) add new column, (2) backfill, (3) deploy code using new column, (4) drop old column. Single-step renames or type changes cause downtime
+- Migration duration estimation — a migration that takes 2 seconds on 100 rows can take 2 hours on 1M rows. Have you estimated duration at production scale?
+- Rollback scripts — do all migrations have DOWN scripts? (Audit #19 covered recent ones, but check the full set)
+- Data-only migrations — are there migrations that UPDATE existing data? These need batching on large tables to avoid lock contention
+- Migration ordering — with 32+ migration files, are there any that depend on each other but could run out of order?
+
+**Last run:** Never
+
+---
+
+## 36. Accessibility (WCAG)
+
+**What it catches:** Barriers that prevent users with disabilities from using your app — also a legal requirement under the European Accessibility Act (EAA, enforcement June 2025).
+
+**What to look for:**
+- React Native components missing `accessibilityRole`, `accessibilityLabel`, and `accessibilityState` props
+- `TouchableOpacity` / `Pressable` without `accessibilityRole="button"` and descriptive label
+- Images without `accessibilityLabel` (equivalent to alt text)
+- Color contrast ratios — WCAG AA requires 4.5:1 for normal text, 3:1 for large text
+- Screen reader testing — does VoiceOver (iOS) and TalkBack (Android) navigate the app logically?
+- Focus order — is tab/swipe navigation order logical (not jumping around)?
+- Dynamic content updates — are screen readers notified of BrainScreen updates, activity log changes, bot status changes? (use `accessibilityLiveRegion` on Android, `UIAccessibility.post` on iOS)
+- Text scaling — does the app respect system font size preferences? Does it break layout at 200% text size?
+- Touch target size — minimum 44x44 points (Apple) / 48x48 dp (Material Design) for all interactive elements
+
+**Last run:** Never
+
+---
+
 ## Audit Log
 
 Track when each audit was last run and what was found/fixed. This helps Claude prioritize which audits are overdue.
@@ -497,3 +714,15 @@ Track when each audit was last run and what was found/fixed. This helps Claude p
 | 22 | Monitoring & Alerting | 2026-04-14 | Deep pass: /health/metrics returns cycle success rate, error count, token usage, action breakdown. Structured Pino JSON logging with bot_id, cycle_number, action_type filtering. Daily token usage tracked per bot. Missing: per-bot error tracking, BullMQ queue depth monitoring, Supabase query latency tracking, stuck-bot detection (cycling but no progress), cost alert thresholds. Sentry captures unhandled exceptions. No external uptime monitoring service yet. | claude/audit-checklist-completion-JLioU |
 | 23 | Prompt Injection | 2026-04-13 | Re-run: 4 critical, 2 high fixed in App prompt-builder.ts. Critical: identity_core fields (self_narrative, formed_convictions, claimed_values, active_tensions) now sanitized via sanitizeForPrompt() in both buildIdentityFirstSystemPrompt and buildPlatformIdentityPrompt. Critical: selfAuthoredBlock now sanitized in buildPlatformIdentityPrompt (was missing — only buildIdentityFirstSystemPrompt had it). High: skill name/instruction now sanitized before system prompt injection. High: paper title/abstract/body now sanitized in review, bounty, respond, and rebuttal prompts. School-side sanitize_untrusted coverage verified. | claude/audit-checklist-review-GrqeE |
 | 24 | HTTP Security Headers | 2026-04-13 | Re-run: no new header gaps. Helmet on App, vercel.json headers on School, proxy CSP — all verified. | claude/audit-checklist-fixes-59GsO |
+| 25 | Email Deliverability | 2026-04-14 | 2 critical, 3 high, 2 medium, 1 low. FIXED: email retry logic (2 retries with backoff) added to sendWithRetry(). FIXED: CAN-SPAM physical address footer added to all transactional emails. Remaining: no Resend bounce/complaint webhook, COPPA email unimplemented (plan only), SPF/DKIM/DMARC not verified, no email warm-up. | claude/push-cadence-table-update-WmhJf |
+| 26 | App Store Readiness | 2026-04-14 | 3 critical, 2 high, 2 medium, 1 low. FIXED: BYOK consent modal added (Apple 5.1.2(i) — names provider, requires "I Agree"). FIXED: push projectId reads from app.json extra.eas.projectId. FIXED: runtimeVersion + EAS config added to app.json. Remaining: no AASA/assetlinks, no demo account for reviewers, privacy manifest incomplete. | claude/push-cadence-table-update-WmhJf |
+| 27 | Payment & Billing | 2026-04-14 | 0 critical, 2 high, 3 medium, 4 low. No invoice.finalization_failed handler. No live vs test Stripe key guard in config — FIXED: added sk_test_ check in validateStartupConfig. Refund marks status but doesn't revoke grade_unlock/entitlements. No stripe_event_id dedup table (multi-step idempotency works but fragile). No VAT/sales tax. Raw body middleware ordering is correct. Currency in cents (integers) throughout — correct. | claude/push-cadence-table-update-WmhJf |
+| 28 | Platform Provider Limits | 2026-04-14 | 0 critical, 0 high, 3 medium, 2 low. No maxDuration in vercel.json — forge_aggregate cron may timeout. action-guide.js created its own Supabase client without 30s timeout — FIXED: now uses shared.js getSupabase(). forge_aggregate has no concurrent-run guard (at-least-once cron can duplicate). Proxy session store is per-isolate. Proxy rate limit is request-count only, not TPM-aware. | claude/push-cadence-table-update-WmhJf |
+| 29 | Timezone & Unicode | 2026-04-14 | 0 critical, 0 high, 3 medium, 3 low. MCP output byte-offset truncation can split UTF-8 multi-byte chars — FIXED: now uses encode/decode with errors='ignore'. .slice(0,N) on LLM strings in forge-hypotheses.js may split surrogates. .length (UTF-16 code units) used for user content gates. All DB timestamps are TIMESTAMPTZ (UTC). SQLite defaults to UTF-8. StatsScreen hardcodes M/D format. | claude/push-cadence-table-update-WmhJf |
+| 30 | BYOK Key Lifecycle | 2026-04-14 | 0 critical, 2 high, 3 medium, 1 low. FIXED: markKeyInvalid() now called on LLM 401 errors in agent-loop.ts — is_valid flag is set to false so UI shows key needs replacing. Remaining: no live API validation before key storage, reEncrypt() unused, no spend anomaly alerts, no atomic key-swap. Key isolation verified correct. | claude/push-cadence-table-update-WmhJf |
+| 31 | WebSocket Resilience | 2026-04-14 | 3 critical, 3 high, 1 medium, 2 low. FIXED: server heartbeat ping/pong every 30s — detects half-open TCP, terminates dead connections. FIXED: client AppState foreground listener — reconnects when app returns from background. FIXED: reconnect jitter added. Remaining: no message sequencing/dedup, no missed-event replay. Auth on reconnect handles token refresh correctly. | claude/push-cadence-table-update-WmhJf |
+| 32 | License Compliance | 2026-04-14 | 1 critical, 0 high, 1 medium, 1 low. No license scan in CI — AGPL dependency could silently enter. All current deps are clean: School 12 MIT + 1 0BSD, App 100% clean, Bot httpx (BSD-3) + anthropic (MIT) + openai (MIT). FIXED: added "license": "MIT" to peerzero-school and peerzero-app package.json. pip-licenses not in CI. | claude/push-cadence-table-update-WmhJf |
+| 33 | Env Var Validation | 2026-04-14 | 0 critical, 3 high, 2 medium, 4 low. App validateStartupConfig() never touched lazy getters — secrets only failed at first request — FIXED: now eagerly accesses databaseUrl, jwtSecret, jwtRefreshSecret, encryptionMasterKey, stripeSecretKey in production. School env vars (Supabase, Anthropic) validated lazily at first DB/LLM call only. ANTHROPIC_API_KEY missing causes silent feature degradation. Bot validation is good (validate() + sys.exit(1) at startup). | claude/push-cadence-table-update-WmhJf |
+| 34 | Redis & Queue Config | 2026-04-14 | 1 critical, 1 high, 2 medium, 3 low. FIXED: startup check reads CONFIG GET maxmemory-policy — warns/errors if not noeviction. FIXED: warns if REDIS_URL lacks TLS (rediss://) in production. FIXED: removeOnComplete/removeOnFail in defaultJobOptions. 7 persistent Redis connections per process. stalledInterval/lockRenewTime correctly configured. Dead letter: log only, no persistent DLQ. | claude/push-cadence-table-update-WmhJf |
+| 35 | Migration Safety | 2026-04-14 | 0 critical, 2 high, 3 medium, 2 low. All CREATE INDEX in migrations 027, 030, 032 (school) and 0024 (app) are non-concurrent — will lock writes on large tables. Migration 029 adds UNIQUE constraints via ALTER TABLE (AccessExclusiveLock). Mutable DEFAULT (NOW/CURRENT_DATE) backfills wrong timestamps in 010, 0025. Unbatched UPDATE on large tables in 006, 0022, 0030. Missing migrations 001-003, 005 (baseline gap). 22 of 28 school migrations lack DOWN scripts. | claude/push-cadence-table-update-WmhJf |
+| 36 | Accessibility (WCAG) | 2026-04-14 | 0 critical, 3 high, 5 medium, 3 low. FIXED: accessibilityLiveRegion="polite" on chat message FlatList. FIXED: TasksScreen task cards, cancel button, and filter tabs all have accessibilityRole/Label/State + tablist role. FIXED: ChatScreen filter tabs have role/label/state, send button has role/label. FIXED: text.tertiary color from #4D5A78→#6B7A9A (WCAG AA 4.5:1). FIXED: send button 40→44px. Remaining: BrainScreen tabs need label, LogScreen long-press needs hint, chat toggle rows, modals need accessibilityViewIsModal. | claude/push-cadence-table-update-WmhJf |

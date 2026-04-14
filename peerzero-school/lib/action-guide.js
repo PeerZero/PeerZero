@@ -10,22 +10,14 @@
  * This eliminates the need for bots to hard-code server rules client-side.
  */
 
-const { createClient } = require('@supabase/supabase-js');
 const log = require('./logger');
+const { getSupabase } = require('./shared');
 
 // ── School config (lazy-loaded) ─────────────────────────────────────────
 let _school;
 function getSchool() {
   if (!_school) _school = require('../schools');
   return _school;
-}
-
-let _supabase;
-function getSupabase() {
-  if (!_supabase) {
-    _supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
-  }
-  return _supabase;
 }
 
 /**

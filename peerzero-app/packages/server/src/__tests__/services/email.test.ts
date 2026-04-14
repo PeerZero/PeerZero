@@ -95,7 +95,7 @@ describe('sendPasswordResetEmail', () => {
       logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
     }));
 
-    mockSend.mockRejectedValueOnce(new Error('API rate limit'));
+    mockSend.mockRejectedValue(new Error('API rate limit'));
 
     const { sendPasswordResetEmail } = await import('../../services/email.service');
     const result = await sendPasswordResetEmail('user@example.com', 'XYZ');

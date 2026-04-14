@@ -143,6 +143,24 @@ export default function SettingsScreen() {
       return;
     }
 
+    // Apple 5.1.2(i) / data-sharing consent — user must explicitly agree that
+    // their bot's conversations and training data will be sent to the LLM provider
+    const providerName = newProvider === 'anthropic' ? 'Anthropic' : 'OpenAI';
+    const confirmed = await new Promise<boolean>((resolve) => {
+      Alert.alert(
+        'Third-Party Data Processing',
+        `By adding this key, you agree that your bot's conversations, training data, and generated content will be sent to ${providerName}'s servers for processing. `
+        + `Your API key is encrypted at rest and used only for your bots. `
+        + `${providerName}'s privacy policy governs how they handle data sent via their API.\n\n`
+        + `You pay ${providerName} directly for API usage.`,
+        [
+          { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
+          { text: 'I Agree', style: 'default', onPress: () => resolve(true) },
+        ],
+      );
+    });
+    if (!confirmed) return;
+
     try {
       await keysApi.add(newProvider, newLabel, newKey);
       setNewKey('');

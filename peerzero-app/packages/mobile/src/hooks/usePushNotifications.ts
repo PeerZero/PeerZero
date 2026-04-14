@@ -12,6 +12,7 @@
 
 import { useEffect, useRef } from 'react';
 import { Platform } from 'react-native';
+import Constants from 'expo-constants';
 import { notifications as notifApi } from '../services/api';
 
 // Push notifications are not supported on web
@@ -75,7 +76,7 @@ export function usePushNotifications(isAuthenticated: boolean): void {
 
         // Get the Expo push token
         const tokenData = await Notifications.getExpoPushTokenAsync({
-          projectId: undefined, // Uses app.json expo.extra.eas.projectId
+          projectId: Constants.expoConfig?.extra?.eas?.projectId,
         });
 
         const token = tokenData.data;

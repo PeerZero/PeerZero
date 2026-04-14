@@ -125,6 +125,34 @@ app.use('/api/platforms', platformRoutes);
 app.use('/api/skills', skillRoutes);
 app.use('/health', healthRoutes);
 
+// ── Well-known files for Universal Links (iOS) and App Links (Android) ──
+app.get('/.well-known/apple-app-site-association', (_req, res) => {
+  res.json({
+    applinks: {
+      apps: [],
+      details: [{
+        appID: 'TEAM_ID.com.peerzero.app', // Replace TEAM_ID with Apple Developer Team ID
+        paths: ['/bot/*', '/invite/*', '/verify/*'],
+      }],
+    },
+    webcredentials: {
+      apps: ['TEAM_ID.com.peerzero.app'],
+    },
+  });
+});
+
+app.get('/.well-known/assetlinks.json', (_req, res) => {
+  res.json([{
+    relation: ['delegate_permission/common.handle_all_urls'],
+    target: {
+      namespace: 'android_app',
+      package_name: 'com.peerzero.app',
+      // Replace with production signing certificate SHA-256 fingerprint
+      sha256_cert_fingerprints: ['REPLACE_WITH_PRODUCTION_SHA256_FINGERPRINT'],
+    },
+  }]);
+});
+
 // ── 404 catch-all for unknown routes ──
 app.use((_req, res) => {
   res.status(404).json({ error: 'Not found' });
@@ -148,6 +176,33 @@ setupWebSocket(server);
 if (config.redisUrl) {
   startWorker();
   startPlatformWorker();
+
+  // Validate Redis configuration for BullMQ compatibility
+  const IORedis = require('ioredis');
+  const checkRedis = new IORedis(config.redisUrl, { maxRetriesPerRequest: null, lazyConnect: true });
+  checkRedis.connect().then(() => {
+    return checkRedis.config('GET', 'maxmemory-policy');
+  }).then((result: string[]) => {
+    const policy = result?.[1];
+    if (policy && policy !== 'noeviction') {
+      logger.error(
+        { policy },
+        `Redis maxmemory-policy is "${policy}" — BullMQ REQUIRES "noeviction". `
+        + 'Jobs can be silently evicted, corrupting queue state. '
+        + 'Run: redis-cli CONFIG SET maxmemory-policy noeviction'
+      );
+    } else if (policy === 'noeviction') {
+      logger.info('Redis maxmemory-policy verified: noeviction (correct for BullMQ)');
+    }
+    // Warn if Redis URL is not using TLS in production
+    if (config.nodeEnv === 'production' && !config.redisUrl.startsWith('rediss://')) {
+      logger.warn('REDIS_URL is not using TLS (rediss://) in production — data in transit is unencrypted');
+    }
+    checkRedis.quit().catch(() => {});
+  }).catch((err: Error) => {
+    logger.warn({ err: err.message }, 'Could not verify Redis maxmemory-policy (CONFIG may be disabled on managed Redis)');
+    checkRedis.quit().catch(() => {});
+  });
 } else {
   logger.warn('REDIS_URL not set — job workers disabled (auth and API still work)');
 }

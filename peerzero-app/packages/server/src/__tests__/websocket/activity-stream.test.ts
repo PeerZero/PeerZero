@@ -36,6 +36,14 @@ class FakeWebSocket extends EventEmitter {
     this.readyState = 3; // CLOSED
   }
 
+  terminate() {
+    this.readyState = 3; // CLOSED
+  }
+
+  ping() {
+    // Simulate server-side ping for heartbeat
+  }
+
   // Simulate receiving a message
   receiveMessage(data: string) {
     this.emit('message', Buffer.from(data));
@@ -172,7 +180,7 @@ describe('activity-stream', () => {
     it('sends connected message on successful auth', async () => {
       const ws = await connectAndAuth('bot-1', 'user-1');
       const lastMsg = JSON.parse(ws.sent[ws.sent.length - 1]);
-      expect(lastMsg).toEqual({ type: 'connected', bot_id: 'bot-1' });
+      expect(lastMsg).toEqual({ type: 'connected', bot_id: 'bot-1', seq: 0 });
     });
 
     it('verifies bot ownership via DB query', async () => {

@@ -106,6 +106,9 @@ export default function TasksScreen({ route }: TasksScreenProps) {
         style={styles.taskCard}
         onPress={() => toggleExpand(item.id)}
         activeOpacity={0.7}
+        accessibilityRole="button"
+        accessibilityLabel={`Task from ${isOwnerDirective ? 'you' : item.sender}: ${message?.slice(0, 80) || item.action_requested}. Status: ${item.status}`}
+        accessibilityState={{ expanded }}
       >
         {/* Status indicator */}
         <View style={[styles.statusBar, { backgroundColor: statusColor }]} />
@@ -157,6 +160,8 @@ export default function TasksScreen({ route }: TasksScreenProps) {
               style={styles.cancelButton}
               onPress={() => handleCancel(item.request_id)}
               activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel="Cancel task"
             >
               <Text style={styles.cancelText}>Cancel Task</Text>
             </TouchableOpacity>
@@ -177,7 +182,7 @@ export default function TasksScreen({ route }: TasksScreenProps) {
   return (
     <View style={styles.container}>
       {/* Filter tabs */}
-      <View style={styles.tabBar}>
+      <View style={styles.tabBar} accessibilityRole="tablist">
         {([
           { key: 'all' as FilterTab, label: 'All' },
           { key: 'completed' as FilterTab, label: 'Done' },
@@ -189,6 +194,9 @@ export default function TasksScreen({ route }: TasksScreenProps) {
             style={[styles.tab, activeTab === tab.key && styles.tabActive]}
             onPress={() => setActiveTab(tab.key)}
             activeOpacity={0.7}
+            accessibilityRole="tab"
+            accessibilityLabel={`${tab.label} tasks`}
+            accessibilityState={{ selected: activeTab === tab.key }}
           >
             <Text style={[styles.tabText, activeTab === tab.key && styles.tabTextActive]}>
               {tab.label}

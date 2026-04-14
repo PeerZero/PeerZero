@@ -371,7 +371,7 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
       keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
     >
       {/* Filter tabs */}
-      <View style={styles.tabBar}>
+      <View style={styles.tabBar} accessibilityRole="tablist">
         {([
           { key: 'all' as FilterTab, label: 'All' },
           { key: 'chat' as FilterTab, label: 'Chat', count: chatCount },
@@ -382,6 +382,9 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
             style={[styles.tab, activeTab === tab.key && styles.tabActive]}
             onPress={() => setActiveTab(tab.key)}
             activeOpacity={0.7}
+            accessibilityRole="tab"
+            accessibilityLabel={`${tab.label} messages${tab.count ? ` (${tab.count})` : ''}`}
+            accessibilityState={{ selected: activeTab === tab.key }}
           >
             <Text style={[styles.tabText, activeTab === tab.key && styles.tabTextActive]}>
               {tab.label}
@@ -413,6 +416,9 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
         data={filteredMessages}
         keyExtractor={item => item.id}
         renderItem={renderMessage}
+        accessibilityRole="list"
+        accessibilityLabel="Chat messages"
+        accessibilityLiveRegion="polite"
         contentContainerStyle={[
           styles.messageList,
           filteredMessages.length === 0 && styles.emptyList,
@@ -488,6 +494,9 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
             disabled={!inputText.trim() || sending}
             activeOpacity={0.7}
             accessibilityRole="button"
+            accessibilityLabel={sending ? 'Sending message' : 'Send message'}
+            accessibilityState={{ disabled: !inputText.trim() || sending }}
+            accessibilityRole="button"
             accessibilityLabel="Send message"
           >
             {sending ? (
@@ -511,7 +520,7 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
           activeOpacity={1}
           onPress={() => setSettingsVisible(false)}
         >
-          <TouchableOpacity activeOpacity={1} style={styles.modalSheet}>
+          <TouchableOpacity activeOpacity={1} style={styles.modalSheet} accessibilityViewIsModal={true}>
             <View style={styles.modalHandle} />
             <Text style={styles.modalTitle}>Chat Settings</Text>
             <Text style={styles.modalSubtitle}>
@@ -896,9 +905,9 @@ const styles = StyleSheet.create({
     lineHeight: fontSize.md * lineHeight.normal,
   },
   sendButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: colors.accent.primary,
     justifyContent: 'center',
     alignItems: 'center',

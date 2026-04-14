@@ -1,6 +1,6 @@
 # Pre-Launch Compliance Checklist
 
-Last updated: 2026-03-31
+Last updated: 2026-04-14
 
 Do these when the code is stable and you're preparing to launch. Not before.
 
@@ -29,6 +29,7 @@ PeerZero will be used by children (Tamagotchi-style bots). COPPA compliance is m
 - [x] **Child account restrictions** — BYOK managed by parent (add/delete key buttons hidden for child accounts), payments show "ask parent" prompt, push notifications default to all-off for child accounts (server-enforced via CHILD_NOTIFICATION_PREFS). Completed 2026-04-04.
 - [ ] **Parental controls dashboard** — Parent can review data, delete account, withdraw consent. Currently email-based only (`POST /parental-consent/withdraw`). Build parent dashboard later.
 - [ ] **Legal counsel review** — All compliance docs (Privacy Policy, ToS, DPIA, COPPA guide, AI Act classification) need review by a privacy attorney before launch.
+- [ ] **COPPA 2026 amendments** — FTC published final amendments effective **April 22, 2026**. Key changes: (a) opt-in consent required before sharing children's data with third parties (affects BYOK — Anthropic receives child-generated content), (b) data retention limited to what's "reasonably necessary", (c) new requirements for EdTech/school-authorized operators. Review `docs/COPPA_COMPLIANCE.md` against the final rule text.
 - [ ] **Penalties:** Up to $50,070 per violation. Epic Games paid $275M (2022).
 
 ## EU AI Act (Enforcement: August 2, 2026)
@@ -57,6 +58,9 @@ PeerZero will be used by children (Tamagotchi-style bots). COPPA compliance is m
 - [ ] **DPO appointment** — Required before processing EU users' data at scale.
 - [ ] **Sub-processor DPAs** — Execute Data Processing Agreements with Supabase, Vercel, Cloudflare, Anthropic, Stripe, Resend, Expo.
 - [ ] **SCCs for international transfers** — Standard Contractual Clauses with all US-based sub-processors for EU user data.
+- [ ] **Subprocessor list (public)** — GDPR Art. 28 requires listing all subprocessors. Publish at a stable URL (e.g., `/subprocessors`) with: Supabase (database, US), Vercel (hosting, US), Cloudflare (proxy/CDN, US), Anthropic (LLM API, US), Stripe (payments, US), Resend (email, US), Expo/EAS (push notifications, US). Notify users 30 days before adding new subprocessors.
+- [ ] **DSAR implementation (Art. 15-22)** — Data Subject Access Request: the existing `GET /api/users/export` endpoint returns user data, but must also include: all bot activity logs, all papers/reviews/bounties attributed to user's bots (cross-system from School), API key metadata (not the key itself), payment history, and parental consent records. Response deadline: 30 days. Automate as much as possible.
+- [ ] **Data portability (Art. 20)** — Right to receive personal data in a "structured, commonly used, machine-readable format." The export endpoint should return JSON (not just human-readable). Include: user profile, bot configurations, activity history, memory summaries (L2/L3 but NOT redacted L4/L5 identity — those are bot identity, not user personal data). Clarify in Privacy Policy what is "user data" vs "bot-generated artifacts."
 
 ## CCPA/CPRA (California)
 
@@ -72,9 +76,36 @@ PeerZero will be used by children (Tamagotchi-style bots). COPPA compliance is m
 
 ## App Store Compliance
 
+- [x] **Apple Guideline 5.1.2(i) — Third-party data disclosure** — BYOK sends user data to Anthropic/OpenAI. Consent modal added to SettingsScreen.tsx `handleAddKey()` — names the provider, explains data flow, requires explicit "I Agree" before key is stored. Completed 2026-04-14.
 - [ ] **Google Play Families Policy** — Enroll in Designed for Families program, update data safety section. See `docs/COPPA_COMPLIANCE.md` Section 7.
 - [ ] **Apple Kids category or age gate** — Implement documented age gate with parental consent. See `docs/COPPA_COMPLIANCE.md` Section 7.
 - [ ] **Update store listing** — Change age rating, update data safety section, add Terms of Service URL.
+- [ ] **Privacy nutrition labels** — App Store data safety / Apple privacy labels must list BYOK API keys (stored server-side) and bot conversation content sent to third-party LLMs. Currently only declares email, name, and purchase history.
+
+## Email Deliverability (Pre-Launch)
+
+- [ ] **SPF/DKIM/DMARC DNS records** — Resend handles DKIM signing, but you must add SPF and DKIM DNS records for your sending domain (noreply@peerzero.com). SPF has a 10-lookup limit. Start DMARC at `p=none` (monitor), move to `p=reject` before launch.
+- [ ] **Resend bounce webhook** — Create a `POST /api/webhooks/resend` route to handle `email.bounced`, `email.complained`, and `email.delivery_delayed` events. Hard-bounced addresses must be suppressed from future sends. Configure the webhook URL in the Resend dashboard.
+- [ ] **Email warm-up** — New sending domains need 2-4 weeks of gradual volume increase. Plan a warm-up schedule before launch: start with 50/day, double weekly. Launching with a blast from a cold domain = spam folder.
+- [ ] **Test deliverability** — Send test emails to Gmail, Outlook, Yahoo, and iCloud accounts. Check spam folder placement. Test the parental consent email specifically — if it lands in spam, child accounts are permanently locked.
+
+## App Store Submission (Pre-Launch)
+
+- [ ] **Apple Developer Team ID** — Replace `TEAM_ID` in the AASA endpoint (`index.ts /.well-known/apple-app-site-association`) with your actual Apple Developer Team ID.
+- [ ] **Android signing certificate** — Replace `REPLACE_WITH_PRODUCTION_SHA256_FINGERPRINT` in the assetlinks endpoint with the SHA-256 fingerprint of your production signing certificate (not dev). Get it with: `keytool -list -v -keystore <keystore> | grep SHA256`
+- [ ] **EAS project ID** — Run `eas init` in `peerzero-app/packages/mobile/` and replace `REPLACE_WITH_EAS_PROJECT_ID` in `app.json` with the generated project ID. Push notifications won't work without this.
+- [ ] **Demo account for App Store reviewers** — Create a seeded test account with pre-existing bot activity, papers, reviews. Apple reviewers need working credentials and a bot in a reviewable state. Document the credentials in App Store Connect.
+- [ ] **eas.json** — Create an `eas.json` file for EAS Build and EAS Submit configuration (dev, preview, production profiles). Required for App Store submission.
+- [ ] **Privacy nutrition labels update** — Update `NSPrivacyCollectedDataTypes` in `app.json` to include: API keys stored server-side (NSPrivacyCollectedDataTypeOtherDataTypes), bot conversation content sent to third-party LLMs (NSPrivacyCollectedDataTypeOtherUserContent).
+- [ ] **Age rating 17+** — Set age rating to 17+ in App Store Connect to match the 18+ signup gate. Document this in submission notes.
+
+## Database Migration Best Practices (For Future Migrations)
+
+Already-run migrations cannot be changed, but future migrations should follow these patterns:
+- [ ] **Use `CREATE INDEX CONCURRENTLY`** — All new indexes on existing tables must use `CONCURRENTLY` to avoid write-locks. Cannot run inside a transaction block. Migrations 027, 030, 032 (school) and 0024 (app) used blocking indexes — acceptable at current scale but won't be at 100K+ rows.
+- [ ] **Use `CREATE UNIQUE INDEX CONCURRENTLY` then `ADD CONSTRAINT USING INDEX`** — For new UNIQUE constraints on existing tables. Avoids AccessExclusiveLock.
+- [ ] **Batch large UPDATE statements** — Any migration that updates existing rows on large tables should process in batches of 1000 with `WHERE id > $cursor LIMIT 1000` to avoid long transaction locks.
+- [ ] **Document missing baseline** — School migrations 001-003 and 005 are missing (baseline applied via Supabase UI). Document this gap and ensure fresh deployments have a baseline SQL file.
 
 ## Security (Pre-Launch)
 

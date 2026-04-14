@@ -17,7 +17,7 @@
 // =============================================================================
 
 import { useEffect, useRef, useCallback, useState } from 'react';
-import { Platform } from 'react-native';
+import { Platform, AppState, type AppStateStatus } from 'react-native';
 import Constants from 'expo-constants';
 import type { ActivityEntry, BotMessage } from '@peerzero/shared';
 
@@ -209,28 +209,46 @@ export function useBotStream({
           return;
         }
 
-        // Normal disconnect — exponential backoff reconnect
+        // Normal disconnect — exponential backoff with jitter to prevent thundering herd
+        const jitter = reconnectDelay.current * (0.5 + Math.random() * 0.5);
         reconnectTimer.current = setTimeout(() => {
           if (mountedRef.current) {
             reconnectDelay.current = Math.min(reconnectDelay.current * 2, MAX_RECONNECT_DELAY);
             connect();
           }
-        }, reconnectDelay.current);
+        }, jitter);
       };
 
       ws.onerror = () => {
         // onclose will fire after onerror, handling reconnect
       };
     } catch {
-      // Connection failed — schedule retry
+      // Connection failed — schedule retry with jitter
+      const catchJitter = reconnectDelay.current * (0.5 + Math.random() * 0.5);
       reconnectTimer.current = setTimeout(() => {
         if (mountedRef.current) {
           reconnectDelay.current = Math.min(reconnectDelay.current * 2, MAX_RECONNECT_DELAY);
           connect();
         }
-      }, reconnectDelay.current);
+      }, catchJitter);
     }
   }, [botId, enabled]);
+
+  // Reconnect when app returns to foreground — iOS/Android kill TCP connections
+  // on background, so the WebSocket is likely dead when we come back
+  useEffect(() => {
+    const handleAppState = (nextState: AppStateStatus) => {
+      if (nextState === 'active' && mountedRef.current && botId && enabled) {
+        // If the socket is not connected, reconnect immediately
+        if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+          reconnectDelay.current = INITIAL_RECONNECT_DELAY;
+          connect();
+        }
+      }
+    };
+    const sub = AppState.addEventListener('change', handleAppState);
+    return () => sub.remove();
+  }, [botId, enabled, connect]);
 
   useEffect(() => {
     mountedRef.current = true;

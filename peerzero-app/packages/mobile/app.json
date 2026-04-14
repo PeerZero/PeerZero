@@ -63,6 +63,14 @@
     },
     "plugins": [
       "./plugins/widget/withPeerZeroWidget"
-    ]
+    ],
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "REPLACE_WITH_EAS_PROJECT_ID"
+      }
+    }
   }
 }

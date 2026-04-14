@@ -116,5 +116,24 @@ export function validateStartupConfig(): string[] {
     );
   }
 
+  // Eagerly validate lazy-getter secrets at startup so misconfigured
+  // env vars fail fast instead of crashing on first request.
+  if (config.nodeEnv === 'production') {
+    config.databaseUrl;       // throws if DATABASE_URL missing
+    config.jwtSecret;         // throws if JWT_SECRET missing or < 32 chars
+    config.jwtRefreshSecret;  // throws if JWT_REFRESH_SECRET missing
+    config.encryptionMasterKey; // throws if ENCRYPTION_MASTER_KEY missing
+    config.stripeSecretKey;   // throws if STRIPE_SECRET_KEY missing (unless SKIP_PAYMENTS)
+
+    // Guard against Stripe test keys in production
+    const stripeKey = config.stripeSecretKey;
+    if (stripeKey && stripeKey.startsWith('sk_test_')) {
+      throw new Error(
+        'STRIPE_SECRET_KEY is a test key (sk_test_*) in production. '
+        + 'Use a live key (sk_live_*) or set NODE_ENV to something other than production.'
+      );
+    }
+  }
+
   return warnings;
 }
