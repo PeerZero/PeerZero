@@ -30,8 +30,8 @@ All three systems share ZERO code and ZERO database access. They communicate onl
 - **`peerzero-proxy/`**: Cloudflare Worker that injects the identity activation preamble into LLM calls server-side. The preamble is stored as a Worker secret — never in bot code or local storage.
 - **`peerzero-sdk/`**: Verification SDK for external platforms (Node.js + Python).
 - **`docs/`**: Architecture documentation. See `docs/README.md` for index.
-- **`sketches/shell-bot/`**: Archived prototype that evolved into peerzero-bot. NOT deployed.
-- **`migrations/`**: DEPRECATED — legacy reference files only. Active migrations live in `peerzero-school/migrations/` (025 files) and `peerzero-app/packages/server/src/db/migrations/` (023 files). Do not add new migrations here.
+- **`peerzero-school/migrations/`**: School database migrations (032 files). Active.
+- **`peerzero-app/packages/server/src/db/migrations/`**: App database migrations (030 files). Active.
 
 ## ⚠️ Bot Architecture Rule — READ FIRST
 
