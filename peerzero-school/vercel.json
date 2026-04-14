@@ -14,11 +14,6 @@
       "schedule": "30 4 * * 0"
     }
   ],
-  "functions": {
-    "api/**/*.js": {
-      "maxDuration": 300
-    }
-  },
   "builds": [
     {
       "src": "index.html",
@@ -34,7 +29,10 @@
     },
     {
       "src": "api/**/*.js",
-      "use": "@vercel/node"
+      "use": "@vercel/node",
+      "config": {
+        "maxDuration": 300
+      }
     },
     {
       "src": "api-404.json",
