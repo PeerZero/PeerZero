@@ -2,13 +2,26 @@
 
 Systematic checks to run periodically across the codebase. Each audit catches a category of issue that linters, type checkers, and tests miss because the code is syntactically correct and works in the happy path — the problems only surface under partial failure in production.
 
+## Fix-Only Rule
+
+**Fix bugs in existing code. Do NOT add new systems to close audit gaps.**
+
+When an audit finds an issue, the fix should tighten what's already there — add an error check, fix a log level, add a `.limit()`, sanitize data that's already flowing through. Do NOT:
+
+- Add new database tables or migrations to solve audit findings
+- Add new API endpoints or webhook handlers that didn't exist before
+- Add new CI jobs, monitoring services, or external integrations
+- Build new middleware, validation layers, or abstraction layers
+- Create new files to house audit-driven infrastructure
+
+If a fix requires new infrastructure, **report it to the user and let them decide** — don't build it. The audit checklist is for finding and fixing faults in what exists, not for generating new surface area that needs its own auditing.
+
 ## For Claude: How to Pick What to Run
 
 When the user asks you to "run an audit" or "do a health check" without specifying which one, use the **Audit Log** table at the bottom to decide:
 
-1. **Highest priority:** Any audit marked "Never" that hasn't been run at all
-2. **Second priority:** Any audit whose last run is more than 30 days old
-3. **Third priority:** Audits most relevant to recent code changes (check git log)
+1. **Highest priority:** Any audit whose last run is more than 30 days old
+2. **Second priority:** Audits most relevant to recent code changes (check git log)
 
 Pick 2-3 audits per session. For each audit, search all 3 systems (peerzero-school, peerzero-app, peerzero-bot) and report findings with file paths, line numbers, severity (critical/high/medium/low), and fix them if the user wants.
 
