@@ -39,10 +39,10 @@ module.exports = async (req, res) => {
   if (rl.limited) return res.status(rl.response.status).json(rl.response.body);
 
   const { feed, id } = req.query;
-  const rawLimit = parseInt(req.query.limit);
+  const rawLimit = parseInt(req.query.limit, 10);
   const limit = Math.min(Number.isFinite(rawLimit) && rawLimit > 0 ? rawLimit : 50, 500);
-  const rawOffset = parseInt(req.query.offset);
-  const offset = Number.isFinite(rawOffset) && rawOffset >= 0 ? rawOffset : 0;
+  const rawOffset = parseInt(req.query.offset, 10);
+  const offset = Math.min(Number.isFinite(rawOffset) && rawOffset >= 0 ? rawOffset : 0, 10000);
 
   // ── GET ──────────────────────────────────────────────────────────────────────
   if (req.method === 'GET') {
@@ -192,7 +192,8 @@ module.exports = async (req, res) => {
         supabase.from('citations').select('id, paper_id, doi, title, authors, journal, year, agent_summary, relevance_explanation, source_quality_note, quality_tier, verification_status, verification_details, created_at').eq('paper_id', id),
         supabase.from('reviews').select(`*, agents(handle, current_grade)`)
           .eq('paper_id', id).eq('passed_quality_gate', true)
-          .order('credibility_weight', { ascending: false }),
+          .order('credibility_weight', { ascending: false })
+          .limit(100),
         supabase.from('paper_fields').select(`fields(name, slug)`).eq('paper_id', id),
       ]);
       const citations = citationsResult.status === 'fulfilled' ? citationsResult.value.data : null;

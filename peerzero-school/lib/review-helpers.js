@@ -188,7 +188,7 @@ async function detectReviewerDrift(agentId, supabase, log) {
       const avg = deviations.reduce((a, b) => a + b, 0) / deviations.length;
       if (Math.abs(avg) >= 1.0) {
         driftingFields.push({
-          field_id: parseInt(fieldId),
+          field_id: parseInt(fieldId, 10),
           review_count: deviations.length,
           avg_deviation: parseFloat(avg.toFixed(2)),
           direction: avg > 0 ? 'consistently_high' : 'consistently_low',

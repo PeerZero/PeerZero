@@ -18,6 +18,7 @@ use storage_sqlite.py instead (SQLite handles its own locking).
 
 import json
 import logging
+import os
 import stat
 import threading
 from pathlib import Path
@@ -111,14 +112,22 @@ class FileStorage:
                 f"[MEMORY] Writing {path.name} at {size / 1024:.0f} KB — "
                 f"approaching safety limit. Consider investigating."
             )
-        path.write_text(serialized, encoding="utf-8")
-        path.chmod(stat.S_IRUSR | stat.S_IWUSR)
+        # Write to temp file with restrictive permissions then atomically rename
+        # to avoid a TOCTOU window where the file is world-readable before chmod.
+        fd = os.open(str(path), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        try:
+            os.write(fd, serialized.encode("utf-8"))
+        finally:
+            os.close(fd)
 
         # Write HMAC sidecar file for tamper detection
         if self._hmac_key:
             hmac_path = path.with_suffix(path.suffix + ".hmac")
-            hmac_path.write_text(compute_hmac(self._hmac_key, serialized), encoding="utf-8")
-            hmac_path.chmod(stat.S_IRUSR | stat.S_IWUSR)
+            hmac_fd = os.open(str(hmac_path), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            try:
+                os.write(hmac_fd, compute_hmac(self._hmac_key, serialized).encode("utf-8"))
+            finally:
+                os.close(hmac_fd)
 
     def read(self, namespace: str, key: str, default: Any = None) -> Any:
         return self._read_raw(self._path(namespace, key), default)

@@ -120,4 +120,8 @@ class SqliteStorage:
         self.write(namespace, key, [])
 
     def close(self):
+        try:
+            self._conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        except Exception as e:
+            logger.warning(f"[memory] WAL checkpoint failed on close: {e}")
         self._conn.close()

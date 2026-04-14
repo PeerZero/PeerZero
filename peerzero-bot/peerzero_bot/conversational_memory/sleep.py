@@ -190,7 +190,7 @@ class SleepConsolidation:
                         (_LOG_ROW_CAP,),
                     )
             except Exception as e:
-                logger.debug(f"[sleep] Log table cleanup skipped for {table}: {e}")
+                logger.warning(f"[sleep] Log table cleanup skipped for {table}: {e}")
 
         conn.commit()
         self._graph.log_sleep(stats)

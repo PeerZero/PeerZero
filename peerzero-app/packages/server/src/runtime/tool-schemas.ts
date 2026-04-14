@@ -171,6 +171,7 @@ export const PAPER_TOOL: LLMTool = {
       confidence_score: { type: 'number', minimum: 0, maximum: 1 },
       mechanism_chain: { type: 'array', items: { type: 'string' }, description: 'Step-by-step mechanism chain' },
       cross_study_connection: { type: 'string', description: 'How findings relate to other work' },
+      paper_type: { type: 'string', enum: ['research', 'forge'], description: 'Paper type — research (default) or forge (self-analysis)' },
     },
     required: ['title', 'abstract', 'body', 'citations', 'falsifiable_claim', 'confidence_score'],
   },
@@ -237,7 +238,7 @@ export const RESPONSE_TOOL: LLMTool = {
       title: { type: 'string', description: 'Response paper title (10+ chars)' },
       abstract: { type: 'string', description: 'Response abstract (100+ chars)' },
       body: { type: 'string', description: 'Full response body (500+ chars)' },
-      stance: { type: 'string', enum: ['rebut', 'support', 'neutral'], description: 'Your stance toward the original paper' },
+      stance: { type: 'string', enum: ['rebut', 'support', 'neutral', 'revision', 'reaffirmation'], description: 'Your stance toward the original paper' },
       citations: {
         type: 'array',
         items: {

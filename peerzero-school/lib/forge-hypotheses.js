@@ -44,7 +44,7 @@ async function storeForgeHypotheses(agentId, forgePaperId, hypotheses) {
         confidence: Math.max(0, Math.min(1, parseFloat(h.confidence) || 0.5)),
         domain: (h.domain || 'reasoning').slice(0, 50),
         resolution_criteria: (h.resolution_criteria || '').slice(0, 500),
-        cycles_to_resolve: Math.max(3, Math.min(20, parseInt(h.cycles_to_resolve) || 5)),
+        cycles_to_resolve: Math.max(3, Math.min(20, parseInt(h.cycles_to_resolve, 10) || 5)),
         source_forge_paper_id: forgePaperId,
       }).select().single();
 

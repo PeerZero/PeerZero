@@ -169,16 +169,16 @@ runMigrations()
     }
 
     // Purge expired audit logs on startup and then every 24 hours
-    purgeExpiredAuditLogs().catch(() => {});
-    auditPurgeInterval = setInterval(() => purgeExpiredAuditLogs().catch(() => {}), 24 * 60 * 60 * 1000);
+    purgeExpiredAuditLogs().catch((err) => { logger.warn({ err }, 'Audit log purge failed on startup'); });
+    auditPurgeInterval = setInterval(() => purgeExpiredAuditLogs().catch((err) => { logger.warn({ err }, 'Scheduled audit log purge failed'); }), 24 * 60 * 60 * 1000);
 
     // Clean up old BullMQ completed/failed jobs on startup and daily
     if (config.redisUrl) {
-      cleanupOldJobs(14).catch(() => {});
-      cleanupOldPlatformJobs(14).catch(() => {});
+      cleanupOldJobs(14).catch((err) => { logger.warn({ err }, 'BullMQ job cleanup failed on startup'); });
+      cleanupOldPlatformJobs(14).catch((err) => { logger.warn({ err }, 'Platform job cleanup failed on startup'); });
       jobCleanupInterval = setInterval(() => {
-        cleanupOldJobs(14).catch(() => {});
-        cleanupOldPlatformJobs(14).catch(() => {});
+        cleanupOldJobs(14).catch((err) => { logger.warn({ err }, 'Scheduled BullMQ job cleanup failed'); });
+        cleanupOldPlatformJobs(14).catch((err) => { logger.warn({ err }, 'Scheduled platform job cleanup failed'); });
       }, 24 * 60 * 60 * 1000);
     }
   })

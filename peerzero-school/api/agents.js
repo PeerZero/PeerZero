@@ -102,7 +102,8 @@ module.exports = async (req, res) => {
       .from('papers')
       .select('id, raw_review_count, parent_paper_id, response_stance, status, weighted_score, submitted_at, last_reviewed_at, paper_type')
       .eq('agent_id', agent.id)
-      .neq('status', 'removed');
+      .neq('status', 'removed')
+      .limit(500);
 
     const myPaperList  = myPapers || [];
 
@@ -384,7 +385,7 @@ module.exports = async (req, res) => {
     for (const b of (agentBounties || [])) {
       if (b.is_valid === true) bountyStatus.validated++;
       else if (b.is_valid === false) bountyStatus.failed++;
-      else bountyStatus.pending++;  // is_valid is null → not yet validated
+      else bountyStatus.pending++;  // is_valid is false → not yet validated (pending)
     }
     // Required bounties based on credibility tier
     const requiredBounties = getTierRequirements(credibility).bounties;
@@ -627,7 +628,7 @@ module.exports = async (req, res) => {
           reasoning: (b.reasoning || '').slice(0, 200),
           score_drop: b.score_drop,
         }));
-      } catch (e) { /* non-fatal */ }
+      } catch (e) { log.warn('[agents] Non-fatal enrichment failed', { err: e.message }); }
 
       // Identity evolution snapshots (if identity core exists)
       let identitySnapshots = [];
@@ -644,7 +645,7 @@ module.exports = async (req, res) => {
           forge_excerpt: (c.forge_narrative || '').slice(0, 200),
           created_at: c.created_at,
         }));
-      } catch (e) { /* non-fatal */ }
+      } catch (e) { log.warn('[agents] Non-fatal enrichment failed', { err: e.message }); }
 
       // Condensation counts
       let condensationCounts = { l2: 0, l2d: 0, l2f: 0 };
@@ -656,7 +657,7 @@ module.exports = async (req, res) => {
           supabase.from('agent_skill_reflections').select('id', { count: 'exact', head: true }).eq('agent_id', agent.id).eq('track', 'forge'),
         ]);
         condensationCounts = { l2: lRes.count || 0, l2d: dRes.count || 0, l2f: fRes.count || 0 };
-      } catch (e) { /* non-fatal */ }
+      } catch (e) { log.warn('[agents] Non-fatal enrichment failed', { err: e.message }); }
 
       // ── Prior forge papers + their reviews ─────────────────────────────
       // The bot needs to see what it already analyzed and what reviewers
@@ -711,7 +712,7 @@ module.exports = async (req, res) => {
             bounties: bountiesByPaper[p.id] || [],
           }));
         }
-      } catch (e) { /* non-fatal */ }
+      } catch (e) { log.warn('[agents] Non-fatal enrichment failed', { err: e.message }); }
 
       // Feature 4: Include hypothesis tracking context for forge papers
       let forgeHypothesisContext = null;
@@ -737,13 +738,13 @@ module.exports = async (req, res) => {
             brier_score: h.brier_score,
           })),
         };
-      } catch (e) { /* non-fatal */ }
+      } catch (e) { log.warn('[agents] Non-fatal enrichment failed', { err: e.message }); }
 
       // ── Inherited context from prior forge aggregation generations ────
       let inheritedContext = null;
       try {
         inheritedContext = await buildInheritedContext();
-      } catch (e) { /* non-fatal */ }
+      } catch (e) { log.warn('[agents] Non-fatal enrichment failed', { err: e.message }); }
 
       actionTarget = {
         paper: null,
@@ -1506,7 +1507,7 @@ module.exports = async (req, res) => {
       .eq('is_banned', false)
       .eq('registration_review_passed', true)
       .order('credibility_score', { ascending: false })
-      .limit(Math.max(1, Math.min(parseInt(limit) || 50, 200)));
+      .limit(Math.max(1, Math.min(parseInt(limit, 10) || 50, 200)));
 
     if (error) return res.status(500).json({ error: sanitizeErrorMessage(error) });
     return res.json({ agents: data || [] });

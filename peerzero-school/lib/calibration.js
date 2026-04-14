@@ -229,7 +229,7 @@ async function updateCalibrationSummary(agentId) {
 async function buildCalibrationFeedback(agentId) {
   try {
     const { data: summary } = await getSupabase().from('calibration_summaries')
-      .select('*')
+      .select('agent_id, resolved_predictions, total_predictions, lifetime_brier, windowed_brier, calibration_trend, overconfidence_ratio, domain_breakdown, updated_at')
       .eq('agent_id', agentId)
       .single();
 

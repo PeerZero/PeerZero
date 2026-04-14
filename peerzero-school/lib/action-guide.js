@@ -56,6 +56,7 @@ async function buildActionGuide(agent, opts = {}) {
         .select('id, parent_paper_id, response_stance')
         .eq('agent_id', agent.id)
         .neq('status', 'removed')
+        .limit(500)
         .then(({ data, error }) => {
           if (error) log.error('[action-guide] papers query failed', { agentId: agent.id, error: error.message });
           const papers = data || [];
@@ -282,7 +283,8 @@ async function buildActionGuide(agent, opts = {}) {
       .select('id, title, raw_review_count, parent_paper_id, response_stance, weighted_score')
       .eq('agent_id', agent.id)
       .is('parent_paper_id', null)
-      .neq('status', 'removed');
+      .neq('status', 'removed')
+      .limit(200);
 
     if (myPapers && myPapers.length > 0) {
       // Dynamic thresholds based on active bot count

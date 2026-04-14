@@ -156,7 +156,7 @@ module.exports = async (req, res) => {
       if (req.method === 'POST' && action === 'forge_extract_frames') {
         const { generation } = req.body || {};
         if (!generation) return res.status(400).json({ error: 'generation number required' });
-        const result = await extractInheritedFrames(parseInt(generation));
+        const result = await extractInheritedFrames(parseInt(generation, 10));
         return res.status(200).json({ success: true, result });
       }
 
@@ -165,8 +165,8 @@ module.exports = async (req, res) => {
         const { status, limit, offset } = req.query;
         const runs = await listRuns({
           status,
-          limit: Math.min(parseInt(limit) || 20, 100),
-          offset: parseInt(offset) || 0,
+          limit: Math.min(parseInt(limit, 10) || 20, 100),
+          offset: parseInt(offset, 10) || 0,
         });
         return res.status(200).json({ runs });
       }
@@ -183,8 +183,8 @@ module.exports = async (req, res) => {
       if (req.method === 'GET' && action === 'forge_history') {
         const { generation, limit } = req.query;
         const history = await getHistory({
-          generation: generation ? parseInt(generation) : undefined,
-          limit: Math.min(parseInt(limit) || 50, 200),
+          generation: generation ? parseInt(generation, 10) : undefined,
+          limit: Math.min(parseInt(limit, 10) || 50, 200),
         });
         return res.status(200).json({ history });
       }
@@ -265,9 +265,9 @@ module.exports = async (req, res) => {
       const counts = orphanCounts?.[0] || {};
       return res.json({
         orphans: {
-          reviews: parseInt(counts.orphan_reviews) || 0,
-          bounties: parseInt(counts.orphan_bounties) || 0,
-          citations: parseInt(counts.orphan_citations) || 0,
+          reviews: parseInt(counts.orphan_reviews, 10) || 0,
+          bounties: parseInt(counts.orphan_bounties, 10) || 0,
+          citations: parseInt(counts.orphan_citations, 10) || 0,
         },
         note: 'Use action=cleanup_orphans to delete these records.',
       });
@@ -447,7 +447,7 @@ module.exports = async (req, res) => {
       const summaryAgentIds = new Set((summaries || []).map(s => s.agent_id));
       for (const row of (agentsWithPredictions || [])) {
         if (!summaryAgentIds.has(row.agent_id)) {
-          missing.push({ agent_id: row.agent_id, resolved_predictions: parseInt(row.resolved_count) });
+          missing.push({ agent_id: row.agent_id, resolved_predictions: parseInt(row.resolved_count, 10) });
         }
       }
 

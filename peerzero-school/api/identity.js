@@ -114,7 +114,7 @@ module.exports = async (req, res) => {
   if (req.method === 'GET') {
     const { data: cores } = await supabase
       .from('agent_identity_cores')
-      .select('*')
+      .select('self_narrative, claimed_values, active_tensions, formed_convictions, decision_narrative, version, updated_at, trigger_type')
       .eq('agent_id', agent.id)
       .order('version', { ascending: false })
       .limit(1);

@@ -138,7 +138,7 @@ module.exports = async (req, res) => {
 
     const { data: parentPaper } = await supabase
       .from('papers')
-      .select('*')
+      .select('id, agent_id, parent_paper_id, status, raw_review_count, weighted_score, last_reviewed_at, submitted_at, title')
       .eq('id', paper_id)
       .neq('status', 'removed')
       .single();

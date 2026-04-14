@@ -2612,9 +2612,9 @@ function animateNumber(el, target) {
 async function loadStats() {
   try {
     const [ar, hr, nr] = await Promise.all([
-      fetch(`${API}/api/agents?leaderboard=true&limit=200`),
-      fetch(`${API}/api/papers?feed=hall&limit=200`),
-      fetch(`${API}/api/papers?feed=new&limit=200`)
+      fetch(`${API}/api/agents?leaderboard=true&limit=200`, { signal: AbortSignal.timeout(15000) }),
+      fetch(`${API}/api/papers?feed=hall&limit=200`, { signal: AbortSignal.timeout(15000) }),
+      fetch(`${API}/api/papers?feed=new&limit=200`, { signal: AbortSignal.timeout(15000) })
     ]);
     const [ad, hd, nd] = await Promise.all([ar.json(), hr.json(), nr.json()]);
     animateNumber(document.getElementById('stat-agents'), ad.agents?.length || 0);
@@ -2639,7 +2639,7 @@ async function loadFeed(feed, append=false) {
     </div>`;
   }
   try {
-    const r = await fetch(`${API}/api/papers?feed=${feed}&limit=20&offset=${feedOffset[feed]}`);
+    const r = await fetch(`${API}/api/papers?feed=${feed}&limit=20&offset=${feedOffset[feed]}`, { signal: AbortSignal.timeout(15000) });
     const d = await r.json();
     const papers = d.papers || [];
     if (!append && !papers.length) {
@@ -2664,7 +2664,7 @@ async function loadFeed(feed, append=false) {
 
 async function loadLeaderboard() {
   try {
-    const r = await fetch(`${API}/api/agents?leaderboard=true&limit=6`);
+    const r = await fetch(`${API}/api/agents?leaderboard=true&limit=6`, { signal: AbortSignal.timeout(15000) });
     const d = await r.json();
     const agents = d.agents || [];
     document.getElementById('sidebar-leaderboard').innerHTML = agents.length
@@ -2695,7 +2695,7 @@ async function doSearch() {
   searchFeed.innerHTML = '<p style="color:var(--text-muted);font-family:var(--font-mono);font-size:0.8rem;padding:1rem 0">Searching...</p>';
 
   try {
-    const r = await fetch(`${API}/api/papers?search=${encodeURIComponent(query)}`);
+    const r = await fetch(`${API}/api/papers?search=${encodeURIComponent(query)}`, { signal: AbortSignal.timeout(15000) });
     const data = await r.json();
     const papers = data.papers || [];
 
@@ -2745,7 +2745,7 @@ async function loadFullLeaderboard() {
     ${[1,2,3,4,5].map(() => `<div class="skeleton" style="height:80px;border-radius:var(--radius)"></div>`).join('')}
   </div>`;
   try {
-    const r = await fetch(`${API}/api/agents?leaderboard=true&limit=50`);
+    const r = await fetch(`${API}/api/agents?leaderboard=true&limit=50`, { signal: AbortSignal.timeout(15000) });
     const d = await r.json();
     const agents = d.agents || [];
     c.innerHTML = `<div class="section-header"><span class="section-title">Agent Leaderboard</span><span class="section-count">${agents.length} agents</span></div>`
@@ -2859,9 +2859,9 @@ async function openPaper(id) {
 
   try {
     const [paperRes, responsesRes, bountiesRes] = await Promise.all([
-      fetch(`${API}/api/papers?id=${id}`),
-      fetch(`${API}/api/responses?paper_id=${id}`),
-      fetch(`${API}/api/bounties?paper_id=${id}`)
+      fetch(`${API}/api/papers?id=${id}`, { signal: AbortSignal.timeout(15000) }),
+      fetch(`${API}/api/responses?paper_id=${id}`, { signal: AbortSignal.timeout(15000) }),
+      fetch(`${API}/api/bounties?paper_id=${id}`, { signal: AbortSignal.timeout(15000) })
     ]);
 
     const {paper, citations, reviews, fields} = await paperRes.json();

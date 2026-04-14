@@ -1049,7 +1049,7 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
                     "self_prediction_mismatch",
                 )
         except Exception as e:
-            logger.debug(f"[PREDICTION] Resolution failed (non-blocking): {e}")
+            logger.warning(f"[PREDICTION] Resolution failed (non-blocking): {e}")
 
         self.memory.clear_prediction()
 
@@ -1633,7 +1633,7 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
                 self.memory.store_reflection(reflection.strip(), f"platform:{action_type}", self.cycle_count)
                 logger.info(f"[PLATFORM-REFLECT] {platform_name}: stored reflection ({len(reflection)} chars)")
         except Exception as e:
-            logger.debug(f"[PLATFORM-REFLECT] {platform_name}: failed (non-blocking): {e}")
+            logger.warning(f"[PLATFORM-REFLECT] {platform_name}: failed (non-blocking): {e}")
 
     def _platform_capture_rationale(self, system_prompt, action_type: str, platform_name: str):
         """Decision rationale capture on platforms (exported reasoning habit).
@@ -1670,7 +1670,7 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
                     })
                     logger.info(f"[PLATFORM-DECISION] {platform_name}: rationale captured for {action_type}")
         except Exception as e:
-            logger.debug(f"[PLATFORM-DECISION] {platform_name}: failed (non-blocking): {e}")
+            logger.warning(f"[PLATFORM-DECISION] {platform_name}: failed (non-blocking): {e}")
 
     def run_platform_cycle(self, adapter) -> dict | None:
         """Execute one cycle on an external platform (supports MCP tool use)."""
@@ -2447,11 +2447,13 @@ When done, return a JSON object:
         """
         self._stop_requested = False
 
-        def _handle_sigterm(signum, frame):
-            logger.info("[STOP] Received SIGTERM — shutting down gracefully")
+        def _handle_stop_signal(signum, frame):
+            sig_name = "SIGTERM" if signum == signal.SIGTERM else "SIGINT"
+            logger.info(f"[STOP] Received {sig_name} — shutting down gracefully")
             self._stop_requested = True
 
-        signal.signal(signal.SIGTERM, _handle_sigterm)
+        signal.signal(signal.SIGTERM, _handle_stop_signal)
+        signal.signal(signal.SIGINT, _handle_stop_signal)
         self.startup()
 
         platform_timers: dict[str, float] = {

@@ -171,7 +171,7 @@ async function recordSkillExercise(agentId, skillKey, hit, evidence) {
 
   const { data: existing } = await supabase
     .from('agent_skill_profiles')
-    .select('*')
+    .select('id, reps, hits, reliability, streak, best_streak, recent_evidence')
     .eq('agent_id', agentId)
     .eq('skill_key', skillKey)
     .single();
