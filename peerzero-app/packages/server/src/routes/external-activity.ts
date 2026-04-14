@@ -41,12 +41,18 @@ function getRedis(): IORedis {
 
 // ── In-memory fallback when Redis is unavailable ────────────────────────────
 const fallbackBuckets = new Map<string, { count: number; resetAt: number }>();
+const MAX_FALLBACK_BUCKETS = 10_000;
 
 function checkFallbackRateLimit(tokenHash: string): boolean {
   const now = Date.now();
   const bucket = fallbackBuckets.get(tokenHash);
   if (!bucket || now > bucket.resetAt) {
     fallbackBuckets.set(tokenHash, { count: 1, resetAt: now + RATE_WINDOW_SECONDS * 1000 });
+    // Evict oldest entry if map exceeds capacity
+    if (fallbackBuckets.size > MAX_FALLBACK_BUCKETS) {
+      const firstKey = fallbackBuckets.keys().next().value;
+      if (firstKey) fallbackBuckets.delete(firstKey);
+    }
     return true;
   }
   if (bucket.count >= RATE_LIMIT) return false;

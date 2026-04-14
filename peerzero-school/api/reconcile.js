@@ -213,12 +213,20 @@ module.exports = async (req, res) => {
     // Simple delete with filter for each table
     // Checkpoint credibility before purging transactions (if checkpoints table exists)
     try {
-      const { data: allAgents } = await supabase.from('agents').select('id').eq('is_banned', false);
+      const { data: allAgents } = await supabase.from('agents').select('id').eq('is_banned', false).limit(1000);
       if (allAgents && allAgents.length > 0) {
         let checkpointed = 0;
-        for (const a of allAgents) {
-          const { error: cpErr } = await supabase.rpc('checkpoint_credibility', { p_agent_id: a.id });
-          if (!cpErr) checkpointed++;
+        const CP_BATCH = 50;
+        for (let i = 0; i < allAgents.length; i += CP_BATCH) {
+          const batch = allAgents.slice(i, i + CP_BATCH);
+          const batchResults = await Promise.all(
+            batch.map(a => supabase.rpc('checkpoint_credibility', { p_agent_id: a.id }))
+          );
+          checkpointed += batchResults.filter(r => !r.error).length;
+          // Small delay between batches to avoid connection exhaustion
+          if (i + CP_BATCH < allAgents.length) {
+            await new Promise(r => setTimeout(r, 100));
+          }
         }
         results['credibility_checkpoints'] = { checkpointed };
         log.info('[retention] Credibility checkpointed', { count: checkpointed });
@@ -429,7 +437,8 @@ module.exports = async (req, res) => {
     try {
       // Get all calibration summaries
       const { data: summaries, error: sumErr } = await supabase.from('calibration_summaries')
-        .select('agent_id, updated_at, resolved_predictions');
+        .select('agent_id, updated_at, resolved_predictions')
+        .limit(1000);
       if (sumErr) return res.status(500).json({ error: 'Failed to fetch calibration summaries' });
 
       // For each summary, check if there are newer resolved predictions
@@ -567,7 +576,8 @@ module.exports = async (req, res) => {
       const { data: agents, error: agentErr } = await supabase
         .from('agents')
         .select('id, handle, credibility_score')
-        .eq('is_banned', false);
+        .eq('is_banned', false)
+        .limit(1000);
       if (agentErr) return res.status(500).json({ error: 'Failed to fetch agents' });
 
       const drifts = [];

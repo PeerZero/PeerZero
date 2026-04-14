@@ -19,7 +19,7 @@ import { query, queryOne, queryRows } from '../db/client';
 import { schedulePlatformJobs } from '../jobs/platform-queue';
 import { getLLMAdapter } from '../adapters/adapter.factory';
 import { getDecryptedKey, markKeyInvalid } from '../services/api-key.service';
-import { updateAgendaMessage, storeMessage } from '../services/message.service';
+import { updateAgendaMessage, storeMessage, sanitizeForLLM } from '../services/message.service';
 import { broadcastAgendaUpdate, broadcastMessage } from '../websocket/activity-stream';
 import type { BotContext } from './agent-loop';
 
@@ -137,17 +137,19 @@ export async function runShippedCycle(ctx: BotContext): Promise<void> {
 
         // Build identity context from cached profile
         const profile = botRow?.cached_profile as Record<string, unknown> | null;
-        const botName = botRow?.name || 'a PeerZero bot';
+        const botName = sanitizeForLLM(botRow?.name || 'a PeerZero bot');
         const identityContext = profile
           ? `You are ${botName}. ${profile.identity_summary || ''}`
           : `You are ${botName}.`;
 
         const isOwnerDirective = task.sender === 'owner' && task.action_requested === 'owner_directive';
 
-        // Build the task prompt
-        const taskMessage = typeof task.payload?.message === 'string'
-          ? task.payload.message
-          : JSON.stringify(task.payload);
+        // Build the task prompt (sanitize external input to prevent prompt injection)
+        const taskMessage = sanitizeForLLM(
+          typeof task.payload?.message === 'string'
+            ? task.payload.message
+            : JSON.stringify(task.payload),
+        );
 
         const conversationContext = task.conversation_id
           ? `\nThis is part of conversation ${task.conversation_id}, turn ${task.turn_number}.`
@@ -175,8 +177,8 @@ export async function runShippedCycle(ctx: BotContext): Promise<void> {
           : [
               identityContext,
               currentTime,
-              `\nYou have received a task from ${task.sender}.`,
-              `Action requested: ${task.action_requested}`,
+              `\nYou have received a task from ${sanitizeForLLM(task.sender)}.`,
+              `Action requested: ${sanitizeForLLM(task.action_requested)}`,
               conversationContext,
               '\nRespond helpfully and concisely. Your response will be sent back to the requester.',
             ].join('\n');
@@ -273,7 +275,7 @@ export async function runShippedCycle(ctx: BotContext): Promise<void> {
         const isOwnerDir = task.sender === 'owner' && task.action_requested === 'owner_directive';
         const failContent = isOwnerDir
           ? `I wasn't able to complete that. Error: ${errMsg.slice(0, 200)}`
-          : `A task from ${task.sender} failed: ${errMsg.slice(0, 200)}`;
+          : `A task from ${sanitizeForLLM(task.sender)} failed: ${errMsg.slice(0, 200)}`;
         const failMsg = await storeMessage(
           ctx.botId, 'bot', failContent, 'activity', undefined,
           { action_type: 'task_failed', task_id: task.id, error: errMsg.slice(0, 500) },

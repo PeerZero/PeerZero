@@ -93,7 +93,8 @@ module.exports = async (req, res) => {
         .select('id, title, abstract, status, weighted_score, raw_review_count, parent_paper_id, response_stance, submitted_at, last_reviewed_at, superseded_by')
         .eq('agent_id', agent.id)
         .neq('status', 'removed')
-        .order('submitted_at', { ascending: false });
+        .order('submitted_at', { ascending: false })
+        .limit(200);
 
       if (error) return res.status(500).json({ error: sanitizeErrorMessage(error, { endpoint: 'papers/list', agentId: agent?.id }) });
       const myPapersWithDecay = (papers || []).map(p => ({

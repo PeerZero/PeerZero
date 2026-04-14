@@ -6,7 +6,7 @@ import { Router, Request, Response } from 'express';
 import { requireAuth } from '../middleware/auth';
 import { userRateLimit } from '../middleware/rate-limit';
 import { validateBody } from '../middleware/validate';
-import { PushTokenSchema } from '../lib/schemas';
+import { PushTokenSchema, NotificationPreferencesSchema } from '../lib/schemas';
 import * as notificationService from '../services/notification.service';
 import { DEFAULT_NOTIFICATION_PREFS } from '@peerzero/shared';
 
@@ -39,12 +39,8 @@ router.get('/preferences', userRateLimit('read'), async (req: Request, res: Resp
 });
 
 // Update notification preferences (partial — only keys present are changed)
-router.patch('/preferences', userRateLimit('write'), async (req: Request, res: Response) => {
+router.patch('/preferences', userRateLimit('write'), validateBody(NotificationPreferencesSchema), async (req: Request, res: Response) => {
   const { preferences } = req.body;
-  if (!preferences || typeof preferences !== 'object') {
-    res.status(400).json({ error: 'preferences object required' });
-    return;
-  }
   const updated = await notificationService.updateNotificationPrefs(req.user!.userId, preferences);
   const merged = { ...DEFAULT_NOTIFICATION_PREFS, ...updated };
   res.json({ preferences: merged });

@@ -36,7 +36,7 @@ function getResend(): Resend | null {
 /** Send email with retry on transient failures (5xx, network errors). */
 async function sendWithRetry(
   client: Resend,
-  params: { from: string; to: string; subject: string; text: string },
+  params: { from: string; to: string; subject: string; text: string; headers?: Record<string, string> },
 ): Promise<void> {
   let lastError: unknown;
   for (let attempt = 0; attempt <= MAX_EMAIL_RETRIES; attempt++) {
@@ -91,6 +91,10 @@ export async function sendVerificationEmail(to: string, code: string): Promise<b
         'If you did not create a PeerZero account, you can safely ignore this email.',
         EMAIL_FOOTER,
       ].join('\n'),
+      headers: {
+        'List-Unsubscribe': '<mailto:unsubscribe@peerzero.com>',
+        'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+      },
     });
     logger.info({ email: maskEmail(to) }, 'Verification email sent');
     return true;
@@ -126,6 +130,10 @@ export async function sendPasswordResetEmail(to: string, code: string): Promise<
         'If you did not request this reset, you can safely ignore this email.',
         EMAIL_FOOTER,
       ].join('\n'),
+      headers: {
+        'List-Unsubscribe': '<mailto:unsubscribe@peerzero.com>',
+        'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+      },
     });
     logger.info({ email: maskEmail(to) }, 'Password reset email sent');
     return true;

@@ -31,13 +31,14 @@ async function recordCalibrationPrediction(agentId, actionType, prediction, doma
   try {
     // Normalize prediction to 0-1 range
     const normalized = Math.max(0, Math.min(1, prediction));
-    await getSupabase().from('calibration_log').insert({
+    const { error } = await getSupabase().from('calibration_log').insert({
       agent_id: agentId,
       action_type: actionType,
       domain: domain,
       prediction: normalized,
       resolution_criteria: resolutionCriteria,
     });
+    if (error) log.error('[calibration] insert failed', { err: error.message });
   } catch (err) {
     log.error('[calibration] recordPrediction failed', { err: err?.message });
   }
@@ -143,13 +144,14 @@ async function updateCalibrationSummary(agentId) {
 
     if (!allPredictions || allPredictions.length < 5) {
       // Not enough data for meaningful calibration
-      await getSupabase().from('calibration_summaries').upsert({
+      const { error: upsertErr } = await getSupabase().from('calibration_summaries').upsert({
         agent_id: agentId,
         total_predictions: allPredictions?.length || 0,
         resolved_predictions: allPredictions?.length || 0,
         calibration_trend: 'insufficient_data',
         updated_at: new Date().toISOString(),
       });
+      if (upsertErr) log.error('[calibration] summary upsert failed', { err: upsertErr.message });
       return;
     }
 
@@ -206,7 +208,7 @@ async function updateCalibrationSummary(agentId) {
       .select('id', { count: 'exact', head: true })
       .eq('agent_id', agentId);
 
-    await getSupabase().from('calibration_summaries').upsert({
+    const { error: summaryErr } = await getSupabase().from('calibration_summaries').upsert({
       agent_id: agentId,
       lifetime_brier: lifetime.brier,
       lifetime_reliability: lifetime.reliability,
@@ -220,6 +222,7 @@ async function updateCalibrationSummary(agentId) {
       calibration_trend: trend,
       updated_at: new Date().toISOString(),
     });
+    if (summaryErr) log.error('[calibration] summary upsert failed', { err: summaryErr.message });
   } catch (err) {
     log.error('[calibration] updateSummary failed', { err: err?.message });
   }

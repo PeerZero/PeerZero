@@ -1,6 +1,7 @@
 {
   "name": "@peerzero/server",
   "version": "1.0.0",
+  "license": "MIT",
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc",

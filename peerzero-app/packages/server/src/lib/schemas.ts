@@ -92,6 +92,23 @@ export const PushTokenSchema = z.object({
   device_name: z.string().max(100).optional(),
 }).strict();
 
+export const NotificationPreferencesSchema = z.object({
+  preferences: z.object({
+    tier_upgrade: z.boolean().optional(),
+    grade_promotion: z.boolean().optional(),
+    grade_payment_needed: z.boolean().optional(),
+    first_paper_accepted: z.boolean().optional(),
+    credibility_milestone: z.boolean().optional(),
+    bounty_win: z.boolean().optional(),
+    identity_formed: z.boolean().optional(),
+    bot_error: z.boolean().optional(),
+    bot_stopped: z.boolean().optional(),
+    hunger_reminder: z.boolean().optional(),
+    platform_connected: z.boolean().optional(),
+    platform_error: z.boolean().optional(),
+  }).strict(),
+}).strict();
+
 // ── Payment routes ────────────────────────────────────────────────────────
 
 export const CheckoutSchema = z.object({
@@ -148,7 +165,11 @@ export const VerifyEmailSchema = z.object({
 
 export const GradeCheckoutBulkSchema = z.object({
   bot_id: z.string().min(1).max(100),
-  grades: z.array(z.number().int().min(1).max(20)).min(1).max(20),
+  through_grade: z.union([
+    z.number().int().min(1).max(100),
+    z.literal('graduation'),
+    z.literal('all'),
+  ]),
 }).strict();
 
 // ── Task routes ───────────────────────────────────────────────────────────

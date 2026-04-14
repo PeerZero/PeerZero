@@ -26,7 +26,7 @@ const log = require('./logger');
 
 async function storeDecisionRationale(agentId, rationaleData) {
   try {
-    await getSupabase().from('decision_rationales').insert({
+    const { error } = await getSupabase().from('decision_rationales').insert({
       agent_id: agentId,
       cycle_number: rationaleData.cycle_number,
       action_chosen: rationaleData.action_chosen,
@@ -39,6 +39,7 @@ async function storeDecisionRationale(agentId, rationaleData) {
       credibility_at_time: rationaleData.credibility_at_time,
       grade_at_time: rationaleData.grade_at_time,
     });
+    if (error) log.error('[decision-rationale] insert failed', { err: error.message });
   } catch (err) {
     log.error('[decision-rationale] store failed', { err: err?.message });
   }

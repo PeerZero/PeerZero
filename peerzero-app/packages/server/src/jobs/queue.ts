@@ -17,6 +17,9 @@ import { queryOne, query, queryRows } from '../db/client';
 import { notifyBotError } from '../services/notification.service';
 import { broadcastStatusChange } from '../websocket/activity-stream';
 
+const QUEUE_PREFIX = process.env.QUEUE_PREFIX || process.env.NODE_ENV || 'dev';
+const QUEUE_NAME = `${QUEUE_PREFIX}:bot-cycles`;
+
 let connection: IORedis | null = null;
 let botQueue: Queue | null = null;
 let botWorker: Worker | null = null;
@@ -30,7 +33,7 @@ function getConnection(): IORedis {
 
 function getQueue(): Queue {
   if (!botQueue) {
-    botQueue = new Queue('bot-cycles', {
+    botQueue = new Queue(QUEUE_NAME, {
       connection: getConnection() as any,
       defaultJobOptions: {
         attempts: 2,
@@ -143,7 +146,7 @@ export function startWorker(): void {
   if (botWorker) return;
 
   botWorker = new Worker(
-    'bot-cycles',
+    QUEUE_NAME,
     async (job: Job) => {
       const { botId, userId, llmApiKeyId, llmModel, cycleDelaySeconds } = job.data;
 
@@ -151,7 +154,7 @@ export function startWorker(): void {
       // If another worker is already running this bot's cycle (stale BullMQ lock,
       // duplicate job, etc.), skip gracefully — the other worker will self-schedule.
       const CYCLE_LOCK_TTL_MS = 5 * 60 * 1000; // 5 minutes — safety net for crashed workers
-      const lock = await acquireLock(getConnection(), `botlock:cycle:${botId}`, CYCLE_LOCK_TTL_MS);
+      const lock = await acquireLock(getConnection(), `${QUEUE_PREFIX}:botlock:cycle:${botId}`, CYCLE_LOCK_TTL_MS);
       if (!lock) {
         logger.info({ botId }, 'Skipping cycle — another worker holds the lock');
         return;
@@ -293,7 +296,13 @@ export function startWorker(): void {
 async function clearStaleLocks(): Promise<void> {
   try {
     const redis = getConnection();
-    const keys = await redis.keys('botlock:cycle:*');
+    const keys: string[] = [];
+    let cursor = '0';
+    do {
+      const [nextCursor, batch] = await redis.scan(cursor, 'MATCH', `${QUEUE_PREFIX}:botlock:cycle:*`, 'COUNT', 100);
+      cursor = nextCursor;
+      keys.push(...batch);
+    } while (cursor !== '0');
     if (keys.length === 0) return;
     const staleKeys: string[] = [];
     for (const key of keys) {

@@ -13,6 +13,9 @@ import { runPlatformCycle, PlatformCycleContext } from '../runtime/platform-loop
 import { updatePlatformCycleStatus, getActivePlatforms } from '../services/platform.service';
 import { queryOne, query } from '../db/client';
 
+const QUEUE_PREFIX = process.env.QUEUE_PREFIX || process.env.NODE_ENV || 'dev';
+const PLATFORM_QUEUE_NAME = `${QUEUE_PREFIX}:platform-cycles`;
+
 let connection: IORedis | null = null;
 let platformQueue: Queue | null = null;
 let platformWorker: Worker | null = null;
@@ -26,7 +29,7 @@ function getConnection(): IORedis {
 
 function getQueue(): Queue {
   if (!platformQueue) {
-    platformQueue = new Queue('platform-cycles', {
+    platformQueue = new Queue(PLATFORM_QUEUE_NAME, {
       connection: getConnection() as any,
       defaultJobOptions: {
         attempts: 2,
@@ -103,14 +106,14 @@ export function startPlatformWorker(): void {
   if (platformWorker) return;
 
   platformWorker = new Worker(
-    'platform-cycles',
+    PLATFORM_QUEUE_NAME,
     async (job: Job) => {
       const ctx: PlatformCycleContext = job.data;
 
       // Distributed lock: prevent concurrent platform cycle execution for the same platform.
       // Platform actions make external HTTP calls that must not be duplicated.
       const PLATFORM_LOCK_TTL_MS = 3 * 60 * 1000; // 3 minutes
-      const lock = await acquireLock(getConnection(), `botlock:platform:${ctx.platformId}`, PLATFORM_LOCK_TTL_MS);
+      const lock = await acquireLock(getConnection(), `${QUEUE_PREFIX}:botlock:platform:${ctx.platformId}`, PLATFORM_LOCK_TTL_MS);
       if (!lock) {
         logger.info({ botId: ctx.botId, platformId: ctx.platformId }, 'Skipping platform cycle — another worker holds the lock');
         return;
@@ -174,6 +177,13 @@ export function startPlatformWorker(): void {
 
   platformWorker.on('error', (err) => {
     logger.error({ err }, 'Platform worker error');
+  });
+
+  platformWorker.on('failed', (job, err) => {
+    logger.error(
+      { jobId: job?.id, botId: job?.data?.botId, platformId: job?.data?.platformId, err: err?.message },
+      'Platform job failed',
+    );
   });
 
   logger.info('Platform cycle worker started');

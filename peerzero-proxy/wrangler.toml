@@ -1,6 +1,7 @@
 name = "peerzero-llm-proxy"
 main = "src/index.ts"
 compatibility_date = "2024-09-01"
+usage_model = "unbound"
 
 # The IDENTITY_PREAMBLE is stored as a Worker secret (never in source).
 # Set it via: wrangler secret put IDENTITY_PREAMBLE

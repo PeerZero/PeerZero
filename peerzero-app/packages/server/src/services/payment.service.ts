@@ -48,7 +48,10 @@ export async function createCheckout(
 
   let customerId = user.stripe_customer_id;
   if (!customerId) {
-    const customer = await getStripe().customers.create({ email: user.email, metadata: { user_id: userId } });
+    const customer = await getStripe().customers.create(
+      { email: user.email, metadata: { user_id: userId } },
+      { idempotencyKey: `customer-${userId}` },
+    );
     customerId = customer.id;
     // Atomic write: only set if no other concurrent request wrote it first
     const updated = await query('UPDATE users SET stripe_customer_id = $1 WHERE id = $2 AND stripe_customer_id IS NULL', [customerId, userId]);
@@ -84,6 +87,8 @@ export async function createCheckout(
     },
     success_url: `${config.frontendUrl}/payment/success?session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${config.frontendUrl}/payment/cancel`,
+  }, {
+    idempotencyKey: `checkout-${productId}-${userId}-${Math.floor(Date.now() / 60000)}`,
   });
 
   // Store session ID
@@ -181,10 +186,24 @@ export async function handleStripeWebhook(event: Stripe.Event): Promise<void> {
           'DELETE FROM user_entitlements WHERE source_purchase_id = $1',
           [refundedPurchase.id],
         );
+        // Find affected bots before deleting unlocks so we can pause them
+        const affectedBots = await queryRows<{ bot_id: string }>(
+          'SELECT DISTINCT bot_id FROM grade_unlocks WHERE purchase_id = $1',
+          [refundedPurchase.id],
+        );
         await query(
           'DELETE FROM grade_unlocks WHERE purchase_id = $1',
           [refundedPurchase.id],
         );
+        // Pause any affected bots that are currently running — they no longer have valid grade access
+        for (const { bot_id } of affectedBots) {
+          try {
+            await setBotStatus(bot_id, 'paused', 'Paused: grade access revoked due to refund');
+            logger.info({ botId: bot_id, purchaseId: refundedPurchase.id }, 'Bot paused after refund — grade unlocks revoked');
+          } catch (pauseErr) {
+            logger.error({ botId: bot_id, err: pauseErr instanceof Error ? pauseErr.message : pauseErr }, 'Failed to pause bot after refund');
+          }
+        }
         logger.info({ purchaseId: refundedPurchase.id, userId: refundedPurchase.user_id }, 'Refund processed — entitlements and grade unlocks revoked');
       }
       break;
@@ -286,7 +305,10 @@ async function createDynamicGradeCheckout(
 
   let customerId = user.stripe_customer_id;
   if (!customerId) {
-    const customer = await getStripe().customers.create({ email: user.email, metadata: { user_id: userId } });
+    const customer = await getStripe().customers.create(
+      { email: user.email, metadata: { user_id: userId } },
+      { idempotencyKey: `customer-${userId}` },
+    );
     customerId = customer.id;
     const updated = await query('UPDATE users SET stripe_customer_id = $1 WHERE id = $2 AND stripe_customer_id IS NULL', [customerId, userId]);
     if ((updated.rowCount ?? 0) === 0) {
@@ -300,12 +322,16 @@ async function createDynamicGradeCheckout(
     name: `Grade ${grade} Unlock`,
     description: `Advance your bot to Grade ${grade}.`,
     metadata: { grade: String(grade), type: 'grade_advancement' },
+  }, {
+    idempotencyKey: `product-grade-${grade}`,
   });
 
   const stripePrice = await getStripe().prices.create({
     product: stripeProduct.id,
     unit_amount: priceCents,
     currency: 'usd',
+  }, {
+    idempotencyKey: `price-grade-${grade}-${priceCents}`,
   });
 
   // Create purchase record (no product FK — dynamic grade)
@@ -330,6 +356,8 @@ async function createDynamicGradeCheckout(
     },
     success_url: `${config.frontendUrl}/payment/success?session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${config.frontendUrl}/payment/cancel`,
+  }, {
+    idempotencyKey: `checkout-${botId}-${grade}-${Math.floor(Date.now() / 60000)}`,
   });
 
   await query('UPDATE purchases SET stripe_session_id = $1 WHERE id = $2', [session.id, purchase!.id]);
@@ -447,7 +475,10 @@ export async function createBulkGradeCheckout(
 
   let customerId = user.stripe_customer_id;
   if (!customerId) {
-    const customer = await getStripe().customers.create({ email: user.email, metadata: { user_id: userId } });
+    const customer = await getStripe().customers.create(
+      { email: user.email, metadata: { user_id: userId } },
+      { idempotencyKey: `customer-${userId}` },
+    );
     customerId = customer.id;
     const updated = await query('UPDATE users SET stripe_customer_id = $1 WHERE id = $2 AND stripe_customer_id IS NULL', [customerId, userId]);
     if ((updated.rowCount ?? 0) === 0) {
@@ -457,6 +488,7 @@ export async function createBulkGradeCheckout(
   }
 
   // Create a single Stripe product for the bundle
+  const gradesKey = gradesToUnlock.join('-');
   const label = gradesToUnlock.length === 1
     ? `Grade ${gradesToUnlock[0]} Unlock`
     : `Grade ${gradesToUnlock[0]}-${gradesToUnlock[gradesToUnlock.length - 1]} Bundle`;
@@ -465,12 +497,16 @@ export async function createBulkGradeCheckout(
     name: label,
     description: `Unlock grades ${gradesToUnlock.join(', ')} for your bot.`,
     metadata: { type: 'grade_advancement', grades: gradesToUnlock.join(','), bot_id: botId },
+  }, {
+    idempotencyKey: `product-bulk-${gradesKey}`,
   });
 
   const stripePrice = await getStripe().prices.create({
     product: stripeProduct.id,
     unit_amount: totalCents,
     currency: 'usd',
+  }, {
+    idempotencyKey: `price-bulk-${gradesKey}-${totalCents}`,
   });
 
   // Create purchase record
@@ -495,6 +531,8 @@ export async function createBulkGradeCheckout(
     },
     success_url: `${config.frontendUrl}/payment/success?session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${config.frontendUrl}/payment/cancel`,
+  }, {
+    idempotencyKey: `checkout-bulk-${botId}-${gradesKey}-${Math.floor(Date.now() / 60000)}`,
   });
 
   await query('UPDATE purchases SET stripe_session_id = $1 WHERE id = $2', [session.id, purchase!.id]);
@@ -561,6 +599,26 @@ async function resumeBotAfterGradePayment(botId: string): Promise<void> {
   }
   await addBotCycleJob(botId, bot.user_id, bot.llm_api_key_id, bot.llm_model, bot.cycle_delay_seconds);
   logger.info({ botId, grade: gradeUnlocked.grade }, 'Bot auto-resumed after grade payment');
+}
+
+/**
+ * Create a Stripe billing portal session so the user can manage payment methods,
+ * view invoices, and request refunds.
+ */
+export async function createBillingPortalSession(userId: string): Promise<{ url: string }> {
+  const user = await queryOne<{ stripe_customer_id: string | null }>(
+    'SELECT stripe_customer_id FROM users WHERE id = $1',
+    [userId],
+  );
+  if (!user) throw new AppError(404, 'User not found');
+  if (!user.stripe_customer_id) throw new AppError(400, 'No billing account found — make a purchase first');
+
+  const session = await getStripe().billingPortal.sessions.create({
+    customer: user.stripe_customer_id,
+    return_url: `${config.frontendUrl}/settings/billing`,
+  });
+
+  return { url: session.url };
 }
 
 /** Verify Stripe webhook signature. Throws StripeSignatureError on failure. */

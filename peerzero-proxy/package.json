@@ -2,6 +2,7 @@
   "name": "peerzero-llm-proxy",
   "version": "1.0.0",
   "private": true,
+  "license": "MIT",
   "description": "LLM proxy that injects the identity activation preamble server-side",
   "scripts": {
     "dev": "wrangler dev",
