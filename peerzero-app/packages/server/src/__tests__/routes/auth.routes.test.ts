@@ -99,25 +99,37 @@ describe('POST /auth/register', () => {
   it('returns 400 when email is missing', async () => {
     const res = await request(app).post('/auth/register').send({ password: 'longpassword' });
     expect(res.status).toBe(400);
-    expect(res.body.error).toMatch(/email and password required/i);
+    expect(res.body.error).toBe('Validation failed');
+    expect(res.body.details).toEqual(
+      expect.arrayContaining([expect.objectContaining({ field: 'email' })]),
+    );
   });
 
   it('returns 400 when password is missing', async () => {
     const res = await request(app).post('/auth/register').send({ email: 'test@example.com' });
     expect(res.status).toBe(400);
-    expect(res.body.error).toMatch(/email and password required/i);
+    expect(res.body.error).toBe('Validation failed');
+    expect(res.body.details).toEqual(
+      expect.arrayContaining([expect.objectContaining({ field: 'password' })]),
+    );
   });
 
   it('returns 400 for invalid email format', async () => {
     const res = await request(app).post('/auth/register').send({ email: 'not-an-email', password: 'longpassword' });
     expect(res.status).toBe(400);
-    expect(res.body.error).toMatch(/invalid email/i);
+    expect(res.body.error).toBe('Validation failed');
+    expect(res.body.details).toEqual(
+      expect.arrayContaining([expect.objectContaining({ field: 'email', message: expect.stringMatching(/invalid/i) })]),
+    );
   });
 
   it('returns 400 when password is too short', async () => {
     const res = await request(app).post('/auth/register').send({ email: 'test@example.com', password: 'short' });
     expect(res.status).toBe(400);
-    expect(res.body.error).toMatch(/at least 8/i);
+    expect(res.body.error).toBe('Validation failed');
+    expect(res.body.details).toEqual(
+      expect.arrayContaining([expect.objectContaining({ field: 'password', message: expect.stringMatching(/>=\s*8|at least 8/i) })]),
+    );
   });
 
   it('returns 201 with tokens for registration', async () => {
@@ -144,7 +156,10 @@ describe('POST /auth/login', () => {
   it('returns 400 when email or password is missing', async () => {
     const res = await request(app).post('/auth/login').send({ email: 'test@example.com' });
     expect(res.status).toBe(400);
-    expect(res.body.error).toMatch(/email and password required/i);
+    expect(res.body.error).toBe('Validation failed');
+    expect(res.body.details).toEqual(
+      expect.arrayContaining([expect.objectContaining({ field: 'password' })]),
+    );
   });
 
   it('returns tokens on successful login', async () => {
@@ -170,7 +185,10 @@ describe('POST /auth/forgot-password', () => {
   it('returns 400 when email is missing', async () => {
     const res = await request(app).post('/auth/forgot-password').send({});
     expect(res.status).toBe(400);
-    expect(res.body.error).toMatch(/email is required/i);
+    expect(res.body.error).toBe('Validation failed');
+    expect(res.body.details).toEqual(
+      expect.arrayContaining([expect.objectContaining({ field: 'email' })]),
+    );
   });
 
   it('returns success message (does not reveal if account exists)', async () => {
@@ -186,7 +204,13 @@ describe('POST /auth/reset-password', () => {
   it('returns 400 when fields are missing', async () => {
     const res = await request(app).post('/auth/reset-password').send({ email: 'test@example.com' });
     expect(res.status).toBe(400);
-    expect(res.body.error).toMatch(/email.*code.*new_password/i);
+    expect(res.body.error).toBe('Validation failed');
+    expect(res.body.details).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ field: 'code' }),
+        expect.objectContaining({ field: 'new_password' }),
+      ]),
+    );
   });
 
   it('returns success on valid reset', async () => {
@@ -334,7 +358,10 @@ describe('PATCH /auth/password', () => {
       .send({ current_password: 'old' });
 
     expect(res.status).toBe(400);
-    expect(res.body.error).toMatch(/current_password and new_password/i);
+    expect(res.body.error).toBe('Validation failed');
+    expect(res.body.details).toEqual(
+      expect.arrayContaining([expect.objectContaining({ field: 'new_password' })]),
+    );
   });
 
   it('changes password and returns success', async () => {

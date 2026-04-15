@@ -375,6 +375,8 @@ describe('payment.service', () => {
     it('handles charge.refunded by updating status and revoking access', async () => {
       // queryOne: UPDATE purchases ... RETURNING — returns the purchase row
       mockQueryOne.mockResolvedValueOnce({ id: 'purchase-1', user_id: 'user-1', product_id: 'prod-1' });
+      // queryRows: SELECT DISTINCT bot_id FROM grade_unlocks — affected bots
+      mockQueryRows.mockResolvedValueOnce([{ bot_id: 'bot-1' }]);
 
       await handleStripeWebhook({
         type: 'charge.refunded',

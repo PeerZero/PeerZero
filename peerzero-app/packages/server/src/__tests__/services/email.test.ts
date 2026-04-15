@@ -14,6 +14,13 @@ vi.mock('../../lib/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
+// Mock db/client so isEmailSuppressed doesn't hit a real database
+vi.mock('../../db/client', () => ({
+  query: vi.fn().mockResolvedValue({ rows: [] }),
+  queryOne: vi.fn().mockResolvedValue(null),
+  queryRows: vi.fn().mockResolvedValue([]),
+}));
+
 // ── Tests ───────────────────────────────────────────────────────────────────
 
 beforeEach(() => vi.clearAllMocks());

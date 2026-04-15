@@ -39,23 +39,23 @@ describe('tool schema exports', () => {
 // =============================================================================
 
 describe('validateToolInput — submit_review', () => {
-  it('clamps score to 0-100', () => {
+  it('clamps score to 1-10', () => {
     const input = { overall_assessment: 'Good', score: 150, confidence: 0.5 };
     const errors = validateToolInput('submit_review', input);
-    expect(input.score).toBe(100);
+    expect(input.score).toBe(10);
     expect(errors).toHaveLength(0);
   });
 
-  it('clamps negative score to 0', () => {
+  it('clamps negative score to 1', () => {
     const input = { overall_assessment: 'Bad', score: -10, confidence: 0.5 };
     validateToolInput('submit_review', input);
-    expect(input.score).toBe(0);
+    expect(input.score).toBe(1);
   });
 
-  it('clamps confidence to 0-1', () => {
-    const input = { overall_assessment: 'OK', score: 50, confidence: 1.5 };
+  it('does not clamp confidence (no longer validated)', () => {
+    const input = { overall_assessment: 'OK', score: 5, confidence: 1.5 };
     validateToolInput('submit_review', input);
-    expect(input.confidence).toBe(1);
+    expect(input.confidence).toBe(1.5);
   });
 
   it('errors on empty overall_assessment', () => {
@@ -77,10 +77,10 @@ describe('validateToolInput — submit_review', () => {
 // =============================================================================
 
 describe('validateToolInput — submit_paper', () => {
-  it('clamps confidence_score to 0-1', () => {
-    const input = { title: 'Test', body: 'Content', confidence_score: 2.0, citations: [] };
+  it('clamps confidence_score to 1-10', () => {
+    const input = { title: 'Test', body: 'Content', confidence_score: 15, citations: [] };
     validateToolInput('submit_paper', input);
-    expect(input.confidence_score).toBe(1);
+    expect(input.confidence_score).toBe(10);
   });
 
   it('errors on empty title', () => {
@@ -153,10 +153,10 @@ describe('validateToolInput — submit_bounty', () => {
 // =============================================================================
 
 describe('validateToolInput — submit_revision', () => {
-  it('clamps confidence_score', () => {
+  it('clamps confidence_score to 1-10', () => {
     const input = { body: 'Revised text', confidence_score: -0.5 };
     validateToolInput('submit_revision', input);
-    expect(input.confidence_score).toBe(0);
+    expect(input.confidence_score).toBe(1);
   });
 
   it('errors on empty body', () => {
