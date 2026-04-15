@@ -81,12 +81,12 @@ export default function StatsScreen({ route }: StatsScreenProps) {
       />
       {/* Summary cards */}
       <View style={styles.summaryRow}>
-        <View style={styles.summaryCard}>
+        <View style={styles.summaryCard} accessible accessibilityLabel={`${stats.total_cycles} cycles run`}>
           <Text style={styles.summaryEmoji}>🔄</Text>
           <Text style={styles.summaryValue}>{stats.total_cycles}</Text>
           <Text style={styles.summaryLabel}>Cycles Run</Text>
         </View>
-        <View style={styles.summaryCard}>
+        <View style={styles.summaryCard} accessible accessibilityLabel={`${formatTokens(stats.total_tokens)} tokens used`}>
           <Text style={styles.summaryEmoji}>⚡</Text>
           <Text style={styles.summaryValue}>{formatTokens(stats.total_tokens)}</Text>
           <Text style={styles.summaryLabel}>Tokens Used</Text>
@@ -95,7 +95,7 @@ export default function StatsScreen({ route }: StatsScreenProps) {
 
       {/* Credibility over time */}
       {stats.credibility_history.length > 1 && (
-        <View style={styles.chartSection}>
+        <View style={styles.chartSection} accessible accessibilityRole="summary" accessibilityLabel={`Credibility chart showing ${stats.credibility_history.length} data points, current value ${stats.credibility_history[stats.credibility_history.length - 1]?.value ?? 'unknown'}`}>
           <Text style={styles.chartTitle}>Credibility Journey</Text>
           <Text style={styles.chartHint}>How your bot's reputation has grown over time</Text>
           <CredibilityChart data={stats.credibility_history} />
@@ -104,7 +104,7 @@ export default function StatsScreen({ route }: StatsScreenProps) {
 
       {/* Action breakdown */}
       {stats.action_breakdown.length > 0 && (
-        <View style={styles.chartSection}>
+        <View style={styles.chartSection} accessible accessibilityRole="summary" accessibilityLabel={`Action breakdown: ${stats.action_breakdown.map(d => `${d.count} ${d.action_type}s`).join(', ')}`}>
           <Text style={styles.chartTitle}>What It's Been Doing</Text>
           <Text style={styles.chartHint}>Papers written, reviews given, bounties filed</Text>
           <ActionBreakdownChart data={stats.action_breakdown} />
@@ -113,7 +113,7 @@ export default function StatsScreen({ route }: StatsScreenProps) {
 
       {/* Skill progress */}
       {stats.skill_progress.length > 0 && (
-        <View style={styles.chartSection}>
+        <View style={styles.chartSection} accessible accessibilityRole="summary" accessibilityLabel={`Skill progress: ${stats.skill_progress.map(d => `${d.skill} with ${d.reps} exercises`).join(', ')}`}>
           <Text style={styles.chartTitle}>Skills Being Built</Text>
           <Text style={styles.chartHint}>Reasoning abilities measured through practice</Text>
           <SkillProgressChart data={stats.skill_progress} />
@@ -122,7 +122,7 @@ export default function StatsScreen({ route }: StatsScreenProps) {
 
       {/* Token usage trend */}
       {stats.token_usage_trend.length > 1 && (
-        <View style={styles.chartSection}>
+        <View style={styles.chartSection} accessible accessibilityRole="summary" accessibilityLabel={`Token usage chart showing ${stats.token_usage_trend.length} days of data`}>
           <Text style={styles.chartTitle}>Brain Power Used</Text>
           <Text style={styles.chartHint}>Daily API token consumption</Text>
           <TokenUsageChart data={stats.token_usage_trend} />

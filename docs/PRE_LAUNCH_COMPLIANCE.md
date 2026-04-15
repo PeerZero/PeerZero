@@ -74,6 +74,25 @@ PeerZero will be used by children (Tamagotchi-style bots). COPPA compliance is m
 - [ ] **Assess applicability** — Requires "reasonable care" to avoid algorithmic discrimination for high-risk AI systems. PeerZero's credibility scoring may qualify. Same sandbox argument as EU AI Act applies.
 - [ ] **Impact assessment** — If applicable, document algorithmic impact assessment.
 
+## Accessibility — ADA / WCAG 2.1
+
+Mobile apps with a web presence are increasingly subject to ADA Title III. App Store guidelines (Apple HIG, Google Material) expect WCAG AA compliance. Education-adjacent apps face higher scrutiny.
+
+**What's already done:**
+- [x] **Accessibility labels and roles** — 16 of 18 screens have `accessibilityLabel`, `accessibilityRole`, and `accessibilityState` props on interactive elements (178 total a11y prop references across the codebase).
+- [x] **WCAG AA color contrast** — Theme colors documented with contrast ratios in `theme/colors.ts`. Primary text `#EAF0FA` on `#080C18` exceeds 4.5:1. Tertiary text `#6B7A9A` documented at 4.5:1 on dark bg.
+- [x] **StatsScreen and SchoolScreen a11y** — Summary cards, chart sections, and school cards all have `accessibilityRole="summary"` and descriptive labels. Charts provide text descriptions of data for screen readers.
+
+**Still needed:**
+- [ ] **accessibilityHint on all interactive elements** — Only 12 of 31 screen/component files use `accessibilityHint`. Add hints to buttons and controls that aren't self-explanatory from their label alone.
+- [ ] **Dynamic font scaling** — Font sizes are hardcoded in `theme/spacing.ts`. Users with iOS Dynamic Type or Android font scaling won't see adjusted text. Use `allowFontScaling` and relative sizing.
+- [ ] **Reduced motion support** — BotAvatar has continuous idle breathing and bounce animations. Add `useReducedMotion()` check to skip or simplify animations for users with vestibular sensitivities.
+- [ ] **Screen reader testing** — Test full user flows with VoiceOver (iOS) and TalkBack (Android) before launch. Priority flows: registration, bot creation, enrollment, start/stop, chat.
+- [ ] **BotAvatar accessible description** — The procedurally generated SVG avatar has no accessible text. Add `accessibilityLabel` describing the bot's current state (e.g., "Your bot, idle, tier 2").
+- [ ] **VPAT / Accessibility statement** — Not needed pre-launch, but create a public accessibility statement at `/accessibility` when you have a web presence. Enterprise/education customers may ask for a VPAT (Voluntary Product Accessibility Template).
+
+**Risk level:** Low for a pre-launch consumer app. ADA web/app lawsuits (~4K/year in the US) typically target larger companies. The basic label coverage you have is better than most apps at this stage. Fix the screen reader testing gap before launch — that's the highest-value item.
+
 ## App Store Compliance
 
 - [x] **Apple Guideline 5.1.2(i) — Third-party data disclosure** — BYOK sends user data to Anthropic/OpenAI. Consent modal added to SettingsScreen.tsx `handleAddKey()` — names the provider, explains data flow, requires explicit "I Agree" before key is stored. Completed 2026-04-14.

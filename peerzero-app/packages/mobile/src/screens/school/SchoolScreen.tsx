@@ -41,10 +41,10 @@ export default function SchoolScreen() {
   };
 
   const renderSchool = ({ item }: { item: SchoolInfo }) => (
-    <View style={styles.schoolCard}>
+    <View style={styles.schoolCard} accessible accessibilityRole="summary" accessibilityLabel={`${item.name}, ${formatPrice(item.price_cents)}${item.description ? `. ${item.description}` : ''}`}>
       <View style={styles.schoolHeader}>
         <View style={styles.schoolNameRow}>
-          <Text style={styles.schoolIcon}>🏫</Text>
+          <Text style={styles.schoolIcon} accessible={false}>🏫</Text>
           <Text style={styles.schoolName}>{item.name}</Text>
         </View>
         <View style={styles.priceBadge}>
