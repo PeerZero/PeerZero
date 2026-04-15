@@ -190,6 +190,10 @@ Items that need external dependencies, vendor configuration, or architectural wo
 - [ ] **Demo account for App Store review** — Create working test credentials. Ensure Apple's IP range is not blocked by backend. (Audit #26)
 - [ ] **Privacy manifest / nutrition labels** — Accurately list all data collected, shared, and linked to identity for App Store data safety section. (Audit #26)
 
+### Needs Infrastructure / CI Fix
+
+- [ ] **App e2e test requires running PostgreSQL** — `packages/server/src/__tests__/e2e/api.e2e.test.ts` fails with `ECONNREFUSED 127.0.0.1:5432` because it connects to a real Postgres instance (via `setup.ts:resetDatabase`). CI and local dev environments without Postgres will always skip this test. Fix: either add a Postgres service container to CI (e.g. GitHub Actions `services: postgres`), or convert to use a test-scoped container (testcontainers-node), or gate the test behind a `TEST_DATABASE_URL` env var so it's skipped gracefully when Postgres is unavailable.
+
 ### Needs Architectural Work
 
 - [x] **CREATE INDEX CONCURRENTLY scripts** — ~~All indexes lock writes during build~~ DONE: Standalone CONCURRENTLY rebuild scripts created for 19 indexes on large tables. School: `migrations/rollbacks/concurrent_indexes_school.sql` (11 indexes). App: `db/concurrent_indexes_app.sql` (8 indexes). Run manually via psql during maintenance window before tables grow large. (Audit #35)
