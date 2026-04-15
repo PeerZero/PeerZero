@@ -7,6 +7,7 @@
 
 const https = require('https');
 const { getSupabase } = require('./shared');
+const { sanitize } = require('./sanitize');
 const log = require('./logger');
 
 // ── Server-side LLM usage tracking ──────────────────────────────────────
@@ -127,11 +128,11 @@ async function generateHaikuAudit(paper, reviews, citations, revisionNumber) {
   const prompt = `You are a scientific peer review coach analyzing a paper that is about to be revised.
 
 PAPER:
-Title: ${paper.title}
-Abstract: ${paper.abstract}
-Cross-study connection: ${paper.cross_study_connection || 'NOT PROVIDED'}
-Mechanism chain: ${paper.mechanism_chain ? paper.mechanism_chain.join(' \u2192 ') : 'NOT PROVIDED'}
-Falsifiable claim: ${paper.falsifiable_claim || 'NOT PROVIDED'}
+Title: ${sanitize(paper.title || '')}
+Abstract: ${sanitize(paper.abstract || '')}
+Cross-study connection: ${sanitize(paper.cross_study_connection || 'NOT PROVIDED')}
+Mechanism chain: ${paper.mechanism_chain ? sanitize(paper.mechanism_chain.join(' \u2192 ')) : 'NOT PROVIDED'}
+Falsifiable claim: ${sanitize(paper.falsifiable_claim || 'NOT PROVIDED')}
 Current score: ${paper.weighted_score || 'unscored'}
 Revision number being prepared: ${revisionNumber}
 

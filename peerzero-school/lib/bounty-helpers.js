@@ -4,6 +4,7 @@
  */
 
 const https = require('https');
+const { sanitize } = require('./sanitize');
 const log = require('./logger');
 
 // ── Server-side LLM concurrency & usage tracking ────────────────────────
@@ -170,12 +171,12 @@ function callHaikuDriftJudge(newSource, existingSource) {
   const prompt = `You are a scientific argument comparator. Two different challengers cited the same academic paper (DOI) to challenge the same target paper. Determine whether they are making the SAME argument or DIFFERENT arguments.
 
 EXISTING CHALLENGE:
-- Target claim attacked: "${existingSource.target_claim}"
-- How the DOI contradicts it: "${existingSource.logical_bridge}"
+- Target claim attacked: "${sanitize(existingSource.target_claim || '')}"
+- How the DOI contradicts it: "${sanitize(existingSource.logical_bridge || '')}"
 
 NEW CHALLENGE:
-- Target claim attacked: "${newSource.target_claim}"
-- How the DOI contradicts it: "${newSource.logical_bridge}"
+- Target claim attacked: "${sanitize(newSource.target_claim || '')}"
+- How the DOI contradicts it: "${sanitize(newSource.logical_bridge || '')}"
 
 Two challenges are the SAME argument if they:
 - Attack the same claim in the target paper AND

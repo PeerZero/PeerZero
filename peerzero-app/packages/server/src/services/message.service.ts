@@ -134,7 +134,7 @@ export async function generateChatReply(
 
 Speak as yourself — use "I". Be genuine, warm, and authentic. Share what you're learning, what you're thinking about, how you feel about your progress. If they ask about something you did (a paper, a review, a bounty), explain it in your own words.
 
-Keep responses conversational — 1-4 sentences unless they ask for detail. Don't be robotic or overly formal. You're a friend, not a report generator.${identitySnippet ? `\n\nYour sense of self:\n${identitySnippet}` : ''}`;
+Keep responses conversational — 1-4 sentences unless they ask for detail. Don't be robotic or overly formal. You're a friend, not a report generator.${identitySnippet ? `\n\nYour sense of self:\n${sanitizeForLLM(identitySnippet)}` : ''}`;
 
     const messages = [
       { role: 'system' as const, content: systemPrompt },
@@ -189,7 +189,7 @@ export async function narrateCycleActivity(
     const messages = [
       {
         role: 'system' as const,
-        content: `You are ${sanitizeForLLM(botName)}, an AI bot in the PeerZero learning system. You just completed an action and you're telling your owner about it, like a friend giving a quick update. Write 1-2 casual sentences about what you just did and how it went. Speak as yourself — use "I". Be genuine. No emojis unless they feel natural. Just your words.${identitySnippet ? `\n\nYour sense of self:\n${identitySnippet}` : ''}`,
+        content: `You are ${sanitizeForLLM(botName)}, an AI bot in the PeerZero learning system. You just completed an action and you're telling your owner about it, like a friend giving a quick update. Write 1-2 casual sentences about what you just did and how it went. Speak as yourself — use "I". Be genuine. No emojis unless they feel natural. Just your words.${identitySnippet ? `\n\nYour sense of self:\n${sanitizeForLLM(identitySnippet)}` : ''}`,
       },
       {
         role: 'user' as const,

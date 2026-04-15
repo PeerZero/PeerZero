@@ -18,6 +18,7 @@
  */
 
 const { getSupabase } = require('./shared');
+const { sanitize } = require('./sanitize');
 const log = require('./logger');
 
 // ── TRACE-style truncation analysis ──────────────────────────────────────
@@ -131,9 +132,9 @@ async function generateReasoningAudit(paper, callHaikuFn) {
       const claim = paper.falsifiable_claim || paper.abstract || '';
 
       const chainPrompt = CHAIN_VERIFICATION_PROMPT
-        .replace('{title}', (paper.title || '').slice(0, 200))
-        .replace('{claim}', claim.slice(0, 500))
-        .replace('{chain}', chainText);
+        .replace('{title}', sanitize((paper.title || '').slice(0, 200)))
+        .replace('{claim}', sanitize(claim.slice(0, 500)))
+        .replace('{chain}', sanitize(chainText));
 
       const chainResult = await callHaikuFn(chainPrompt, 'mechanism_chain_verification');
       if (chainResult) {
@@ -150,11 +151,11 @@ async function generateReasoningAudit(paper, callHaikuFn) {
       for (const step of loadBearingSteps) {
         try {
           const probePrompt = COUNTERFACTUAL_PROBE_PROMPT
-            .replace('{title}', (paper.title || '').slice(0, 200))
-            .replace('{conclusion}', (paper.falsifiable_claim || paper.abstract || '').slice(0, 500))
-            .replace('{chain}', chainText)
+            .replace('{title}', sanitize((paper.title || '').slice(0, 200)))
+            .replace('{conclusion}', sanitize((paper.falsifiable_claim || paper.abstract || '').slice(0, 500)))
+            .replace('{chain}', sanitize(chainText))
             .replace('{step_number}', String(step.step_number))
-            .replace('{step_text}', String(step.step_text || chain[step.step_number - 1] || '').slice(0, 300));
+            .replace('{step_text}', sanitize(String(step.step_text || chain[step.step_number - 1] || '').slice(0, 300)));
 
           const probeResult = await callHaikuFn(probePrompt, 'counterfactual_probe');
           if (probeResult) {

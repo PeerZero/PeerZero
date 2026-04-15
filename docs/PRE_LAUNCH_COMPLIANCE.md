@@ -200,7 +200,12 @@ Items that need external dependencies, vendor configuration, or architectural wo
 - [ ] **SPF/DKIM/DMARC DNS records** — Configure on the sending domain. Resend handles DKIM signing, but SPF/DMARC records must be added to DNS. Move DMARC from `p=none` → `p=reject` before launch. (Audit #25)
 - [ ] **Email warm-up** — New sending domains need 2-4 weeks of gradual volume. Plan warm-up schedule before launch blast. (Audit #25)
 - [x] **License scan in CI** — ~~Add license-checker to CI pipeline~~ DONE: ci.yml now runs license-checker on School + App server and pip-licenses on Bot, failing on AGPL/SSPL/EUPL licenses. (Audit #32)
-- [ ] **External monitoring service** — Integrate Datadog/Grafana or uptime monitor (UptimeRobot, Better Uptime). Currently no external pings or alerting rules. (Audit #22)
+- [ ] **External uptime monitoring** — Set up UptimeRobot (free tier: 50 monitors, 5-min intervals) or Better Uptime to ping these endpoints and alert on downtime:
+  - `GET /api/health` on each School deployment (science, plus any launched schools) — returns 200 with Supabase connectivity check
+  - `GET /health` on App server — returns 200 with DB + Redis checks
+  - `GET /health/metrics` on App server — returns bot counts, cycle stats, error rates (useful for dashboards)
+  - Cloudflare Worker proxy URL — basic 200 check to verify the proxy is alive
+  - Configure alerts to email/Slack/PagerDuty on 2+ consecutive failures (avoids false alarms from transient blips). (Audit #22)
 
 ### Needs Apple/Google Configuration
 
