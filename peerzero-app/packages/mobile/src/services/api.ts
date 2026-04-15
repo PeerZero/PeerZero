@@ -330,3 +330,9 @@ export const platforms = {
 export const skills = {
   get: (botId: string) => apiFetch(`/bots/${botId}/skills`),
 };
+
+// ── Models (public, no auth) ──
+
+export const models = {
+  list: () => apiFetch<Array<{ id: string; provider: string; label: string; tier: string }>>('/models'),
+};

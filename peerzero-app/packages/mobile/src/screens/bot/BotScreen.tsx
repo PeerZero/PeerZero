@@ -7,7 +7,7 @@ import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert, ActivityIndicator, Switch, Share, RefreshControl } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import Slider from '@react-native-community/slider';
-import { bots as botsApi, payments as paymentsApi } from '../../services/api';
+import { bots as botsApi, payments as paymentsApi, models as modelsApi } from '../../services/api';
 import { useBotStream } from '../../hooks/useBotStream';
 import { colors } from '../../theme/colors';
 import { spacing, fontSize, fontWeight, lineHeight, borderRadius, layout } from '../../theme/spacing';
@@ -20,7 +20,7 @@ import type { MilestoneType } from '../../components/MilestoneModal';
 import * as WebBrowser from 'expo-web-browser';
 import * as Haptics from 'expo-haptics';
 import type { BotDetail } from '@peerzero/shared';
-import { credibilityToStage, calculateHunger, getGradePriceDisplay, GRADUATION_GRADE, getGradePriceCents, GRADE_PRICES_CENTS } from '@peerzero/shared';
+import { credibilityToStage, calculateHunger, getGradePriceDisplay, GRADUATION_GRADE, getGradePriceCents, GRADE_PRICES_CENTS, SUPPORTED_MODELS } from '@peerzero/shared';
 import type { BotScreenProps } from '../../navigation/types';
 import { timeAgo } from '../../utils/timeAgo';
 
@@ -138,6 +138,12 @@ export default function BotScreen({ route, navigation }: BotScreenProps) {
   const [gradeUnlockLoading, setGradeUnlockLoading] = useState(false);
   const [retryLoading, setRetryLoading] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [availableModels, setAvailableModels] = useState(SUPPORTED_MODELS as ReadonlyArray<{ id: string; provider: string; label: string; tier: string }>);
+
+  // Fetch models from server (so new models appear without app update)
+  useEffect(() => {
+    modelsApi.list().then(setAvailableModels).catch(() => {/* fallback to hardcoded SUPPORTED_MODELS */});
+  }, []);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -273,6 +279,19 @@ export default function BotScreen({ route, navigation }: BotScreenProps) {
       setBot(prev => prev ? { ...prev, cycle_delay_seconds: seconds } : null);
     } catch (err: unknown) {
       Alert.alert('Error', err instanceof Error ? err.message : 'Something went wrong');
+    }
+  };
+
+  const handleModelChange = async (modelId: string) => {
+    if (!bot || modelId === bot.llm_model) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const prevModel = bot.llm_model;
+    setBot(prev => prev ? { ...prev, llm_model: modelId } : null);
+    try {
+      await botsApi.update(botId, { llm_model: modelId });
+    } catch (err: unknown) {
+      setBot(prev => prev ? { ...prev, llm_model: prevModel } : null);
+      Alert.alert('Error', err instanceof Error ? err.message : 'Failed to update model');
     }
   };
 
@@ -535,7 +554,7 @@ export default function BotScreen({ route, navigation }: BotScreenProps) {
       >
         <Text style={styles.settingsToggleText}>Settings</Text>
         <Text style={styles.settingsToggleHint}>
-          {formatDelay(currentDelay)} cycle{bot.extended_thinking ? ' · Deep thinking' : ''}{bot.is_public ? ' · Public' : ''}
+          {availableModels.find(m => m.id === bot.llm_model)?.label || bot.llm_model} · {formatDelay(currentDelay)}{bot.extended_thinking ? ' · Deep thinking' : ''}
         </Text>
         <Text style={styles.settingsChevron}>{settingsOpen ? '▾' : '▸'}</Text>
       </TouchableOpacity>
@@ -561,6 +580,31 @@ export default function BotScreen({ route, navigation }: BotScreenProps) {
               accessibilityLabel={`Cycle delay: ${formatDelay(currentDelay)}`}
               accessibilityHint="Adjust how often the bot runs its cycle"
             />
+            {isRunning && (
+              <Text style={styles.delayHint}>Changes take effect next cycle</Text>
+            )}
+          </View>
+
+          {/* Science model selector */}
+          <View style={styles.modelSection}>
+            <Text style={styles.settingTitle}>Science Model</Text>
+            <Text style={styles.settingHint}>
+              Used for papers, reviews, and all reasoning tasks
+            </Text>
+            <View style={styles.modelGrid}>
+              {availableModels.filter(m => m.tier === 'science').map(m => (
+                <TouchableOpacity
+                  key={m.id}
+                  style={[styles.modelPill, bot.llm_model === m.id && styles.modelPillSelected]}
+                  onPress={() => handleModelChange(m.id)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.modelPillText, bot.llm_model === m.id && styles.modelPillTextSelected]}>
+                    {m.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
             {isRunning && (
               <Text style={styles.delayHint}>Changes take effect next cycle</Text>
             )}
@@ -915,6 +959,18 @@ const styles = StyleSheet.create({
   delayValue: { color: colors.accent.primary, fontWeight: fontWeight.bold },
   slider: { width: '100%', height: 44 },
   delayHint: { fontSize: fontSize.xs, color: colors.text.tertiary, textAlign: 'center', fontWeight: fontWeight.medium },
+  modelSection: { paddingVertical: spacing.md, borderTopWidth: 1, borderTopColor: colors.border },
+  modelGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs, marginTop: spacing.sm },
+  modelPill: {
+    paddingVertical: spacing.sm, paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.full, borderWidth: 1, borderColor: colors.border,
+    backgroundColor: colors.bg.elevated,
+  },
+  modelPillSelected: {
+    backgroundColor: colors.accent.primary + '15', borderColor: colors.accent.primary,
+  },
+  modelPillText: { fontSize: fontSize.sm, color: colors.text.secondary, fontWeight: fontWeight.medium },
+  modelPillTextSelected: { color: colors.accent.primary, fontWeight: fontWeight.semibold },
   shareButton: {
     backgroundColor: colors.accent.secondary + '15', paddingVertical: spacing.sm,
     paddingHorizontal: spacing.lg, borderRadius: borderRadius.md, alignSelf: 'center',
