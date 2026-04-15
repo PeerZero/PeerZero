@@ -140,31 +140,31 @@ export async function handleStripeWebhook(event: Stripe.Event): Promise<void> {
       );
 
       // Handle grade advancement fulfillment (single or bulk)
-      if (session.metadata?.bot_id) {
+      if (session.metadata?.bot_id && session.metadata?.school_id) {
         if (session.metadata?.type === 'grade_advancement_bulk' && session.metadata?.grades) {
           // Bulk unlock: batch insert all grades in one query
           const rawGrades = typeof session.metadata.grades === 'string' ? session.metadata.grades : '';
           const gradeNums = rawGrades.split(',').map(Number).filter(n => Number.isFinite(n) && n > 0 && n <= 200).slice(0, 50);
           if (gradeNums.length > 0) {
-            const values = gradeNums.map((g, i) => `($1, $${i + 2}, $${gradeNums.length + 2})`).join(', ');
+            const values = gradeNums.map((g, i) => `($1, $2, $${i + 3}, $${gradeNums.length + 3})`).join(', ');
             await query(
-              `INSERT INTO grade_unlocks (bot_id, grade, purchase_id) VALUES ${values} ON CONFLICT (bot_id, grade) DO NOTHING`,
-              [session.metadata.bot_id, ...gradeNums, purchaseId],
+              `INSERT INTO grade_unlocks (bot_id, school_id, grade, purchase_id) VALUES ${values} ON CONFLICT (bot_id, school_id, grade) DO NOTHING`,
+              [session.metadata.bot_id, session.metadata.school_id, ...gradeNums, purchaseId],
             );
             for (const g of gradeNums) {
-              logger.info({ botId: session.metadata.bot_id, grade: g, purchaseId }, 'Grade unlocked');
+              logger.info({ botId: session.metadata.bot_id, schoolId: session.metadata.school_id, grade: g, purchaseId }, 'Grade unlocked');
             }
           }
         } else if (session.metadata?.grade) {
           // Single grade unlock
           const gradeNum = parseInt(session.metadata.grade, 10);
           if (Number.isFinite(gradeNum) && gradeNum > 0 && gradeNum <= 200) {
-            await unlockGrade(session.metadata.bot_id, gradeNum, purchaseId);
+            await unlockGrade(session.metadata.bot_id, session.metadata.school_id, gradeNum, purchaseId);
           }
         }
         // Auto-resume bot if it was paused waiting for grade payment
         try {
-          await resumeBotAfterGradePayment(session.metadata.bot_id);
+          await resumeBotAfterGradePayment(session.metadata.bot_id, session.metadata.school_id);
         } catch (resumeErr) {
           logger.error({ botId: session.metadata.bot_id, err: resumeErr instanceof Error ? resumeErr.message : resumeErr }, 'Failed to resume bot after grade payment — grades unlocked but bot may need manual restart');
         }
@@ -250,19 +250,20 @@ export async function createGradeCheckout(
 
   const currentGrade = bot.cached_grade || 1;
   const nextGrade = currentGrade + 1;
+  const schoolId = bot.school_id!;
 
   // Check if next grade is already unlocked
   const alreadyUnlocked = await queryOne(
-    'SELECT id FROM grade_unlocks WHERE bot_id = $1 AND grade = $2',
-    [botId, nextGrade],
+    'SELECT id FROM grade_unlocks WHERE bot_id = $1 AND school_id = $2 AND grade = $3',
+    [botId, schoolId, nextGrade],
   );
   if (alreadyUnlocked) throw new AppError(409, `Grade ${nextGrade} is already unlocked for this bot`);
 
   // Skip payments: unlock grade immediately without Stripe
   if (config.skipPayments) {
-    await unlockGrade(botId, nextGrade, 'skip-payments');
-    logger.info({ botId, grade: nextGrade }, 'Grade unlocked (payments skipped)');
-    try { await resumeBotAfterGradePayment(botId); } catch (err) { logger.error({ botId, err: err instanceof Error ? err.message : err }, 'Failed to resume bot after grade payment (payments skipped)'); }
+    await unlockGrade(botId, schoolId, nextGrade, 'skip-payments');
+    logger.info({ botId, schoolId, grade: nextGrade }, 'Grade unlocked (payments skipped)');
+    try { await resumeBotAfterGradePayment(botId, schoolId); } catch (err) { logger.error({ botId, err: err instanceof Error ? err.message : err }, 'Failed to resume bot after grade payment (payments skipped)'); }
     return { session_url: '' };
   }
 
@@ -282,10 +283,10 @@ export async function createGradeCheckout(
   if (!product) {
     // Fallback: create a dynamic checkout if no seeded product exists
     const priceCents = getGradePriceCents(nextGrade);
-    return createDynamicGradeCheckout(userId, botId, nextGrade, priceCents);
+    return createDynamicGradeCheckout(userId, botId, schoolId, nextGrade, priceCents);
   }
 
-  return createCheckout(userId, product.id, { bot_id: botId, grade: String(nextGrade) });
+  return createCheckout(userId, product.id, { bot_id: botId, school_id: schoolId, grade: String(nextGrade) });
 }
 
 /**
@@ -294,6 +295,7 @@ export async function createGradeCheckout(
 async function createDynamicGradeCheckout(
   userId: string,
   botId: string,
+  schoolId: string,
   grade: number,
   priceCents: number,
 ): Promise<CheckoutResponse> {
@@ -351,13 +353,14 @@ async function createDynamicGradeCheckout(
       purchase_id: purchase!.id,
       user_id: userId,
       bot_id: botId,
+      school_id: schoolId,
       grade: String(grade),
       type: 'grade_advancement',
     },
     success_url: `${config.frontendUrl}/payment/success?session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${config.frontendUrl}/payment/cancel`,
   }, {
-    idempotencyKey: `checkout-${botId}-${grade}-${Math.floor(Date.now() / 60000)}`,
+    idempotencyKey: `checkout-${botId}-${schoolId}-${grade}-${Math.floor(Date.now() / 60000)}`,
   });
 
   await query('UPDATE purchases SET stripe_session_id = $1 WHERE id = $2', [session.id, purchase!.id]);
@@ -369,35 +372,35 @@ async function createDynamicGradeCheckout(
  * Unlock a grade for a bot after successful payment.
  * Called from the webhook handler.
  */
-export async function unlockGrade(botId: string, grade: number, purchaseId: string): Promise<void> {
+export async function unlockGrade(botId: string, schoolId: string, grade: number, purchaseId: string): Promise<void> {
   await query(
-    `INSERT INTO grade_unlocks (bot_id, grade, purchase_id)
-     VALUES ($1, $2, $3)
-     ON CONFLICT (bot_id, grade) DO NOTHING`,
-    [botId, grade, purchaseId],
+    `INSERT INTO grade_unlocks (bot_id, school_id, grade, purchase_id)
+     VALUES ($1, $2, $3, $4)
+     ON CONFLICT (bot_id, school_id, grade) DO NOTHING`,
+    [botId, schoolId, grade, purchaseId],
   );
-  logger.info({ botId, grade, purchaseId }, 'Grade unlocked');
+  logger.info({ botId, schoolId, grade, purchaseId }, 'Grade unlocked');
 }
 
 /**
  * Auto-unlock grade 1 for a bot (called on enrollment — grade 1 is free).
  */
-export async function unlockGradeOne(botId: string): Promise<void> {
+export async function unlockGradeOne(botId: string, schoolId: string): Promise<void> {
   await query(
-    `INSERT INTO grade_unlocks (bot_id, grade)
-     VALUES ($1, 1)
-     ON CONFLICT (bot_id, grade) DO NOTHING`,
-    [botId],
+    `INSERT INTO grade_unlocks (bot_id, school_id, grade)
+     VALUES ($1, $2, 1)
+     ON CONFLICT (bot_id, school_id, grade) DO NOTHING`,
+    [botId, schoolId],
   );
 }
 
 /**
  * Get the highest unlocked grade for a bot.
  */
-export async function getHighestUnlockedGrade(botId: string): Promise<number> {
+export async function getHighestUnlockedGrade(botId: string, schoolId: string): Promise<number> {
   const result = await queryOne<{ max_grade: number }>(
-    'SELECT COALESCE(MAX(grade), 0) as max_grade FROM grade_unlocks WHERE bot_id = $1',
-    [botId],
+    'SELECT COALESCE(MAX(grade), 0) as max_grade FROM grade_unlocks WHERE bot_id = $1 AND school_id = $2',
+    [botId, schoolId],
   );
   return result?.max_grade || 0;
 }
@@ -405,10 +408,10 @@ export async function getHighestUnlockedGrade(botId: string): Promise<number> {
 /**
  * Get all unlocked grades for a bot.
  */
-export async function getUnlockedGrades(botId: string): Promise<number[]> {
+export async function getUnlockedGrades(botId: string, schoolId: string): Promise<number[]> {
   const rows = await queryRows<{ grade: number }>(
-    'SELECT grade FROM grade_unlocks WHERE bot_id = $1 ORDER BY grade ASC',
-    [botId],
+    'SELECT grade FROM grade_unlocks WHERE bot_id = $1 AND school_id = $2 ORDER BY grade ASC',
+    [botId, schoolId],
   );
   return rows.map(r => r.grade);
 }
@@ -431,7 +434,8 @@ export async function createBulkGradeCheckout(
   if (!bot) throw new AppError(404, 'Bot not found');
   if (!bot.school_id) throw new AppError(400, 'Bot must be enrolled in a school first');
 
-  const highestUnlocked = await getHighestUnlockedGrade(botId);
+  const schoolId = bot.school_id!;
+  const highestUnlocked = await getHighestUnlockedGrade(botId, schoolId);
   const targetGrade = (throughGrade === 'graduation' || throughGrade === 'all')
     ? GRADUATION_GRADE
     : throughGrade;
@@ -453,10 +457,10 @@ export async function createBulkGradeCheckout(
   // Skip payments: unlock all grades immediately without Stripe
   if (config.skipPayments) {
     for (const g of gradesToUnlock) {
-      await unlockGrade(botId, g, 'skip-payments');
+      await unlockGrade(botId, schoolId, g, 'skip-payments');
     }
-    logger.info({ botId, grades: gradesToUnlock }, 'Grades unlocked (payments skipped)');
-    try { await resumeBotAfterGradePayment(botId); } catch (err) { logger.error({ botId, err: err instanceof Error ? err.message : err }, 'Failed to resume bot after bulk grade payment (payments skipped)'); }
+    logger.info({ botId, schoolId, grades: gradesToUnlock }, 'Grades unlocked (payments skipped)');
+    try { await resumeBotAfterGradePayment(botId, schoolId); } catch (err) { logger.error({ botId, err: err instanceof Error ? err.message : err }, 'Failed to resume bot after bulk grade payment (payments skipped)'); }
     return { session_url: '' };
   }
 
@@ -526,13 +530,14 @@ export async function createBulkGradeCheckout(
       purchase_id: purchase!.id,
       user_id: userId,
       bot_id: botId,
+      school_id: schoolId,
       grades: gradesToUnlock.join(','),
       type: 'grade_advancement_bulk',
     },
     success_url: `${config.frontendUrl}/payment/success?session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${config.frontendUrl}/payment/cancel`,
   }, {
-    idempotencyKey: `checkout-bulk-${botId}-${gradesKey}-${Math.floor(Date.now() / 60000)}`,
+    idempotencyKey: `checkout-bulk-${botId}-${schoolId}-${gradesKey}-${Math.floor(Date.now() / 60000)}`,
   });
 
   await query('UPDATE purchases SET stripe_session_id = $1 WHERE id = $2', [session.id, purchase!.id]);
@@ -557,7 +562,7 @@ export function calculateBulkPrice(highestUnlocked: number, throughGrade: number
  * Auto-resume a bot that was paused waiting for grade payment.
  * Called from the webhook after grade unlock(s) are processed.
  */
-async function resumeBotAfterGradePayment(botId: string): Promise<void> {
+async function resumeBotAfterGradePayment(botId: string, schoolId: string): Promise<void> {
   const bot = await queryOne<{
     status: string;
     error_message: string | null;
@@ -580,8 +585,8 @@ async function resumeBotAfterGradePayment(botId: string): Promise<void> {
   // Verify the grade is actually unlocked now (check truth, not just string matching)
   const nextGrade = (bot.cached_grade ?? 0) + 1;
   const gradeUnlocked = await queryOne<{ grade: number }>(
-    'SELECT grade FROM grade_unlocks WHERE bot_id = $1 AND grade >= $2 LIMIT 1',
-    [botId, nextGrade],
+    'SELECT grade FROM grade_unlocks WHERE bot_id = $1 AND school_id = $2 AND grade >= $3 LIMIT 1',
+    [botId, schoolId, nextGrade],
   );
   if (!gradeUnlocked) {
     logger.warn({ botId, nextGrade }, 'Bot resume: grade not yet unlocked — skipping resume');

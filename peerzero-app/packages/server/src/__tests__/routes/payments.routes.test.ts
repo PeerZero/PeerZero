@@ -212,7 +212,7 @@ describe('GET /payments/grade-status/:botId', () => {
   });
 
   it('returns unlocked grades for owned bot', async () => {
-    mockQueryOne.mockResolvedValueOnce({ id: 'bot-1' }); // ownership check
+    mockQueryOne.mockResolvedValueOnce({ id: 'bot-1', school_id: 'school-1' }); // ownership check
     mockGetUnlockedGrades.mockResolvedValueOnce([1, 2, 3]);
 
     const token = makeToken({ userId: 'user-1', email: 'test@example.com' });
@@ -226,7 +226,7 @@ describe('GET /payments/grade-status/:botId', () => {
   });
 
   it('returns highest_unlocked=0 when no grades unlocked', async () => {
-    mockQueryOne.mockResolvedValueOnce({ id: 'bot-1' });
+    mockQueryOne.mockResolvedValueOnce({ id: 'bot-1', school_id: 'school-1' });
     mockGetUnlockedGrades.mockResolvedValueOnce([]);
 
     const token = makeToken({ userId: 'user-1', email: 'test@example.com' });
@@ -406,7 +406,7 @@ describe('GET /payments/grade-price-preview/:botId', () => {
   });
 
   it('returns price preview for owned bot', async () => {
-    mockQueryOne.mockResolvedValueOnce({ id: 'bot-1' }); // ownership check
+    mockQueryOne.mockResolvedValueOnce({ id: 'bot-1', school_id: 'school-1' }); // ownership check
     mockGetUnlockedGrades.mockResolvedValueOnce([1, 2]);
     mockCalculateBulkPrice.mockReturnValueOnce({ grades: [3, 4, 5], total_cents: 900 });
 

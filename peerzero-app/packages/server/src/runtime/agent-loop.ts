@@ -100,6 +100,7 @@ export async function runOneCycle(ctx: BotContext): Promise<void> {
     apiKey: creds.apiKey,
     handle: creds.handle,
   };
+  const schoolId = creds.schoolId;
 
   // 2. Get decrypted LLM key
   const llmKey = await getDecryptedKey(ctx.llmApiKeyId, ctx.userId);
@@ -113,7 +114,7 @@ export async function runOneCycle(ctx: BotContext): Promise<void> {
 
     // 3.5. Check grade payment gate — if bot's current grade isn't unlocked, pause
     const currentGrade = profile.grade?.grade ?? 1;
-    const gradeUnlocked = await isBotGradeUnlocked(ctx.botId, currentGrade);
+    const gradeUnlocked = await isBotGradeUnlocked(ctx.botId, schoolId, currentGrade);
     if (!gradeUnlocked) {
       logger.info({ botId: ctx.botId, grade: currentGrade }, 'Bot paused — grade not unlocked (payment required)');
       await setBotStatus(ctx.botId, 'paused', `Grade ${currentGrade} requires payment to continue`);

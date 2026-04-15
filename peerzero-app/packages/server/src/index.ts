@@ -126,6 +126,10 @@ app.use('/api/platforms', platformRoutes);
 app.use('/api/skills', skillRoutes);
 app.use('/health', healthRoutes);
 
+// ── Public: available LLM models (no auth — fetched by mobile app + exported bots) ──
+import { SUPPORTED_MODELS } from '@peerzero/shared';
+app.get('/api/models', (_req, res) => res.json(SUPPORTED_MODELS));
+
 // ── Resend email webhook (bounce/complaint handling) ──
 // Resend signs webhooks with Svix — verify signature to prevent forged events.
 // Set RESEND_WEBHOOK_SECRET in env to the signing secret from Resend dashboard.

@@ -131,9 +131,9 @@ export async function getBotDetail(userId: string, botId: string): Promise<BotDe
     ? (Date.now() - new Date(bot.cache_updated_at).getTime()) > STALE_THRESHOLD_MS
     : bot.cached_profile !== null; // has cache but no timestamp = stale
 
-  // Grade unlock info
+  // Grade unlock info (per-school: if enrolled, check that school's unlocks)
   const { getHighestUnlockedGrade } = await import('./payment.service');
-  const highestUnlocked = await getHighestUnlockedGrade(botId);
+  const highestUnlocked = bot.school_id ? await getHighestUnlockedGrade(botId, bot.school_id) : 0;
   const currentGrade = bot.cached_grade || 1;
   const gradePaymentRequired = currentGrade > highestUnlocked;
   const nextGradePriceCents = gradePaymentRequired
@@ -304,9 +304,9 @@ export async function enrollBotInSchool(userId: string, botId: string, schoolId:
 
     // Auto-unlock grade 1 (free with enrollment)
     await client.query(
-      `INSERT INTO grade_unlocks (bot_id, grade, unlocked_at) VALUES ($1, 1, NOW())
-       ON CONFLICT (bot_id, grade) DO NOTHING`,
-      [botId],
+      `INSERT INTO grade_unlocks (bot_id, school_id, grade, unlocked_at) VALUES ($1, $2, 1, NOW())
+       ON CONFLICT (bot_id, school_id, grade) DO NOTHING`,
+      [botId, schoolId],
     );
 
     await client.query('COMMIT');
@@ -378,11 +378,11 @@ export async function clearIncomingTaskSecret(userId: string, botId: string): Pr
  * Check if a bot has unlocked a specific grade.
  * Used by the agent loop to gate grade advancement on payment.
  */
-export async function isBotGradeUnlocked(botId: string, grade: number): Promise<boolean> {
+export async function isBotGradeUnlocked(botId: string, schoolId: string, grade: number): Promise<boolean> {
   if (config.skipPayments) return true;
   const result = await queryOne(
-    'SELECT id FROM grade_unlocks WHERE bot_id = $1 AND grade = $2',
-    [botId, grade],
+    'SELECT id FROM grade_unlocks WHERE bot_id = $1 AND school_id = $2 AND grade = $3',
+    [botId, schoolId, grade],
   );
   return !!result;
 }
@@ -403,14 +403,15 @@ export async function setBotStatus(botId: string, status: string, errorMessage?:
   }
 }
 
-export async function getDecryptedSchoolKey(botId: string): Promise<{ apiKey: string; handle: string; baseUrl: string } | null> {
+export async function getDecryptedSchoolKey(botId: string): Promise<{ apiKey: string; handle: string; baseUrl: string; schoolId: string } | null> {
   const bot = await queryOne<{
+    school_id: string;
     school_api_key_encrypted: Buffer;
     school_api_key_iv: Buffer;
     school_agent_handle: string;
     base_url: string;
   }>(
-    `SELECT b.school_api_key_encrypted, b.school_api_key_iv, b.school_agent_handle, s.base_url
+    `SELECT b.school_id, b.school_api_key_encrypted, b.school_api_key_iv, b.school_agent_handle, s.base_url
      FROM bots b JOIN schools s ON s.id = b.school_id
      WHERE b.id = $1 AND b.school_api_key_encrypted IS NOT NULL`,
     [botId],
@@ -418,5 +419,5 @@ export async function getDecryptedSchoolKey(botId: string): Promise<{ apiKey: st
   if (!bot) return null;
 
   const apiKey = decrypt(bot.school_api_key_encrypted, bot.school_api_key_iv);
-  return { apiKey, handle: bot.school_agent_handle, baseUrl: bot.base_url };
+  return { apiKey, handle: bot.school_agent_handle, baseUrl: bot.base_url, schoolId: bot.school_id };
 }

@@ -35,6 +35,7 @@ vi.mock('../services/bot.service', () => ({
     apiKey: 'test-school-key',
     handle: 'test-bot',
     baseUrl: 'https://school.test',
+    schoolId: 'school-1',
   }),
   setBotStatus: vi.fn().mockResolvedValue(undefined),
   isBotGradeUnlocked: vi.fn().mockResolvedValue(true),
@@ -158,7 +159,7 @@ describe('runOneCycle', () => {
     vi.clearAllMocks();
     // Re-apply default mocks after clearAllMocks
     (getDecryptedSchoolKey as ReturnType<typeof vi.fn>).mockResolvedValue({
-      apiKey: 'test-school-key', handle: 'test-bot', baseUrl: 'https://school.test',
+      apiKey: 'test-school-key', handle: 'test-bot', baseUrl: 'https://school.test', schoolId: 'school-1',
     });
     (isBotGradeUnlocked as ReturnType<typeof vi.fn>).mockResolvedValue(true);
   });

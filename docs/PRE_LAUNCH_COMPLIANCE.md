@@ -74,6 +74,25 @@ PeerZero will be used by children (Tamagotchi-style bots). COPPA compliance is m
 - [ ] **Assess applicability** — Requires "reasonable care" to avoid algorithmic discrimination for high-risk AI systems. PeerZero's credibility scoring may qualify. Same sandbox argument as EU AI Act applies.
 - [ ] **Impact assessment** — If applicable, document algorithmic impact assessment.
 
+## Accessibility — ADA / WCAG 2.1
+
+Mobile apps with a web presence are increasingly subject to ADA Title III. App Store guidelines (Apple HIG, Google Material) expect WCAG AA compliance. Education-adjacent apps face higher scrutiny.
+
+**What's already done:**
+- [x] **Accessibility labels and roles** — 16 of 18 screens have `accessibilityLabel`, `accessibilityRole`, and `accessibilityState` props on interactive elements (178 total a11y prop references across the codebase).
+- [x] **WCAG AA color contrast** — Theme colors documented with contrast ratios in `theme/colors.ts`. Primary text `#EAF0FA` on `#080C18` exceeds 4.5:1. Tertiary text `#6B7A9A` documented at 4.5:1 on dark bg.
+- [x] **StatsScreen and SchoolScreen a11y** — Summary cards, chart sections, and school cards all have `accessibilityRole="summary"` and descriptive labels. Charts provide text descriptions of data for screen readers.
+
+**Still needed:**
+- [ ] **accessibilityHint on all interactive elements** — Only 12 of 31 screen/component files use `accessibilityHint`. Add hints to buttons and controls that aren't self-explanatory from their label alone.
+- [ ] **Dynamic font scaling** — Font sizes are hardcoded in `theme/spacing.ts`. Users with iOS Dynamic Type or Android font scaling won't see adjusted text. Use `allowFontScaling` and relative sizing.
+- [ ] **Reduced motion support** — BotAvatar has continuous idle breathing and bounce animations. Add `useReducedMotion()` check to skip or simplify animations for users with vestibular sensitivities.
+- [ ] **Screen reader testing** — Test full user flows with VoiceOver (iOS) and TalkBack (Android) before launch. Priority flows: registration, bot creation, enrollment, start/stop, chat.
+- [ ] **BotAvatar accessible description** — The procedurally generated SVG avatar has no accessible text. Add `accessibilityLabel` describing the bot's current state (e.g., "Your bot, idle, tier 2").
+- [ ] **VPAT / Accessibility statement** — Not needed pre-launch, but create a public accessibility statement at `/accessibility` when you have a web presence. Enterprise/education customers may ask for a VPAT (Voluntary Product Accessibility Template).
+
+**Risk level:** Low for a pre-launch consumer app. ADA web/app lawsuits (~4K/year in the US) typically target larger companies. The basic label coverage you have is better than most apps at this stage. Fix the screen reader testing gap before launch — that's the highest-value item.
+
 ## App Store Compliance
 
 - [x] **Apple Guideline 5.1.2(i) — Third-party data disclosure** — BYOK sends user data to Anthropic/OpenAI. Consent modal added to SettingsScreen.tsx `handleAddKey()` — names the provider, explains data flow, requires explicit "I Agree" before key is stored. Completed 2026-04-14.
@@ -189,6 +208,10 @@ Items that need external dependencies, vendor configuration, or architectural wo
 - [ ] **EAS project ID** — Replace `REPLACE_WITH_EAS_PROJECT_ID` in app.json with real Expo EAS project ID. (Audit #26)
 - [ ] **Demo account for App Store review** — Create working test credentials. Ensure Apple's IP range is not blocked by backend. (Audit #26)
 - [ ] **Privacy manifest / nutrition labels** — Accurately list all data collected, shared, and linked to identity for App Store data safety section. (Audit #26)
+
+### Needs Infrastructure / CI Fix
+
+- [ ] **App e2e test requires running PostgreSQL** — `packages/server/src/__tests__/e2e/api.e2e.test.ts` fails with `ECONNREFUSED 127.0.0.1:5432` because it connects to a real Postgres instance (via `setup.ts:resetDatabase`). CI and local dev environments without Postgres will always skip this test. Fix: either add a Postgres service container to CI (e.g. GitHub Actions `services: postgres`), or convert to use a test-scoped container (testcontainers-node), or gate the test behind a `TEST_DATABASE_URL` env var so it's skipped gracefully when Postgres is unavailable.
 
 ### Needs Architectural Work
 

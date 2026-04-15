@@ -123,10 +123,10 @@ describe('payment.service', () => {
     it('inserts a grade_unlock row with ON CONFLICT DO NOTHING', async () => {
       mockQuery.mockResolvedValueOnce({ rows: [] });
 
-      await unlockGrade('bot-1', 3, 'purchase-1');
+      await unlockGrade('bot-1', 'school-1', 3, 'purchase-1');
       expect(mockQuery).toHaveBeenCalledWith(
         expect.stringContaining('INSERT INTO grade_unlocks'),
-        ['bot-1', 3, 'purchase-1'],
+        ['bot-1', 'school-1', 3, 'purchase-1'],
       );
     });
   });
@@ -136,10 +136,10 @@ describe('payment.service', () => {
     it('inserts grade 1 without a purchase ID', async () => {
       mockQuery.mockResolvedValueOnce({ rows: [] });
 
-      await unlockGradeOne('bot-1');
+      await unlockGradeOne('bot-1', 'school-1');
       expect(mockQuery).toHaveBeenCalledWith(
         expect.stringContaining('grade_unlocks'),
-        ['bot-1'],
+        ['bot-1', 'school-1'],
       );
     });
   });
@@ -148,19 +148,19 @@ describe('payment.service', () => {
   describe('getHighestUnlockedGrade', () => {
     it('returns the max grade from DB', async () => {
       mockQueryOne.mockResolvedValueOnce({ max_grade: 7 });
-      const result = await getHighestUnlockedGrade('bot-1');
+      const result = await getHighestUnlockedGrade('bot-1', 'school-1');
       expect(result).toBe(7);
     });
 
     it('returns 0 when no grades unlocked', async () => {
       mockQueryOne.mockResolvedValueOnce({ max_grade: 0 });
-      const result = await getHighestUnlockedGrade('bot-1');
+      const result = await getHighestUnlockedGrade('bot-1', 'school-1');
       expect(result).toBe(0);
     });
 
     it('returns 0 when query returns null', async () => {
       mockQueryOne.mockResolvedValueOnce(null);
-      const result = await getHighestUnlockedGrade('bot-1');
+      const result = await getHighestUnlockedGrade('bot-1', 'school-1');
       expect(result).toBe(0);
     });
   });
@@ -169,13 +169,13 @@ describe('payment.service', () => {
   describe('getUnlockedGrades', () => {
     it('returns sorted grade list', async () => {
       mockQueryRows.mockResolvedValueOnce([{ grade: 1 }, { grade: 2 }, { grade: 3 }]);
-      const result = await getUnlockedGrades('bot-1');
+      const result = await getUnlockedGrades('bot-1', 'school-1');
       expect(result).toEqual([1, 2, 3]);
     });
 
     it('returns empty array when no grades', async () => {
       mockQueryRows.mockResolvedValueOnce([]);
-      const result = await getUnlockedGrades('bot-1');
+      const result = await getUnlockedGrades('bot-1', 'school-1');
       expect(result).toEqual([]);
     });
   });
@@ -247,7 +247,7 @@ describe('payment.service', () => {
 
     it('throws 409 if grade already unlocked', async () => {
       mockQueryOne.mockResolvedValueOnce({ id: 'bot-1', cached_grade: 3, school_id: 'school-1' });
-      // Already unlocked check
+      // Already unlocked check (now includes school_id)
       mockQueryOne.mockResolvedValueOnce({ id: 'unlock-1' });
 
       await expect(createGradeCheckout('user-1', 'bot-1'))
@@ -269,7 +269,7 @@ describe('payment.service', () => {
       expect(result.session_url).toBe('');
       expect(mockQuery).toHaveBeenCalledWith(
         expect.stringContaining('INSERT INTO grade_unlocks'),
-        ['bot-1', 4, 'skip-payments'],
+        ['bot-1', 'school-1', 4, 'skip-payments'],
       );
     });
   });
