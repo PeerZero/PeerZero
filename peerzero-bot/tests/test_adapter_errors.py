@@ -252,9 +252,9 @@ class TestSchoolDownloadSkillMd:
         mock_response.headers = {"content-type": "text/html"}
         mock_response.json.side_effect = json.JSONDecodeError("err", "", 0)
         # text/html is not text/markdown or text/plain, so _get calls .json()
-        # which fails, so this should raise
+        # which fails — _get catches and re-raises as ValueError
         adapter._http.get.return_value = mock_response
-        with pytest.raises(json.JSONDecodeError):
+        with pytest.raises(ValueError, match="non-JSON response"):
             adapter.download_skill_md()
 
     def test_markdown_response_returned_directly(self):
