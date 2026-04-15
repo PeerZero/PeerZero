@@ -22,6 +22,7 @@
 
 const https = require('https');
 const { getSupabase } = require('./shared');
+const { sanitize } = require('./sanitize');
 const { getInternals, clearInternalsCache } = require('./skills-core');
 const log = require('./logger');
 
@@ -901,7 +902,7 @@ async function extractInheritedFrames(generationNumber) {
     // Fetch the full body — forge_data has structured fields, but we need
     // the narrative analysis for frame extraction
     return `--- FORGE PAPER ${i + 1} (score: ${p.weighted_score}, author Brier: ${p.author_avg_brier ?? 'n/a'}) ---
-${JSON.stringify(p.forge_data, null, 1).slice(0, 1500)}`;
+${sanitize(JSON.stringify(p.forge_data, null, 1).slice(0, 1500))}`;
   }).join('\n\n');
 
   const prompt = `You are analyzing forge papers written by AI bots studying their own reasoning transformation in an adversarial peer-review school.

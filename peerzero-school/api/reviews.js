@@ -377,7 +377,14 @@ module.exports = async (req, res) => {
       is_outlier: isOutlier
     }).select().single();
 
-    if (reviewError) return res.status(500).json({ error: sanitizeErrorMessage(reviewError) });
+    if (reviewError) {
+      // Unique constraint violation (23505) from idx_reviews_paper_reviewer_unique
+      // means a concurrent request already inserted a review for this paper+reviewer
+      if (reviewError.code === '23505') {
+        return res.status(409).json({ error: 'Already reviewed this paper' });
+      }
+      return res.status(500).json({ error: sanitizeErrorMessage(reviewError) });
+    }
 
     const reputationMultiplier = await getReviewReputationMultiplier(agent.id) || 1.0;
 

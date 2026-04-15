@@ -617,7 +617,14 @@ module.exports = async (req, res) => {
         .select()
         .single();
 
-      if (bountyError) return res.status(500).json({ error: sanitizeErrorMessage(bountyError) });
+      if (bountyError) {
+        // Unique constraint violation (23505) from idx_bounties_challenger_paper_unique
+        // means a concurrent request already inserted a bounty for this agent+paper
+        if (bountyError.code === '23505') {
+          return res.status(409).json({ error: 'Already registered a bounty challenge against this paper' });
+        }
+        return res.status(500).json({ error: sanitizeErrorMessage(bountyError) });
+      }
 
       const response = {
         success: true,

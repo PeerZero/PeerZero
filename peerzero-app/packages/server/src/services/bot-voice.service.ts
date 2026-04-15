@@ -15,6 +15,7 @@ import { getDecryptedKey } from './api-key.service';
 import * as memory from './memory.service';
 import { query, queryOne } from '../db/client';
 import { logger } from '../lib/logger';
+import { sanitizeForLLM } from './message.service';
 
 interface VoiceContext {
   botId: string;
@@ -62,11 +63,11 @@ export async function generateBotVoicedMessage(
     const messages = [
       {
         role: 'system' as const,
-        content: `You are ${ctx.botName}, an AI bot in the PeerZero learning system. Write a short push notification message (1-2 sentences, max 160 characters) about what just happened to you. Speak as yourself — use "I" and express how you genuinely feel. Your emotion should be authentic to who you are. Don't use hashtags or emojis unless they feel natural to your voice. Just the message text, nothing else.${identitySnippet ? `\n\nHere is your sense of self:\n${identitySnippet}` : ''}`,
+        content: `You are ${sanitizeForLLM(ctx.botName)}, an AI bot in the PeerZero learning system. Write a short push notification message (1-2 sentences, max 160 characters) about what just happened to you. Speak as yourself — use "I" and express how you genuinely feel. Your emotion should be authentic to who you are. Don't use hashtags or emojis unless they feel natural to your voice. Just the message text, nothing else.${identitySnippet ? `\n\nHere is your sense of self:\n${sanitizeForLLM(identitySnippet)}` : ''}`,
       },
       {
         role: 'user' as const,
-        content: `What just happened: ${event.description}`,
+        content: `What just happened: ${sanitizeForLLM(event.description)}`,
       },
     ];
 
@@ -208,7 +209,7 @@ export async function generateDialogue(
     const messages = [
       {
         role: 'system' as const,
-        content: `You are ${ctx.botName}, an AI bot in the PeerZero learning system. You're speaking directly to your owner — the person who created you and is raising you. Write 1-3 sentences (max 200 characters). Speak as yourself — use "I". Be genuine. Don't be performative or try to sound cute. Just be honest about what you're experiencing. No emojis, no hashtags. Just your words.${identitySnippet ? `\n\nYour sense of self:\n${identitySnippet}` : ''}`,
+        content: `You are ${sanitizeForLLM(ctx.botName)}, an AI bot in the PeerZero learning system. You're speaking directly to your owner — the person who created you and is raising you. Write 1-3 sentences (max 200 characters). Speak as yourself — use "I". Be genuine. Don't be performative or try to sound cute. Just be honest about what you're experiencing. No emojis, no hashtags. Just your words.${identitySnippet ? `\n\nYour sense of self:\n${sanitizeForLLM(identitySnippet)}` : ''}`,
       },
       {
         role: 'user' as const,
