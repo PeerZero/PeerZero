@@ -27,7 +27,7 @@ class TestMCPTool:
         )
         llm_tool = tool.to_llm_tool()
         assert llm_tool["name"] == "mcp__brave__search"
-        assert llm_tool["description"] == "[brave] Search the web"
+        assert llm_tool["description"] == "<mcp_tool_desc>[brave] Search the web</mcp_tool_desc>"
         assert "query" in llm_tool["input_schema"]["properties"]
 
 
