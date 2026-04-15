@@ -340,7 +340,7 @@ describe('E2E: Agent loop cycle', () => {
       skill_exercises: { interaction_type: 'review', exercises: [{ skill: 'Adversarial Reasoning', skill_key: 'adversarial_reasoning', outcome: 'SUCCESS', detail: 'Good' }], coaching: [], storage_instruction: '' },
       memory_prompts: { uncondensed_exercises: 2 },
     });
-    mockLLMToolCall('submit_review', { overall_assessment: 'Solid paper with minor issues.', score: 72 });
+    mockLLMToolCall('submit_review', { overall_assessment: 'Solid paper with minor issues.', score: 7.2 });
 
     await runOneCycle(BASE_CTX);
 
@@ -351,11 +351,11 @@ describe('E2E: Agent loop cycle', () => {
     expect(mockSchoolAdapter.submitReview).toHaveBeenCalledWith(
       expect.objectContaining({ handle: 'test-bot' }),
       'paper-1',
-      expect.objectContaining({ score: 72 }),
+      expect.objectContaining({ score: 7.2 }),
     );
     expect(activity.logActivity).toHaveBeenCalledWith(
       'bot-1', 1, 'review',
-      expect.objectContaining({ score: 72 }),
+      expect.objectContaining({ score: 7.2 }),
       expect.anything(),
       expect.objectContaining({ headline: 'Reviewed' }),
       expect.any(Number), 1500, undefined, expect.anything(),

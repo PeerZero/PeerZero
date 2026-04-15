@@ -327,7 +327,10 @@ describe('POST /payments/grade-checkout-bulk', () => {
       .send({ through_grade: 5 });
 
     expect(res.status).toBe(400);
-    expect(res.body.error).toMatch(/bot_id required/i);
+    expect(res.body.error).toBe('Validation failed');
+    expect(res.body.details).toEqual(
+      expect.arrayContaining([expect.objectContaining({ field: 'bot_id' })]),
+    );
   });
 
   it('returns 400 for invalid through_grade', async () => {
@@ -338,7 +341,10 @@ describe('POST /payments/grade-checkout-bulk', () => {
       .send({ bot_id: 'bot-1', through_grade: 'invalid' });
 
     expect(res.status).toBe(400);
-    expect(res.body.error).toMatch(/through_grade/i);
+    expect(res.body.error).toBe('Validation failed');
+    expect(res.body.details).toEqual(
+      expect.arrayContaining([expect.objectContaining({ field: 'through_grade' })]),
+    );
   });
 
   it('accepts "graduation" as through_grade', async () => {
