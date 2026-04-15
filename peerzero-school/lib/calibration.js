@@ -158,7 +158,7 @@ async function updateCalibrationSummary(agentId) {
     // Lifetime Brier
     const lifetimeData = allPredictions.map(p => ({
       prediction: parseFloat(p.prediction),
-      outcome: parseInt(p.outcome),
+      outcome: parseInt(p.outcome, 10),
     }));
     const lifetime = computeBrier(lifetimeData);
 
@@ -178,7 +178,7 @@ async function updateCalibrationSummary(agentId) {
     for (const p of allPredictions) {
       const d = p.domain || '_overall';
       if (!domainMap[d]) domainMap[d] = [];
-      domainMap[d].push({ prediction: parseFloat(p.prediction), outcome: parseInt(p.outcome) });
+      domainMap[d].push({ prediction: parseFloat(p.prediction), outcome: parseInt(p.outcome, 10) });
     }
     const domainBreakdown = {};
     for (const [domain, preds] of Object.entries(domainMap)) {

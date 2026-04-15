@@ -403,7 +403,13 @@ async function handleCondensation(
     const parsed = tryParseJson(response.content);
     if (parsed?.core_identity) {
       await memory.storeCore(ctx.botId, parsed.core_identity as string, `cycle-${ctx.cycleNumber}`);
-      await schoolAdapter.submitCoreCondensation(schoolCreds, parsed);
+      // Core identity is stored locally — submit to School for server-side tracking.
+      // Non-blocking: School endpoint may not have a /core sub-path handler yet.
+      try {
+        await schoolAdapter.submitCoreCondensation(schoolCreds, parsed);
+      } catch (coreErr) {
+        logger.warn({ err: coreErr instanceof Error ? coreErr.message : String(coreErr) }, 'Core condensation submission to School failed (non-blocking — local storage succeeded)');
+      }
       condensationOccurred = 'core';
     } else {
       logger.warn({ contentSnippet: response.content?.slice(0, 120) }, 'Failed to extract JSON from core condensation LLM response');

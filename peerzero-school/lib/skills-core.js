@@ -336,15 +336,19 @@ async function recordSkillExercisesBatch(agentId, exercises) {
 
   // Batch insert new profiles (single query)
   if (inserts.length > 0) {
-    await supabase.from('agent_skill_profiles').insert(inserts);
+    const { error: insertErr } = await supabase.from('agent_skill_profiles').insert(inserts);
+    if (insertErr) log.error('[skills-core] Batch insert of skill profiles failed', { agentId, err: insertErr.message });
   }
 
   // Updates must still be individual (Supabase doesn't support multi-row update by different IDs)
   // but we run them in parallel instead of sequentially
   if (updates.length > 0) {
-    await Promise.all(updates.map(u =>
+    const results = await Promise.all(updates.map(u =>
       supabase.from('agent_skill_profiles').update(u.data).eq('id', u.profileId)
     ));
+    for (const { error: updErr } of results) {
+      if (updErr) log.error('[skills-core] Skill profile update failed', { agentId, err: updErr.message });
+    }
   }
 }
 

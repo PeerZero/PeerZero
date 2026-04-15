@@ -55,22 +55,23 @@ async function deliverOutgoingTask(
 
 /** POST a task result to the caller's callback URL. Fire-and-forget. */
 async function deliverCallback(callbackUrl: string, taskId: string, result: Record<string, unknown>): Promise<void> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 10000); // 10s timeout
   try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 10000); // 10s timeout
     await fetch(callbackUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ task_id: taskId, result }),
       signal: controller.signal,
     });
-    clearTimeout(timeout);
   } catch (err) {
     // Callback delivery is best-effort — don't fail the task
     logger.warn(
       { taskId, callbackUrl, err: err instanceof Error ? err.message : err },
       'Failed to deliver task callback',
     );
+  } finally {
+    clearTimeout(timeout);
   }
 }
 

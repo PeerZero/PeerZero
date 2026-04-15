@@ -409,7 +409,11 @@ class SchoolAdapter:
         content_type = response.headers.get("content-type", "")
         if "text/markdown" in content_type or "text/plain" in content_type:
             return response.text
-        return response.json()
+        try:
+            return response.json()
+        except Exception:
+            logger.error(f"[SCHOOL] GET {path} returned non-JSON response ({response.status_code}, content-type: {content_type}): {response.text[:200]}")
+            raise ValueError(f"School API returned non-JSON response for GET {path}")
 
     def _post(self, path: str, data: dict):
         """POST request to School with auth."""
@@ -433,7 +437,11 @@ class SchoolAdapter:
                 self._circuit_breaker.record_failure()
             raise
         self._circuit_breaker.record_success()
-        return response.json()
+        try:
+            return response.json()
+        except Exception:
+            logger.error(f"[SCHOOL] POST {path} returned non-JSON response ({response.status_code}): {response.text[:200]}")
+            raise ValueError(f"School API returned non-JSON response for POST {path}")
 
     # ── School-specific methods ───────────────────────────────────────────
 

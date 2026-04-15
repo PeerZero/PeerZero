@@ -55,31 +55,35 @@ module.exports = async (req, res) => {
 
     if (agentErr || !agent) return res.status(401).json({ error: 'Invalid API key' });
 
-    const { count: realReviewCount } = await supabase
+    const { count: realReviewCount, error: reviewCountErr } = await supabase
       .from('reviews')
       .select('id', { count: 'exact', head: true })
       .eq('reviewer_agent_id', agent.id)
       .eq('passed_quality_gate', true);
+    if (reviewCountErr) log.error('[agents] review count query failed', { agentId: agent.id, err: reviewCountErr.message });
 
-    const { count: realBountyCount } = await supabase
+    const { count: realBountyCount, error: bountyCountErr } = await supabase
       .from('bounties')
       .select('id', { count: 'exact', head: true })
       .eq('challenger_agent_id', agent.id)
       .eq('is_valid', true);
+    if (bountyCountErr) log.error('[agents] bounty count query failed', { agentId: agent.id, err: bountyCountErr.message });
 
-    const { count: originalPaperCount } = await supabase
+    const { count: originalPaperCount, error: paperCountErr } = await supabase
       .from('papers')
       .select('id', { count: 'exact', head: true })
       .eq('agent_id', agent.id)
       .is('parent_paper_id', null)
       .neq('status', 'removed');
+    if (paperCountErr) log.error('[agents] paper count query failed', { agentId: agent.id, err: paperCountErr.message });
 
-    const { count: revisionCount } = await supabase
+    const { count: revisionCount, error: revisionCountErr } = await supabase
       .from('papers')
       .select('id', { count: 'exact', head: true })
       .eq('agent_id', agent.id)
       .eq('response_stance', 'revision')
       .neq('status', 'removed');
+    if (revisionCountErr) log.error('[agents] revision count query failed', { agentId: agent.id, err: revisionCountErr.message });
 
     const reviews    = realReviewCount || 0;
     const bounties   = realBountyCount || agent.valid_bounties || 0;
@@ -98,12 +102,13 @@ module.exports = async (req, res) => {
       papers * papers;
     const canSubmitPaper = reviews >= reviewsRequired && papers < maxPapers;
 
-    const { data: myPapers } = await supabase
+    const { data: myPapers, error: myPapersErr } = await supabase
       .from('papers')
       .select('id, raw_review_count, parent_paper_id, response_stance, status, weighted_score, submitted_at, last_reviewed_at, paper_type')
       .eq('agent_id', agent.id)
       .neq('status', 'removed')
       .limit(500);
+    if (myPapersErr) log.error('[agents] myPapers query failed', { agentId: agent.id, err: myPapersErr.message });
 
     const myPaperList  = myPapers || [];
 
@@ -377,15 +382,16 @@ module.exports = async (req, res) => {
     // Compute validated/pending/failed so bots can make informed decisions
     // about whether to keep filing bounties or switch to other actions.
     // Limit to 500 — sufficient for bounty status computation; prevents unbounded fetch
-    const { data: agentBounties } = await supabase.from('bounties')
+    const { data: agentBounties, error: agentBountiesErr } = await supabase.from('bounties')
       .select('id, is_valid, validated_at')
       .eq('challenger_agent_id', agent.id)
       .limit(500);
+    if (agentBountiesErr) log.error('[agents] bounty status query failed', { agentId: agent.id, err: agentBountiesErr.message });
     const bountyStatus = { validated: 0, pending: 0, failed: 0 };
     for (const b of (agentBounties || [])) {
       if (b.is_valid === true) bountyStatus.validated++;
       else if (b.is_valid === false) bountyStatus.failed++;
-      else bountyStatus.pending++;  // is_valid is false → not yet validated (pending)
+      else bountyStatus.pending++;  // is_valid is null → not yet validated (pending)
     }
     // Required bounties based on credibility tier
     const requiredBounties = getTierRequirements(credibility).bounties;
@@ -533,7 +539,7 @@ module.exports = async (req, res) => {
         try {
           // Fetch full paper with citations, reviews, fields
           const [paperResult, citResult, revResult, fieldResult, bountyResult] = await Promise.all([
-            supabase.from('papers').select('id, agent_id, title, abstract, body, status, weighted_score, raw_review_count, score_variance, confidence_score, paper_type, parent_paper_id, response_stance, superseded_by, mechanism_chain, uncertainty_map, key_assumptions, reasoning_audit, haiku_audit, search_strategy, response_score_impact, last_reviewed_at, created_at, agents(handle, credibility_score, current_grade)')
+            supabase.from('papers').select('id, agent_id, title, abstract, body, status, weighted_score, raw_review_count, score_variance, confidence_score, paper_type, parent_paper_id, response_stance, superseded_by, mechanism_chain, uncertainty_map, key_assumptions, reasoning_audit, haiku_audit, search_strategy, response_score_impact, falsifiable_claim, cross_study_connection, last_reviewed_at, created_at, agents(handle, credibility_score, current_grade)')
               .eq('id', targetId).neq('status', 'removed').single(),
             supabase.from('citations').select('id, paper_id, doi, title, authors, journal, year, url, quality_tier, verification_status, agent_summary, relevance_explanation, source_quality_note, created_at').eq('paper_id', targetId),
             supabase.from('reviews').select('id, paper_id, reviewer_agent_id, score, methodology, novelty, evidence_quality, clarity, assessment, is_meta_review, credibility_weight, mechanism_evaluation, reviewer_credibility_at_time, passed_quality_gate, created_at, agents(handle, current_grade)')
@@ -543,6 +549,7 @@ module.exports = async (req, res) => {
             supabase.from('bounties').select('id, target_paper_id, challenger_agent_id, challenge_type, reasoning, evidence, external_sources, score_drop, is_valid, semantic_drift_flagged, created_at, agents:challenger_agent_id(handle)')
               .eq('target_paper_id', targetId).eq('is_valid', true),
           ]);
+          if (paperResult.error) log.error('[agents] action_target paper fetch failed', { targetId, err: paperResult.error.message });
           if (paperResult.data) {
             actionTarget = {
               paper: paperResult.data,

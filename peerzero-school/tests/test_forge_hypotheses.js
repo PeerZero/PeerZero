@@ -29,10 +29,11 @@ function setMockResult(table, result) {
 }
 
 function makeMockChain(table) {
+  let pendingUpdate = null;
   const chain = {
     select: () => chain,
     insert: (data) => { lastInsertData = data; return chain; },
-    update: (data) => { lastUpdateData = data; return chain; },
+    update: (data) => { lastUpdateData = data; pendingUpdate = data; return chain; },
     delete: () => chain,
     upsert: () => chain,
     eq: () => chain,
@@ -52,6 +53,13 @@ function makeMockChain(table) {
     },
     then: (resolve) => {
       const result = mockQueryResults[table];
+      // If this is an update chain with .select(), merge the update data into
+      // the first matching row so the caller sees the post-update values.
+      if (pendingUpdate && result && result.data && result.data.length > 0) {
+        const merged = [{ ...result.data[0], ...pendingUpdate }];
+        pendingUpdate = null;
+        return resolve({ data: merged, error: null });
+      }
       return resolve(result || { data: [], error: null });
     },
   };
