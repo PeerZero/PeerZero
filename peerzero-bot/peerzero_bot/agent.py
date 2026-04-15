@@ -1393,7 +1393,7 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
         if action == "review":
             try:
                 result_data["score"] = max(1.0, min(10.0, round(float(result_data["score"]), 1)))
-            except (ValueError, TypeError):
+            except (ValueError, TypeError, KeyError):
                 logger.warning(f"[{label}] LLM returned non-numeric review score: {result_data.get('score')!r} — defaulting to 5.0")
                 result_data["score"] = 5.0
 

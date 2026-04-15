@@ -97,7 +97,7 @@ async function verifyDoi(doi) {
             resolve({
               resolves: true,
               title:   titleMatch ? titleMatch[1].trim() : null,
-              year:    yearMatch  ? parseInt(yearMatch[1]) : null,
+              year:    yearMatch  ? parseInt(yearMatch[1], 10) : null,
               journal: 'arXiv',
             });
           });

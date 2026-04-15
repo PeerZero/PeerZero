@@ -1,0 +1,139 @@
+rules:
+  # ═══════════════════════════════════════════════════════════════════════
+  # PeerZero Custom Semgrep Rules
+  #
+  # Catches recurring audit patterns that manual review keeps missing.
+  # Run: semgrep --config .semgrep.yml peerzero-school/ peerzero-app/
+  # CI: included in .github/workflows/ci.yml security-scan job.
+  # ═══════════════════════════════════════════════════════════════════════
+
+  # ── 1. Supabase .single() without error destructuring ──────────────────
+  - id: supabase-single-no-error-check
+    patterns:
+      - pattern: |
+          const { data: $DATA } = await $OBJ.single();
+      - pattern-not: |
+          const { data: $DATA, error: $ERR } = await $OBJ.single();
+      - pattern-not: |
+          const { data: $DATA, error } = await $OBJ.single();
+    message: >
+      Supabase .single() call discards the error return. If the query fails
+      or returns no rows, `$DATA` will be null with no indication of why.
+      Destructure the error: `const { data: $DATA, error } = ...`
+    severity: WARNING
+    languages: [javascript, typescript]
+    metadata:
+      category: correctness
+      audit: "#1 Silent Failures"
+
+  - id: supabase-single-no-error-check-shorthand
+    patterns:
+      - pattern: |
+          const { data } = await $OBJ.single();
+      - pattern-not: |
+          const { data, error } = await $OBJ.single();
+      - pattern-not: |
+          const { data, error: $ERR } = await $OBJ.single();
+    message: >
+      Supabase .single() call discards the error return. If the query fails
+      or returns no rows, `data` will be null with no indication of why.
+      Add error to the destructure: `const { data, error } = ...`
+    severity: WARNING
+    languages: [javascript, typescript]
+    metadata:
+      category: correctness
+      audit: "#1 Silent Failures"
+
+  # ── 2. Supabase write with result discarded ────────────────────────────
+  - id: supabase-insert-no-error-check
+    patterns:
+      - pattern: |
+          await $OBJ.from($TABLE).insert($DATA);
+      - pattern-not-inside: |
+          const { $$$VARS } = await $OBJ.from($TABLE).insert($DATA);
+    message: >
+      Supabase .insert() discards the result. If the insert fails, the
+      error is silently lost. Destructure: `const { error } = await ...`
+    severity: WARNING
+    languages: [javascript, typescript]
+    metadata:
+      category: correctness
+      audit: "#1 Silent Failures"
+
+  # ── 3. parseInt without radix ──────────────────────────────────────────
+  - id: parseint-missing-radix
+    pattern: parseInt($VALUE)
+    fix: parseInt($VALUE, 10)
+    message: >
+      parseInt() called without radix parameter. Always pass 10 as the
+      second argument to avoid octal/hex parsing surprises.
+    severity: WARNING
+    languages: [javascript, typescript]
+    metadata:
+      category: correctness
+      audit: "#13 Input Validation"
+
+  # ── 4. Fire-and-forget Supabase via .then() ────────────────────────────
+  - id: supabase-fire-and-forget
+    pattern: |
+      $OBJ.from($TABLE).$METHOD($ARGS).then(...)
+    message: >
+      Supabase operation uses .then() (fire-and-forget) instead of await.
+      If it fails, the error is silently swallowed. Use await and check
+      the error return.
+    severity: WARNING
+    languages: [javascript, typescript]
+    metadata:
+      category: correctness
+      audit: "#1 Silent Failures"
+
+  # ── 5. Untracked setInterval ───────────────────────────────────────────
+  - id: untracked-setinterval
+    patterns:
+      - pattern: setInterval(...)
+      - pattern-not: $VAR = setInterval(...)
+      - pattern-not: const $VAR = setInterval(...)
+      - pattern-not: let $VAR = setInterval(...)
+      - pattern-not: setInterval(...).unref()
+    message: >
+      setInterval() return value not captured. Without a reference, the
+      interval can never be cleared — potential memory leak. Assign it
+      to a variable and clear on shutdown.
+    severity: WARNING
+    languages: [javascript, typescript]
+    metadata:
+      category: correctness
+      audit: "#3 Unbounded Growth"
+
+  # ── 6. Python response.json() without try/except ───────────────────────
+  - id: python-response-json-unprotected
+    patterns:
+      - pattern: return $RESPONSE.json()
+      - pattern-not-inside: |
+          try:
+            ...
+          except ...:
+            ...
+    message: >
+      response.json() can throw JSONDecodeError if the server returns
+      non-JSON content (e.g., HTML error page). Wrap in try/except.
+    severity: WARNING
+    languages: [python]
+    metadata:
+      category: correctness
+      audit: "#14 Cross-System Contracts"
+
+  # ── 7. clearTimeout after await (not in finally) ───────────────────────
+  - id: timeout-not-in-finally
+    pattern: |
+      const $TO = setTimeout(...);
+      await $EXPR;
+      clearTimeout($TO);
+    message: >
+      clearTimeout after await — if the await throws, the timeout leaks.
+      Move to a finally block.
+    severity: WARNING
+    languages: [javascript, typescript]
+    metadata:
+      category: correctness
+      audit: "#6 Timeout & Exhaustion"

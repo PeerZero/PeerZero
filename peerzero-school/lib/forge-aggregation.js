@@ -494,11 +494,12 @@ async function runAggregation(triggeredBy = 'cron') {
       if (!p.requires_human_review && p.consensus_strength >= MIN_CONSENSUS_FOR_AUTO_APPLY) {
         try {
           // Find the proposal row we just inserted
-          const { data: row } = await supabase.from('forge_config_proposals')
+          const { data: row, error: rowErr } = await supabase.from('forge_config_proposals')
             .select('id')
             .eq('aggregation_run_id', run.id)
             .eq('proposal_key', p.proposal_key)
             .single();
+          if (rowErr) { log.error('[forge-aggregation] Failed to fetch proposal row for auto-apply', { key: p.proposal_key, err: rowErr.message }); continue; }
           if (row) {
             await applyProposal(row.id, 'auto');
             autoApplied++;
@@ -573,11 +574,12 @@ async function applyProposal(proposalId, appliedBy = 'auto') {
   const configKey = `forge_evolved_${proposal.proposal_key}`;
   const generation = proposal.forge_aggregation_runs.generation_number;
 
-  // Read current value from school_internals
-  const { data: current } = await supabase.from('school_internals')
+  // Read current value from school_internals (may not exist yet — that's OK)
+  const { data: current, error: readErr } = await supabase.from('school_internals')
     .select('value')
     .eq('key', configKey)
     .single();
+  if (readErr && readErr.code !== 'PGRST116') log.warn('[forge-aggregation] Config read failed', { key: configKey, err: readErr.message });
 
   const oldValue = current?.value || null;
 

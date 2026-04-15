@@ -18,6 +18,7 @@ const rateBuckets = {};
 const RATE_CLEANUP_INTERVAL = 60000;
 const MAX_RATE_BUCKETS = 10_000;
 
+// nosemgrep: untracked-setinterval — Vercel serverless: .unref() prevents process hang; no shutdown hook needed
 setInterval(() => {
   const now = Date.now();
   for (const key of Object.keys(rateBuckets)) {
@@ -32,7 +33,7 @@ setInterval(() => {
     const toRemove = keys.length - MAX_RATE_BUCKETS;
     for (let i = 0; i < toRemove; i++) delete rateBuckets[keys[i]];
   }
-}, RATE_CLEANUP_INTERVAL);
+}, RATE_CLEANUP_INTERVAL).unref();
 
 /**
  * In-memory sliding window rate limiter.

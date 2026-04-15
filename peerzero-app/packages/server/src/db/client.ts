@@ -12,7 +12,7 @@ export function getPool(): Pool {
   if (!pool) {
     const dbUrl = config.databaseUrl;
     const sslEnabled = dbUrl.includes('sslmode=');
-    const statementTimeoutMs = Math.max(1000, parseInt(process.env.DB_STATEMENT_TIMEOUT || '30000') || 30000);
+    const statementTimeoutMs = Math.max(1000, parseInt(process.env.DB_STATEMENT_TIMEOUT || '30000', 10) || 30000);
 
     // Auto-detect Supabase pooler (PgBouncer) — uses port 6543 or has pgbouncer=true.
     // When behind the pooler, the app-side pool can be larger since PgBouncer manages
@@ -24,9 +24,9 @@ export function getPool(): Pool {
 
     pool = new Pool({
       connectionString: dbUrl,
-      max: Math.max(1, parseInt(process.env.DB_POOL_MAX || String(defaultMax)) || defaultMax),
-      idleTimeoutMillis: Math.max(1000, parseInt(process.env.DB_POOL_IDLE_TIMEOUT || '30000') || 30000),
-      connectionTimeoutMillis: Math.max(1000, parseInt(process.env.DB_POOL_CONN_TIMEOUT || '15000') || 15000),
+      max: Math.max(1, parseInt(process.env.DB_POOL_MAX || String(defaultMax), 10) || defaultMax),
+      idleTimeoutMillis: Math.max(1000, parseInt(process.env.DB_POOL_IDLE_TIMEOUT || '30000', 10) || 30000),
+      connectionTimeoutMillis: Math.max(1000, parseInt(process.env.DB_POOL_CONN_TIMEOUT || '15000', 10) || 15000),
       // Prevent runaway queries from blocking connections indefinitely
       statement_timeout: statementTimeoutMs,
       ...(sslEnabled && { ssl: { rejectUnauthorized: process.env.NODE_ENV === 'production' } }),

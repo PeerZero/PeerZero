@@ -403,7 +403,9 @@ async function handleCondensation(
     const parsed = tryParseJson(response.content);
     if (parsed?.core_identity) {
       await memory.storeCore(ctx.botId, parsed.core_identity as string, `cycle-${ctx.cycleNumber}`);
-      await schoolAdapter.submitCoreCondensation(schoolCreds, parsed);
+      // Core identity is a bot-local operation — not submitted to School.
+      // The School tracks L2 paragraphs (via submitCondensation); L3 core
+      // identity lives only in the bot's local memory, matching the Python bot.
       condensationOccurred = 'core';
     } else {
       logger.warn({ contentSnippet: response.content?.slice(0, 120) }, 'Failed to extract JSON from core condensation LLM response');

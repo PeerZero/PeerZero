@@ -17,7 +17,6 @@ const mockSchoolAdapter = {
   submitReaffirmation: vi.fn(),
   submitResponse: vi.fn(),
   submitCondensation: vi.fn(),
-  submitCoreCondensation: vi.fn(),
   submitIdentityReflection: vi.fn(),
 };
 
@@ -618,7 +617,6 @@ describe('condensation threshold', () => {
       memoryPrompts: { uncondensed_exercises: 5 },
       tokensUsed: 500,
     });
-    mockSchoolAdapter.submitCoreCondensation.mockResolvedValue({ success: true });
     mockLLMAdapter.chat.mockResolvedValueOnce({
       content: JSON.stringify({ core_identity: 'I am a careful reasoner who...' }),
       tokens_used: 500,
@@ -631,7 +629,6 @@ describe('condensation threshold', () => {
     expect(mockStoreCore).toHaveBeenCalledWith(
       'bot-1', 'I am a careful reasoner who...', 'cycle-1',
     );
-    expect(mockSchoolAdapter.submitCoreCondensation).toHaveBeenCalled();
   });
 
   it('triggers self-authoring after condensation occurs', async () => {

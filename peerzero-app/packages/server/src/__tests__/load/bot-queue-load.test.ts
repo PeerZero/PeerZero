@@ -34,7 +34,6 @@ const mockSchoolAdapter = {
   submitRevision: vi.fn(),
   submitReaffirmation: vi.fn(),
   submitCondensation: vi.fn(),
-  submitCoreCondensation: vi.fn(),
   submitIdentityReflection: vi.fn(),
 };
 

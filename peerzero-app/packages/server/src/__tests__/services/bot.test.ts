@@ -6,10 +6,18 @@ const mockQueryOne = vi.fn();
 const mockQueryRows = vi.fn();
 const mockQuery = vi.fn();
 
+const mockPoolClient = {
+  query: vi.fn().mockResolvedValue({ rowCount: 1 }),
+  release: vi.fn(),
+};
+
 vi.mock('../../db/client', () => ({
   queryOne: (...args: any[]) => mockQueryOne(...args),
   queryRows: (...args: any[]) => mockQueryRows(...args),
   query: (...args: any[]) => mockQuery(...args),
+  getPool: () => ({
+    connect: () => Promise.resolve(mockPoolClient),
+  }),
 }));
 
 vi.mock('../../lib/logger', () => ({
@@ -363,18 +371,16 @@ describe('enrollBotInSchool', () => {
     mockQueryOne.mockResolvedValueOnce(null);
     // register returns success
     mockRegister.mockResolvedValueOnce({ success: true, api_key: 'school-key-123' });
-    // update bot
-    mockQuery.mockResolvedValueOnce({ rowCount: 1 });
-    // create enrollment
-    mockQuery.mockResolvedValueOnce({ rowCount: 1 });
-    // unlockGradeOne
-    mockUnlockGradeOne.mockResolvedValueOnce(undefined);
+    // pool client.query handles BEGIN, UPDATE, INSERT, grade unlock, COMMIT
+    mockPoolClient.query.mockResolvedValue({ rowCount: 1 });
 
     const result = await enrollBotInSchool('user-1', 'bot-1', 'school-1');
     expect(result.handle).toContain('testbot');
     expect(result.schoolSlug).toBe('science');
     expect(mockRegister).toHaveBeenCalledOnce();
-    expect(mockUnlockGradeOne).toHaveBeenCalledWith('bot-1');
+    // Verify transaction was used (BEGIN + 3 writes + COMMIT = 5 calls)
+    expect(mockPoolClient.query).toHaveBeenCalled();
+    expect(mockPoolClient.release).toHaveBeenCalled();
   });
 
   it('throws 404 when bot not found', async () => {

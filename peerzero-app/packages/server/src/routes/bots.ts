@@ -29,9 +29,9 @@ router.use(requireAuth);
 
 // List user's bots (paginated)
 router.get('/', userRateLimit('read'), async (req: Request, res: Response) => {
-  const rawLimit = parseInt(req.query.limit as string);
+  const rawLimit = parseInt(req.query.limit as string, 10);
   const limit = Number.isFinite(rawLimit) && rawLimit > 0 ? Math.min(rawLimit, 500) : 50;
-  const rawOffset = parseInt(req.query.offset as string);
+  const rawOffset = parseInt(req.query.offset as string, 10);
   const offset = Number.isFinite(rawOffset) && rawOffset >= 0 ? rawOffset : 0;
   const result = await botService.getUserBots(req.user!.userId, limit, offset);
   res.json(result);
@@ -199,9 +199,9 @@ router.get('/:id/memory', userRateLimit('read'), async (req: Request, res: Respo
 router.get('/:id/activity', userRateLimit('read'), async (req: Request, res: Response) => {
   // Verify ownership before returning activity
   await botService.getBotDetail(req.user!.userId, req.params.id);
-  const rawPage = parseInt(req.query.page as string);
+  const rawPage = parseInt(req.query.page as string, 10);
   const page = Number.isFinite(rawPage) && rawPage > 0 ? Math.min(rawPage, 500) : 1;
-  const rawPerPage = parseInt(req.query.per_page as string);
+  const rawPerPage = parseInt(req.query.per_page as string, 10);
   const perPage = Number.isFinite(rawPerPage) && rawPerPage > 0 ? Math.min(rawPerPage, 100) : 20;
 
   // Optional category filter
@@ -287,7 +287,7 @@ router.get('/:id/external-activity', userRateLimit('read'), async (req: Request,
     const nextCursor = hasMore && lastRow ? `${lastRow.created_at}:${lastRow.id}` : null;
     res.json({ data, has_more: hasMore, next_cursor: nextCursor });
   } else {
-    const rawPage = parseInt(req.query.page as string);
+    const rawPage = parseInt(req.query.page as string, 10);
     const page = Number.isFinite(rawPage) && rawPage > 0 ? Math.min(rawPage, 500) : 1;
     const offset = (page - 1) * perPage;
     const rows = await queryRows(
@@ -424,9 +424,9 @@ router.post('/:id/speak', userRateLimit('write'), async (req: Request, res: Resp
 // Get message feed (paginated, newest first)
 router.get('/:id/messages', userRateLimit('read'), async (req: Request, res: Response) => {
   await botService.getBotDetail(req.user!.userId, req.params.id);
-  const rawPage = parseInt(req.query.page as string);
+  const rawPage = parseInt(req.query.page as string, 10);
   const page = Number.isFinite(rawPage) && rawPage > 0 ? Math.min(rawPage, 500) : 1;
-  const rawPerPage = parseInt(req.query.per_page as string);
+  const rawPerPage = parseInt(req.query.per_page as string, 10);
   const perPage = Number.isFinite(rawPerPage) && rawPerPage > 0 ? Math.min(rawPerPage, 50) : 30;
   const result = await messageService.getMessages(req.params.id, page, perPage);
   res.json({ ...result, page, per_page: perPage });

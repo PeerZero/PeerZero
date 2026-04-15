@@ -969,7 +969,8 @@ module.exports = async (req, res) => {
 
     // Clear architecture observations when a methodology paper with Architecture field is submitted.
     if (safeFieldIds && safeFieldIds.length > 0) {
-      const { data: archField } = await supabase.from('fields').select('id').eq('slug', 'architecture').single();
+      const { data: archField, error: archErr } = await supabase.from('fields').select('id').eq('slug', 'architecture').single();
+      if (archErr) log.warn('[papers] Architecture field lookup failed — skipping arch obs clear', { err: archErr.message });
       if (archField && safeFieldIds.includes(archField.id)) {
         clearArchitectureObservations(agent.id).catch(err =>
           log.error('[arch_obs] Clear on paper submit failed', { err: err?.message })

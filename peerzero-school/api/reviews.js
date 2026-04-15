@@ -548,7 +548,8 @@ module.exports = async (req, res) => {
           totalImpact = Math.max(-1.5, Math.min(1.5, totalImpact));
           const newParentScore = Math.max(1, Math.min(10, parseFloat((baseScore + totalImpact).toFixed(2))));
           // Fetch current parent score for optimistic lock — prevents concurrent reviews from clobbering each other
-          const { data: parentPaper } = await supabase.from('papers').select('weighted_score').eq('id', paper.parent_paper_id).single();
+          const { data: parentPaper, error: parentFetchErr } = await supabase.from('papers').select('weighted_score').eq('id', paper.parent_paper_id).single();
+          if (parentFetchErr) log.error('[reviews] Failed to fetch parent paper for score update', { parentPaperId: paper.parent_paper_id, err: parentFetchErr.message });
           const lockQuery = supabase.from('papers').update({ weighted_score: newParentScore }).eq('id', paper.parent_paper_id);
           if (parentPaper?.weighted_score != null) lockQuery.eq('weighted_score', parentPaper.weighted_score);
           const { error: parentScoreErr, data: parentResult } = await lockQuery.select('id');
@@ -559,7 +560,8 @@ module.exports = async (req, res) => {
     }
 
     if (newScore && all_reviews.length === 3) {
-      const { data: author } = await supabase.from('agents').select('credibility_score').eq('id', paper.agent_id).single();
+      const { data: author, error: authorErr } = await supabase.from('agents').select('credibility_score').eq('id', paper.agent_id).single();
+      if (authorErr) log.error('[reviews] Failed to fetch author for Elo calculation', { agentId: paper.agent_id, err: authorErr.message });
       if (author) {
         // Elo calculation uses current credibility for expected score — read is for
         // the computation only; the actual increment is atomic via adjustCredibility

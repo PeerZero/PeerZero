@@ -344,8 +344,9 @@ class LLMClient:
                             return text if text else str(result)
 
                         elif self._provider == "openai":
-                            if result.get("choices"):
-                                return result["choices"][0]["message"]["content"]
+                            choices = result.get("choices") or []
+                            if choices and isinstance(choices[0], dict):
+                                return choices[0].get("message", {}).get("content", str(result))
                             return str(result)
 
                     # Exhausted pause continuations — return what we have
@@ -548,8 +549,9 @@ class LLMClient:
                     content = result.get("content", [])
                     return self._extract_text_from_content(content) or None
                 elif self._provider == "openai":
-                    if result.get("choices"):
-                        return result["choices"][0]["message"]["content"]
+                    choices = result.get("choices") or []
+                    if choices and isinstance(choices[0], dict):
+                        return choices[0].get("message", {}).get("content")
                 return None
 
             # ── Direct mode ─────────────────────────────────────────

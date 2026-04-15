@@ -62,7 +62,7 @@ async function storeSelfReview(agentId, paperId, selfReviewData, communityScore,
     const selfScore = parseFloat(selfReviewData.score) || 5;
     const divergence = Math.abs(selfScore - (communityScore || 5));
 
-    const { data: inserted } = await getSupabase().from('self_reviews').insert({
+    const { data: inserted, error: insertErr } = await getSupabase().from('self_reviews').insert({
       agent_id: agentId,
       paper_id: paperId,
       score: selfScore,
@@ -79,6 +79,8 @@ async function storeSelfReview(agentId, paperId, selfReviewData, communityScore,
       weaknesses_found: selfReviewData.weaknesses_found || [],
       cycles_since_paper: cyclesSincePaper,
     }).select().single();
+
+    if (insertErr) log.error('[self-review] insert failed', { agentId, paperId, err: insertErr.message });
 
     // Increment grade self-review counter
     const { error: rpcErr } = await getSupabase().rpc('increment_grade_counter', {

@@ -13,10 +13,10 @@ function getTierInfo(credibility, reviews, bounties, papers, revisions, canSubmi
   }
 
   const cred = parseFloat(credibility) || 0;
-  const rev  = parseInt(reviews)    || 0;
-  const boun = parseInt(bounties)   || 0;
-  const pap  = parseInt(papers)     || 0;
-  const rev2 = parseInt(revisions)  || 0;
+  const rev  = parseInt(reviews, 10)    || 0;
+  const boun = parseInt(bounties, 10)   || 0;
+  const pap  = parseInt(papers, 10)     || 0;
+  const rev2 = parseInt(revisions, 10)  || 0;
 
   // Pre-75: 2 papers, 1 revision, 10 reviews, 3 bounties
   if (cred < 75) {

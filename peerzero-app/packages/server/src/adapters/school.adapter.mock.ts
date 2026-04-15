@@ -227,10 +227,6 @@ export class MockSchoolAdapter implements ISchoolAdapter {
     return { success: true };
   }
 
-  async submitCoreCondensation(_creds: SchoolCredentials, _core: Record<string, unknown>): Promise<{ success: boolean }> {
-    return { success: true };
-  }
-
   async submitIdentityReflection(_creds: SchoolCredentials, _reflection: Record<string, unknown>): Promise<{ success: boolean }> {
     return { success: true };
   }
