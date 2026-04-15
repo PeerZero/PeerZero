@@ -285,12 +285,13 @@ CREATE INDEX idx_entitlements_user ON user_entitlements(user_id, entitlement_typ
 CREATE TABLE grade_unlocks (
   id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   bot_id          UUID NOT NULL REFERENCES bots(id) ON DELETE CASCADE,
+  school_id       UUID NOT NULL REFERENCES schools(id),
   grade           INTEGER NOT NULL CHECK (grade >= 1),
   purchase_id     UUID REFERENCES purchases(id),
   unlocked_at     TIMESTAMPTZ DEFAULT NOW(),
-  UNIQUE(bot_id, grade)
+  UNIQUE(bot_id, school_id, grade)
 );
-CREATE INDEX idx_grade_unlocks_bot ON grade_unlocks(bot_id);
+CREATE INDEX idx_grade_unlocks_bot_school ON grade_unlocks(bot_id, school_id);
 
 -- =============================================================================
 -- PUSH NOTIFICATIONS — Expo push tokens + user notification preferences

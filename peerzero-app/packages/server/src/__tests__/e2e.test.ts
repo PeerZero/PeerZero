@@ -119,7 +119,7 @@ vi.mock('../adapters/platform.adapter.factory', () => ({
 
 vi.mock('../services/bot.service', () => ({
   getDecryptedSchoolKey: vi.fn().mockResolvedValue({
-    apiKey: 'test-school-key', handle: 'test-bot', baseUrl: 'https://school.test',
+    apiKey: 'test-school-key', handle: 'test-bot', baseUrl: 'https://school.test', schoolId: 'school-1',
   }),
   setBotStatus: vi.fn().mockResolvedValue(undefined),
   isBotGradeUnlocked: vi.fn().mockResolvedValue(true),

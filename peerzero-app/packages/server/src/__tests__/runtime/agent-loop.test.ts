@@ -35,6 +35,7 @@ const mockGetDecryptedSchoolKey = vi.fn().mockResolvedValue({
   apiKey: 'test-school-key',
   handle: 'test-bot',
   baseUrl: 'https://school.test',
+  schoolId: 'school-1',
 });
 
 vi.mock('../../services/bot.service', () => ({
@@ -221,6 +222,7 @@ beforeEach(() => {
     apiKey: 'test-school-key',
     handle: 'test-bot',
     baseUrl: 'https://school.test',
+    schoolId: 'school-1',
   });
   mockIsBotGradeUnlocked.mockResolvedValue(true);
   mockQueryOne.mockResolvedValue(null);
@@ -507,7 +509,7 @@ describe('grade payment gate', () => {
 
     await runOneCycle(BASE_CTX);
 
-    expect(mockIsBotGradeUnlocked).toHaveBeenCalledWith('bot-1', 1);
+    expect(mockIsBotGradeUnlocked).toHaveBeenCalledWith('bot-1', 'school-1', 1);
   });
 });
 

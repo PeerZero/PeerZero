@@ -48,7 +48,7 @@ vi.mock('../../adapters/adapter.factory', () => ({
 
 vi.mock('../../services/bot.service', () => ({
   getDecryptedSchoolKey: vi.fn().mockResolvedValue({
-    apiKey: 'test-key', handle: 'load-bot', baseUrl: 'https://school.test',
+    apiKey: 'test-key', handle: 'load-bot', baseUrl: 'https://school.test', schoolId: 'school-1',
   }),
   setBotStatus: vi.fn().mockResolvedValue(undefined),
   isBotGradeUnlocked: vi.fn().mockResolvedValue(true),
@@ -162,7 +162,7 @@ describe('Bot Queue Load Tests', () => {
     vi.clearAllMocks();
     // Re-apply default mocks after clearAllMocks (factory runs once, clearAllMocks removes implementations)
     (getDecryptedSchoolKey as ReturnType<typeof vi.fn>).mockResolvedValue({
-      apiKey: 'test-key', handle: 'load-bot', baseUrl: 'https://school.test',
+      apiKey: 'test-key', handle: 'load-bot', baseUrl: 'https://school.test', schoolId: 'school-1',
     });
     (isBotGradeUnlocked as ReturnType<typeof vi.fn>).mockResolvedValue(true);
     (getDecryptedKey as ReturnType<typeof vi.fn>).mockResolvedValue('test-llm-key');

@@ -217,6 +217,7 @@ describe('getBotDetail', () => {
       id: 'bot-1',
       name: 'TestBot',
       cached_grade: 3,
+      school_id: 'school-1',
       cached_profile: null,
       cache_updated_at: null,
       is_public: false,
@@ -235,6 +236,7 @@ describe('getBotDetail', () => {
       id: 'bot-1',
       name: 'TestBot',
       cached_grade: 5,
+      school_id: 'school-1',
       cached_profile: null,
       cache_updated_at: null,
       is_public: true,
@@ -253,6 +255,7 @@ describe('getBotDetail', () => {
       id: 'bot-1',
       name: 'TestBot',
       cached_grade: 1,
+      school_id: 'school-1',
       cached_profile: '{}',
       cache_updated_at: oldDate,
       is_public: false,
@@ -466,13 +469,13 @@ describe('generatePhoneHomeToken', () => {
 describe('isBotGradeUnlocked', () => {
   it('returns true when grade_unlocks row exists', async () => {
     mockQueryOne.mockResolvedValueOnce({ id: 'unlock-1' });
-    const result = await isBotGradeUnlocked('bot-1', 3);
+    const result = await isBotGradeUnlocked('bot-1', 'school-1', 3);
     expect(result).toBe(true);
   });
 
   it('returns false when no grade_unlocks row', async () => {
     mockQueryOne.mockResolvedValueOnce(null);
-    const result = await isBotGradeUnlocked('bot-1', 5);
+    const result = await isBotGradeUnlocked('bot-1', 'school-1', 5);
     expect(result).toBe(false);
   });
 
@@ -480,7 +483,7 @@ describe('isBotGradeUnlocked', () => {
     const { config } = await import('../../config');
     (config as any).skipPayments = true;
 
-    const result = await isBotGradeUnlocked('bot-1', 99);
+    const result = await isBotGradeUnlocked('bot-1', 'school-1', 99);
     expect(result).toBe(true);
     expect(mockQueryOne).not.toHaveBeenCalled();
 
@@ -515,8 +518,9 @@ describe('setBotStatus', () => {
 // ── getDecryptedSchoolKey ───────────────────────────────────────────────────
 
 describe('getDecryptedSchoolKey', () => {
-  it('returns decrypted key with handle and base URL', async () => {
+  it('returns decrypted key with handle, base URL, and schoolId', async () => {
     mockQueryOne.mockResolvedValueOnce({
+      school_id: 'school-1',
       school_api_key_encrypted: Buffer.from('enc'),
       school_api_key_iv: Buffer.from('iv'),
       school_agent_handle: 'testbot-abc123',
@@ -528,6 +532,7 @@ describe('getDecryptedSchoolKey', () => {
       apiKey: 'decrypted-key',
       handle: 'testbot-abc123',
       baseUrl: 'https://school.test',
+      schoolId: 'school-1',
     });
   });
 

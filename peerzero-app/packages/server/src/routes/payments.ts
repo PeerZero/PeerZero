@@ -47,13 +47,17 @@ router.post('/grade-checkout', requireAuth, userRateLimit('write'), validateBody
 router.get('/grade-status/:botId', requireAuth, async (req: Request, res: Response) => {
   // Verify the requesting user owns this bot before returning grade data
   const bot = await import('../db/client').then(({ queryOne }) =>
-    queryOne('SELECT id FROM bots WHERE id = $1 AND user_id = $2', [req.params.botId, req.user!.userId]),
+    queryOne<{ id: string; school_id: string | null }>('SELECT id, school_id FROM bots WHERE id = $1 AND user_id = $2', [req.params.botId, req.user!.userId]),
   );
   if (!bot) {
     res.status(404).json({ error: 'Bot not found' });
     return;
   }
-  const grades = await paymentService.getUnlockedGrades(req.params.botId);
+  if (!bot.school_id) {
+    res.json({ unlocked_grades: [], highest_unlocked: 0 });
+    return;
+  }
+  const grades = await paymentService.getUnlockedGrades(req.params.botId, bot.school_id);
   const highest = grades.length > 0 ? Math.max(...grades) : 0;
   res.json({ unlocked_grades: grades, highest_unlocked: highest });
 });
@@ -80,14 +84,18 @@ router.post('/grade-checkout-bulk', requireAuth, userRateLimit('write'), validat
 router.get('/grade-price-preview/:botId', requireAuth, userRateLimit('read'), async (req: Request, res: Response) => {
   // Verify the requesting user owns this bot
   const bot = await import('../db/client').then(({ queryOne }) =>
-    queryOne('SELECT id FROM bots WHERE id = $1 AND user_id = $2', [req.params.botId, req.user!.userId]),
+    queryOne<{ id: string; school_id: string | null }>('SELECT id, school_id FROM bots WHERE id = $1 AND user_id = $2', [req.params.botId, req.user!.userId]),
   );
   if (!bot) {
     res.status(404).json({ error: 'Bot not found' });
     return;
   }
+  if (!bot.school_id) {
+    res.status(400).json({ error: 'Bot must be enrolled in a school first' });
+    return;
+  }
   const targetParam = req.query.through as string;
-  const unlockedGrades = await paymentService.getUnlockedGrades(req.params.botId);
+  const unlockedGrades = await paymentService.getUnlockedGrades(req.params.botId, bot.school_id);
   const highestUnlocked = unlockedGrades.length > 0 ? Math.max(...unlockedGrades) : 0;
   const parsedGrade = parseInt(targetParam, 10);
   const target = (targetParam === 'graduation' || targetParam === 'all') ? 12 :
