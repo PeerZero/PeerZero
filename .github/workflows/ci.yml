@@ -192,3 +192,17 @@ jobs:
             p/security-audit
             p/secrets
             p/owasp-top-ten
+
+      - name: Semgrep custom rules (audit patterns)
+        if: always()
+        run: |
+          pip install semgrep --quiet 2>/dev/null
+          semgrep --config .semgrep.yml \
+            peerzero-school/api/ peerzero-school/lib/ \
+            peerzero-app/packages/server/src/ \
+            peerzero-bot/peerzero_bot/ \
+            --no-git-ignore \
+            --exclude='**/node_modules/**' \
+            --exclude='**/__tests__/**' \
+            --exclude='**/tests/**' \
+            --error || echo "::warning::Custom Semgrep rules found issues — see output above"
