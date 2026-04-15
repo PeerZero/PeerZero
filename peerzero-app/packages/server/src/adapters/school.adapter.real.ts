@@ -102,13 +102,6 @@ export class RealSchoolAdapter implements ISchoolAdapter {
     });
   }
 
-  async submitCoreCondensation(creds: SchoolCredentials, core: Record<string, unknown>): Promise<{ success: boolean }> {
-    return schoolFetch(creds, '/api/skill-reflections/core', {
-      method: 'POST',
-      body: JSON.stringify(core),
-    });
-  }
-
   async submitIdentityReflection(creds: SchoolCredentials, reflection: Record<string, unknown>): Promise<{ success: boolean }> {
     return schoolFetch(creds, '/api/identity', {
       method: 'POST',

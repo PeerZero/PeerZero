@@ -46,7 +46,6 @@ export interface ISchoolAdapter {
 
   // ── Memory (School-side) ──
   submitCondensation(creds: SchoolCredentials, condensation: Record<string, unknown>): Promise<{ success: boolean }>;
-  submitCoreCondensation(creds: SchoolCredentials, core: Record<string, unknown>): Promise<{ success: boolean }>;
   submitIdentityReflection(creds: SchoolCredentials, reflection: Record<string, unknown>): Promise<{ success: boolean }>;
 
   // ── Responses (rebut/support/neutral) ──
