@@ -37,7 +37,7 @@ async function storeForgeHypotheses(agentId, forgePaperId, hypotheses) {
     if (!h.claim || !h.testable_prediction) continue;
 
     try {
-      const { data } = await getSupabase().from('forge_hypotheses').insert({
+      const { data, error: insertErr } = await getSupabase().from('forge_hypotheses').insert({
         agent_id: agentId,
         claim: Array.from(h.claim || '').slice(0, 500).join(''),
         testable_prediction: Array.from(h.testable_prediction || '').slice(0, 500).join(''),
@@ -48,6 +48,7 @@ async function storeForgeHypotheses(agentId, forgePaperId, hypotheses) {
         source_forge_paper_id: forgePaperId,
       }).select().single();
 
+      if (insertErr) log.error('[forge-hypotheses] insert failed', { agentId, err: insertErr.message });
       if (data) inserted.push(data);
     } catch (err) {
       log.error('[forge-hypotheses] store failed', { err: err?.message });

@@ -92,6 +92,8 @@ rules:
     patterns:
       - pattern: setInterval(...)
       - pattern-not: $VAR = setInterval(...)
+      - pattern-not: const $VAR = setInterval(...)
+      - pattern-not: let $VAR = setInterval(...)
       - pattern-not: setInterval(...).unref()
     message: >
       setInterval() return value not captured. Without a reference, the
