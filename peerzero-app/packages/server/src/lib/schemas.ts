@@ -180,7 +180,17 @@ export const IncomingTaskSchema = z.object({
   action_requested: z.string().min(1).max(200),
   payload: z.record(z.string(), z.unknown()).optional(),
   callback_url: z.string().url().max(2000).optional(),
-  deadline: z.string().max(100).optional(),
+  // Must be an ISO 8601 string AND in the future — past-dated deadlines are
+  // rejected so a sender can't fill a bot's inbox with tasks that will be
+  // expired on the next cycle anyway.
+  deadline: z.string().max(100).refine(
+    (s) => !isNaN(Date.parse(s)) && Date.parse(s) > Date.now(),
+    { message: 'deadline must be a valid ISO 8601 timestamp in the future' },
+  ).optional(),
+  // conversation_id is trust-on-first-use. Senders should pick a high-entropy
+  // value (UUIDv4 or 128+ bits of randomness) so a third party can't guess
+  // an active id and inject a forged turn. We don't enforce a format
+  // because external A2A callers may pick their own scheme.
   conversation_id: z.string().max(200).optional(),
   turn_number: z.number().int().min(0).optional(),
 }).strict();

@@ -52,6 +52,43 @@ export async function queryOne<T extends QueryResultRow = any>(text: string, par
   return result.rows[0] || null;
 }
 
+/**
+ * Run a callback inside a single transaction. Commits on success, rolls back
+ * on any thrown error (including the BEGIN itself if it fails to start). The
+ * returned `tx` has the same shape as the top-level query helpers so callers
+ * don't have to think about whether they're in a transaction.
+ *
+ * Use this when you need two or more statements to succeed or fail together —
+ * e.g. the checkout webhook marking a purchase completed AND inserting the
+ * entitlement: if the process dies between them, the retry should see the
+ * purchase still pending, not silently skip the entitlement insert.
+ */
+export interface Tx {
+  query<R extends QueryResultRow = any>(text: string, params?: any[]): Promise<QueryResult<R>>;
+  queryRows<R extends QueryResultRow = any>(text: string, params?: any[]): Promise<R[]>;
+  queryOne<R extends QueryResultRow = any>(text: string, params?: any[]): Promise<R | null>;
+}
+
+export async function withTransaction<T>(fn: (tx: Tx) => Promise<T>): Promise<T> {
+  const client = await getPool().connect();
+  try {
+    await client.query('BEGIN');
+    const tx: Tx = {
+      query: (text, params) => client.query(text, params),
+      queryRows: async (text, params) => (await client.query(text, params)).rows as any,
+      queryOne: async (text, params) => ((await client.query(text, params)).rows[0] as any) ?? null,
+    };
+    const result = await fn(tx);
+    await client.query('COMMIT');
+    return result;
+  } catch (err) {
+    try { await client.query('ROLLBACK'); } catch { /* already rolled back / connection gone */ }
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
 /** Close the pool (for graceful shutdown). */
 export async function closePool(): Promise<void> {
   if (pool) {

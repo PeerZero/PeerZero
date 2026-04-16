@@ -145,8 +145,11 @@ function cleanupSessions(): void {
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
-    // Validate that ALLOWED_ORIGINS is configured (prevents accidental open CORS)
-    if (!env.ALLOWED_ORIGINS) {
+    // Validate that ALLOWED_ORIGINS is configured (prevents accidental open CORS).
+    // Also reject values that parse to an empty list — e.g. ",,, " — which
+    // would otherwise pass this check and fall through to an origin-less allow.
+    if (!env.ALLOWED_ORIGINS ||
+        env.ALLOWED_ORIGINS.split(",").map(o => o.trim()).filter(Boolean).length === 0) {
       console.error("ALLOWED_ORIGINS not configured — rejecting request. Set it in wrangler.toml or as a secret.");
       return jsonError("Proxy misconfigured: CORS origins not set", 500, request, env);
     }

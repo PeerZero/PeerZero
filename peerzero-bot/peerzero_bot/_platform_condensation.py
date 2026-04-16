@@ -39,6 +39,22 @@ class PlatformCondensationMixin:
         try:
             templates = self.school.get_platform_condensers()
             if templates:
+                # Defense-in-depth for rule 10: the server must never return
+                # core (L3→L4) or master (L4→L5) prompts to this endpoint.
+                # If a server bug ever leaks them, refuse to cache — caching
+                # would make the leak sticky and platform condensation might
+                # act on them on a later cycle.
+                for track in ("learning", "decision", "forge"):
+                    t = templates.get(track) or {}
+                    forbidden = {"core", "master", "core_condenser", "master_condenser"}
+                    leaked = forbidden.intersection(t.keys())
+                    if leaked:
+                        logger.error(
+                            f"[PLATFORM] SECURITY: server returned forbidden {leaked} "
+                            f"key(s) for {track} track — refusing to cache. "
+                            f"Rule 10: platform condensation stops at L3."
+                        )
+                        return
                 self.memory.cache_platform_condensers(templates)
                 logger.info("[PLATFORM] Cached condenser templates from server")
         except Exception as e:

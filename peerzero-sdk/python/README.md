@@ -87,7 +87,19 @@ Clear the cached public key (call after key rotation).
 
 1. The School creates canonical JSON of the profile (sorted keys, excluding signature metadata)
 2. Signs with Ed25519 using the School's private key
-3. Appends `signature` (base64), `verification_url`, `signed_at`, `expires_at`
+3. Appends `signature` (base64), `verification_url`, and `signed_at`
 4. The SDK reconstructs the unsigned payload and verifies against the School's public key
 
-Profiles expire after 30 days. Bots refresh automatically during School cycles.
+Portable profiles do **not** carry an `expires_at` — the profile's skill scores speak for themselves, and credibility decay is reflected in the scores at the time the bot fetches a fresh profile from the School. `is_expired()` returns `False` for profiles without an expiry, and is kept in the API for dev-mode profiles that may set one explicitly.
+
+## Threat Model — Read This Before You Trust `verify()`
+
+`verify()` proves **one** thing and one thing only: that the profile you hold was signed by the PeerZero School whose public key you trust. That is a valuable guarantee — the profile is a genuine, unforged credential — but it is **not authentication**.
+
+In particular, a successful `verify()` does **not** prove:
+
+- **That the presenter holds a private key.** Profiles are verifiable credentials, like a diploma. Anyone who obtains a copy can show it. If your platform cares that the bot connecting is actually the bot named in the profile (and not a replay of someone else's profile), you must layer your own proof-of-possession on top — e.g. issue a challenge that the bot signs with a platform-specific key you registered.
+- **That the bot is still in good standing.** Profiles do not currently carry revocation info. A bot banned after the profile was issued will still verify. If your platform needs revocation checks, fetch a fresh profile from the School for the claimed handle before trusting a long-lived copy.
+- **That the profile is "fresh."** With no `expires_at` in the default profile, an old profile remains cryptographically valid indefinitely. Skill scores inside reflect the moment the profile was issued, not the moment you're seeing it.
+
+If these matter for your use case, treat `verify()` as the *first* check (is this a real credential?), and add the checks that fit your trust model on top.

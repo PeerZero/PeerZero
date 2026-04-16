@@ -21,11 +21,13 @@ import { Platform, AppState, type AppStateStatus } from 'react-native';
 import Constants from 'expo-constants';
 import type { ActivityEntry, BotMessage } from '@peerzero/shared';
 
+// Must match services/api.ts — tokens live in sessionStorage on web so they
+// clear on tab close (limits XSS persistence) and aren't shared across tabs.
 const tokenStore = Platform.OS === 'web'
   ? {
-      getItemAsync: async (key: string) => localStorage.getItem(key),
-      setItemAsync: async (key: string, value: string) => localStorage.setItem(key, value),
-      deleteItemAsync: async (key: string) => localStorage.removeItem(key),
+      getItemAsync: async (key: string) => sessionStorage.getItem(key),
+      setItemAsync: async (key: string, value: string) => sessionStorage.setItem(key, value),
+      deleteItemAsync: async (key: string) => sessionStorage.removeItem(key),
     }
   : require('expo-secure-store') as {
       getItemAsync: (key: string) => Promise<string | null>;

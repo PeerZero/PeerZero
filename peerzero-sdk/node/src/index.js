@@ -134,6 +134,14 @@ function clearKeyCache() {
 /**
  * Verify a signed portable profile's Ed25519 signature.
  *
+ * Threat model: a successful verify() proves the profile was signed by the
+ * School whose public key you trust — it does NOT prove the presenter holds
+ * a private key, that the bot is still in good standing, or that the profile
+ * is fresh. Profiles are verifiable credentials (like a diploma), not
+ * authentication tokens. If your platform needs proof-of-possession,
+ * revocation checks, or freshness, layer those on top of verify(). See the
+ * README "Threat Model" section for details.
+ *
  * @param {object} profile — The full portable profile (with signature fields)
  * @param {string|crypto.KeyObject} [publicKey] — PEM string, KeyObject, or omit to auto-fetch
  * @returns {Promise<object>} — The verified profile (same object, signature confirmed valid)
