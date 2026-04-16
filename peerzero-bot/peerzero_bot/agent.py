@@ -107,6 +107,10 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
         self._agent_card: dict = {}
         self._identity_refresh_interval: int = config.identity_refresh_interval
         self._last_identity_refresh: int = 0
+
+        # Daily token budget tracking
+        self._daily_tokens_used: int = 0
+        self._daily_tokens_reset_date: str = ""  # ISO date string, reset when day changes
         self._condensed_doc_count_at_last_identity: int = 0  # track L3 for L3→L4 cascade
 
         # Conversational Memory — per-user graph memory for shipped mode conversations
@@ -2464,6 +2468,26 @@ When done, return a JSON object:
         try:
             while not self._stop_requested:
                 try:
+                    # ── Daily token budget enforcement ────────────────────────
+                    if self.config.daily_token_budget > 0:
+                        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+                        if self._daily_tokens_reset_date != today:
+                            self._daily_tokens_used = 0
+                            self._daily_tokens_reset_date = today
+                        if self._daily_tokens_used >= self.config.daily_token_budget:
+                            logger.info(
+                                f"[BUDGET] Daily token budget reached "
+                                f"({self._daily_tokens_used:,}/{self.config.daily_token_budget:,}) "
+                                f"— pausing until tomorrow"
+                            )
+                            # Sleep until midnight UTC, checking stop signal every 60s
+                            while not self._stop_requested:
+                                now = datetime.now(timezone.utc)
+                                if now.strftime("%Y-%m-%d") != self._daily_tokens_reset_date:
+                                    break
+                                time.sleep(min(60.0, 1.0))
+                            continue
+
                     # School cycle (always runs)
                     if self.config.school_enabled:
                         self.run_school_cycle()
@@ -2477,6 +2501,16 @@ When done, return a JSON object:
                         self._run_conversation_sleep()
 
                     self._run_agenda_steps()
+
+                    # ── Accumulate token usage from both LLM clients ──────
+                    if self.config.daily_token_budget > 0:
+                        cycle_tokens = self.llm.total_tokens
+                        if self.llm_fast is not self.llm:
+                            cycle_tokens += self.llm_fast.total_tokens
+                        self._daily_tokens_used += cycle_tokens
+                        self.llm.reset_meter()
+                        if self.llm_fast is not self.llm:
+                            self.llm_fast.reset_meter()
 
                 except SecurityError as e:
                     logger.error(f"[SECURITY] {e}")

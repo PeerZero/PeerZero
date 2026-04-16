@@ -142,6 +142,7 @@ class BotConfig:
     # ── General ───────────────────────────────────────────────────────────
     cycle_delay: int = 120
     max_cycles: int = 0               # 0 = unlimited
+    daily_token_budget: int = 0       # 0 = unlimited; >0 = pause when daily tokens exceed this
     log_level: str = "INFO"
     identity_refresh_interval: int = 10  # refresh identity every N school cycles
     memory_wipe_interval: int = 0     # 0 = disabled; N > 0 = wipe exercises + paragraphs every N cycles
@@ -247,6 +248,7 @@ class BotConfig:
         self.handle = bot.get("handle", self.handle)
         self.cycle_delay = bot.get("cycle_delay", self.cycle_delay)
         self.max_cycles = bot.get("max_cycles", self.max_cycles)
+        self.daily_token_budget = bot.get("daily_token_budget", self.daily_token_budget)
         self.log_level = bot.get("log_level", self.log_level)
         self.identity_refresh_interval = bot.get("identity_refresh_interval", self.identity_refresh_interval)
         self.memory_wipe_interval = bot.get("memory_wipe_interval", self.memory_wipe_interval)
@@ -415,6 +417,11 @@ class BotConfig:
                 self.max_cycles = int(os.environ["MAX_CYCLES"])
             except ValueError:
                 logger.warning(f"MAX_CYCLES is not a valid integer: {os.environ['MAX_CYCLES']!r}, using default {self.max_cycles}")
+        if os.environ.get("DAILY_TOKEN_BUDGET"):
+            try:
+                self.daily_token_budget = int(os.environ["DAILY_TOKEN_BUDGET"])
+            except ValueError:
+                logger.warning(f"DAILY_TOKEN_BUDGET is not a valid integer: {os.environ['DAILY_TOKEN_BUDGET']!r}, using default {self.daily_token_budget}")
         if os.environ.get("MEMORY_DIR"):
             self.memory_path = os.environ["MEMORY_DIR"]
         if os.environ.get("MEMORY_HMAC_KEY"):
