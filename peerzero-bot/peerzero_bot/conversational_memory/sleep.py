@@ -73,6 +73,12 @@ class SleepConsolidation:
             "DELETE FROM l2_observations WHERE node_id NOT IN (SELECT id FROM nodes)"
         )
 
+        # Clean superseded L2 observations — these have been replaced by newer
+        # enriched portraits and accumulate without bound otherwise
+        conn.execute(
+            "DELETE FROM l2_observations WHERE superseded_by IS NOT NULL"
+        )
+
         # ── 2b. Delete orphan nodes (no remaining edges for N days) ─
         # A node whose every connecting edge has decayed away is isolated —
         # nothing links to it, nothing links from it. If it's been orphaned

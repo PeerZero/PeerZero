@@ -52,7 +52,7 @@ Pick 2-3 audits per session. For each audit, search all 3 systems (peerzero-scho
 - `except Exception` catching code bugs (TypeError, KeyError) alongside transient errors
 - Un-awaited async calls missing `.catch()` (can crash Node via unhandled rejection)
 
-**Last run:** 2026-04-14 — Round 5: Final 2 unchecked writes in forge-aggregation.js now error-checked. See audit log for details.
+**Last run:** 2026-04-16 — Round 8: 3 HIGH fixes. agent-loop.ts skill/core/identity condensation wrapped in try/catch. See audit log.
 
 ---
 
@@ -87,7 +87,7 @@ Pick 2-3 audits per session. For each audit, search all 3 systems (peerzero-scho
 - Orphan records: paper_fields/citations/reviews for deleted papers, activity_log for deleted bots
 - Memory leaks: in-process caches (LRU engines, rated_review_ids sets) that grow per session
 
-**Last run:** 2026-04-14 — Round 3: 6 unbounded queries capped with .limit(). See audit log for details.
+**Last run:** 2026-04-16 — Round 6: Superseded L2 observations now cleaned in sleep consolidation. See audit log.
 
 ---
 
@@ -691,7 +691,7 @@ Pick 2-3 audits per session. For each audit, search all 3 systems (peerzero-scho
 - Text scaling — does the app respect system font size preferences? Does it break layout at 200% text size?
 - Touch target size — minimum 44x44 points (Apple) / 48x48 dp (Material Design) for all interactive elements
 
-**Last run:** 2026-04-14 — See audit log for details.
+**Last run:** 2026-04-16 — Round 3: Re-verified. All chat toggles and modals have proper accessibility props. No remaining issues.
 
 ---
 
@@ -703,9 +703,9 @@ Track when each audit was last run and what was found/fixed. This helps Claude p
 
 | # | Audit | Last Run | Issues Found | Branch/PR |
 |---|-------|----------|-------------|-----------|
-| 1 | Silent Failures | 2026-04-15 | Round 7: 1 CRITICAL + 4 HIGH fixes. agents.js: 5 count/list queries (reviews, bounties, papers, revisions, myPapers, agentBounties) now error-checked — silent null-to-zero conversion made profile return wrong data. reviews.js: author credibility fetch and parent paper score fetch now error-checked. skills-core.js: batch insert and parallel update results now error-checked. forge-aggregation.js: proposal row fetch and config read now error-checked (with PGRST116 filter for expected not-found). papers.js: architecture field lookup now error-checked. Bot school.py: _get() and _post() now catch JSONDecodeError on non-JSON responses (Vercel HTML errors). App agent-loop.ts: core condensation submission wrapped in try/catch (was crashing cycle on 400 from School). shipped-loop.ts: timeout leak fixed with finally block. | claude/audit-code-launch-prep-5xshZ |
+| 1 | Silent Failures | 2026-04-16 | Round 8: 3 HIGH fixes. agent-loop.ts: skill condensation, core condensation, and identity reflection all wrapped in try/catch — previously any School API error during these steps crashed the entire bot cycle. Now matches forge + decision condensation pattern (non-blocking with warning log). | claude/audit-checklist-hardening-GmzV5 |
 | 2 | Race Conditions | 2026-04-15 | Round 4: 2 MEDIUM fixes. reviews.js: unique constraint violation (23505) now returns 409 instead of generic 500 — concurrent duplicate review attempts get clean error. bounties.js: same fix for bounty unique constraint. Review count cap TOCTOU remains LOW (concurrent reviewers can bypass 15-cap, but count recomputes correctly from actual rows). Migration 033 UNIQUE indexes prevent same-reviewer/same-challenger duplicates at DB level. | claude/run-security-audit-CM9mO |
-| 3 | Unbounded Growth | 2026-04-14 | Round 5: 5 fixes. reconcile.js: 3 unbounded agent/summary queries capped with .limit(1000). papers.js: my_papers query capped with .limit(200). external-activity.ts: fallbackBuckets Map capped at 10K entries with oldest-eviction. Remaining: credibility_transactions checkpoint+purge, bot_memory_core version accumulation. | claude/review-audit-checklist-DD40v |
+| 3 | Unbounded Growth | 2026-04-16 | Round 6: 1 MEDIUM fix. conversational_memory/sleep.py: superseded L2 observations (superseded_by IS NOT NULL) now deleted during sleep consolidation — previously accumulated without bound as each condensation cycle created new L2 records and marked old ones superseded but never cleaned them up. Remaining: credibility_transactions checkpoint+purge. | claude/audit-checklist-hardening-GmzV5 |
 | 4 | Retry & Idempotency | 2026-04-14 | Round 4: Stripe idempotency keys added to all resource-creation calls (customers.create, checkout.sessions.create, products.create, prices.create) across createCheckout, createDynamicGradeCheckout, and createBulkGradeCheckout. Prevents duplicate Stripe resources on network retries. | claude/review-audit-checklist-DD40v |
 | 5 | Secret Exposure | 2026-04-15 | Re-run: 0 new issues. Error sanitization comprehensive (sanitizeErrorMessage on all 500 responses). No secrets in logs, no identity text in public APIs. .env.test test-only values (acceptable). Push tokens masked in notification logs. All prior acceptable items re-confirmed. | claude/run-security-audit-CM9mO |
 | 6 | Timeout & Exhaustion | 2026-04-14 | Round 3: 7 browser fetch() calls in index.html now have AbortSignal.timeout(15000) — UI no longer hangs on slow API. Prior server-side timeout fixes verified. | claude/audit-checklist-completion-JLioU |
@@ -738,4 +738,4 @@ Track when each audit was last run and what was found/fixed. This helps Claude p
 | 33 | Env Var Validation | 2026-04-14 | Round 2: 2 HIGH fixes. Bot .env.example: documented 7 missing env vars (PEERZERO_PROXY_KEY, CONVERSATIONAL_MEMORY_KEY, MEMORY_HMAC_KEY, PZ_ALLOW_LOCAL_PROXY, PEERZERO_ALLOW_INSECURE_CONFIG, BOT_MODE, MEMORY_WIPE_INTERVAL). App .env.example: documented 5 missing env vars (SCHOOL_ADMIN_SECRET, ADMIN_SECRET, RESEND_WEBHOOK_SECRET, COMPANY_ADDRESS, DB_STATEMENT_TIMEOUT). | claude/review-audit-checklist-DD40v |
 | 34 | Redis & Queue Config | 2026-04-14 | Round 2: 3 MEDIUM fixes. queue.ts: clearStaleLocks() now uses SCAN instead of redis.keys() (O(N) blocking fix). Both queue.ts and platform-queue.ts: queue names and lock keys now prefixed with QUEUE_PREFIX (env-based namespace prevents staging/prod collisions). platform-queue.ts: added failed event handler matching bot-cycles pattern. | claude/review-audit-checklist-DD40v |
 | 35 | Migration Safety | 2026-04-14 | 0 critical, 2 high, 3 medium, 2 low. All CREATE INDEX in migrations 027, 030, 032 (school) and 0024 (app) are non-concurrent — will lock writes on large tables. Migration 029 adds UNIQUE constraints via ALTER TABLE (AccessExclusiveLock). Mutable DEFAULT (NOW/CURRENT_DATE) backfills wrong timestamps in 010, 0025. Unbatched UPDATE on large tables in 006, 0022, 0030. Missing migrations 001-003, 005 (baseline gap). 22 of 28 school migrations lack DOWN scripts. | claude/push-cadence-table-update-WmhJf |
-| 36 | Accessibility (WCAG) | 2026-04-14 | Round 2: 2 fixes. BrainScreen.tsx: tab buttons now include accessibilityHint from TABS constant (e.g. "What's on the desk right now"). LogScreen.tsx: contentEntry TouchableOpacity now has accessibilityHint="Long press to delete" (matching taskEntry and externalEntry patterns). Remaining: chat toggle rows, modals need accessibilityViewIsModal. | claude/audit-checklist-fixes-KEjdN |
+| 36 | Accessibility (WCAG) | 2026-04-16 | Round 3: Re-verified. ChatScreen.tsx toggle rows already have accessibilityRole, accessibilityLabel, accessibilityState, and accessibilityHint. MilestoneModal.tsx already has accessibilityViewIsModal on content view. No remaining issues. | claude/audit-checklist-hardening-GmzV5 |
