@@ -25,6 +25,16 @@ vi.mock('../../db/client', () => ({
   queryOne: (...args: any[]) => mockQueryOne(...args),
   queryRows: (...args: any[]) => mockQueryRows(...args),
   query: (...args: any[]) => mockQuery(...args),
+  // withTransaction runs the callback with a tx object whose methods proxy
+  // straight to the top-level query mocks — the tests set up mockQueryOne /
+  // mockQuery expectations as a flat sequence and don't care whether a given
+  // statement ran inside a transaction. That keeps existing test scaffolding
+  // working through the payment-webhook atomicity change.
+  withTransaction: async (fn: (tx: any) => Promise<any>) => fn({
+    query: (...args: any[]) => mockQuery(...args),
+    queryRows: (...args: any[]) => mockQueryRows(...args),
+    queryOne: (...args: any[]) => mockQueryOne(...args),
+  }),
 }));
 
 vi.mock('../../services/bot.service', () => ({
@@ -325,7 +335,9 @@ describe('payment.service', () => {
     });
 
     it('skips already-completed purchases (idempotent)', async () => {
-      mockQueryOne.mockResolvedValueOnce({ status: 'completed' }); // already processed
+      // UPDATE with WHERE status != 'completed' returns null when the row
+      // is already completed — that's the signal to short-circuit.
+      mockQueryOne.mockResolvedValueOnce(null);
 
       await handleStripeWebhook({
         type: 'checkout.session.completed',
@@ -338,7 +350,8 @@ describe('payment.service', () => {
         },
       } as any);
 
-      // Should not have called UPDATE
+      // The entitlement INSERT and grade-unlock INSERTs must not fire
+      // because the UPDATE found no pending row to complete.
       expect(mockQuery).not.toHaveBeenCalled();
     });
 

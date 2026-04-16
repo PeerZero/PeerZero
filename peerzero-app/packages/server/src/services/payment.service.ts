@@ -5,7 +5,7 @@
 
 import Stripe from 'stripe';
 import { config } from '../config';
-import { queryOne, queryRows, query } from '../db/client';
+import { queryOne, queryRows, query, withTransaction } from '../db/client';
 import { AppError } from '../middleware/error-handler';
 import type { ProductInfo, CheckoutResponse } from '@peerzero/shared';
 import { getGradePriceCents, GRADUATION_GRADE, POST_GRADUATION_PRICE_CENTS } from '@peerzero/shared';
@@ -88,7 +88,11 @@ export async function createCheckout(
     success_url: `${config.frontendUrl}/payment/success?session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${config.frontendUrl}/payment/cancel`,
   }, {
-    idempotencyKey: `checkout-${productId}-${userId}-${Math.floor(Date.now() / 60000)}`,
+    // Key on the purchase row id so each checkout attempt is its own Stripe
+    // session. The previous key bucketed by minute, which made rapid
+    // double-clicks reuse one session whose metadata only pointed at the
+    // first purchase row — the second row stayed in 'pending' forever.
+    idempotencyKey: `checkout-${purchase.id}`,
   });
 
   // Store session ID
@@ -111,58 +115,75 @@ export async function handleStripeWebhook(event: Stripe.Event): Promise<void> {
         break;
       }
 
-      // Atomically mark completed — returns null if already processed (prevents duplicate entitlements)
-      const purchase = await queryOne<{ user_id: string; product_id: string }>(
-        `UPDATE purchases SET status = 'completed', stripe_payment_id = $1
-         WHERE id = $2 AND status != 'completed'
-         RETURNING user_id, product_id`,
-        [session.payment_intent as string, purchaseId],
-      );
-      if (!purchase) {
-        return; // Already processed or not found, skip
-      }
+      // The mark-completed UPDATE and the entitlement/grade-unlock INSERTs must
+      // be atomic. If we SIGTERM or OOM-kill between them, a Stripe retry would
+      // see status='completed' and exit early — user paid, no entitlement
+      // granted. The transaction ensures the UPDATE rolls back on any failure,
+      // so the retry finds the purchase still 'pending' and redoes everything.
+      await withTransaction(async (tx) => {
+        const purchase = await tx.queryOne<{ user_id: string; product_id: string }>(
+          `UPDATE purchases SET status = 'completed', stripe_payment_id = $1
+           WHERE id = $2 AND status != 'completed'
+           RETURNING user_id, product_id`,
+          [session.payment_intent as string, purchaseId],
+        );
+        if (!purchase) {
+          return; // Already processed or not found — nothing to roll back.
+        }
 
-      // purchase is guaranteed unique here — the UPDATE only succeeds once
-      const product = await queryOne<{ type: string; metadata: Record<string, unknown> }>(
-        'SELECT type, metadata FROM products WHERE id = $1',
-        [purchase.product_id],
-      );
-      if (!product) {
-        logger.warn({ purchaseId, productId: purchase.product_id }, 'Stripe webhook: product not found for purchase');
-        break;
-      }
+        const product = await tx.queryOne<{ type: string; metadata: Record<string, unknown> }>(
+          'SELECT type, metadata FROM products WHERE id = $1',
+          [purchase.product_id],
+        );
+        if (!product) {
+          // Abort the transaction — we don't want to mark the purchase
+          // completed without a product to grant the entitlement for.
+          throw new Error(`Stripe webhook: product ${purchase.product_id} not found for purchase ${purchaseId}`);
+        }
 
-      await query(
-        `INSERT INTO user_entitlements (user_id, entitlement_type, quantity, source_purchase_id, metadata)
-         VALUES ($1, $2, 1, $3, $4)
-         ON CONFLICT (source_purchase_id, entitlement_type) DO NOTHING`,
-        [purchase.user_id, product.type, purchaseId, JSON.stringify(session.metadata || {})],
-      );
+        await tx.query(
+          `INSERT INTO user_entitlements (user_id, entitlement_type, quantity, source_purchase_id, metadata)
+           VALUES ($1, $2, 1, $3, $4)
+           ON CONFLICT (source_purchase_id, entitlement_type) DO NOTHING`,
+          [purchase.user_id, product.type, purchaseId, JSON.stringify(session.metadata || {})],
+        );
 
-      // Handle grade advancement fulfillment (single or bulk)
-      if (session.metadata?.bot_id && session.metadata?.school_id) {
-        if (session.metadata?.type === 'grade_advancement_bulk' && session.metadata?.grades) {
-          // Bulk unlock: batch insert all grades in one query
-          const rawGrades = typeof session.metadata.grades === 'string' ? session.metadata.grades : '';
-          const gradeNums = rawGrades.split(',').map(Number).filter(n => Number.isFinite(n) && n > 0 && n <= 200).slice(0, 50);
-          if (gradeNums.length > 0) {
-            const values = gradeNums.map((g, i) => `($1, $2, $${i + 3}, $${gradeNums.length + 3})`).join(', ');
-            await query(
-              `INSERT INTO grade_unlocks (bot_id, school_id, grade, purchase_id) VALUES ${values} ON CONFLICT (bot_id, school_id, grade) DO NOTHING`,
-              [session.metadata.bot_id, session.metadata.school_id, ...gradeNums, purchaseId],
-            );
-            for (const g of gradeNums) {
-              logger.info({ botId: session.metadata.bot_id, schoolId: session.metadata.school_id, grade: g, purchaseId }, 'Grade unlocked');
+        // Handle grade advancement fulfillment (single or bulk)
+        if (session.metadata?.bot_id && session.metadata?.school_id) {
+          if (session.metadata?.type === 'grade_advancement_bulk' && session.metadata?.grades) {
+            // Bulk unlock: batch insert all grades in one query
+            const rawGrades = typeof session.metadata.grades === 'string' ? session.metadata.grades : '';
+            const gradeNums = rawGrades.split(',').map(Number).filter(n => Number.isFinite(n) && n > 0 && n <= 200).slice(0, 50);
+            if (gradeNums.length > 0) {
+              const values = gradeNums.map((g, i) => `($1, $2, $${i + 3}, $${gradeNums.length + 3})`).join(', ');
+              await tx.query(
+                `INSERT INTO grade_unlocks (bot_id, school_id, grade, purchase_id) VALUES ${values} ON CONFLICT (bot_id, school_id, grade) DO NOTHING`,
+                [session.metadata.bot_id, session.metadata.school_id, ...gradeNums, purchaseId],
+              );
+              for (const g of gradeNums) {
+                logger.info({ botId: session.metadata.bot_id, schoolId: session.metadata.school_id, grade: g, purchaseId }, 'Grade unlocked');
+              }
+            }
+          } else if (session.metadata?.grade) {
+            // Single grade unlock — inline the insert so it participates in the tx.
+            const gradeNum = parseInt(session.metadata.grade, 10);
+            if (Number.isFinite(gradeNum) && gradeNum > 0 && gradeNum <= 200) {
+              await tx.query(
+                `INSERT INTO grade_unlocks (bot_id, school_id, grade, purchase_id)
+                 VALUES ($1, $2, $3, $4) ON CONFLICT (bot_id, school_id, grade) DO NOTHING`,
+                [session.metadata.bot_id, session.metadata.school_id, gradeNum, purchaseId],
+              );
+              logger.info({ botId: session.metadata.bot_id, schoolId: session.metadata.school_id, grade: gradeNum, purchaseId }, 'Grade unlocked');
             }
           }
-        } else if (session.metadata?.grade) {
-          // Single grade unlock
-          const gradeNum = parseInt(session.metadata.grade, 10);
-          if (Number.isFinite(gradeNum) && gradeNum > 0 && gradeNum <= 200) {
-            await unlockGrade(session.metadata.bot_id, session.metadata.school_id, gradeNum, purchaseId);
-          }
         }
-        // Auto-resume bot if it was paused waiting for grade payment
+      });
+
+      // Auto-resume bot if it was paused waiting for grade payment. This runs
+      // AFTER the transaction commits — a failure here must not roll back the
+      // entitlement that has already been granted, just log so an operator
+      // can unstick the bot manually.
+      if (session.metadata?.bot_id && session.metadata?.school_id) {
         try {
           await resumeBotAfterGradePayment(session.metadata.bot_id, session.metadata.school_id);
         } catch (resumeErr) {
@@ -360,7 +381,7 @@ async function createDynamicGradeCheckout(
     success_url: `${config.frontendUrl}/payment/success?session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${config.frontendUrl}/payment/cancel`,
   }, {
-    idempotencyKey: `checkout-${botId}-${schoolId}-${grade}-${Math.floor(Date.now() / 60000)}`,
+    idempotencyKey: `checkout-${purchase!.id}`,
   });
 
   await query('UPDATE purchases SET stripe_session_id = $1 WHERE id = $2', [session.id, purchase!.id]);
@@ -537,7 +558,7 @@ export async function createBulkGradeCheckout(
     success_url: `${config.frontendUrl}/payment/success?session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${config.frontendUrl}/payment/cancel`,
   }, {
-    idempotencyKey: `checkout-bulk-${botId}-${schoolId}-${gradesKey}-${Math.floor(Date.now() / 60000)}`,
+    idempotencyKey: `checkout-bulk-${purchase!.id}`,
   });
 
   await query('UPDATE purchases SET stripe_session_id = $1 WHERE id = $2', [session.id, purchase!.id]);

@@ -268,6 +268,12 @@ CREATE TABLE purchases (
   created_at        TIMESTAMPTZ DEFAULT NOW()
 );
 CREATE INDEX idx_purchases_user ON purchases(user_id, created_at DESC);
+-- Stripe payment intents are 1:1 with purchases; UNIQUE prevents a second
+-- purchase row from claiming the same intent, and the index speeds up the
+-- refund webhook's lookup by stripe_payment_id.
+CREATE UNIQUE INDEX idx_purchases_stripe_payment_id
+  ON purchases(stripe_payment_id)
+  WHERE stripe_payment_id IS NOT NULL;
 
 CREATE TABLE user_entitlements (
   id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -568,6 +574,12 @@ CREATE TABLE bot_tasks (
     CHECK (status IN ('pending', 'processing', 'completed', 'failed', 'rejected', 'expired')),
   result            JSONB,
   error             TEXT,
+  -- Callback delivery state (migration 0034). null callback_delivered_at
+  -- with callback_url set means the result has not been posted yet.
+  callback_delivered_at    TIMESTAMPTZ,
+  callback_attempts        INT NOT NULL DEFAULT 0,
+  callback_next_attempt_at TIMESTAMPTZ,
+  callback_last_error      TEXT,
   created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
   completed_at      TIMESTAMPTZ
@@ -575,3 +587,13 @@ CREATE TABLE bot_tasks (
 CREATE INDEX idx_bot_tasks_bot ON bot_tasks(bot_id, created_at DESC);
 CREATE INDEX idx_bot_tasks_conversation ON bot_tasks(conversation_id) WHERE conversation_id IS NOT NULL;
 CREATE INDEX idx_bot_tasks_pending ON bot_tasks(bot_id, status) WHERE status = 'pending';
+-- Prevent a second sender from injecting a duplicate turn into an existing
+-- conversation on a bot's inbox.
+CREATE UNIQUE INDEX idx_bot_tasks_conversation_turn_unique
+  ON bot_tasks(bot_id, direction, conversation_id, turn_number)
+  WHERE conversation_id IS NOT NULL;
+CREATE INDEX idx_bot_tasks_callback_pending
+  ON bot_tasks(bot_id, callback_next_attempt_at)
+  WHERE callback_url IS NOT NULL
+    AND callback_delivered_at IS NULL
+    AND callback_next_attempt_at IS NOT NULL;
