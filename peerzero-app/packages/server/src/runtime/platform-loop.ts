@@ -73,7 +73,7 @@ export async function runPlatformCycle(ctx: PlatformCycleContext): Promise<void>
        FROM bots WHERE user_id = $1`,
       [ctx.userId],
     );
-    const userUsed = parseInt(userTotal?.total || '0', 10);
+    const userUsed = Number(userTotal?.total) || 0;
     if (userUsed >= tokenRow.user_daily_token_cap) {
       logger.info({ botId: ctx.botId, userId: ctx.userId, used: userUsed, cap: tokenRow.user_daily_token_cap }, 'User daily token cap reached — skipping platform cycle');
       return;

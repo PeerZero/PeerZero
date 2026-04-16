@@ -186,7 +186,7 @@ export function startWorker(): void {
            FROM bots WHERE user_id = $1`,
           [userId],
         );
-        userDailyTokensUsed = parseInt(userTotal?.total || '0', 10);
+        userDailyTokensUsed = Number(userTotal?.total) || 0;
       }
 
       const ctx: BotContext = {

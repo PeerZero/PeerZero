@@ -25,7 +25,7 @@ export const UpdateBotSchema = z.object({
   cycle_delay_seconds: z.number().int().min(30).max(3600).optional(),
   is_public: z.boolean().optional(),
   mode: z.enum(['school', 'shipped']).optional(),
-  daily_token_cap: z.number().int().min(0).max(100_000_000).nullable().optional(),
+  daily_token_cap: z.number().int().min(10000).max(100_000_000).nullable().optional(),
 }).strict();
 
 // ── API key routes ──────────────────────────────────────────────────────────
