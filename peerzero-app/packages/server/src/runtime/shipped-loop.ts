@@ -76,6 +76,16 @@ async function deliverCallback(callbackUrl: string, taskId: string, result: Reco
 }
 
 export async function runShippedCycle(ctx: BotContext): Promise<void> {
+  // Token cap check — skip cycle if daily limit reached (per-bot or per-user)
+  if (ctx.dailyTokenCap && ctx.dailyTokensUsed >= ctx.dailyTokenCap) {
+    logger.info({ botId: ctx.botId, used: ctx.dailyTokensUsed, cap: ctx.dailyTokenCap }, 'Daily token cap reached — skipping shipped cycle');
+    return;
+  }
+  if (ctx.userDailyTokenCap && ctx.userDailyTokensUsed >= ctx.userDailyTokenCap) {
+    logger.info({ botId: ctx.botId, userId: ctx.userId, used: ctx.userDailyTokensUsed, cap: ctx.userDailyTokenCap }, 'User daily token cap reached — skipping shipped cycle');
+    return;
+  }
+
   const startTime = Date.now();
 
   // 0. Stale lock cleanup — reset tasks stuck in 'processing' for >10 minutes

@@ -121,8 +121,8 @@ router.get('/me', requireAuth, async (req: Request, res: Response) => {
 // ── Profile Management ──
 
 router.patch('/profile', requireAuth, validateBody(UpdateProfileSchema), async (req: Request, res: Response) => {
-  const { display_name, language } = req.body;
-  await updateProfile(req.user!.userId, display_name, language);
+  const { display_name, language, daily_token_cap } = req.body;
+  await updateProfile(req.user!.userId, display_name, language, daily_token_cap);
   const profile = await getUserProfile(req.user!.userId);
   res.json(profile);
 });

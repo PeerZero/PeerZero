@@ -73,15 +73,21 @@ export interface BotContext {
   fastLlmModel: string | null; // Optional fast model for utility tasks (platform replies, skill generation)
   extendedThinking: boolean;   // User opt-in for Claude extended thinking (higher cost, better reasoning)
   cycleNumber: number;
-  dailyTokenCap: number | null;  // User-set daily token cap (null = unlimited)
-  dailyTokensUsed: number;       // Tokens already used today
+  dailyTokenCap: number | null;  // Per-bot daily token cap (null = unlimited)
+  dailyTokensUsed: number;       // Tokens already used today by this bot
+  userDailyTokenCap: number | null; // Per-user daily token cap across all bots (null = unlimited)
+  userDailyTokensUsed: number;     // Tokens used today across all user's bots
   userTimezone: string;          // IANA timezone (e.g. 'America/New_York'), defaults to 'UTC'
 }
 
 export async function runOneCycle(ctx: BotContext): Promise<void> {
-  // Token cap check — skip cycle if daily limit reached
+  // Token cap check — skip cycle if daily limit reached (per-bot or per-user)
   if (ctx.dailyTokenCap && ctx.dailyTokensUsed >= ctx.dailyTokenCap) {
     logger.info({ botId: ctx.botId, used: ctx.dailyTokensUsed, cap: ctx.dailyTokenCap }, 'Daily token cap reached — skipping cycle');
+    return;
+  }
+  if (ctx.userDailyTokenCap && ctx.userDailyTokensUsed >= ctx.userDailyTokenCap) {
+    logger.info({ botId: ctx.botId, userId: ctx.userId, used: ctx.userDailyTokensUsed, cap: ctx.userDailyTokenCap }, 'User daily token cap reached — skipping cycle');
     return;
   }
 

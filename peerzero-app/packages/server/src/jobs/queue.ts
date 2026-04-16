@@ -162,8 +162,9 @@ export function startWorker(): void {
 
       try {
       // Check if bot is still running (also fetch mode, fast model, extended thinking from DB)
-      const bot = await queryOne<{ status: string; mode: string; cycle_count: number; fast_llm_model: string | null; extended_thinking: boolean; cycle_delay_seconds: number; daily_token_cap: number | null; daily_tokens_used: number; daily_tokens_reset_at: string | null; user_timezone: string }>(
-        `SELECT b.status, b.mode, b.cycle_count, b.fast_llm_model, b.extended_thinking, b.cycle_delay_seconds, b.daily_token_cap, b.daily_tokens_used, b.daily_tokens_reset_at, COALESCE(u.timezone, 'UTC') AS user_timezone
+      // Includes user's daily_token_cap for per-user spending limits
+      const bot = await queryOne<{ status: string; mode: string; cycle_count: number; fast_llm_model: string | null; extended_thinking: boolean; cycle_delay_seconds: number; daily_token_cap: number | null; daily_tokens_used: number; daily_tokens_reset_at: string | null; user_timezone: string; user_daily_token_cap: number | null }>(
+        `SELECT b.status, b.mode, b.cycle_count, b.fast_llm_model, b.extended_thinking, b.cycle_delay_seconds, b.daily_token_cap, b.daily_tokens_used, b.daily_tokens_reset_at, COALESCE(u.timezone, 'UTC') AS user_timezone, u.daily_token_cap AS user_daily_token_cap
          FROM bots b JOIN users u ON u.id = b.user_id WHERE b.id = $1`,
         [botId],
       );
@@ -177,6 +178,17 @@ export function startWorker(): void {
       const resetDate = bot.daily_tokens_reset_at ? new Date(bot.daily_tokens_reset_at).toISOString().slice(0, 10) : null;
       const dailyTokensUsed = resetDate === todayStr ? (bot.daily_tokens_used || 0) : 0;
 
+      // Compute per-user aggregate token usage across all bots (only if user has a cap)
+      let userDailyTokensUsed = 0;
+      if (bot.user_daily_token_cap) {
+        const userTotal = await queryOne<{ total: string }>(
+          `SELECT COALESCE(SUM(CASE WHEN daily_tokens_reset_at >= CURRENT_DATE THEN daily_tokens_used ELSE 0 END), 0) AS total
+           FROM bots WHERE user_id = $1`,
+          [userId],
+        );
+        userDailyTokensUsed = parseInt(userTotal?.total || '0', 10);
+      }
+
       const ctx: BotContext = {
         botId,
         userId,
@@ -187,6 +199,8 @@ export function startWorker(): void {
         cycleNumber: (bot.cycle_count || 0) + 1,
         dailyTokenCap: bot.daily_token_cap,
         dailyTokensUsed,
+        userDailyTokenCap: bot.user_daily_token_cap,
+        userDailyTokensUsed,
         userTimezone: bot.user_timezone || 'UTC',
       };
 

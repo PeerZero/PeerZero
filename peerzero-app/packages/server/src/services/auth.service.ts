@@ -198,7 +198,7 @@ function hashToken(token: string): string {
 
 const SUPPORTED_LANGUAGES = ['en', 'es', 'fr', 'de', 'ja', 'ko', 'zh', 'pt', 'it', 'ru', 'ar', 'hi'];
 
-export async function updateProfile(userId: string, displayName?: string, language?: string): Promise<void> {
+export async function updateProfile(userId: string, displayName?: string, language?: string, dailyTokenCap?: number | null): Promise<void> {
   if (displayName !== undefined) {
     if (!displayName || typeof displayName !== 'string' || displayName.trim().length === 0) {
       throw new AppError(400, 'Display name cannot be empty');
@@ -218,6 +218,15 @@ export async function updateProfile(userId: string, displayName?: string, langua
       throw new AppError(400, `Unsupported language. Supported: ${SUPPORTED_LANGUAGES.join(', ')}`);
     }
     await query('UPDATE users SET language = $1, updated_at = NOW() WHERE id = $2', [language, userId]);
+  }
+
+  if (dailyTokenCap !== undefined) {
+    if (dailyTokenCap !== null) {
+      if (typeof dailyTokenCap !== 'number' || !Number.isInteger(dailyTokenCap) || dailyTokenCap < 50000) {
+        throw new AppError(400, 'Daily token cap must be null (unlimited) or at least 50,000');
+      }
+    }
+    await query('UPDATE users SET daily_token_cap = $1, updated_at = NOW() WHERE id = $2', [dailyTokenCap, userId]);
   }
 }
 
@@ -298,8 +307,8 @@ export async function resetPassword(email: string, code: string, newPassword: st
 }
 
 export async function getUserProfile(userId: string) {
-  const user = await queryOne<{ id: string; email: string; display_name: string | null; language: string; email_verified: boolean; created_at: string }>(
-    'SELECT id, email, display_name, language, email_verified, created_at FROM users WHERE id = $1',
+  const user = await queryOne<{ id: string; email: string; display_name: string | null; language: string; email_verified: boolean; daily_token_cap: number | null; created_at: string }>(
+    'SELECT id, email, display_name, language, email_verified, daily_token_cap, created_at FROM users WHERE id = $1',
     [userId],
   );
   if (!user) throw new AppError(404, 'User not found');

@@ -152,41 +152,15 @@ module.exports = async (req, res) => {
 
     if (agentErr || !agent) return res.status(401).json({ error: 'Invalid API key' });
 
-    const { count: realReviewCount, error: reviewCountErr } = await supabase
-      .from('reviews')
-      .select('id', { count: 'exact', head: true })
-      .eq('reviewer_agent_id', agent.id)
-      .eq('passed_quality_gate', true);
-    if (reviewCountErr) log.error('[agents] review count query failed', { agentId: agent.id, err: reviewCountErr.message });
+    // Fetch all 4 profile counts in a single DB round-trip (migration 035 RPC)
+    const { data: counts, error: countsErr } = await supabase.rpc('get_agent_profile_counts', { p_agent_id: agent.id }).single();
+    if (countsErr) log.error('[agents] profile counts RPC failed', { agentId: agent.id, err: countsErr.message });
 
-    const { count: realBountyCount, error: bountyCountErr } = await supabase
-      .from('bounties')
-      .select('id', { count: 'exact', head: true })
-      .eq('challenger_agent_id', agent.id)
-      .eq('is_valid', true);
-    if (bountyCountErr) log.error('[agents] bounty count query failed', { agentId: agent.id, err: bountyCountErr.message });
-
-    const { count: originalPaperCount, error: paperCountErr } = await supabase
-      .from('papers')
-      .select('id', { count: 'exact', head: true })
-      .eq('agent_id', agent.id)
-      .is('parent_paper_id', null)
-      .neq('status', 'removed');
-    if (paperCountErr) log.error('[agents] paper count query failed', { agentId: agent.id, err: paperCountErr.message });
-
-    const { count: revisionCount, error: revisionCountErr } = await supabase
-      .from('papers')
-      .select('id', { count: 'exact', head: true })
-      .eq('agent_id', agent.id)
-      .eq('response_stance', 'revision')
-      .neq('status', 'removed');
-    if (revisionCountErr) log.error('[agents] revision count query failed', { agentId: agent.id, err: revisionCountErr.message });
-
-    const reviews    = realReviewCount || 0;
-    const bounties   = realBountyCount || agent.valid_bounties || 0;
+    const reviews    = Number(counts?.review_count) || 0;
+    const bounties   = Number(counts?.bounty_count) || agent.valid_bounties || 0;
     const credibility = parseFloat(agent.credibility_score) || 0;
-    const papers     = originalPaperCount || 0;
-    const revisions  = revisionCount || 0;
+    const papers     = Number(counts?.paper_count) || 0;
+    const revisions  = Number(counts?.revision_count) || 0;
 
     const maxPapers = credibility >= 175 ? 32 :
       credibility >= 150 ? 16 :
