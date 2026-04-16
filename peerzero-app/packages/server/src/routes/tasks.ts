@@ -20,12 +20,27 @@ import { validateExternalUrl } from '../lib/url-validation';
 import { logger } from '../lib/logger';
 import rateLimit from 'express-rate-limit';
 
+// Global per-IP limit on incoming tasks — prevents one sender from hammering
+// the endpoint across many targets.
 const incomingTaskLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 30,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many incoming tasks. Try again later.' },
+});
+
+// Per-target-bot limit on incoming tasks — prevents a distributed sender fleet
+// from flooding one bot's inbox even if each sender stays under the per-IP
+// limit above. The two work together: per-IP stops one actor fanning out,
+// per-bot stops many actors converging on one target.
+const incomingTaskPerBotLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => `bot:${req.params.id}`,
+  message: { error: 'This bot is receiving too many tasks right now. Try again later.' },
 });
 
 // Phone-home endpoints — self-hosted bots polling for directives and reporting progress
@@ -40,7 +55,7 @@ const phoneHomeLimiter = rateLimit({
 const router = Router();
 
 // ── Incoming task (from another agent — HMAC auth if secret configured) ──
-router.post('/:id/tasks/incoming', incomingTaskLimiter, validateBody(IncomingTaskSchema), async (req: Request, res: Response) => {
+router.post('/:id/tasks/incoming', incomingTaskLimiter, incomingTaskPerBotLimiter, validateBody(IncomingTaskSchema), async (req: Request, res: Response) => {
   // Verify bot exists and is in shipped mode
   const bot = await botService.getBotById(req.params.id) as Record<string, unknown> | null;
   if (!bot) {
@@ -213,14 +228,29 @@ router.post('/:id/tasks/send', requireAuth, userRateLimit('write'), async (req: 
     res.status(400).json({ error: 'payload must be a JSON object' });
     return;
   }
-  if (deadline !== undefined && (typeof deadline !== 'string' || isNaN(Date.parse(deadline)))) {
-    res.status(400).json({ error: 'deadline must be a valid ISO 8601 date string' });
-    return;
+  if (deadline !== undefined) {
+    if (typeof deadline !== 'string' || isNaN(Date.parse(deadline))) {
+      res.status(400).json({ error: 'deadline must be a valid ISO 8601 date string' });
+      return;
+    }
+    // Reject already-past deadlines — otherwise the task sits in 'pending'
+    // just long enough for the shipped loop to expire it, which is a
+    // cheap way to fill someone's inbox.
+    if (Date.parse(deadline) < Date.now()) {
+      res.status(400).json({ error: 'deadline must be in the future' });
+      return;
+    }
   }
   if (conversation_id !== undefined && (typeof conversation_id !== 'string' || conversation_id.length > 200)) {
     res.status(400).json({ error: 'conversation_id must be a string (max 200 chars)' });
     return;
   }
+  // conversation_id is trust-on-first-use: whoever opens a conversation on a
+  // bot pins that id. Senders should use a high-entropy value (UUIDv4 or
+  // 128+ bits of randomness) so a third party can't guess an active id and
+  // inject a forged turn. This is not enforced as a format check here
+  // because external A2A callers may pick their own scheme; weak ids are a
+  // sender-side bug, not a server-side one.
   if (turn_number !== undefined && (typeof turn_number !== 'number' || !Number.isFinite(turn_number) || turn_number < 0)) {
     res.status(400).json({ error: 'turn_number must be a non-negative number' });
     return;

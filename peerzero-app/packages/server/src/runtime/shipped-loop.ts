@@ -53,25 +53,104 @@ async function deliverOutgoingTask(
   }
 }
 
-/** POST a task result to the caller's callback URL. Fire-and-forget. */
+// Callback delivery retry policy. Bumped on each failure; when attempts
+// reach MAX_CALLBACK_ATTEMPTS the task is flagged and retries stop.
+const MAX_CALLBACK_ATTEMPTS = 5;
+/** Exponential backoff: 1m, 2m, 4m, 8m, 16m. */
+function callbackBackoffMs(attempt: number): number {
+  return 60_000 * Math.pow(2, Math.max(0, attempt - 1));
+}
+
+/**
+ * POST a task result to the caller's callback URL and persist the delivery
+ * state. On success, stamps callback_delivered_at. On failure, bumps the
+ * attempt counter and schedules the next retry — the shipped loop picks up
+ * due retries on subsequent cycles via processCallbackRetries().
+ *
+ * The payload includes task_id, which the receiver should treat as the
+ * idempotency key: the same task_id from this server always refers to the
+ * same result, so a receiver seeing it twice can dedupe.
+ */
 async function deliverCallback(callbackUrl: string, taskId: string, result: Record<string, unknown>): Promise<void> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 10000); // 10s timeout
   try {
-    await fetch(callbackUrl, {
+    const response = await fetch(callbackUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ task_id: taskId, result }),
       signal: controller.signal,
     });
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+    await query(
+      `UPDATE bot_tasks SET callback_delivered_at = now(), callback_next_attempt_at = NULL,
+                              callback_last_error = NULL, updated_at = now()
+       WHERE id = $1`,
+      [taskId],
+    );
   } catch (err) {
-    // Callback delivery is best-effort — don't fail the task
+    const errMsg = err instanceof Error ? err.message : String(err);
+    // Persist failure so the shipped loop can retry it on a later cycle.
+    // callback_attempts increments atomically; if the new attempts count
+    // crosses MAX_CALLBACK_ATTEMPTS, stop scheduling retries.
+    const row = await queryOne<{ callback_attempts: number }>(
+      `UPDATE bot_tasks
+         SET callback_attempts        = callback_attempts + 1,
+             callback_last_error      = $2,
+             callback_next_attempt_at = CASE
+               WHEN callback_attempts + 1 >= $3 THEN NULL
+               ELSE now() + ($4 || ' milliseconds')::interval
+             END,
+             updated_at = now()
+       WHERE id = $1
+       RETURNING callback_attempts`,
+      [taskId, errMsg.slice(0, 500), MAX_CALLBACK_ATTEMPTS, String(callbackBackoffMs(1))],
+    );
+    // If we already know the new attempt count, recompute the real backoff
+    // (the UPDATE above used the "first failure" backoff because we didn't
+    // know attempts yet — this second write makes the schedule correct).
+    if (row && row.callback_attempts > 1 && row.callback_attempts < MAX_CALLBACK_ATTEMPTS) {
+      await query(
+        `UPDATE bot_tasks
+           SET callback_next_attempt_at = now() + ($2 || ' milliseconds')::interval
+         WHERE id = $1 AND callback_delivered_at IS NULL`,
+        [taskId, String(callbackBackoffMs(row.callback_attempts))],
+      );
+    }
     logger.warn(
-      { taskId, callbackUrl, err: err instanceof Error ? err.message : err },
-      'Failed to deliver task callback',
+      { taskId, callbackUrl, err: errMsg, attempt: row?.callback_attempts ?? '?' },
+      'Failed to deliver task callback — will retry',
     );
   } finally {
     clearTimeout(timeout);
+  }
+}
+
+/**
+ * Retry any previously-failed callbacks that are due. Called once per
+ * shipped cycle, before new task processing, so transient delivery errors
+ * on the last cycle get a fresh chance this cycle.
+ */
+async function processCallbackRetries(botId: string): Promise<void> {
+  const due = await queryRows<{ id: string; callback_url: string; result: Record<string, unknown> | null }>(
+    `SELECT id, callback_url, result
+     FROM bot_tasks
+     WHERE bot_id = $1
+       AND callback_url IS NOT NULL
+       AND callback_delivered_at IS NULL
+       AND callback_next_attempt_at IS NOT NULL
+       AND callback_next_attempt_at <= now()
+       AND callback_attempts < $2
+     ORDER BY callback_next_attempt_at ASC
+     LIMIT 10`,
+    [botId, MAX_CALLBACK_ATTEMPTS],
+  );
+  for (const row of due) {
+    // result is non-null for tasks that successfully processed — deliverCallback
+    // tolerates a missing result by posting an empty object.
+    await deliverCallback(row.callback_url, row.id, row.result || {});
   }
 }
 
@@ -94,6 +173,13 @@ export async function runShippedCycle(ctx: BotContext): Promise<void> {
      WHERE bot_id = $1 AND status = 'processing' AND updated_at < now() - INTERVAL '10 minutes'`,
     [ctx.botId],
   );
+
+  // 0a. Retry any due callbacks that previously failed delivery. Running this
+  // before new task processing ensures transient callback failures don't
+  // starve when a later cycle is busy with new work.
+  await processCallbackRetries(ctx.botId).catch((err) => {
+    logger.warn({ botId: ctx.botId, err: err instanceof Error ? err.message : err }, 'Callback retry sweep failed');
+  });
 
   // 1. Process pending incoming tasks
   const pendingTasks = await queryRows<{

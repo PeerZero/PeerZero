@@ -39,7 +39,15 @@ const mockQueryRows = vi.fn().mockResolvedValue([]);
 vi.mock('../../db/client', () => ({
   query: (...args: any[]) => mockQuery(...args),
   queryOne: (...args: any[]) => mockQueryOne(...args),
-  queryRows: (...args: any[]) => mockQueryRows(...args),
+  // The callback-retry sweep fires a queryRows before incoming-task
+  // processing (migration 0034). Short-circuit it here so tests that use
+  // mockResolvedValueOnce to seed the task list don't get their value
+  // consumed by the retry-sweep SELECT.
+  queryRows: (...args: any[]) => {
+    const sql = String(args[0] || '');
+    if (sql.includes('callback_delivered_at IS NULL')) return Promise.resolve([]);
+    return mockQueryRows(...args);
+  },
 }));
 
 // Mock global fetch for callback delivery
