@@ -115,7 +115,10 @@ async function cacheBotVoice(
       [botId],
     );
   } catch (err) {
-    logger.debug({ err: err instanceof Error ? err.message : err, botId }, 'Voice cache write/cleanup failed');
+    // Voice cache is user-facing (milestone messages in the bot's own voice);
+    // warn so a sustained DB-write failure is visible to operators instead
+    // of being swallowed at debug level.
+    logger.warn({ err: err instanceof Error ? err.message : err, botId }, 'Voice cache write/cleanup failed — milestone message not cached');
   }
 }
 

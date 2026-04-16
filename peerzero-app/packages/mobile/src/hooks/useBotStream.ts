@@ -95,6 +95,10 @@ async function refreshAccessToken(): Promise<string | null> {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ refresh_token: refreshToken }),
+      // 10s timeout — matches api.ts's tryRefresh. Without this, a slow
+      // auth server blocks WebSocket reconnection indefinitely, so the
+      // activity stream never recovers after a network blip.
+      signal: AbortSignal.timeout(10000),
     });
 
     if (!res.ok) return null;
