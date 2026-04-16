@@ -138,6 +138,12 @@ export async function handleStripeWebhook(event: Stripe.Event): Promise<void> {
         if (!product) {
           // Abort the transaction — we don't want to mark the purchase
           // completed without a product to grant the entitlement for.
+          // Log before throw so the operator sees the purchase/product ids
+          // even when the error surfaces through the tx-rollback path.
+          logger.error(
+            { purchaseId, productId: purchase.product_id, userId: purchase.user_id },
+            'Stripe webhook: product lookup failed during checkout processing — rolling back',
+          );
           throw new Error(`Stripe webhook: product ${purchase.product_id} not found for purchase ${purchaseId}`);
         }
 

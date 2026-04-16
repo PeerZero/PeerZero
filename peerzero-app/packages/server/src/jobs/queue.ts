@@ -213,7 +213,7 @@ export function startWorker(): void {
         // Reset failure counter on success (persisted in DB to survive restarts)
         await query('UPDATE bots SET consecutive_failures = 0 WHERE id = $1', [botId]);
       } catch (err) {
-        logger.error({ botId, err }, 'Bot cycle failed');
+        logger.error({ botId, mode: botMode, err }, 'Bot cycle failed');
         const errorMsg = err instanceof Error ? err.message : String(err);
 
         // Immediately stop on auth errors

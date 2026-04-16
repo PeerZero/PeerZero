@@ -71,7 +71,7 @@ function callbackBackoffMs(attempt: number): number {
  * idempotency key: the same task_id from this server always refers to the
  * same result, so a receiver seeing it twice can dedupe.
  */
-async function deliverCallback(callbackUrl: string, taskId: string, result: Record<string, unknown>): Promise<void> {
+async function deliverCallback(botId: string, callbackUrl: string, taskId: string, result: Record<string, unknown>): Promise<void> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 10000); // 10s timeout
   try {
@@ -120,7 +120,7 @@ async function deliverCallback(callbackUrl: string, taskId: string, result: Reco
       );
     }
     logger.warn(
-      { taskId, callbackUrl, err: errMsg, attempt: row?.callback_attempts ?? '?' },
+      { botId, taskId, callbackUrl, err: errMsg, attempt: row?.callback_attempts ?? '?' },
       'Failed to deliver task callback — will retry',
     );
   } finally {
@@ -150,7 +150,7 @@ async function processCallbackRetries(botId: string): Promise<void> {
   for (const row of due) {
     // result is non-null for tasks that successfully processed — deliverCallback
     // tolerates a missing result by posting an empty object.
-    await deliverCallback(row.callback_url, row.id, row.result || {});
+    await deliverCallback(botId, row.callback_url, row.id, row.result || {});
   }
 }
 
@@ -334,7 +334,7 @@ export async function runShippedCycle(ctx: BotContext): Promise<void> {
 
         // Deliver callback if set
         if (task.callback_url) {
-          await deliverCallback(task.callback_url, task.id, taskResult);
+          await deliverCallback(ctx.botId, task.callback_url, task.id, taskResult);
         }
 
         // Narrate the result to the user's chat feed
