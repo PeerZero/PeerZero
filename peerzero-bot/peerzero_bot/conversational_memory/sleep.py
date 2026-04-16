@@ -73,6 +73,12 @@ class SleepConsolidation:
             "DELETE FROM l2_observations WHERE node_id NOT IN (SELECT id FROM nodes)"
         )
 
+        # Clean superseded L2 observations — these have been replaced by newer
+        # enriched portraits and accumulate without bound otherwise
+        conn.execute(
+            "DELETE FROM l2_observations WHERE superseded_by IS NOT NULL"
+        )
+
         # ── 2b. Delete orphan nodes (no remaining edges for N days) ─
         # A node whose every connecting edge has decayed away is isolated —
         # nothing links to it, nothing links from it. If it's been orphaned
@@ -178,7 +184,18 @@ class SleepConsolidation:
                     f'(co-occurrence: {c["co_occurrence_count"]}, edge: {c["edge_weight"]:.2f})'
                 )
 
-        # ── 7. Prune log tables (keep most recent 500 rows each) ───
+        # ── 7. Prune condensed L1 interactions older than 30 days ───
+        thirty_days_ms = 30 * 24 * 60 * 60 * 1000
+        l1_cutoff = int(time.time() * 1000) - thirty_days_ms
+        try:
+            conn.execute(
+                "DELETE FROM l1_interactions WHERE condensed = 1 AND created_at < ?",
+                (l1_cutoff,),
+            )
+        except Exception as e:
+            logger.warning(f"[sleep] L1 interactions cleanup failed: {e}")
+
+        # ── 8. Prune log tables (keep most recent 500 rows each) ───
         _LOG_ROW_CAP = 500
         for table in ("conviction_log", "condensation_log", "sleep_log"):
             try:

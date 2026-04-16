@@ -197,6 +197,7 @@ class ConversationalMemoryDB:
         # Performance pragmas
         self._conn.execute("PRAGMA journal_mode = WAL")
         self._conn.execute("PRAGMA synchronous = NORMAL")
+        self._conn.execute("PRAGMA busy_timeout = 30000")
         self._conn.execute("PRAGMA foreign_keys = ON")
         self._conn.execute("PRAGMA mmap_size = 67108864")  # 64MB mmap (was 256MB — reduced to prevent memory exhaustion at scale)
 

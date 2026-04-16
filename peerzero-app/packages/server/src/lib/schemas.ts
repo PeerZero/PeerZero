@@ -25,7 +25,7 @@ export const UpdateBotSchema = z.object({
   cycle_delay_seconds: z.number().int().min(30).max(3600).optional(),
   is_public: z.boolean().optional(),
   mode: z.enum(['school', 'shipped']).optional(),
-  daily_token_cap: z.number().int().min(0).max(100_000_000).nullable().optional(),
+  daily_token_cap: z.number().int().min(10000).max(100_000_000).nullable().optional(),
 }).strict();
 
 // ── API key routes ──────────────────────────────────────────────────────────
@@ -125,9 +125,10 @@ export const GradeCheckoutSchema = z.object({
 export const UpdateProfileSchema = z.object({
   display_name: z.string().min(1).max(100).optional(),
   language: z.string().min(2).max(10).optional(),
+  daily_token_cap: z.union([z.null(), z.number().int().min(50000).max(100000000)]).optional(),
 }).strict().refine(
-  (data) => data.display_name !== undefined || data.language !== undefined,
-  { message: 'At least one of display_name or language is required' },
+  (data) => data.display_name !== undefined || data.language !== undefined || data.daily_token_cap !== undefined,
+  { message: 'At least one of display_name, language, or daily_token_cap is required' },
 );
 
 // ── Auth routes ──────────────────────────────────────────────────────────

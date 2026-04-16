@@ -363,11 +363,12 @@ module.exports = async (req, res) => {
     try {
       const { reviewerWeight } = require('../lib/review-helpers');
       const PAGE_SIZE = 1000;
+      const MAX_PAGES = 200; // Defense-in-depth: cap pagination at 200K rows
 
       // Fetch all non-removed papers with a weighted_score
       let papers = [];
       let off = 0;
-      while (true) {
+      for (let _page = 0; _page < MAX_PAGES; _page++) {
         const { data: page, error } = await supabase.from('papers')
           .select('id, weighted_score, raw_review_count')
           .neq('status', 'removed')
@@ -383,7 +384,7 @@ module.exports = async (req, res) => {
       // Fetch all quality-gate-passed reviews with scores and credibility
       let reviews = [];
       off = 0;
-      while (true) {
+      for (let _page = 0; _page < MAX_PAGES; _page++) {
         const { data: page, error } = await supabase.from('reviews')
           .select('paper_id, score, reviewer_credibility_at_time')
           .eq('passed_quality_gate', true)
@@ -510,9 +511,10 @@ module.exports = async (req, res) => {
   if (action === 'check_skill_integrity') {
     try {
       const PAGE_SIZE = 1000;
+      const MAX_PAGES = 200;
       let profiles = [];
       let off = 0;
-      while (true) {
+      for (let _page = 0; _page < MAX_PAGES; _page++) {
         const { data: page, error } = await supabase.from('agent_skill_profiles')
           .select('id, agent_id, skill_key, reps, hits, reliability, strength, streak, best_streak')
           .range(off, off + PAGE_SIZE - 1);
@@ -621,9 +623,10 @@ module.exports = async (req, res) => {
   try {
     // ── Step 1: Fetch all agents (paginated) ──────────────────────────
     const PAGE_SIZE = 1000;
+    const MAX_PAGES = 200;
     let allAgents = [];
     let offset = 0;
-    while (true) {
+    for (let _page = 0; _page < MAX_PAGES; _page++) {
       const { data: page, error: pageErr } = await supabase
         .from('agents')
         .select('id, total_papers_submitted, total_reviews_completed, best_paper_score, original_paper_count, revision_count, valid_bounties')
@@ -648,7 +651,7 @@ module.exports = async (req, res) => {
     async function fetchAll(table, selectStr, filters) {
       let all = [];
       let off = 0;
-      while (true) {
+      for (let _page = 0; _page < MAX_PAGES; _page++) {
         let q = supabase.from(table).select(selectStr).range(off, off + PAGE_SIZE - 1);
         if (filters) q = filters(q);
         const { data, error } = await q;

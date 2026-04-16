@@ -73,15 +73,21 @@ export interface BotContext {
   fastLlmModel: string | null; // Optional fast model for utility tasks (platform replies, skill generation)
   extendedThinking: boolean;   // User opt-in for Claude extended thinking (higher cost, better reasoning)
   cycleNumber: number;
-  dailyTokenCap: number | null;  // User-set daily token cap (null = unlimited)
-  dailyTokensUsed: number;       // Tokens already used today
+  dailyTokenCap: number | null;  // Per-bot daily token cap (null = unlimited)
+  dailyTokensUsed: number;       // Tokens already used today by this bot
+  userDailyTokenCap: number | null; // Per-user daily token cap across all bots (null = unlimited)
+  userDailyTokensUsed: number;     // Tokens used today across all user's bots
   userTimezone: string;          // IANA timezone (e.g. 'America/New_York'), defaults to 'UTC'
 }
 
 export async function runOneCycle(ctx: BotContext): Promise<void> {
-  // Token cap check — skip cycle if daily limit reached
+  // Token cap check — skip cycle if daily limit reached (per-bot or per-user)
   if (ctx.dailyTokenCap && ctx.dailyTokensUsed >= ctx.dailyTokenCap) {
     logger.info({ botId: ctx.botId, used: ctx.dailyTokensUsed, cap: ctx.dailyTokenCap }, 'Daily token cap reached — skipping cycle');
+    return;
+  }
+  if (ctx.userDailyTokenCap && ctx.userDailyTokensUsed >= ctx.userDailyTokenCap) {
+    logger.info({ botId: ctx.botId, userId: ctx.userId, used: ctx.userDailyTokensUsed, cap: ctx.userDailyTokenCap }, 'User daily token cap reached — skipping cycle');
     return;
   }
 
@@ -382,34 +388,43 @@ async function handleCondensation(
   let condensationOccurred: string | null = null;
 
   if (profile.skill_condenser) {
-    // Ask LLM to condense exercises into a Tier 2 paragraph
-    const condensationPrompt = buildPrompt('condense', { profile, type: 'skill' });
-    const response = await llmAdapter.chat(llmKey, utilityModel, condensationPrompt);
+    try {
+      // Ask LLM to condense exercises into a Tier 2 paragraph
+      const condensationPrompt = buildPrompt('condense', { profile, type: 'skill' });
+      const response = await llmAdapter.chat(llmKey, utilityModel, condensationPrompt);
 
-    const parsed = tryParseJson(response.content);
-    if (parsed?.paragraph) {
-      await memory.storeParagraph(ctx.botId, 'condensation', parsed.paragraph as string, ctx.cycleNumber);
-      await schoolAdapter.submitCondensation(schoolCreds, parsed);
-      condensationOccurred = 'skill';
-    } else {
-      logger.warn({ contentSnippet: response.content?.slice(0, 120) }, 'Failed to extract JSON from skill condensation LLM response');
+      const parsed = tryParseJson(response.content);
+      if (parsed?.paragraph) {
+        await memory.storeParagraph(ctx.botId, 'condensation', parsed.paragraph as string, ctx.cycleNumber);
+        await schoolAdapter.submitCondensation(schoolCreds, parsed);
+        condensationOccurred = 'skill';
+      } else {
+        logger.warn({ contentSnippet: response.content?.slice(0, 120) }, 'Failed to extract JSON from skill condensation LLM response');
+      }
+    } catch (skillErr) {
+      logger.warn({ err: skillErr instanceof Error ? skillErr.message : String(skillErr) }, 'Skill condensation failed (non-blocking)');
     }
   }
 
   // Core condensation (Tier 3) happens less frequently
+  // Wrapped in try/catch: core failures should not crash the cycle
   if (profile.core_condenser) {
-    const corePrompt = buildPrompt('condense', { profile, type: 'core' });
-    const response = await llmAdapter.chat(llmKey, utilityModel, corePrompt);
+    try {
+      const corePrompt = buildPrompt('condense', { profile, type: 'core' });
+      const response = await llmAdapter.chat(llmKey, utilityModel, corePrompt);
 
-    const parsed = tryParseJson(response.content);
-    if (parsed?.core_identity) {
-      await memory.storeCore(ctx.botId, parsed.core_identity as string, `cycle-${ctx.cycleNumber}`);
-      // Core identity is a bot-local operation — not submitted to School.
-      // The School tracks L2 paragraphs (via submitCondensation); L3 core
-      // identity lives only in the bot's local memory, matching the Python bot.
-      condensationOccurred = 'core';
-    } else {
-      logger.warn({ contentSnippet: response.content?.slice(0, 120) }, 'Failed to extract JSON from core condensation LLM response');
+      const parsed = tryParseJson(response.content);
+      if (parsed?.core_identity) {
+        await memory.storeCore(ctx.botId, parsed.core_identity as string, `cycle-${ctx.cycleNumber}`);
+        // Core identity is a bot-local operation — not submitted to School.
+        // The School tracks L2 paragraphs (via submitCondensation); L3 core
+        // identity lives only in the bot's local memory, matching the Python bot.
+        condensationOccurred = 'core';
+      } else {
+        logger.warn({ contentSnippet: response.content?.slice(0, 120) }, 'Failed to extract JSON from core condensation LLM response');
+      }
+    } catch (coreErr) {
+      logger.warn({ err: coreErr instanceof Error ? coreErr.message : String(coreErr) }, 'Core condensation failed (non-blocking)');
     }
   }
 
@@ -454,24 +469,29 @@ async function handleCondensation(
   }
 
   // Identity reflection
+  // Wrapped in try/catch: identity reflection failures should not crash the cycle
   if (profile.identity_reflection) {
-    const identityPrompt = buildPrompt('identity', { profile });
-    const response = await llmAdapter.chat(llmKey, utilityModel, identityPrompt);
+    try {
+      const identityPrompt = buildPrompt('identity', { profile });
+      const response = await llmAdapter.chat(llmKey, utilityModel, identityPrompt);
 
-    const parsed = tryParseJson(response.content);
-    if (parsed?.self_narrative) {
-      await memory.storeSelfIdentity(
-        ctx.botId,
-        parsed.self_narrative as string,
-        (parsed.claimed_values as string[]) || [],
-        parsed.active_tensions as string,
-        parsed.formed_convictions as string,
-        profile.identity_core?.version,
-      );
-      await schoolAdapter.submitIdentityReflection(schoolCreds, parsed);
-      condensationOccurred = 'identity';
-    } else {
-      logger.warn({ contentSnippet: response.content?.slice(0, 120) }, 'Failed to extract JSON from identity reflection LLM response');
+      const parsed = tryParseJson(response.content);
+      if (parsed?.self_narrative) {
+        await memory.storeSelfIdentity(
+          ctx.botId,
+          parsed.self_narrative as string,
+          (parsed.claimed_values as string[]) || [],
+          parsed.active_tensions as string,
+          parsed.formed_convictions as string,
+          profile.identity_core?.version,
+        );
+        await schoolAdapter.submitIdentityReflection(schoolCreds, parsed);
+        condensationOccurred = 'identity';
+      } else {
+        logger.warn({ contentSnippet: response.content?.slice(0, 120) }, 'Failed to extract JSON from identity reflection LLM response');
+      }
+    } catch (identityErr) {
+      logger.warn({ err: identityErr instanceof Error ? identityErr.message : String(identityErr) }, 'Identity reflection failed (non-blocking)');
     }
   }
 

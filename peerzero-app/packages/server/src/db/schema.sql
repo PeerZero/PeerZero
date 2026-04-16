@@ -20,6 +20,8 @@ CREATE TABLE users (
   stripe_customer_id TEXT,
   email_verified  BOOLEAN NOT NULL DEFAULT FALSE,
   email_verification_token_hash TEXT,
+  daily_token_cap INTEGER DEFAULT NULL
+    CONSTRAINT check_user_daily_token_cap CHECK (daily_token_cap IS NULL OR daily_token_cap >= 50000),
   created_at      TIMESTAMPTZ DEFAULT NOW(),
   updated_at      TIMESTAMPTZ DEFAULT NOW()
 );

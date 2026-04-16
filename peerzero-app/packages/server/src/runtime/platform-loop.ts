@@ -53,9 +53,10 @@ export interface PlatformCycleContext {
 }
 
 export async function runPlatformCycle(ctx: PlatformCycleContext): Promise<void> {
-  // 0. Token cap check — skip if daily limit reached (same check as agent-loop)
-  const tokenRow = await queryOne<{ daily_token_cap: number | null; daily_tokens_used: number; daily_tokens_reset_at: string | null }>(
-    'SELECT daily_token_cap, daily_tokens_used, daily_tokens_reset_at FROM bots WHERE id = $1',
+  // 0. Token cap check — skip if daily limit reached (per-bot or per-user)
+  const tokenRow = await queryOne<{ daily_token_cap: number | null; daily_tokens_used: number; daily_tokens_reset_at: string | null; user_daily_token_cap: number | null }>(
+    `SELECT b.daily_token_cap, b.daily_tokens_used, b.daily_tokens_reset_at, u.daily_token_cap AS user_daily_token_cap
+     FROM bots b JOIN users u ON u.id = b.user_id WHERE b.id = $1`,
     [ctx.botId],
   );
   if (tokenRow?.daily_token_cap) {
@@ -63,6 +64,18 @@ export async function runPlatformCycle(ctx: PlatformCycleContext): Promise<void>
     const used = isStale ? 0 : tokenRow.daily_tokens_used;
     if (used >= tokenRow.daily_token_cap) {
       logger.info({ botId: ctx.botId, used, cap: tokenRow.daily_token_cap }, 'Daily token cap reached — skipping platform cycle');
+      return;
+    }
+  }
+  if (tokenRow?.user_daily_token_cap) {
+    const userTotal = await queryOne<{ total: string }>(
+      `SELECT COALESCE(SUM(CASE WHEN daily_tokens_reset_at >= CURRENT_DATE THEN daily_tokens_used ELSE 0 END), 0) AS total
+       FROM bots WHERE user_id = $1`,
+      [ctx.userId],
+    );
+    const userUsed = Number(userTotal?.total) || 0;
+    if (userUsed >= tokenRow.user_daily_token_cap) {
+      logger.info({ botId: ctx.botId, userId: ctx.userId, used: userUsed, cap: tokenRow.user_daily_token_cap }, 'User daily token cap reached — skipping platform cycle');
       return;
     }
   }
@@ -141,7 +154,7 @@ export async function runPlatformCycle(ctx: PlatformCycleContext): Promise<void>
         action = JSON.parse(llmResponse.content) as PlatformAction;
       } catch {
         logger.error({ platform: platCreds.platformName }, 'Failed to parse LLM platform action response');
-        await updatePlatformCycleStatus(ctx.platformId, 'active');
+        await updatePlatformCycleStatus(ctx.platformId, 'error', 'LLM response was not valid JSON');
         return;
       }
       if ((action as unknown as Record<string, unknown>).skip) {

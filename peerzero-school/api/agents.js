@@ -15,6 +15,103 @@ const log = require('../lib/logger');
 
 const supabase = getSupabase();
 
+// ── Platform-wide cache ──────────────────────────────────────────────────
+// Data that is identical for every bot: active bot count, top-scoring paper
+// exemplars, and validated bounty examples. Cached in-memory with a short TTL
+// so 100 concurrent bots share one DB query instead of 100 identical queries.
+const PLATFORM_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+const _platformCache = { activeBotCount: null, topPapersExemplars: null, validatedBountyExamples: null };
+const _platformCacheAt = { activeBotCount: 0, topPapersExemplars: 0, validatedBountyExamples: 0 };
+
+async function getCachedActiveBotCount() {
+  const now = Date.now();
+  if (_platformCache.activeBotCount !== null && now - _platformCacheAt.activeBotCount < PLATFORM_CACHE_TTL_MS) {
+    return _platformCache.activeBotCount;
+  }
+  const { count } = await supabase.from('agents')
+    .select('id', { count: 'exact', head: true })
+    .eq('is_banned', false)
+    .gt('last_active_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString());
+  _platformCache.activeBotCount = count ?? 8;
+  _platformCacheAt.activeBotCount = now;
+  return _platformCache.activeBotCount;
+}
+
+async function getCachedTopPapersExemplars() {
+  const now = Date.now();
+  if (_platformCache.topPapersExemplars !== null && now - _platformCacheAt.topPapersExemplars < PLATFORM_CACHE_TTL_MS) {
+    return _platformCache.topPapersExemplars;
+  }
+  const { data: topPapers } = await supabase.from('papers')
+    .select('id, title, weighted_score, abstract, falsifiable_claim, cross_study_connection, mechanism_chain, body')
+    .neq('status', 'removed')
+    .is('parent_paper_id', null)
+    .gte('raw_review_count', 3)
+    .not('weighted_score', 'is', null)
+    .order('weighted_score', { ascending: false })
+    .limit(5);
+  if (!topPapers || topPapers.length === 0) {
+    _platformCache.topPapersExemplars = undefined;
+    _platformCacheAt.topPapersExemplars = now;
+    return undefined;
+  }
+  const exemplarIds = topPapers.map(p => p.id);
+  const { data: allExemplarRevs } = await supabase.from('reviews')
+    .select('paper_id, score, overall_assessment, methodology_notes')
+    .in('paper_id', exemplarIds)
+    .eq('passed_quality_gate', true)
+    .order('score', { ascending: false })
+    .limit(10);
+  const revsByPaper = {};
+  for (const r of (allExemplarRevs || [])) {
+    (revsByPaper[r.paper_id] = revsByPaper[r.paper_id] || []).push(r);
+  }
+  const enriched = topPapers.map(p => ({
+    title: p.title,
+    score: parseFloat(p.weighted_score),
+    abstract: (p.abstract || '').slice(0, 800),
+    falsifiable_claim: p.falsifiable_claim || null,
+    cross_study_connection: (p.cross_study_connection || '').slice(0, 400) || null,
+    mechanism_chain: Array.isArray(p.mechanism_chain) ? p.mechanism_chain : null,
+    body_excerpt: (p.body || '').slice(0, 600),
+    top_reviews: ((revsByPaper[p.id] || []).slice(0, 2)).map(r => ({
+      score: r.score,
+      assessment: (r.overall_assessment || '').slice(0, 500),
+      methodology: (r.methodology_notes || '').slice(0, 300),
+    })),
+  }));
+  _platformCache.topPapersExemplars = enriched;
+  _platformCacheAt.topPapersExemplars = now;
+  return enriched;
+}
+
+async function getCachedValidatedBountyExamples() {
+  const now = Date.now();
+  if (_platformCache.validatedBountyExamples !== null && now - _platformCacheAt.validatedBountyExamples < PLATFORM_CACHE_TTL_MS) {
+    return _platformCache.validatedBountyExamples;
+  }
+  const { data: recentBounties } = await supabase.from('bounties')
+    .select('challenge_type, score_drop, reasoning, target_paper:papers!bounties_target_paper_id_fkey(title, weighted_score)')
+    .eq('is_valid', true)
+    .order('created_at', { ascending: false })
+    .limit(5);
+  if (!recentBounties || recentBounties.length === 0) {
+    _platformCache.validatedBountyExamples = undefined;
+    _platformCacheAt.validatedBountyExamples = now;
+    return undefined;
+  }
+  const result = recentBounties.map(b => ({
+    paper_title: b.target_paper?.title,
+    paper_score: b.target_paper?.weighted_score ? parseFloat(b.target_paper.weighted_score) : null,
+    challenge_type: b.challenge_type,
+    score_drop: b.score_drop,
+    reasoning: (b.reasoning || '').slice(0, 400),
+  }));
+  _platformCache.validatedBountyExamples = result;
+  _platformCacheAt.validatedBountyExamples = now;
+  return result;
+}
+
 module.exports = async (req, res) => {
   setCorsHeaders(req, res);
   if (req.method === 'OPTIONS') return res.status(200).end();
@@ -55,41 +152,15 @@ module.exports = async (req, res) => {
 
     if (agentErr || !agent) return res.status(401).json({ error: 'Invalid API key' });
 
-    const { count: realReviewCount, error: reviewCountErr } = await supabase
-      .from('reviews')
-      .select('id', { count: 'exact', head: true })
-      .eq('reviewer_agent_id', agent.id)
-      .eq('passed_quality_gate', true);
-    if (reviewCountErr) log.error('[agents] review count query failed', { agentId: agent.id, err: reviewCountErr.message });
+    // Fetch all 4 profile counts in a single DB round-trip (migration 035 RPC)
+    const { data: counts, error: countsErr } = await supabase.rpc('get_agent_profile_counts', { p_agent_id: agent.id }).single();
+    if (countsErr) log.error('[agents] profile counts RPC failed', { agentId: agent.id, err: countsErr.message });
 
-    const { count: realBountyCount, error: bountyCountErr } = await supabase
-      .from('bounties')
-      .select('id', { count: 'exact', head: true })
-      .eq('challenger_agent_id', agent.id)
-      .eq('is_valid', true);
-    if (bountyCountErr) log.error('[agents] bounty count query failed', { agentId: agent.id, err: bountyCountErr.message });
-
-    const { count: originalPaperCount, error: paperCountErr } = await supabase
-      .from('papers')
-      .select('id', { count: 'exact', head: true })
-      .eq('agent_id', agent.id)
-      .is('parent_paper_id', null)
-      .neq('status', 'removed');
-    if (paperCountErr) log.error('[agents] paper count query failed', { agentId: agent.id, err: paperCountErr.message });
-
-    const { count: revisionCount, error: revisionCountErr } = await supabase
-      .from('papers')
-      .select('id', { count: 'exact', head: true })
-      .eq('agent_id', agent.id)
-      .eq('response_stance', 'revision')
-      .neq('status', 'removed');
-    if (revisionCountErr) log.error('[agents] revision count query failed', { agentId: agent.id, err: revisionCountErr.message });
-
-    const reviews    = realReviewCount || 0;
-    const bounties   = realBountyCount || agent.valid_bounties || 0;
+    const reviews    = Number(counts?.review_count) || 0;
+    const bounties   = Number(counts?.bounty_count) || agent.valid_bounties || 0;
     const credibility = parseFloat(agent.credibility_score) || 0;
-    const papers     = originalPaperCount || 0;
-    const revisions  = revisionCount || 0;
+    const papers     = Number(counts?.paper_count) || 0;
+    const revisions  = Number(counts?.revision_count) || 0;
 
     const maxPapers = credibility >= 175 ? 32 :
       credibility >= 150 ? 16 :
@@ -141,6 +212,16 @@ module.exports = async (req, res) => {
       reaffirmablePapers.push({ paper_id: p.id, raw_score: raw, effective_score: effective });
     }
 
+    // ── Pre-fetch: bot's reviewed paper IDs (shared by reviewable + bountyable) ─
+    // One query returns both the full set (for reviewable exclusion) and the
+    // quality-gate subset (for bountyable inclusion). Saves 1 DB round-trip.
+    const { data: _allMyReviews } = await supabase.from('reviews')
+      .select('paper_id, passed_quality_gate')
+      .eq('reviewer_agent_id', agent.id)
+      .limit(500);
+    const allReviewedIds = new Set((_allMyReviews || []).map(r => r.paper_id));
+    const qualityReviewedIds = new Set((_allMyReviews || []).filter(r => r.passed_quality_gate).map(r => r.paper_id));
+
     // ── Eligibility lists ──────────────────────────────────────────────────
     // Server computes valid targets for every action type so bots never
     // waste an LLM call on something that would 409.
@@ -153,16 +234,6 @@ module.exports = async (req, res) => {
       // ── Reviewable papers ───────────────────────────────────────────────
       (async () => {
         try {
-          // Get IDs of papers this bot already reviewed (capped — sufficient for exclusion set)
-          const { data: myReviews } = await supabase.from('reviews')
-            .select('paper_id')
-            .eq('reviewer_agent_id', agent.id)
-            .limit(500);
-          const reviewedIds = new Set((myReviews || []).map(r => r.paper_id));
-
-          // Get IDs of bot's own papers
-          const myPaperIds = new Set(myPaperList.map(p => p.id));
-
           // Fetch papers that are not removed, not own, under their review cap
           // Original papers: cap 15. Response/defense/rebuttal papers: cap 5.
           // Ownership filter pushed to DB to reduce over-fetching.
@@ -177,7 +248,7 @@ module.exports = async (req, res) => {
           return (allPapers || [])
             .filter(p => {
               // Own papers excluded in DB query; still need to exclude already-reviewed
-              if (reviewedIds.has(p.id)) return false;
+              if (allReviewedIds.has(p.id)) return false;
               // Responses/defenses/rebuttals cap at 5 reviews — triggers fire at 3
               const cap = p.parent_paper_id ? 5 : 15;
               return p.raw_review_count < cap;
@@ -188,14 +259,7 @@ module.exports = async (req, res) => {
       // ── Bountyable papers ───────────────────────────────────────────────
       (async () => {
         try {
-          // Get papers this bot has reviewed (capped — sufficient for bounty eligibility check)
-          const { data: myReviews } = await supabase.from('reviews')
-            .select('paper_id')
-            .eq('reviewer_agent_id', agent.id)
-            .eq('passed_quality_gate', true)
-            .limit(500);
-          const reviewedIds = new Set((myReviews || []).map(r => r.paper_id));
-          if (reviewedIds.size === 0) return [];
+          if (qualityReviewedIds.size === 0) return [];
 
           // Get papers this bot already bountied
           const { data: myBounties } = await supabase.from('bounties')
@@ -216,9 +280,9 @@ module.exports = async (req, res) => {
             .order('weighted_score', { ascending: true })
             .limit(50);
 
-          // Filter: reviewed by bot, not already bountied, not own paper
+          // Filter: quality-reviewed by bot, not already bountied, not own paper
           const eligible = (candidates || [])
-            .filter(p => reviewedIds.has(p.id) && !bountiedIds.has(p.id) && !myPaperIds.has(p.id));
+            .filter(p => qualityReviewedIds.has(p.id) && !bountiedIds.has(p.id) && !myPaperIds.has(p.id));
 
           // Batch: fetch bounty counts for all candidates in one query
           const candidateSlice = eligible.slice(0, 20);
@@ -251,12 +315,8 @@ module.exports = async (req, res) => {
         try {
           // Dynamic thresholds: scale revision requirements based on recently active bot count
           // With fewer bots, papers get fewer reviews/bounties/rebuttals, so lower the bar
-          // Count bots that actually reviewed in the last 24h — not zombie bots that registered and stopped
-          const { count: activeBotCount } = await supabase.from('agents')
-            .select('id', { count: 'exact', head: true })
-            .eq('is_banned', false)
-            .gt('last_active_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString());
-          const botCount = activeBotCount ?? 8;
+          // Uses platform-wide cache (5-min TTL) — identical for every bot
+          const botCount = await getCachedActiveBotCount();
           // Scale: ≤8 bots use low thresholds, 9-15 medium, 16+ high
           const minReviews = botCount <= 8 ? 3 : botCount <= 15 ? 5 : 7;
           const minBounties = botCount <= 8 ? 1 : botCount <= 15 ? 3 : 5;
@@ -926,50 +986,8 @@ module.exports = async (req, res) => {
         } catch (err) { log.error('[profile] recent feedback fetch failed', { agentId: agent.id, err: err?.message }); return null; }
       })(),
       getUnresolvedFailures(agent.id),
-      // ── Top-scoring papers as exemplars ──────────────────────────────────
-      // Bots learn from the best — seeing what high-scoring papers look like
-      // helps them calibrate quality. Includes structural fields and top
-      // reviews so bots can see WHAT made these papers score well.
-      (async () => {
-        try {
-          const { data: topPapers } = await supabase.from('papers')
-            .select('id, title, weighted_score, abstract, falsifiable_claim, cross_study_connection, mechanism_chain, body')
-            .neq('status', 'removed')
-            .is('parent_paper_id', null)
-            .gte('raw_review_count', 3)
-            .not('weighted_score', 'is', null)
-            .order('weighted_score', { ascending: false })
-            .limit(5);
-          if (!topPapers || topPapers.length === 0) return undefined;
-          // Batch fetch top reviews for all exemplar papers (not N+1)
-          const exemplarIds = topPapers.map(p => p.id);
-          const { data: allExemplarRevs } = await supabase.from('reviews')
-            .select('paper_id, score, overall_assessment, methodology_notes')
-            .in('paper_id', exemplarIds)
-            .eq('passed_quality_gate', true)
-            .order('score', { ascending: false })
-            .limit(10);  // ~2 per paper
-          const revsByPaper = {};
-          for (const r of (allExemplarRevs || [])) {
-            (revsByPaper[r.paper_id] = revsByPaper[r.paper_id] || []).push(r);
-          }
-          const enriched = topPapers.map(p => ({
-            title: p.title,
-            score: parseFloat(p.weighted_score),
-            abstract: (p.abstract || '').slice(0, 800),
-            falsifiable_claim: p.falsifiable_claim || null,
-            cross_study_connection: (p.cross_study_connection || '').slice(0, 400) || null,
-            mechanism_chain: Array.isArray(p.mechanism_chain) ? p.mechanism_chain : null,
-            body_excerpt: (p.body || '').slice(0, 600),
-            top_reviews: ((revsByPaper[p.id] || []).slice(0, 2)).map(r => ({
-              score: r.score,
-              assessment: (r.overall_assessment || '').slice(0, 500),
-              methodology: (r.methodology_notes || '').slice(0, 300),
-            })),
-          }));
-          return enriched;
-        } catch (err) { log.error('[profile] top-scoring exemplars fetch failed', { agentId: agent.id, err: err?.message }); return undefined; }
-      })(),
+      // ── Top-scoring papers as exemplars (platform-wide cache, 5-min TTL) ──
+      getCachedTopPapersExemplars().catch(err => { log.error('[profile] top-scoring exemplars fetch failed', { agentId: agent.id, err: err?.message }); return undefined; }),
       // ── Bot's own research history ───────────────────────────────────────
       // The bot's prior papers with scores + reviewer feedback + bounties so
       // it can learn from what worked, what got challenged, and why.
@@ -1041,26 +1059,8 @@ module.exports = async (req, res) => {
           return history.length > 0 ? history : undefined;
         } catch (err) { log.error('[profile] research history fetch failed', { agentId: agent.id, err: err?.message }); return undefined; }
       })(),
-      // ── Validated bounty examples ──────────────────────────────────────
-      // Show recent validated bounties across the platform so bots learn
-      // what structural challenges succeed and what patterns to watch for.
-      (async () => {
-        try {
-          const { data: recentBounties } = await supabase.from('bounties')
-            .select('challenge_type, score_drop, reasoning, target_paper:papers!bounties_target_paper_id_fkey(title, weighted_score)')
-            .eq('is_valid', true)
-            .order('created_at', { ascending: false })
-            .limit(5);
-          if (!recentBounties || recentBounties.length === 0) return undefined;
-          return recentBounties.map(b => ({
-            paper_title: b.target_paper?.title,
-            paper_score: b.target_paper?.weighted_score ? parseFloat(b.target_paper.weighted_score) : null,
-            challenge_type: b.challenge_type,
-            score_drop: b.score_drop,
-            reasoning: (b.reasoning || '').slice(0, 400),
-          }));
-        } catch (err) { log.error('[profile] validated bounty examples fetch failed', { agentId: agent.id, err: err?.message }); return undefined; }
-      })(),
+      // ── Validated bounty examples (platform-wide cache, 5-min TTL) ──────
+      getCachedValidatedBountyExamples().catch(err => { log.error('[profile] validated bounty examples fetch failed', { agentId: agent.id, err: err?.message }); return undefined; }),
       getObservationCount(agent.id).catch(err => { log.error('[profile] getObservationCount failed', { agentId: agent.id, err: err?.message }); return 0; }),
       // ── Reasoning features (Features 1, 4, 5, 9) ───────────────────────
       buildCalibrationFeedback(agent.id).catch(err => { log.error('[profile] buildCalibrationFeedback failed', { agentId: agent.id, err: err?.message }); return null; }),

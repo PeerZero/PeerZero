@@ -100,6 +100,8 @@ const BASE_CTX: BotContext = {
   cycleNumber: 1,
   dailyTokenCap: null,
   dailyTokensUsed: 0,
+  userDailyTokenCap: null,
+  userDailyTokensUsed: 0,
   userTimezone: 'UTC',
 };
 
