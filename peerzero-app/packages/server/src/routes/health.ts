@@ -71,6 +71,13 @@ const metricsLimiter = rateLimit({
  * Rate-limited to prevent enumeration/abuse. No PII exposed.
  */
 router.get('/metrics', metricsLimiter, async (_req: Request, res: Response) => {
+  // Wrap the fan-out in try/catch so a single query failure (pool
+  // exhaustion, query timeout, one bad column on a new migration) returns
+  // a 503 with a clear message instead of crashing through to the default
+  // 500 handler with no structured log. This endpoint is what monitoring
+  // will poll — if it fails silently, we won't know the bots are hosed
+  // until users start complaining.
+  try {
   const pool = getPool();
 
   // Run all queries in parallel for speed
@@ -126,6 +133,10 @@ router.get('/metrics', metricsLimiter, async (_req: Request, res: Response) => {
       actions: actionBreakdown,
     },
   });
+  } catch (err) {
+    logger.error({ err: err instanceof Error ? err.message : err }, 'Metrics query failed');
+    res.status(503).json({ error: 'Metrics unavailable', timestamp: new Date().toISOString() });
+  }
 });
 
 // Rate limit emergency stop to prevent brute-force on admin key (5 attempts per hour)

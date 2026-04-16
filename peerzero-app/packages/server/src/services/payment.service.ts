@@ -138,6 +138,12 @@ export async function handleStripeWebhook(event: Stripe.Event): Promise<void> {
         if (!product) {
           // Abort the transaction — we don't want to mark the purchase
           // completed without a product to grant the entitlement for.
+          // Log before throw so the operator sees the purchase/product ids
+          // even when the error surfaces through the tx-rollback path.
+          logger.error(
+            { purchaseId, productId: purchase.product_id, userId: purchase.user_id },
+            'Stripe webhook: product lookup failed during checkout processing — rolling back',
+          );
           throw new Error(`Stripe webhook: product ${purchase.product_id} not found for purchase ${purchaseId}`);
         }
 
@@ -195,37 +201,47 @@ export async function handleStripeWebhook(event: Stripe.Event): Promise<void> {
 
     case 'charge.refunded': {
       const charge = event.data.object as Stripe.Charge;
-      // Mark purchase as refunded
-      const refundedPurchase = await queryOne<{ id: string; user_id: string; product_id: string }>(
-        `UPDATE purchases SET status = 'refunded' WHERE stripe_payment_id = $1 AND status = 'completed'
-         RETURNING id, user_id, product_id`,
-        [charge.payment_intent as string],
-      );
-      if (refundedPurchase) {
-        // Revoke entitlements and grade unlocks granted by this purchase
-        await query(
+
+      // Mirrors the checkout.session.completed tx above: the UPDATE that
+      // marks the purchase refunded and the two DELETEs that revoke the
+      // entitlement + grade unlocks must be atomic. If the process dies
+      // between them, a Stripe retry would see status='refunded' and skip
+      // the handler entirely — leaving a refunded user with live grade
+      // access and a live entitlement row.
+      const affectedBots = await withTransaction(async (tx) => {
+        const refundedPurchase = await tx.queryOne<{ id: string; user_id: string; product_id: string }>(
+          `UPDATE purchases SET status = 'refunded' WHERE stripe_payment_id = $1 AND status = 'completed'
+           RETURNING id, user_id, product_id`,
+          [charge.payment_intent as string],
+        );
+        if (!refundedPurchase) return [] as { bot_id: string }[];
+
+        await tx.query(
           'DELETE FROM user_entitlements WHERE source_purchase_id = $1',
           [refundedPurchase.id],
         );
-        // Find affected bots before deleting unlocks so we can pause them
-        const affectedBots = await queryRows<{ bot_id: string }>(
+        const bots = await tx.queryRows<{ bot_id: string }>(
           'SELECT DISTINCT bot_id FROM grade_unlocks WHERE purchase_id = $1',
           [refundedPurchase.id],
         );
-        await query(
+        await tx.query(
           'DELETE FROM grade_unlocks WHERE purchase_id = $1',
           [refundedPurchase.id],
         );
-        // Pause any affected bots that are currently running — they no longer have valid grade access
-        for (const { bot_id } of affectedBots) {
-          try {
-            await setBotStatus(bot_id, 'paused', 'Paused: grade access revoked due to refund');
-            logger.info({ botId: bot_id, purchaseId: refundedPurchase.id }, 'Bot paused after refund — grade unlocks revoked');
-          } catch (pauseErr) {
-            logger.error({ botId: bot_id, err: pauseErr instanceof Error ? pauseErr.message : pauseErr }, 'Failed to pause bot after refund');
-          }
-        }
         logger.info({ purchaseId: refundedPurchase.id, userId: refundedPurchase.user_id }, 'Refund processed — entitlements and grade unlocks revoked');
+        return bots;
+      });
+
+      // Pause any affected bots AFTER the revocation commits — a failure
+      // here must not roll back the revocation itself (which has already
+      // committed), just log so an operator can manually pause the bot.
+      for (const { bot_id } of affectedBots) {
+        try {
+          await setBotStatus(bot_id, 'paused', 'Paused: grade access revoked due to refund');
+          logger.info({ botId: bot_id }, 'Bot paused after refund — grade unlocks revoked');
+        } catch (pauseErr) {
+          logger.error({ botId: bot_id, err: pauseErr instanceof Error ? pauseErr.message : pauseErr }, 'Failed to pause bot after refund');
+        }
       }
       break;
     }

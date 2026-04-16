@@ -66,7 +66,10 @@ async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> 
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
+  // 15s request timeout — matches the dev-server / production network ceiling
+  // we care about. Without this, a hung server or dropped route leaves the
+  // UI spinning indefinitely with no way to recover short of force-quit.
+  const res = await fetch(`${API_BASE}${path}`, { ...options, headers, signal: AbortSignal.timeout(15000) });
 
   // Try token refresh on 401
   const refresh = await getRefreshToken();
@@ -75,7 +78,7 @@ async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> 
     if (refreshed) {
       const newToken = await getAccessToken();
       headers['Authorization'] = `Bearer ${newToken}`;
-      const retryRes = await fetch(`${API_BASE}${path}`, { ...options, headers });
+      const retryRes = await fetch(`${API_BASE}${path}`, { ...options, headers, signal: AbortSignal.timeout(15000) });
       if (!retryRes.ok) throw await parseError(retryRes);
       return retryRes.json() as Promise<T>;
     }
