@@ -184,7 +184,18 @@ class SleepConsolidation:
                     f'(co-occurrence: {c["co_occurrence_count"]}, edge: {c["edge_weight"]:.2f})'
                 )
 
-        # ── 7. Prune log tables (keep most recent 500 rows each) ───
+        # ── 7. Prune condensed L1 interactions older than 30 days ───
+        thirty_days_ms = 30 * 24 * 60 * 60 * 1000
+        l1_cutoff = int(time.time() * 1000) - thirty_days_ms
+        try:
+            conn.execute(
+                "DELETE FROM l1_interactions WHERE condensed = 1 AND created_at < ?",
+                (l1_cutoff,),
+            )
+        except Exception as e:
+            logger.warning(f"[sleep] L1 interactions cleanup failed: {e}")
+
+        # ── 8. Prune log tables (keep most recent 500 rows each) ───
         _LOG_ROW_CAP = 500
         for table in ("conviction_log", "condensation_log", "sleep_log"):
             try:

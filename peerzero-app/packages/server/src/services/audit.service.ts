@@ -43,6 +43,19 @@ export async function purgeExpiredAuditLogs(): Promise<number> {
     } catch (actErr) {
       logger.error({ err: actErr instanceof Error ? actErr.message : actErr }, 'Failed to purge activity logs');
     }
+    // Hard-delete active activity_log entries older than 180 days (unbounded growth prevention)
+    try {
+      const oldActResult = await query(
+        `DELETE FROM activity_log WHERE deleted_at IS NULL AND created_at < NOW() - INTERVAL '180 days'`,
+        [],
+      );
+      const oldActDeleted = (oldActResult as { rowCount?: number }).rowCount || 0;
+      if (oldActDeleted > 0) {
+        logger.info({ deleted: oldActDeleted }, 'Purged old active activity log entries (180d retention)');
+      }
+    } catch (oldActErr) {
+      logger.error({ err: oldActErr instanceof Error ? oldActErr.message : oldActErr }, 'Failed to purge old activity logs');
+    }
     // Purge terminal bot_tasks older than 90 days
     try {
       const taskResult = await query(

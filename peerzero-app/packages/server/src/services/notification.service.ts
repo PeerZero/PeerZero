@@ -324,7 +324,7 @@ export async function notifyBotError(
         description: `I hit an error and had to stop: ${errorMessage.slice(0, 80)}`,
         details: { error: errorMessage.slice(0, 200) },
       });
-    } catch { /* use fallback */ }
+    } catch (err) { logger.warn({ err: err instanceof Error ? err.message : err }, 'Bot voice generation failed for error notification — using fallback'); }
   }
   await sendNotification(userId, 'bot_error', botName, body, { botId });
 }

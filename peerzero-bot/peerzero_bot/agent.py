@@ -576,7 +576,7 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
 
         except Exception as e:
             logger.error(f"[CONV] Conversation turn failed: {e}", exc_info=True)
-            return {"error": f"Conversation turn failed: {type(e).__name__}", "response": None, "session_id": session_id}
+            return None  # Caller checks truthiness — dict with error key was truthy, masking failure
 
     def run_conversation_sleep(self, user_id: str | None = None) -> dict:
         """

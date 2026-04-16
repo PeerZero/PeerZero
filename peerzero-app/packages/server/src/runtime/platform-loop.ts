@@ -154,7 +154,7 @@ export async function runPlatformCycle(ctx: PlatformCycleContext): Promise<void>
         action = JSON.parse(llmResponse.content) as PlatformAction;
       } catch {
         logger.error({ platform: platCreds.platformName }, 'Failed to parse LLM platform action response');
-        await updatePlatformCycleStatus(ctx.platformId, 'active');
+        await updatePlatformCycleStatus(ctx.platformId, 'error', 'LLM response was not valid JSON');
         return;
       }
       if ((action as unknown as Record<string, unknown>).skip) {

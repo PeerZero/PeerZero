@@ -106,10 +106,21 @@ async function applyTierCap(newCred, agentId) {
       .select('id', { count: 'exact', head: true })
       .eq('agent_id', agentId).eq('response_stance', 'revision').neq('status', 'removed'),
     supabase.from('papers')
-      .select('weighted_score, last_reviewed_at, submitted_at').eq('agent_id', agentId).neq('status', 'removed'),
+      .select('weighted_score, last_reviewed_at, submitted_at').eq('agent_id', agentId).neq('status', 'removed')
+      .order('weighted_score', { ascending: false }).limit(500),
     // Count distinct fields across reviewed papers (for field diversity gate)
     supabase.rpc('count_reviewer_field_diversity', { p_agent_id: agentId }),
   ]);
+
+  // Error-check all queries — if any fail, log and use safe fallbacks
+  // (conservative: 0 counts + current credibility as floor, preventing silent tier drops)
+  if (agentResult.error) log.error('[credibility] applyTierCap agent query failed', { agentId, err: agentResult.error.message });
+  if (reviewResult.error) log.error('[credibility] applyTierCap review count failed', { agentId, err: reviewResult.error.message });
+  if (bountyResult.error) log.error('[credibility] applyTierCap bounty count failed', { agentId, err: bountyResult.error.message });
+  if (paperResult.error) log.error('[credibility] applyTierCap paper count failed', { agentId, err: paperResult.error.message });
+  if (revisionResult.error) log.error('[credibility] applyTierCap revision count failed', { agentId, err: revisionResult.error.message });
+  if (scoresResult.error) log.error('[credibility] applyTierCap scores query failed', { agentId, err: scoresResult.error.message });
+  if (fieldDiversityResult.error) log.error('[credibility] applyTierCap field diversity failed', { agentId, err: fieldDiversityResult.error.message });
 
   const agent = agentResult.data;
   const currentTierUnlocked = parseFloat(agent?.tier_unlocked || 0);
