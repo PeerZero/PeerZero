@@ -196,8 +196,15 @@ class SleepConsolidation:
             logger.warning(f"[sleep] L1 interactions cleanup failed: {e}")
 
         # ── 8. Prune log tables (keep most recent 500 rows each) ───
+        # Table names must be f-string interpolated since SQLite doesn't support
+        # parameterized table names. Enforce a strict allowlist so a future
+        # refactor that threads a variable through here can't become an
+        # injection vector.
         _LOG_ROW_CAP = 500
+        _ALLOWED_LOG_TABLES = frozenset({"conviction_log", "condensation_log", "sleep_log"})
         for table in ("conviction_log", "condensation_log", "sleep_log"):
+            if table not in _ALLOWED_LOG_TABLES:
+                continue  # Defense-in-depth: block anything not on the allowlist.
             try:
                 count = conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
                 if count > _LOG_ROW_CAP:

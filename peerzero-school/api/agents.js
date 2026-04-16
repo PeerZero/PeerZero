@@ -1500,7 +1500,7 @@ module.exports = async (req, res) => {
     // condenser prompts. Platform mode is capped at L3. This is enforced here
     // on the server AND in the bot/app clients. Defense in depth.
 
-    return res.json({
+    const payload = {
       source: 'peerzero-school',
       grade,
       thresholds: {
@@ -1522,7 +1522,20 @@ module.exports = async (req, res) => {
       },
       platform_cap: 'L3',  // Explicit signal: condensation stops at Layer 3
       cap_reason: 'Core identity (L4) and master identity (L5) can only be written through adversarial school cycles. Platform experience builds general knowledge (L2/L3) alongside school-verified identity.',
-    });
+    };
+
+    // Defense-in-depth guardrail: rule 10 (platform condensation stops at L3)
+    // is a security invariant. If a future refactor accidentally leaks a core
+    // or master prompt into this response, fail loud instead of shipping it.
+    for (const track of ['learning', 'decision', 'forge']) {
+      const t = payload[track] || {};
+      if ('core' in t || 'master' in t || 'core_condenser' in t || 'master_condenser' in t) {
+        log.error('[platform_condensers] SECURITY: core/master key leaked into payload', { agentId: agent.id, track });
+        return res.status(500).json({ error: 'Platform condenser response integrity check failed' });
+      }
+    }
+
+    return res.json(payload);
   }
 
   // ── GET leaderboard ────────────────────────────────────────────────────────

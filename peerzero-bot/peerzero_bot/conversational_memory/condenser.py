@@ -65,7 +65,11 @@ class Condenser:
                     "\n<school_identity>\n"
                     + "\n\n".join(parts)
                     + "\n</school_identity>\n"
-                    "Your school identity is fixed. Understand this person THROUGH it.\n"
+                    "Your school identity is READ-ONLY here. It was forged through "
+                    "adversarial school cycles and cannot be written to in conversation. "
+                    "Do not restate, revise, reinterpret, contradict, or extend it in your "
+                    "output. Understand this person THROUGH it — but write only about them, "
+                    "not about yourself.\n"
                 )
 
         return f"""These are raw interactions with someone you are getting to know:
@@ -253,7 +257,10 @@ Output structured JSON only. No preamble.
         if self._school_identity and self._school_identity.get("l5"):
             school_section = (
                 "\n<school_identity_anchor>\n"
-                "Your school-forged identity is fixed. This portrait speaks THROUGH it.\n"
+                "Your school-forged identity is READ-ONLY. Do not restate, revise, "
+                "reinterpret, contradict, or extend it in the portrait. The portrait "
+                "describes the USER, not you — it speaks THROUGH your identity but "
+                "must never rewrite it.\n"
                 f"{self._school_identity['l5']}\n"
                 "</school_identity_anchor>\n"
             )

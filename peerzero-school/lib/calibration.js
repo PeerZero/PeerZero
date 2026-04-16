@@ -188,15 +188,19 @@ async function updateCalibrationSummary(agentId) {
       }
     }
 
-    // Calibration trend: compare first half vs second half of windowed data
+    // Calibration trend: compare newer half vs older half of windowed data.
+    // windowedData is ordered newest-first (see line 142: .order('created_at', desc)),
+    // so slice(0, n/2) = newer half, slice(n/2) = older half.
     let trend = 'insufficient_data';
     if (windowedData.length >= 20) {
-      const firstHalf = windowedData.slice(Math.floor(windowedData.length / 2));
-      const secondHalf = windowedData.slice(0, Math.floor(windowedData.length / 2));
-      const firstBrier = computeBrier(firstHalf);
-      const secondBrier = computeBrier(secondHalf);
-      if (firstBrier && secondBrier) {
-        const delta = secondBrier.brier - firstBrier.brier;
+      const mid = Math.floor(windowedData.length / 2);
+      const newerHalf = windowedData.slice(0, mid);
+      const olderHalf = windowedData.slice(mid);
+      const newerBrier = computeBrier(newerHalf);
+      const olderBrier = computeBrier(olderHalf);
+      if (newerBrier && olderBrier) {
+        // Lower Brier = better calibration. If newer < older, we're improving.
+        const delta = newerBrier.brier - olderBrier.brier;
         if (delta < -0.03) trend = 'improving';
         else if (delta > 0.03) trend = 'degrading';
         else trend = 'stable';
