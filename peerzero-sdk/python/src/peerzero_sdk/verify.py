@@ -244,6 +244,14 @@ def verify(
     """
     Verify a signed portable profile's Ed25519 signature.
 
+    Threat model: a successful verify() proves the profile was signed by the
+    School whose public key you trust — it does NOT prove the presenter
+    holds a private key, that the bot is still in good standing, or that
+    the profile is fresh. Profiles are verifiable credentials (like a
+    diploma), not authentication tokens. If your platform needs proof-of-
+    possession, revocation checks, or freshness, layer those on top of
+    verify(). See the README "Threat Model" section for details.
+
     Args:
         profile: The full portable profile (with signature fields).
         public_key: PEM string/bytes, Ed25519PublicKey, or None to auto-fetch.
