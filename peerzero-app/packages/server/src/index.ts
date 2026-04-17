@@ -224,12 +224,19 @@ if (config.redisUrl) {
   }).then((result: string[]) => {
     const policy = result?.[1];
     if (policy && policy !== 'noeviction') {
-      logger.error(
-        { policy },
-        `Redis maxmemory-policy is "${policy}" — BullMQ REQUIRES "noeviction". `
+      const message = `Redis maxmemory-policy is "${policy}" — BullMQ REQUIRES "noeviction". `
         + 'Jobs can be silently evicted, corrupting queue state. '
-        + 'Run: redis-cli CONFIG SET maxmemory-policy noeviction'
-      );
+        + 'Run: redis-cli CONFIG SET maxmemory-policy noeviction';
+      // In production, a misconfigured eviction policy corrupts queue state
+      // silently. Fail loud at startup instead of losing jobs mid-flight.
+      // Allow an override (REDIS_POLICY_OVERRIDE=1) for managed Redis providers
+      // that enforce a non-noeviction policy the operator has verified safe.
+      if (config.nodeEnv === 'production' && process.env.REDIS_POLICY_OVERRIDE !== '1') {
+        logger.fatal({ policy }, message);
+        checkRedis.quit().catch(() => {});
+        process.exit(1);
+      }
+      logger.error({ policy }, message);
     } else if (policy === 'noeviction') {
       logger.info('Redis maxmemory-policy verified: noeviction (correct for BullMQ)');
     }

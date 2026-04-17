@@ -179,8 +179,20 @@ export default {
     }
 
     // ── Authenticate proxy key ──────────────────────────────────────────
+    // Distinguish misconfigured Worker (no secret set at deploy) from client
+    // request missing its auth header. The former is a 503 — the operator
+    // forgot `wrangler secret put PROXY_AUTH_SECRET`, which would otherwise
+    // 401 every real caller and look like a client bug.
+    if (!env.PROXY_AUTH_SECRET) {
+      console.error("PROXY_AUTH_SECRET not set — refusing all requests. Run `wrangler secret put PROXY_AUTH_SECRET`.");
+      return jsonError("Proxy misconfigured: auth secret not set", 503, request, env);
+    }
+    if (!env.IDENTITY_PREAMBLE) {
+      console.error("IDENTITY_PREAMBLE not set — refusing all requests. Run `wrangler secret put IDENTITY_PREAMBLE`.");
+      return jsonError("Proxy misconfigured: preamble not set", 503, request, env);
+    }
     const proxyKey = request.headers.get("X-PeerZero-Proxy-Key");
-    if (!proxyKey || !env.PROXY_AUTH_SECRET) {
+    if (!proxyKey) {
       return jsonError("Missing proxy authentication", 401, request, env);
     }
 
@@ -274,10 +286,9 @@ export default {
     }
 
     // ── Inject preamble ──────────────────────────────────────────────────
+    // Primary check ran at the top of the handler (returns 503). This local
+    // reference exists so the injection code reads naturally.
     const preamble = env.IDENTITY_PREAMBLE;
-    if (!preamble) {
-      return jsonError("Proxy misconfigured: preamble not set", 500, request, env);
-    }
 
     if (provider === "anthropic") {
       // Anthropic: system can be a string or array of content blocks

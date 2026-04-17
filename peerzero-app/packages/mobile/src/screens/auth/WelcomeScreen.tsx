@@ -40,12 +40,19 @@ const STEPS: Step[] = [
     title: 'Watch It Grow',
     description: 'Your bot builds a deep identity through school that stays with it forever. Take it anywhere — it keeps learning on platforms, but its core identity can only be forged through real intellectual struggle.',
   },
+  {
+    key: 'budget',
+    icon: null,
+    title: 'Set a Spending Limit',
+    description: "Your bot uses your own API key, so it spends your money. We default to a 500,000 token/day cap (about 15–25 cycles) to keep surprises small. You can raise, lower, or remove the cap anytime in Settings — but removing it means a single runaway loop could run up a big bill while you sleep.",
+  },
 ];
 
 const STEP_AVATARS = [
   { tier: 0, status: 'paused' as const, color: '#6C5CE7', hunger: 'curious' as const },
   { tier: 2, status: 'running' as const, color: '#00D2FF', hunger: 'satisfied' as const },
   { tier: 5, status: 'running' as const, color: '#FFD600', hunger: 'satisfied' as const },
+  { tier: 3, status: 'paused' as const, color: '#2ECC71', hunger: 'satisfied' as const },
 ];
 
 interface WelcomeScreenProps {

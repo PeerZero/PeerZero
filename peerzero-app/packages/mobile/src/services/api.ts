@@ -151,7 +151,7 @@ export const auth = {
 
   me: () => apiFetch('/auth/me'),
 
-  updateProfile: (data: { display_name?: string }) =>
+  updateProfile: (data: { display_name?: string; language?: string; daily_token_cap?: number | null }) =>
     apiFetch('/auth/profile', { method: 'PATCH', body: JSON.stringify(data) }),
 
   changePassword: (data: { current_password: string; new_password: string }) =>

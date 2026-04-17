@@ -250,7 +250,7 @@ describe('PATCH /auth/profile', () => {
     expect(res.status).toBe(401);
   });
 
-  it('returns 400 when neither display_name nor language provided', async () => {
+  it('returns 400 when no updatable fields provided', async () => {
     const token = makeToken({ userId: 'user-1', email: 'test@example.com' });
     const res = await request(app)
       .patch('/auth/profile')
@@ -260,7 +260,7 @@ describe('PATCH /auth/profile', () => {
     expect(res.status).toBe(400);
     expect(res.body.error).toBe('Validation failed');
     expect(res.body.details).toEqual(
-      expect.arrayContaining([expect.objectContaining({ message: expect.stringMatching(/display_name or language/i) })]),
+      expect.arrayContaining([expect.objectContaining({ message: expect.stringMatching(/display_name.*language.*daily_token_cap/i) })]),
     );
   });
 
@@ -278,7 +278,7 @@ describe('PATCH /auth/profile', () => {
 
     expect(res.status).toBe(200);
     expect(res.body.display_name).toBe('UpdatedName');
-    expect(mockUpdateProfile).toHaveBeenCalledWith('user-1', 'UpdatedName', undefined);
+    expect(mockUpdateProfile).toHaveBeenCalledWith('user-1', 'UpdatedName', undefined, undefined);
   });
 });
 

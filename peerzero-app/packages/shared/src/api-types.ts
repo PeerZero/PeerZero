@@ -28,6 +28,7 @@ export interface UserProfile {
   email: string;
   display_name: string | null;
   created_at: string;
+  daily_token_cap: number | null;  // null = unlimited (opt-in). Default 500k.
   entitlements: {
     bot_slots: number;
     bots_used: number;

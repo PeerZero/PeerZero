@@ -252,11 +252,18 @@ module.exports = async (req, res) => {
             );
 
             // Run reasoning audit alongside haiku audit if paper has a mechanism chain.
-            // Non-blocking — failures don't affect the response.
+            // Awaited, not fire-and-forget: Vercel can freeze the function the
+            // moment `res.json()` returns, so a dangling promise may never
+            // resolve and the audit silently never runs. This codepath is
+            // author-only on revision-eligible papers (low-frequency,
+            // high-stakes), so the extra latency is acceptable.
             if (Array.isArray(paper.mechanism_chain) && paper.mechanism_chain.length >= 2 && !paper.reasoning_audit) {
-              generateReasoningAudit(paper, callAnthropicHaiku)
-                .then(audit => { if (audit) storeReasoningAudit(id, audit); })
-                .catch(err => log.error('[reasoning-audit] generation failed', { paperId: id, err: err?.message }));
+              try {
+                const audit = await generateReasoningAudit(paper, callAnthropicHaiku);
+                if (audit) await storeReasoningAudit(id, audit);
+              } catch (err) {
+                log.error('[reasoning-audit] generation failed', { paperId: id, err: err?.message });
+              }
             }
 
             return res.json({

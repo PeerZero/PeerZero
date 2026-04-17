@@ -323,7 +323,7 @@ describe('LLM action parsing', () => {
     expect(mockUpdatePlatformCycleStatus).toHaveBeenCalledWith('plat-1', 'active');
   });
 
-  it('skips cycle when JSON content is unparseable', async () => {
+  it('marks cycle as error when JSON content is unparseable', async () => {
     mockLLMAdapter.chat.mockResolvedValue({
       content: 'I want to post something...',
       tokens_used: 200,
@@ -335,7 +335,11 @@ describe('LLM action parsing', () => {
     await runPlatformCycle(BASE_CTX);
 
     expect(mockPlatformAdapter.submitAction).not.toHaveBeenCalled();
-    expect(mockUpdatePlatformCycleStatus).toHaveBeenCalledWith('plat-1', 'active');
+    expect(mockUpdatePlatformCycleStatus).toHaveBeenCalledWith(
+      'plat-1',
+      'error',
+      expect.stringMatching(/json/i),
+    );
   });
 });
 
