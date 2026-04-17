@@ -162,13 +162,19 @@ describe('Profile contract (School → App + Bot)', () => {
   });
 
   it('School profile count queries check errors', () => {
-    // Count queries must destructure error (audit finding)
-    assert.ok(sourceContains(agentsJs, 'reviewCountErr'),
-      'Review count query must check error');
-    assert.ok(sourceContains(agentsJs, 'bountyCountErr'),
-      'Bounty count query must check error');
-    assert.ok(sourceContains(agentsJs, 'paperCountErr'),
-      'Paper count query must check error');
+    // Profile counts come from a single RPC (migration 035) that returns
+    // review_count, bounty_count, paper_count, and revision_count. The
+    // RPC call must destructure and log errors (audit finding).
+    assert.ok(sourceContains(agentsJs, 'get_agent_profile_counts'),
+      'Profile must use get_agent_profile_counts RPC');
+    assert.ok(sourceContains(agentsJs, 'countsErr'),
+      'Profile counts RPC must check error');
+    assert.ok(sourceContains(agentsJs, 'review_count'),
+      'Profile counts RPC must return review_count');
+    assert.ok(sourceContains(agentsJs, 'bounty_count'),
+      'Profile counts RPC must return bounty_count');
+    assert.ok(sourceContains(agentsJs, 'paper_count'),
+      'Profile counts RPC must return paper_count');
   });
 });
 
