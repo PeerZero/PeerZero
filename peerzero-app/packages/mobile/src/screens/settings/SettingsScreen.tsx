@@ -36,6 +36,10 @@ export default function SettingsScreen() {
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
 
+  // Spending limit (user-level daily token cap)
+  const [editingLimit, setEditingLimit] = useState(false);
+  const [limitInput, setLimitInput] = useState('');
+
   const [notifPrefs, setNotifPrefs] = useState<Record<string, boolean>>(DEFAULT_NOTIFICATION_PREFS);
 
   // Widget settings
@@ -206,6 +210,54 @@ export default function SettingsScreen() {
     }
   };
 
+  const saveLimit = async (newCap: number | null) => {
+    try {
+      await authApi.updateProfile({ daily_token_cap: newCap });
+      setEditingLimit(false);
+      showToast(newCap === null ? 'Spending limit removed' : 'Spending limit updated', 'success');
+      if (refreshUser) refreshUser();
+    } catch (err: unknown) {
+      Alert.alert('Error', err instanceof Error ? err.message : 'Failed to update limit');
+    }
+  };
+
+  const handleSaveLimit = async () => {
+    const parsed = parseInt(limitInput.replace(/[,_\s]/g, ''), 10);
+    if (!Number.isFinite(parsed) || parsed < 50000) {
+      Alert.alert('Invalid Limit', 'Enter a number of at least 50,000 tokens/day.');
+      return;
+    }
+    await saveLimit(parsed);
+  };
+
+  const handleRemoveLimit = () => {
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+    Alert.alert(
+      'Remove daily spending limit?',
+      'With no cap, a runaway loop or bug could run up a large API bill before you notice. '
+      + 'At Opus prices a single bot can burn $20–40/day of normal usage — and much more under failure. '
+      + 'You will not get a refund from your LLM provider.\n\nAre you sure you want no limit?',
+      [
+        { text: 'Keep limit', style: 'cancel' },
+        {
+          text: 'I accept the risk — no limit',
+          style: 'destructive',
+          onPress: () => {
+            // Second confirmation for destructive operation
+            Alert.alert(
+              'Really remove the limit?',
+              'This applies to all of your bots combined. You can turn it back on anytime in Settings.',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                { text: 'Remove limit', style: 'destructive', onPress: () => saveLimit(null) },
+              ],
+            );
+          },
+        },
+      ],
+    );
+  };
+
   const handleChangePassword = async () => {
     if (!currentPassword || !newPassword) {
       Alert.alert('Error', 'All password fields are required');
@@ -364,6 +416,57 @@ export default function SettingsScreen() {
             />
             <TouchableOpacity style={styles.saveButton} onPress={handleChangePassword} accessibilityRole="button" accessibilityLabel="Change Password">
               <Text style={styles.saveButtonText}>Change Password</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+      </View>
+
+      {/* Spending Limit section */}
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <View style={styles.sectionTitleRow}>
+            <Text style={styles.sectionIcon}>💸</Text>
+            <Text style={styles.sectionTitle}>Daily Spending Limit</Text>
+          </View>
+          <TouchableOpacity
+            onPress={() => {
+              setEditingLimit(!editingLimit);
+              setLimitInput(user?.daily_token_cap != null ? String(user.daily_token_cap) : '500000');
+            }}
+            accessibilityRole="button"
+            accessibilityLabel={editingLimit ? 'Cancel editing limit' : 'Edit limit'}
+          >
+            <Text style={styles.addButton}>{editingLimit ? 'Cancel' : 'Edit'}</Text>
+          </TouchableOpacity>
+        </View>
+
+        <Text style={{ color: colors.text.secondary, fontSize: fontSize.sm, marginBottom: spacing.sm }}>
+          {user?.daily_token_cap == null
+            ? '⚠️ No limit set — all bots combined can spend without a cap.'
+            : `Up to ${user.daily_token_cap.toLocaleString()} tokens/day across all your bots. Bots pause at the cap until midnight UTC.`}
+        </Text>
+
+        {editingLimit && (
+          <View style={styles.addForm}>
+            <TextInput
+              style={styles.input}
+              placeholder="Daily token cap (min 50,000)"
+              placeholderTextColor={colors.text.tertiary}
+              value={limitInput}
+              onChangeText={setLimitInput}
+              keyboardType="number-pad"
+              accessibilityLabel="Daily token cap"
+            />
+            <TouchableOpacity style={styles.saveButton} onPress={handleSaveLimit} accessibilityRole="button" accessibilityLabel="Save limit">
+              <Text style={styles.saveButtonText}>Save Limit</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.saveButton, { backgroundColor: 'transparent', borderWidth: 1, borderColor: colors.text.tertiary, marginTop: spacing.xs }]}
+              onPress={handleRemoveLimit}
+              accessibilityRole="button"
+              accessibilityLabel="Remove limit, no cap"
+            >
+              <Text style={[styles.saveButtonText, { color: colors.text.secondary }]}>Remove limit (no cap)</Text>
             </TouchableOpacity>
           </View>
         )}

@@ -29,7 +29,7 @@ vi.mock('../../jobs/platform-queue', () => ({
   schedulePlatformJobs: (...args: any[]) => mockSchedulePlatformJobs(...args),
 }));
 
-const mockQuery = vi.fn().mockResolvedValue({ rows: [], rowCount: 0 });
+const mockQuery = vi.fn().mockResolvedValue({ rows: [], rowCount: 1 });
 const mockQueryOne = vi.fn().mockResolvedValue({
   cached_profile: { identity_summary: 'A careful reasoner' },
   name: 'TestBot',
@@ -92,7 +92,7 @@ function makePendingTask(overrides: Record<string, unknown> = {}) {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mockQuery.mockResolvedValue({ rows: [], rowCount: 0 });
+  mockQuery.mockResolvedValue({ rows: [], rowCount: 1 });
   mockQueryOne.mockResolvedValue({
     cached_profile: { identity_summary: 'A careful reasoner' },
     name: 'TestBot',

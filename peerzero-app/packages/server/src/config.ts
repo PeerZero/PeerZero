@@ -65,8 +65,14 @@ export const config = {
   // true  = real adapters (connects to School API and LLM providers)
   useRealAdapters: process.env.USE_REAL_ADAPTERS === 'true',
 
-  // School URL (only used when useRealAdapters is true)
-  defaultSchoolUrl: optional('DEFAULT_SCHOOL_URL', 'https://peerzero.science'),
+  // School URL (only used when useRealAdapters is true).
+  // Accepts DEFAULT_SCHOOL_URL (app-native) or PEERZERO_URL (bot-native) for
+  // consistency with the bot config, so an operator who sets only PEERZERO_URL
+  // doesn't silently end up pointing at production.
+  defaultSchoolUrl: optional(
+    'DEFAULT_SCHOOL_URL',
+    process.env.PEERZERO_URL || 'https://peerzero.science',
+  ),
 
   // Frontend URLs for Stripe redirects
   frontendUrl: optional('FRONTEND_URL', 'https://app.peerzero.com'),

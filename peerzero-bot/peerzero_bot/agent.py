@@ -2480,12 +2480,15 @@ When done, return a JSON object:
                                 f"({self._daily_tokens_used:,}/{self.config.daily_token_budget:,}) "
                                 f"— pausing until tomorrow"
                             )
-                            # Sleep until midnight UTC, checking stop signal every 60s
+                            # Sleep until midnight UTC, waking every 60s to check
+                            # the stop signal and the date rollover. Previously
+                            # min(60.0, 1.0) pegged the loop at 1s — no LLM cost
+                            # but a busy spin once the daily cap was hit.
                             while not self._stop_requested:
                                 now = datetime.now(timezone.utc)
                                 if now.strftime("%Y-%m-%d") != self._daily_tokens_reset_date:
                                     break
-                                time.sleep(min(60.0, 1.0))
+                                time.sleep(60.0)
                             continue
 
                     # School cycle (always runs)

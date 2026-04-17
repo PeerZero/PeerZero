@@ -48,7 +48,10 @@ function callAnthropicHaiku(prompt, context = 'unknown') {
         hostname: 'api.anthropic.com',
         path: '/v1/messages',
         method: 'POST',
-        timeout: 25000,
+        // Haiku is fast (<10s typical) but tail latency and network jitter can
+        // push past 25s. 90s is well under Vercel's 300s function cap and the
+        // Supabase client's 30s fetch cap (Supabase isn't in this call path).
+        timeout: 90000,
         headers: {
           'Content-Type': 'application/json',
           'x-api-key': process.env.ANTHROPIC_API_KEY,

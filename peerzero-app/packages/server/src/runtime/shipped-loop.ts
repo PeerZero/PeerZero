@@ -222,11 +222,17 @@ export async function runShippedCycle(ctx: BotContext): Promise<void> {
 
     for (const task of pendingTasks) {
       try {
-        // Mark as processing
-        await query(
-          `UPDATE bot_tasks SET status = 'processing', updated_at = now() WHERE id = $1`,
+        // Atomically claim the task — guard against two workers picking up the
+        // same row. If another worker already moved it out of 'pending', skip.
+        const claim = await query(
+          `UPDATE bot_tasks SET status = 'processing', updated_at = now()
+           WHERE id = $1 AND status = 'pending'`,
           [task.id],
         );
+        if (claim.rowCount === 0) {
+          logger.debug({ botId: ctx.botId, taskId: task.id }, 'Task already claimed by another worker — skipping');
+          continue;
+        }
 
         if (!llmKey) {
           throw new Error('LLM API key not available — cannot process task');

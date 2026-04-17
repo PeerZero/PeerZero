@@ -127,8 +127,9 @@ CREATE TABLE bots (
   -- Incoming task auth (optional HMAC secret, SHA-256 hashed)
   incoming_task_secret_hash TEXT,
 
-  -- Daily token usage cap (prevents runaway LLM costs)
-  daily_token_cap INTEGER DEFAULT NULL
+  -- Daily token usage cap (prevents runaway LLM costs).
+  -- Default 500k covers ~15-25 Opus cycles/day. NULL = unlimited (opt-in via UI).
+  daily_token_cap INTEGER DEFAULT 500000
     CONSTRAINT check_daily_token_cap CHECK (daily_token_cap IS NULL OR daily_token_cap >= 10000),
   daily_tokens_used INTEGER DEFAULT 0,
   daily_tokens_reset_at DATE DEFAULT CURRENT_DATE,

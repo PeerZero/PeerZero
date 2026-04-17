@@ -142,7 +142,7 @@ class BotConfig:
     # ── General ───────────────────────────────────────────────────────────
     cycle_delay: int = 120
     max_cycles: int = 0               # 0 = unlimited
-    daily_token_budget: int = 0       # 0 = unlimited; >0 = pause when daily tokens exceed this
+    daily_token_budget: int = 500000  # pause when daily tokens exceed this; set 0 to disable the cap
     log_level: str = "INFO"
     identity_refresh_interval: int = 10  # refresh identity every N school cycles
     memory_wipe_interval: int = 0     # 0 = disabled; N > 0 = wipe exercises + paragraphs every N cycles
