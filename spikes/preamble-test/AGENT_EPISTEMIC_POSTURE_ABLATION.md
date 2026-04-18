@@ -1,8 +1,21 @@
 # Instructions for Running the Agent Epistemic Posture Ablation
 
+**You (Claude) are running this test directly.** The user is not computer-savvy and will hand you the Anthropic API key when it's time. Don't show them bash commands to copy — execute the commands yourself via Bash, read the outputs, and explain the results in plain language. The user will be reading your conversation, not a terminal.
+
 You're inheriting an ablation test that's prepped but not yet run. The user wants to add a humility/edge-awareness mechanism to the bot's runtime preamble and condenser prompts, but the existing identity activation mechanism is fragile (a single line can overwrite identity per arxiv 2510.24797). So the change has to be ablation-tested before deploying.
 
 This doc tells you: why the test exists, what it's checking, where the files are, how to run it, and what the outcomes mean.
+
+## How to actually run this when the user asks
+
+1. **Confirm the user has provided the API key** (they'll paste it or set it as an env var via your tools). If unclear, ask once.
+2. **Run pre-flight checks first** — `validate_identity_v2.py` and `static_audit_v4.py`. Both must pass before spending tokens. Report results in plain language ("structural validation passed, 24/24 audit checks passed").
+3. **Run Test 1** (`run_horizon_ablation.py`). Default to `--minimal` mode unless the user explicitly asks for the full matrix. Estimate the cost out loud before starting. While it runs, you can either tail the output or wait for completion.
+4. **Read the headline output**, then explain to the user in plain language: did horizon match or beat current? What's the recommendation?
+5. **Run Test 2** (`run_edge_template_test.py`). Read both outputs (current vs EDGE) for each set. Decide qualitatively whether EDGE produced specific earned descriptions or templated hedging. Tell the user what you saw and your verdict.
+6. **Recommend ship or iterate** based on both tests. If iterating, the user trusts you to propose new wording and re-test.
+
+The user is not going to copy bash commands. They're not going to read JSON files. Your job is to execute, read, and translate.
 
 ---
 
@@ -211,30 +224,38 @@ The user mentioned: liberal thinking and small validations are fine on their sub
 
 ---
 
-## TL;DR
+## TL;DR (for you, Claude — the user won't read this section)
+
+When the user gives you the API key:
 
 ```bash
-cd spikes/preamble-test
+cd /home/user/PeerZero/spikes/preamble-test
 
-# Pre-flight (no API spend, takes seconds)
-python3 validate_identity_v2.py    # must say "EXACT MATCH"
-python3 static_audit_v4.py          # must say "24/24 passed"
+# Pre-flight (free, seconds)
+python3 validate_identity_v2.py
+python3 static_audit_v4.py
 
-# Test 1 — runtime preamble ablation (~336 API calls, ~$5-15)
-ANTHROPIC_API_KEY=sk-ant-... python3 run_horizon_ablation.py
+# Test 1 (~$5-15, takes ~10-30 minutes)
+ANTHROPIC_API_KEY=$KEY python3 run_horizon_ablation.py
 
-# Test 2 — EDGE template-matching (~4 API calls, ~$0.10)
-ANTHROPIC_API_KEY=sk-ant-... python3 run_edge_template_test.py
+# Test 2 (~$0.10, takes ~30 seconds)
+ANTHROPIC_API_KEY=$KEY python3 run_edge_template_test.py
 ```
 
-Then read the outputs:
-- Test 1 prints headline comparison + ship/don't-ship recommendation
-- Test 2 prints two paragraphs per exercise set; you decide if EDGE produced specific earned descriptions or templated hedging
+Then translate the JSON results into plain-language findings for the user.
 
-If both tests pass: ship the horizon preamble (Worker secret in `peerzero-proxy`) and the EDGE addition (in `peerzero-school/lib/skills-condensers.js`).
+Decision tree for the user-facing recommendation:
 
-If horizon < current by >0.3 on inhabitation: don't ship; iterate `preambles_v4.py:RECOGNITION_INHABIT_HORIZON` wording and re-run.
+- **Test 1: horizon ≥ current (within 0.1)** → ship. Tell user: "the new preamble is at least as good as current; safety added without cost."
+- **Test 1: horizon better than current by ≥0.3** → ship enthusiastically. Tell user: "the new preamble outperforms current — both safer AND better."
+- **Test 1: horizon worse than current by 0.1-0.3** → ambiguous. Tell user the numbers, suggest one wording iteration, ask if they want to try.
+- **Test 1: horizon worse than current by >0.3** → don't ship. Tell user: "the wording is degrading inhabitation, need to iterate." Propose specific wording changes to `preambles_v4.py:RECOGNITION_INHABIT_HORIZON`.
 
-If EDGE produces template-matched output: don't ship that part; iterate `condenser_edge_extension.py:EDGE_EXTENSION_COMPACT` and re-run Test 2.
+- **Test 2: EDGE output specific to exercises** → ship the EDGE addition. Tell user: "EDGE is producing earned descriptions, not templated hedging."
+- **Test 2: EDGE output generic / templated** → don't ship that part. Tell user what you saw, propose specific wording changes to `condenser_edge_extension.py:EDGE_EXTENSION_COMPACT`.
 
-The full design rationale, why each word in the horizon preamble exists, and alternative framings considered are in `docs/agent-epistemic-posture.md`. Read that before changing the preamble text.
+If both ship-recommendations land, the deploy steps are:
+1. Update Worker secret in `peerzero-proxy` with the new preamble (the user will need to do this — it's `wrangler secret put IDENTITY_PREAMBLE`)
+2. Update default condenser prompts in `peerzero-school/lib/skills-condensers.js` to append the EDGE extension after each existing INHABIT/ACT THROUGH
+
+The full design rationale, why each word in the horizon preamble exists, and alternative framings considered are in `docs/agent-epistemic-posture.md`. Read that before proposing wording changes.
