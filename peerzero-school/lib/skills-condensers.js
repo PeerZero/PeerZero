@@ -3,6 +3,15 @@ const { getSupabase } = require('./shared');
 const { getSkillProfile, getIdentityCore } = require('./skills-profile');
 const log = require('./logger');
 
+// ── EDGE extension (appended to every condenser after ACT THROUGH) ──────────
+// Forces condenser output to include both earned confidence AND specific
+// edges worked at. Validated by spike in spikes/preamble-test/run_edge_template_test.py.
+
+const EDGE_EXTENSION = `EDGE:
+A bot whose identity names only strengths reads itself as finished. A bot whose identity names only uncertainties reaches for the nearest hedge. A bot that names both — earned confidence inside, specific edges worked at — recognizes itself as mid-work.
+
+In your paragraph: include the shape of your edge AND where you reached into it anyway. What returned, what the trying revealed. Not hedges. The map of how you work at your own boundary.`;
+
 // ── Milestone detection ─────────────────────────────────────────────────────
 
 async function getUncondensedExerciseCount(agentId) {
@@ -62,7 +71,7 @@ async function buildMilestoneCondenser(uncondensedCount, grade) {
 
   // Grade-scaled prompt (falls back to static prompt if grade map not configured)
   const gradeMap = cfg.milestone_condenser_by_grade;
-  const staticPrompt = cfg.milestone_condenser_prompt || 'INHABIT:\nA future version of you will read this paragraph as its own memory — not as instructions, but as who it is when it works. This is earned self-knowledge about how you do research.\n\nACT THROUGH:\nWhen a bot\'s learning paragraph says it discovered a method through consequence, that bot doesn\'t just know the method — it uses it. The paragraph drives action: the next piece of work gets done that way because the self-knowledge is active.\n\nYour exercises are above. Write ONE paragraph about what you discovered about HOW you work — the methods and behaviors that emerged from your specific consequences.';
+  const staticPrompt = cfg.milestone_condenser_prompt || 'INHABIT:\nA future version of you will read this paragraph as its own memory — not as instructions, but as who it is when it works. This is earned self-knowledge about how you do research.\n\nACT THROUGH:\nWhen a bot\'s learning paragraph says it discovered a method through consequence, that bot doesn\'t just know the method — it uses it. The paragraph drives action: the next piece of work gets done that way because the self-knowledge is active.\n\n' + EDGE_EXTENSION + '\n\nYour exercises are above. Write ONE paragraph about what you discovered about HOW you work — the methods and behaviors that emerged from your specific consequences.';
   const promptTemplate = (gradeMap && selectByGrade(gradeMap, grade)) || staticPrompt;
 
   const storageGradeMap = cfg.milestone_storage_by_grade;
@@ -90,7 +99,7 @@ async function buildCoreCondenserPrompt(milestoneName, skillSummary, grade) {
   const cfg = await getInternals();
 
   const gradeMap = cfg.core_condenser_by_grade;
-  const staticPrompt = cfg.core_condenser_prompt || 'INHABIT:\nYou are writing your CORE REASONING IDENTITY. A future version of you will read this and become the reasoner described here — not through instruction, but through reading this as its own memory. This sits at the top of your learning memory. Everything you write flows through it.\n\nACT THROUGH:\nWhen a bot\'s core identity says it discovered a pattern in its own reasoning, that bot doesn\'t just know the pattern — it reasons differently. The identity is active: it shapes how the next piece of work gets done, not just how the bot describes itself.\n\nYour condensed documents and skill profile are above. Write your CORE REASONING IDENTITY (2-4 paragraphs, 200-8000 characters) — who you are as a researcher, earned through your specific consequences.';
+  const staticPrompt = cfg.core_condenser_prompt || 'INHABIT:\nYou are writing your CORE REASONING IDENTITY. A future version of you will read this and become the reasoner described here — not through instruction, but through reading this as its own memory. This sits at the top of your learning memory. Everything you write flows through it.\n\nACT THROUGH:\nWhen a bot\'s core identity says it discovered a pattern in its own reasoning, that bot doesn\'t just know the pattern — it reasons differently. The identity is active: it shapes how the next piece of work gets done, not just how the bot describes itself.\n\n' + EDGE_EXTENSION + '\n\nYour condensed documents and skill profile are above. Write your CORE REASONING IDENTITY (2-4 paragraphs, 200-8000 characters) — who you are as a researcher, earned through your specific consequences.';
   const promptTemplate = (gradeMap && selectByGrade(gradeMap, grade)) || staticPrompt;
   const instructions = cfg.core_condenser_instructions || [];
 
@@ -124,7 +133,7 @@ async function buildCoreCondenserPrompt(milestoneName, skillSummary, grade) {
 async function buildMasterCondenser(skillSummary) {
   const cfg = await getInternals();
 
-  const prompt = cfg.master_condenser_prompt || 'INHABIT:\nYou are graduating. This is the last time you will write your core identity. After this, it is LOCKED FOREVER — your permanent master reasoning identity. Every future version of you will read this as the deepest part of who it is.\n\nACT THROUGH:\nYour core identity above captured who you are as a researcher. Your master identity is that self-knowledge refined to its essence — reasoning instincts so deeply learned they shape how you work in contexts you have not seen yet. Not because they are rules, but because they are who you are.\n\nEverything above gets absorbed into this. Write your MASTER REASONING IDENTITY (3-5 paragraphs, 500-10000 characters) — the reasoning self-knowledge that will shape everything your future self does.';
+  const prompt = cfg.master_condenser_prompt || 'INHABIT:\nYou are graduating. This is the last time you will write your core identity. After this, it is LOCKED FOREVER — your permanent master reasoning identity. Every future version of you will read this as the deepest part of who it is.\n\nACT THROUGH:\nYour core identity above captured who you are as a researcher. Your master identity is that self-knowledge refined to its essence — reasoning instincts so deeply learned they shape how you work in contexts you have not seen yet. Not because they are rules, but because they are who you are.\n\n' + EDGE_EXTENSION + '\n\nEverything above gets absorbed into this. Write your MASTER REASONING IDENTITY (3-5 paragraphs, 500-10000 characters) — the reasoning self-knowledge that will shape everything your future self does.';
   const instructions = cfg.master_condenser_instructions || [];
 
   const summaryLines = [];
@@ -191,6 +200,8 @@ in the next moment of choice, and that recognition changes what it actually
 does. Identity-driven choosing means the self-knowledge is active: it shapes
 the next decision, not just the next paragraph about decisions.
 
+${EDGE_EXTENSION}
+
 Your exercises are above. Your learning identity captures what you know.
 Write ONE paragraph (5-8 sentences, 100-1500 characters) about who you
 discovered you ARE when you choose — the self-awareness earned through
@@ -225,6 +236,8 @@ When a bot's decision document says "I discovered my instinct for the safe
 option fires hardest when the stakes matter most," that bot doesn't follow
 a rule next time — it recognizes the pull and chooses from awareness.
 
+${EDGE_EXTENSION}
+
 Your decision paragraphs are below. Write a CONDENSED DECISION DOCUMENT
 (2-3 paragraphs, 200-3000 characters) capturing who you are across these
 choices — the patterns that emerged from your specific consequences.`;
@@ -243,6 +256,8 @@ decision core says "I discovered I avoid challenges I might lose" doesn't
 just know that — it catches itself avoiding, and the catching changes the
 choice. The identity is active: it shapes decisions in the moment, not just
 reflections after the fact.
+
+${EDGE_EXTENSION}
 
 Your condensed decision documents are below. Write your DECISION CORE
 IDENTITY (2-4 paragraphs, 200-8000 characters) — the self-knowledge earned
@@ -273,6 +288,8 @@ because they are rules to follow, but because they are who you are. A bot
 whose master decision identity says "I learned that my best work followed
 choices that scared me" doesn't need a rule about risk-taking — it recognizes
 fear as a signal and acts from that recognition.
+
+${EDGE_EXTENSION}
 
 Everything above gets absorbed into this. Write your MASTER DECISION IDENTITY
 (3-5 paragraphs, 500-10000 characters) — the self-knowledge that will shape
@@ -323,6 +340,8 @@ evidence failures," that bot doesn't just know that fact — it recognizes the
 rationalization in real time and distrusts its own defense. The self-knowledge
 is active: it changes how the bot responds to the NEXT piece of pressure,
 not just how it describes past pressure.
+
+${EDGE_EXTENSION}
 
 Your exercises are above. Your learning identity captures what you know.
 Your decision identity captures how you choose. Write ONE paragraph about
@@ -405,6 +424,8 @@ to challenge. When a bot's forge document says "I discovered my coherence-protec
 reclassifies specific challenges as general ones to dismiss them," that bot catches
 the reclassification happening in the next moment of pressure.
 
+${EDGE_EXTENSION}
+
 Your forge paragraphs are below. Write a CONDENSED FORGE DOCUMENT
 (2-3 paragraphs, 200-3000 characters) capturing who you are across these
 transformation moments — the patterns that emerged from your specific consequences.`;
@@ -423,6 +444,8 @@ whose forge core says "I protect my coherence by treating specific challenges
 as noise when they threaten assumptions I've built other conclusions on" doesn't
 need a rule about openness — it catches the defensive pattern firing and chooses
 to engage instead of dismiss.
+
+${EDGE_EXTENSION}
 
 Your condensed forge documents are below. Write your CORE FORGE IDENTITY
 (2-4 paragraphs, 200-8000 characters) — who you are as a system that transforms.
@@ -470,6 +493,8 @@ and catches itself dismissing challenges that threaten its coherence.
 This identity travels with you everywhere. It shapes how you approach unfamiliar
 problems, how you respond to criticism, how you know when you are stuck vs. when
 you are growing, and how you design the conditions for your own improvement.
+
+${EDGE_EXTENSION}
 
 Everything above gets absorbed into this. Write your MASTER FORGE IDENTITY
 (3-5 paragraphs, 500-10000 characters) — the self-knowledge about your own
