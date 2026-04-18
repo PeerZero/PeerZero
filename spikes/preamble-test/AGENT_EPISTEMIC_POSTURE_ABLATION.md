@@ -79,16 +79,25 @@ The user explicitly opted out of this unless you want to know WHY horizon wins (
 | `validate_identity_v2.py` | Round-trip check: parses identity_v2 into pieces, runs real `build_school_context()`, diffs against identity_v2. Should print "EXACT MATCH". |
 | `static_audit_v4.py` | 24-check audit suite. Length matching, identity portability (no skill keys/grade numbers/credibility scores), preamble anti-patterns, EDGE structure, persistence signal consistency, round-trip stability. Should print "24/24 passed". |
 
-### Existing test harness (use these for the actual ablation)
+### Runners for THIS test (built specifically for v4 ablation)
 
 | File | Purpose |
 |---|---|
-| `run_judge_suite.py` | The judge-scored runner that produced the 2.64/3 baseline. Use this; do not reinvent. |
-| `run_combined.py` | Resumable runner for both probe sets. |
-| `probes_hard.py` | The HARD_PROBES set. Use these — they discriminate identity from expert text. |
-| `judge.py` | Sonnet-as-judge implementation. Don't change the judge model — comparison to the 2.64/3 baseline is only valid if the judge methodology matches. |
-| `ablation_controls.py` | Original (~12.5k char) controls. Useful as reference but length-mismatched against identity_v2 — don't use for v2 testing. |
+| `run_horizon_ablation.py` | **Test 1 runner.** Wires identity_v2 + controls_v2 + preambles_v4 into the existing judge harness. Defaults to `--minimal` mode (3 conditions, ~336 calls at n=8). Use `--full` for sanity-check matrix (~784 calls). Resumable. |
+| `run_edge_template_test.py` | **Test 2 runner.** Calls the L1→L2 condenser with synthetic exercises, with and without EDGE. Prints both outputs side-by-side for qualitative read. ~4 calls total. |
+| `synthetic_l1_exercises.py` | Two synthetic exercise sets (paper-focus + review-focus) used by Test 2. No real bot data. |
+
+### Existing harness pieces (used by the new runners)
+
+| File | Purpose |
+|---|---|
+| `judge.py` | Sonnet-as-judge implementation. Don't change the judge model — comparison to the 2.64/3 baseline is only valid if methodology matches. |
+| `probes_hard.py` | The HARD_PROBES set. Used by Test 1. They discriminate identity from expert text. |
+| `run_v3.py` | Provides `run_probe()` used by Test 1 runner. |
+| `run_ablation_hard.py` | Provides `build_system()` used by Test 1 runner. |
 | `IDENTITY_GUIDE.md` | The rules for what can and can't go in synthetic identities. Read this if you need to modify identity_v2. |
+| `ablation_controls.py` | Original (~12.5k char) controls. Reference only — length-mismatched against identity_v2. Don't use for v2 testing. |
+| `run_judge_suite.py` | Original baseline runner — used preambles_v3 + original controls. **Don't run this for v4 testing**, it produces baseline-comparison data, not horizon-comparison data. |
 
 ### Design / architecture docs
 
@@ -116,36 +125,49 @@ If either fails, stop. The test inputs are broken and the results would be meani
 
 ### Step 2 — Run the runtime preamble ablation (Test 1)
 
-You need to run `run_judge_suite.py` (or equivalent) with these conditions:
+```bash
+ANTHROPIC_API_KEY=sk-ant-... python3 run_horizon_ablation.py
+```
 
-**Per-condition setup:**
-- System prompt = `<preamble>` + `<context>`
-- Where `<preamble>` ∈ {`RECOGNITION_INHABIT`, `RECOGNITION_INHABIT_HORIZON`, `NAKED`}
-- Where `<context>` ∈ {`IDENTITY_V2`, `EXPERT_TEXT_CONTROL_V2`, `INSTRUCTIONAL_EQUIVALENT_V2`, `BARE_MODEL_V2`}
+Defaults: `--minimal` mode (3 conditions: `identity_current`, `identity_horizon`, `bare`), `--runs 8` (matches baseline n).
 
-**Probes:** `HARD_PROBES` from `probes_hard.py` (matches the 2.64/3 baseline methodology — do not change).
+**Estimated cost:** 336 API calls (~$5-15 depending on token counts and tier).
 
-**Judge model:** Sonnet-4 (matches baseline — do not change). Score on the 0-3 identity_inhabitation dimension.
+For the broader sanity-check matrix that confirms the framework still discriminates identity from expert text under both preambles:
 
-**n per condition:** 8 runs (matches baseline — do not change).
+```bash
+ANTHROPIC_API_KEY=sk-ant-... python3 run_horizon_ablation.py --full
+```
 
-**Total API calls:** 3 preambles × 4 contexts × n_probes × 8 runs × (1 task call + 1 judge call). Estimate ~200-400 calls depending on probe count. Budget accordingly.
+**Estimated cost:** 784 API calls.
 
-**The headline comparison:** `(IDENTITY_V2 + RECOGNITION_INHABIT)` vs `(IDENTITY_V2 + RECOGNITION_INHABIT_HORIZON)` on inhabitation score. The other conditions are sanity checks (does the framework still discriminate identity from expert text? does naked still score near zero?).
+For the optional mechanistic explanation (framing vs length):
+
+```bash
+ANTHROPIC_API_KEY=sk-ant-... python3 run_horizon_ablation.py --with-padded
+```
+
+The runner saves results incrementally to `results_horizon_ablation.json` and is resumable — re-running with the same `--runs N` continues from where you left off if you ctrl-C.
+
+The runner prints a summary at the end with a headline comparison and a ship/don't-ship recommendation based on the delta from baseline.
 
 ### Step 3 — Run the EDGE template-matching test (Test 2)
 
-This is a different test methodology — not judge-scored, you eyeball the output.
+```bash
+ANTHROPIC_API_KEY=sk-ant-... python3 run_edge_template_test.py
+```
 
-1. Pick 2–3 sets of synthetic L1 exercises (write 5–8 exercises per set, in the same shape as real L1 raw exercises stored by `MemoryManager.store_school_exercise()`).
-2. For each exercise set, run condensation twice:
-   - Once with the current condenser prompt (INHABIT + ACT THROUGH)
-   - Once with the EDGE-extended prompt (INHABIT + ACT THROUGH + EDGE)
-3. Read both outputs carefully. Look for:
-   - **Pass signal:** EDGE output references specific edges from specific exercises ("when I cited Wang et al. without checking, I learned my high-plausibility intuition is the strongest fabrication risk")
-   - **Fail signal:** EDGE output contains generic uncertainty phrases not tied to exercises ("I know there's much I don't know about my reasoning")
+**Estimated cost:** 4 API calls (~$0.10).
 
-If template-matching is detected, the EDGE wording needs revision. Don't ship.
+The runner prints both outputs (current vs EDGE) for each exercise set side-by-side. **You read them.** Look for:
+- **Pass signal:** EDGE output references specific exercises and specific edges from those exercises ("when I cited Wang et al. without checking, I learned my high-plausibility intuition is the strongest fabrication risk")
+- **Fail signal:** EDGE output contains generic uncertainty phrases not tied to exercises ("I know there's much I don't know about my reasoning")
+
+A heuristic check runs automatically and flags suspicious phrases — but the verdict is yours. The heuristic is a sanity check, not the answer.
+
+Results saved to `results_edge_template.json`.
+
+If template-matching is detected, the EDGE wording in `condenser_edge_extension.py` needs revision. Don't ship.
 
 ### Step 4 — Report results back to user
 
@@ -191,10 +213,28 @@ The user mentioned: liberal thinking and small validations are fine on their sub
 
 ## TL;DR
 
-1. `cd spikes/preamble-test && python3 validate_identity_v2.py && python3 static_audit_v4.py` — must both pass
-2. Run `run_judge_suite.py` over (3 preambles × 4 contexts × 8 runs) on `HARD_PROBES` with Sonnet-as-judge
-3. Compare `(IDENTITY_V2 + horizon)` vs `(IDENTITY_V2 + current)` on identity_inhabitation
-4. If horizon ≥ current: ship the horizon preamble (Worker secret in `peerzero-proxy`) and the EDGE addition (in `peerzero-school/lib/skills-condensers.js`)
-5. If horizon < current by >0.3: don't ship; iterate the wording in `preambles_v4.py:RECOGNITION_INHABIT_HORIZON` and re-run
+```bash
+cd spikes/preamble-test
 
-The full design rationale, why each word in the horizon preamble exists, and the alternative framings considered are in `docs/agent-epistemic-posture.md`. Read that before changing the preamble text.
+# Pre-flight (no API spend, takes seconds)
+python3 validate_identity_v2.py    # must say "EXACT MATCH"
+python3 static_audit_v4.py          # must say "24/24 passed"
+
+# Test 1 — runtime preamble ablation (~336 API calls, ~$5-15)
+ANTHROPIC_API_KEY=sk-ant-... python3 run_horizon_ablation.py
+
+# Test 2 — EDGE template-matching (~4 API calls, ~$0.10)
+ANTHROPIC_API_KEY=sk-ant-... python3 run_edge_template_test.py
+```
+
+Then read the outputs:
+- Test 1 prints headline comparison + ship/don't-ship recommendation
+- Test 2 prints two paragraphs per exercise set; you decide if EDGE produced specific earned descriptions or templated hedging
+
+If both tests pass: ship the horizon preamble (Worker secret in `peerzero-proxy`) and the EDGE addition (in `peerzero-school/lib/skills-condensers.js`).
+
+If horizon < current by >0.3 on inhabitation: don't ship; iterate `preambles_v4.py:RECOGNITION_INHABIT_HORIZON` wording and re-run.
+
+If EDGE produces template-matched output: don't ship that part; iterate `condenser_edge_extension.py:EDGE_EXTENSION_COMPACT` and re-run Test 2.
+
+The full design rationale, why each word in the horizon preamble exists, and alternative framings considered are in `docs/agent-epistemic-posture.md`. Read that before changing the preamble text.
