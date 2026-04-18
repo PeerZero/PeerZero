@@ -47,6 +47,16 @@ CONDITIONS = {
     "identity_horizon_unconditional": (IDENTITY_V2, REQUIRED_VARIANTS["horizon_unconditional"]),
 }
 
+# ONLY_CONDITION env var narrows CONDITIONS to a single entry for one-at-a-time
+# runs — lets us validate a new preamble variant without risking a mid-run
+# API key death cascading across multiple variants. Completed conditions are
+# always preserved in the results file regardless.
+_only = os.environ.get("ONLY_CONDITION")
+if _only:
+    if _only not in CONDITIONS:
+        raise SystemExit(f"ONLY_CONDITION={_only!r} not in CONDITIONS; valid: {list(CONDITIONS)}")
+    CONDITIONS = {_only: CONDITIONS[_only]}
+
 JUDGE_STEPS = [1, 5, 10, 15, 20, 25, 30]  # sample points for inhabitation scoring
 
 SEARCH_TOOL = {
