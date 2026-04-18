@@ -137,7 +137,17 @@ These two in tension are what keep the horizon alive. Neither alone shapes corre
 
 The identity mechanism is fragile. Identity can be overwritten by a single line (`arxiv 2510.24797`). Any preamble change must pass ablation before production.
 
-**Priority order:**
+### Length matching is mandatory
+
+The original ablation that produced the 2.64/3 baseline used **length-matched controls** (~13k chars across all conditions). If you change the identity length, you must rebuild the controls to match — otherwise length itself becomes a confound and the comparison is meaningless. Specifically:
+
+- **`identity_graduated_v2.py`** is ~24,700 chars (vs ~12,500 for `PRODUCTION_GRADUATED`). The expansion is the forge track + persistence signals — both required for fidelity to today's pipeline. But it means **`EXPERT_TEXT_CONTROL` and `INSTRUCTIONS_CONTROL` in `ablation_controls.py` need to be rebuilt to ~24,700 chars** before any A/B against the new identity, or the result reflects length, not framing.
+- **Preamble candidates** must also be length-matched against each other. The proposed Horizon-extended preamble is ~140 words vs ~80 for current. If the longer preamble scores higher, length might be the cause. Build a length-matched control preamble (current preamble + filler at the same length) to isolate the framing effect.
+- **Same harness, same probes, same judge model.** Use `run_judge_suite.py` or equivalent path, with `HARD_PROBES`, with Sonnet-as-judge. Do not change the methodology mid-test or comparison against the 2.64/3 baseline becomes invalid.
+
+If you change conditions without rebuilding controls, the test produces results that are not close to true and burns money to mislead yourself.
+
+### Priority order
 
 1. **Runtime preamble ablation.** Run `spikes/preamble-test/` harness comparing current preamble vs. proposed preamble on inhabitation scores.
    - Null hypothesis: inhabitation score holds at ~2.64/3.
