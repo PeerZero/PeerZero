@@ -129,7 +129,43 @@ export function validateStartupConfig(): string[] {
     config.jwtSecret;         // throws if JWT_SECRET missing or < 32 chars
     config.jwtRefreshSecret;  // throws if JWT_REFRESH_SECRET missing
     config.encryptionMasterKey; // throws if ENCRYPTION_MASTER_KEY missing
+
+    // Validate format (32 bytes hex-encoded for AES-256-GCM). Without this
+    // check a malformed key (wrong length, non-hex chars) loads silently
+    // and crashes on first encrypt operation.
+    const encKey = config.encryptionMasterKey;
+    if (!/^[a-fA-F0-9]{64}$/.test(encKey)) {
+      throw new Error(
+        'ENCRYPTION_MASTER_KEY must be exactly 64 hex characters (32 bytes '
+        + `for AES-256-GCM). Got ${encKey.length} chars; valid hex: `
+        + `${/^[a-fA-F0-9]+$/.test(encKey)}.`,
+      );
+    }
+
     config.stripeSecretKey;   // throws if STRIPE_SECRET_KEY missing (unless SKIP_PAYMENTS)
+
+    // SCHOOL_ADMIN_SECRET is only used when calling admin school endpoints
+    // (school.adapter.real.ts). Without real adapters it's not needed, but
+    // if real adapters are on and the secret is missing, the first admin
+    // call (e.g., reconcile, kill switch) crashes mid-request.
+    if (config.useRealAdapters && !process.env.SCHOOL_ADMIN_SECRET) {
+      throw new Error(
+        'SCHOOL_ADMIN_SECRET is required in production when USE_REAL_ADAPTERS=true. '
+        + 'Without it, admin school endpoints (reconcile, emergency stop) crash on first call.',
+      );
+    }
+
+    // ADMIN_SECRET gates the health/emergency-stop endpoint. Without it the
+    // endpoint silently rejects every request — there is no way to trigger
+    // the kill switch during an incident. Warn loudly so operators notice
+    // before they need it.
+    if (!process.env.ADMIN_SECRET) {
+      warnings.push(
+        'ADMIN_SECRET is not set in production. The /health/emergency-stop '
+        + 'endpoint will reject all requests, leaving no way to pause all bots '
+        + 'during an incident. Set ADMIN_SECRET to a long random string.',
+      );
+    }
 
     // Guard against Stripe test keys in production
     const stripeKey = config.stripeSecretKey;

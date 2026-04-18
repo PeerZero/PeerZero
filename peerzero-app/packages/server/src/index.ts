@@ -244,7 +244,28 @@ if (config.redisUrl) {
     if (config.nodeEnv === 'production' && !config.redisUrl.startsWith('rediss://')) {
       logger.warn('REDIS_URL is not using TLS (rediss://) in production — data in transit is unencrypted');
     }
-    checkRedis.quit().catch(() => {});
+
+    // Check AOF persistence — BullMQ jobs survive Redis restart only if AOF
+    // is enabled. RDB-only loses up to seconds of jobs on crash. Warn so
+    // operators know to enable `appendonly yes` and `appendfsync everysec`
+    // in production. Best-effort — managed Redis may disable CONFIG GET.
+    return checkRedis.config('GET', 'appendonly').then((aofResult: string[]) => {
+      const aof = aofResult?.[1];
+      if (config.nodeEnv === 'production' && aof === 'no') {
+        logger.warn(
+          'Redis AOF persistence is disabled — BullMQ job data will be lost '
+          + 'on Redis restart or crash. Enable with: redis-cli CONFIG SET '
+          + 'appendonly yes && CONFIG SET appendfsync everysec',
+        );
+      } else if (aof === 'yes') {
+        logger.info('Redis AOF persistence verified: enabled');
+      }
+      checkRedis.quit().catch(() => {});
+    }).catch(() => {
+      // CONFIG GET on appendonly is restricted on some managed providers;
+      // skip without warning to avoid noise.
+      checkRedis.quit().catch(() => {});
+    });
   }).catch((err: Error) => {
     logger.warn({ err: err.message }, 'Could not verify Redis maxmemory-policy (CONFIG may be disabled on managed Redis)');
     checkRedis.quit().catch(() => {});

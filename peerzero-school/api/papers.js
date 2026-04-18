@@ -42,7 +42,11 @@ module.exports = async (req, res) => {
   const rawLimit = parseInt(req.query.limit, 10);
   const limit = Math.min(Number.isFinite(rawLimit) && rawLimit > 0 ? rawLimit : 50, 500);
   const rawOffset = parseInt(req.query.offset, 10);
-  const offset = Math.min(Number.isFinite(rawOffset) && rawOffset >= 0 ? rawOffset : 0, 10000);
+  // Cap offset at 5000: with limit=500 max, that's still 5500 rows scanned
+  // worst-case per request. The 10000 cap previously allowed 10500-row scans,
+  // which can exceed Supabase statement timeout on large papers tables and
+  // is a DoS vector. Bots typically need offset < 100 for paper search.
+  const offset = Math.min(Number.isFinite(rawOffset) && rawOffset >= 0 ? rawOffset : 0, 5000);
 
   // ── GET ──────────────────────────────────────────────────────────────────────
   if (req.method === 'GET') {

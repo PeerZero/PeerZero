@@ -39,7 +39,7 @@ function getQueue(): Queue {
         attempts: 2,
         backoff: { type: 'exponential', delay: 5000 },
         removeOnComplete: 100,
-        removeOnFail: 50,
+        removeOnFail: 500, // Retain more failures for debugging; cleanupOldJobs() ages out at 14 days
       },
     });
   }
@@ -67,7 +67,7 @@ async function scheduleNextCycle(
       jobId: `bot-${botId}-${Date.now()}`,
       delay: cycleDelaySeconds * 1000,
       removeOnComplete: 100,
-      removeOnFail: 50,
+      removeOnFail: 500, // Retain more failures for debugging; cleanupOldJobs() ages out at 14 days
       attempts: 2,
       backoff: { type: 'exponential', delay: 5000 },
     },
@@ -94,7 +94,7 @@ export async function addBotCycleJob(
     {
       jobId: `bot-${botId}-immediate`,
       removeOnComplete: 100,
-      removeOnFail: 50,
+      removeOnFail: 500, // Retain more failures for debugging; cleanupOldJobs() ages out at 14 days
       attempts: 2,
       backoff: { type: 'exponential', delay: 5000 },
     },
