@@ -139,9 +139,11 @@ router.post('/webhook', webhookLimiter, async (req: Request, res: Response) => {
     await paymentService.handleStripeWebhook(event);
     res.json({ received: true });
   } catch (err) {
-    const msg = err instanceof Error ? err.message : 'Unknown error';
-    // Log internally but don't leak details to Stripe
-    (await import('../lib/logger')).logger.error({ err: msg, eventType: event.type }, 'Webhook handler failed');
+    // Pass the raw err so pino captures stack; include event.id for Stripe-dashboard correlation.
+    (await import('../lib/logger')).logger.error(
+      { err, eventType: event.type, eventId: event.id },
+      'Webhook handler failed',
+    );
     res.status(500).json({ error: 'Webhook processing failed' });
   }
 });

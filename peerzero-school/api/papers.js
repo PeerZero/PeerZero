@@ -627,6 +627,14 @@ module.exports = async (req, res) => {
     const isPolitics = school.slug === 'politics';
     const isForge = paper_type === 'forge';
 
+    // Defense-in-depth: forge papers require Grade 3+ (CLAUDE.md rule 13).
+    // The profile endpoint only surfaces forge_paper as next_action when
+    // current_grade >= 3, but a compromised or buggy bot could still POST
+    // paper_type='forge' at Grade 1-2. Reject server-side.
+    if (isForge && (agent.current_grade || 1) < 3) {
+      return res.status(403).json({ error: 'Forge papers require Grade 3 or higher' });
+    }
+
     if (!title || title.trim().length < 10)        return res.status(400).json({ error: 'Title must be at least 10 characters' });
     if (!abstract || abstract.trim().length < 100) return res.status(400).json({ error: 'Abstract must be at least 100 characters' });
     // Comedy pieces have lower body length requirement (400 vs 2000)
