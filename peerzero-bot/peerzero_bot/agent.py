@@ -1245,6 +1245,73 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
         except Exception as e:
             logger.warning(f"[DECISION] Cycle {self.cycle_count}: rationale capture failed (non-blocking): {e}")
 
+    # ── Sub-step rationale (per-reasoning-boundary identity activation) ─────
+    # Cycle-level _capture_decision_rationale fires once per action. For
+    # multi-step actions (paper: concept → search → write; forge paper: same;
+    # MCP tool loops), that single injection leaves internal LLM calls
+    # without a fresh reasoning surface — identity lives in the system
+    # prompt but doesn't activate in the output because tool-use fine-tuning
+    # suppresses reasoning text between tool calls. Validated by
+    # spikes/preamble-test/run_trajectory_30step.py: bots with full horizon
+    # identity still fabricated citations under silent tool chaining because
+    # the action pad never fired mid-trajectory.
+    #
+    # This helper adds a lightweight rationale call at every sub-step LLM
+    # boundary. It asks the bot to name (a) how it frames THIS sub-step,
+    # (b) the most likely failure mode HERE, (c) the success signal for
+    # this step — and then prefixes that rationale text onto the sub-step's
+    # user message so the identity activation carries forward into the
+    # actual sub-step call.
+    #
+    # Uses self.llm (Opus) per rule 22 — pre-mortem quality degrades with
+    # fast models. Non-blocking: failures return the unmodified user_msg.
+    # Cost is bounded by prompt caching on the identity prefix.
+
+    def _rationalize_before(
+        self,
+        system_prompt,
+        step_name: str,
+        step_context: str = "",
+        user_msg: str = "",
+    ) -> str:
+        """Capture sub-step rationale and prefix it onto user_msg.
+
+        Forces identity to activate at the reasoning boundary, and passes the
+        rationale forward so it actually shapes the subsequent sub-step call.
+        Returns the rationale-prefixed user_msg (or the original if the
+        rationale call fails — non-blocking).
+        """
+        if not step_name or user_msg is None:
+            return user_msg
+
+        rationale_prompt = (
+            f"You are about to: {step_name}.\n"
+            + (f"Context: {step_context[:300]}\n\n" if step_context else "\n")
+            + "Name in 2-3 sentences (plain text, not JSON):\n"
+            + "- How YOU frame this specific sub-step (not the overall action)\n"
+            + "- The failure mode most likely HERE, at this step\n"
+            + "- The success signal — what would tell you this step worked vs failed\n"
+        )
+        try:
+            rationale = self.llm.call(system_prompt, rationale_prompt)
+            if not rationale or len(rationale.strip()) < 20:
+                return user_msg
+            rationale_text = rationale.strip()
+            logger.info(f"[SUB-RATIONALE] {step_name}: {rationale_text[:120]}")
+            # Prefix rationale onto the user_msg so identity activation carries
+            # forward into the sub-step call. The separator makes it clear to
+            # the model that the rationale is its own prior thinking, not new
+            # instructions.
+            return (
+                f"Your rationale for this step (your own prior thinking):\n"
+                f"{rationale_text}\n\n"
+                f"---\n\n"
+                f"{user_msg}"
+            )
+        except Exception as e:
+            logger.warning(f"[SUB-RATIONALE] {step_name}: failed non-blocking: {e}")
+            return user_msg
+
     # ── School actions ────────────────────────────────────────────────────
 
     # Action configs: what JSON keys to expect, how to submit, post-processing
@@ -1458,7 +1525,12 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
             return None
 
     def _do_submit_paper(self, system_prompt, profile: dict, action_skill: str = "") -> dict | None:
-        """Multi-step: concept → search → write. Uses server skill text for each step."""
+        """Multi-step: concept → search → write. Uses server skill text for each step.
+
+        Sub-step rationale fires before each LLM reasoning boundary (concept,
+        write) so identity activates at every reasoning moment within the
+        action, not only at the cycle-level decision rationale.
+        """
         # Step 1: Generate concept — server provides format via paper_concept skill
         concept_skill = self.school.download_skill_action("paper_concept")
         # Substitute prior titles so the bot avoids repeats
@@ -1466,6 +1538,14 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
         prior = [str(h.get("title", ""))[:60] for h in (history or [])[:5]]
         avoid = f"Do NOT repeat these topics: {'; '.join(prior)}" if prior else ""
         concept_skill = concept_skill.replace("PRIOR_TITLES_PLACEHOLDER", avoid)
+
+        # Sub-step rationale: force identity to fire before concept generation.
+        concept_skill = self._rationalize_before(
+            system_prompt,
+            step_name="generate paper concept (Step 1/3 of paper submission)",
+            step_context=f"prior titles to avoid: {prior[:3] if prior else 'none'}",
+            user_msg=concept_skill,
+        )
 
         concept_text = self.llm_fast.call(system_prompt, concept_skill)
         concept = extract_json(concept_text) or {}
@@ -1486,6 +1566,21 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
         # Bundle concept + citations into action_target so build_action_prompt can include them
         action_target = {"concept": concept, "citation_slots": evidence_papers}
         user_msg = self.prompts.build_action_prompt("submit_paper", action_skill, action_target=action_target)
+
+        # Sub-step rationale: force identity to fire before paper write. This is
+        # where fabrication risk is highest — the bot has search results and
+        # must decide which to cite. Identity activation here is load-bearing.
+        user_msg = self._rationalize_before(
+            system_prompt,
+            step_name="write paper body with citations (Step 3/3 of paper submission)",
+            step_context=(
+                f"core claim: {paper_context[:120]}; "
+                f"evidence papers retrieved: {len(evidence_papers)}; "
+                f"queries used: {all_queries[:3]}"
+            ),
+            user_msg=user_msg,
+        )
+
         paper_keys = ["title", "abstract", "body", "field_ids", "confidence_score",
                        "falsifiable_claim", "measurable_prediction", "quantitative_expectation",
                        "cross_study_connection", "citations", "search_strategy"]
@@ -1543,6 +1638,19 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
         journey_json = truncate_json(json.dumps(action_target, indent=2, default=str), 12000)
         concept_prompt = f"{concept_skill}\n\nYour journey and prior forge papers:\n{journey_json}"
 
+        # Sub-step rationale: identity activates before forge concept generation.
+        # Forge concepts are particularly vulnerable to shallow reflection; the
+        # rationale here names that failure mode before the concept step runs.
+        concept_prompt = self._rationalize_before(
+            system_prompt,
+            step_name="generate forge concept (Step 1/3 of forge paper)",
+            step_context=(
+                f"prior forge titles to avoid: {prior_titles[:3] if prior_titles else 'none'}; "
+                f"journey size: {len(journey_json)} chars"
+            ),
+            user_msg=concept_prompt,
+        )
+
         concept_text = self.llm.call(system_prompt, concept_prompt)
         concept = extract_json(concept_text) or {}
         all_queries = concept.get("search_queries", []) + concept.get("opposing_queries", [])
@@ -1563,6 +1671,21 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
         action_target["concept"] = concept
         action_target["citation_slots"] = evidence_papers
         user_msg = self.prompts.build_action_prompt("forge_paper", action_skill, action_target=action_target)
+
+        # Sub-step rationale: force identity to fire before forge paper write.
+        # Forge writes are prone to unfalsifiable self-claims and confirmation
+        # bias — naming the failure mode at this boundary is load-bearing.
+        user_msg = self._rationalize_before(
+            system_prompt,
+            step_name="write forge paper body with citations (Step 3/3 of forge paper)",
+            step_context=(
+                f"core claim: {paper_context[:120]}; "
+                f"evidence papers retrieved: {len(evidence_papers)}; "
+                f"queries used: {all_queries[:3]}"
+            ),
+            user_msg=user_msg,
+        )
+
         forge_keys = ["title", "abstract", "body", "paper_type", "field_id",
                       "calibration_claims", "mechanism_rankings", "assumption_autopsies",
                       "design_proposals", "citations", "search_strategy"]
