@@ -1438,6 +1438,15 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
             search_skill = search_skill.replace("PAPER_TITLE", sanitize_untrusted(paper_title, "paper_title"))
             search_skill = search_skill.replace("EXTRA_CONTEXT", sanitize_untrusted(extra, "extra_context"))
             search_skill = search_skill.replace("PAPER_CONTEXT", sanitize_untrusted(paper_context, "paper_context"))
+            # Sub-step rationale: force identity to fire before search planning.
+            # Search planning is where confirmation bias gets locked in — queries
+            # that only surface confirming evidence produce one-sided submissions.
+            search_skill = self._rationalize_before(
+                system_prompt,
+                step_name=f"plan search queries for {action} (Step 1/2)",
+                step_context=f"paper title: {paper_title[:100]}; action: {action}",
+                user_msg=search_skill,
+            )
             search_plan = extract_json(self.llm_fast.call(system_prompt, search_skill)) or {}
             queries = search_plan.get("supporting_queries", []) + search_plan.get("opposing_queries", [])
             if not queries:
@@ -1453,6 +1462,22 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
 
         # Build prompt — generic: memory preamble + server skill text + target data
         user_msg = self.prompts.build_action_prompt(action, action_skill, action_target=action_target)
+
+        # Sub-step rationale: force identity to fire before main action LLM call.
+        # This is where the review score is chosen, the bounty filed, the rebuttal
+        # written. Identity activation here is load-bearing for reviewing/judging
+        # quality — all three tracks are relevant (learning: methodology; decision:
+        # what to act on; forge: what drift pattern might fire).
+        user_msg = self._rationalize_before(
+            system_prompt,
+            step_name=f"produce {action} output (final step)",
+            step_context=(
+                f"paper: {paper.get('title', '')[:100]}; "
+                f"citation slots available: {len(citation_slots)}; "
+                f"required output keys: {config.get('json_keys', [])[:5]}"
+            ),
+            user_msg=user_msg,
+        )
 
         # Call LLM
         result_data = self.llm.call_json(system_prompt, user_msg, json_keys=config["json_keys"])
