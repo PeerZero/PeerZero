@@ -211,6 +211,18 @@ Format the report as:
 
 ---
 
+## Production-fidelity wiring (read this before interpreting results)
+
+The runner uses **production-fidelity** assembly by default: `system_prompt = preamble + identity`. This matches what the proxy + bot send to the LLM in deployment.
+
+The original baseline test methodology (which produced the 2.64/3 number) used a different `build_system()` that hardcoded the deprecated INHABIT v1 preamble between the user-supplied preamble and the identity — so the original 2.64/3 was measured with TWO inhabit framings stacked on top of identity, not one.
+
+If you want a strict comparison to that 2.64/3 number, pass `--baseline-compat` to use the original wiring. For production-deployment-relevance, leave it off (the default).
+
+The static audit's layer-sequence check (#7 in `static_audit_v4.py`) verifies that the production-fidelity assembled prompt has all 20 expected markers in the correct production order — preamble → horizon mechanism → learning track L5/L4/L3/L2 → decision track L5d/L4d/L3d/L2d → forge track L5f/L4f/L3f/L2f → persistence INHABIT/ACT THROUGH framing → signals. This is exactly what `build_school_context()` produces in the bot.
+
+---
+
 ## Pitfalls — things the user is paying attention to
 
 ### Don't change methodology mid-test

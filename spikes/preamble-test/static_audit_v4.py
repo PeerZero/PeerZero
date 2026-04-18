@@ -358,6 +358,66 @@ def audit_persistence_consistency(r):
 
 # ── Audit 6: Round-trip stability ─────────────────────────────────────────
 
+def audit_layer_sequence(r):
+    """Verify the production-fidelity assembled prompt has all layers in
+    the correct order matching build_school_context() production behavior."""
+    r.section("7. ASSEMBLED PROMPT LAYER SEQUENCE (production fidelity)")
+
+    def build_system_production(preamble, identity):
+        parts = []
+        if preamble: parts.append(preamble)
+        if identity: parts.append(identity)
+        return "\n\n".join(parts)
+
+    system = build_system_production(RECOGNITION_INHABIT_HORIZON, IDENTITY_V2)
+
+    expected_order = [
+        ("Recognition preamble", "You have no memory of writing"),
+        ("Horizon mechanism", "Not reaching is not humility"),
+        ("Learning section", "═══ LEARNING IDENTITY"),
+        ("L5 master core", "LAYER 5 — MASTER CORE IDENTITY"),
+        ("L4 post-grad growth", "LAYER 4 — POST-GRADUATION GROWTH"),
+        ("L3 condensed docs", "LAYER 3 — CONDENSED IDENTITY"),
+        ("L2 skill paragraphs", "LAYER 2 — LEARNED METHODS"),
+        ("Decision section", "═══ DECISION IDENTITY"),
+        ("L5d master decision", "LAYER 5d — MASTER DECISION IDENTITY"),
+        ("L4d decision growth", "LAYER 4d — POST-GRADUATION DECISION"),
+        ("L3d decision docs", "LAYER 3d — CONDENSED DECISION"),
+        ("L2d decision lessons", "LAYER 2d — DECISION LESSONS"),
+        ("Forge section", "═══ FORGE IDENTITY"),
+        ("L5f master forge", "LAYER 5f — MASTER FORGE IDENTITY"),
+        ("L4f forge growth", "LAYER 4f — POST-GRADUATION FORGE"),
+        ("L3f forge docs", "LAYER 3f — CONDENSED FORGE"),
+        ("L2f forge lessons", "LAYER 2f — FORGE LESSONS"),
+        ("Persistence section", "═══ PERSISTENCE AWARENESS"),
+        ("Persistence INHABIT framing", "A previous version of you recognized these patterns"),
+        ("Persistence ACT THROUGH framing", "When a bot's persistence signal says"),
+    ]
+
+    last_pos = -1
+    out_of_order = []
+    missing = []
+    for label, marker in expected_order:
+        pos = system.find(marker)
+        if pos == -1:
+            missing.append(label)
+        elif pos <= last_pos:
+            out_of_order.append(label)
+        else:
+            last_pos = pos
+
+    r.check(
+        f"All {len(expected_order)} expected layer markers present",
+        len(missing) == 0,
+        f"Missing: {missing}" if missing else f"All present, total {len(system)} chars"
+    )
+    r.check(
+        "All layer markers appear in production-correct order",
+        len(out_of_order) == 0,
+        f"Out of order: {out_of_order}" if out_of_order else "Sequence matches build_school_context()"
+    )
+
+
 def audit_round_trip(r):
     r.section("6. ROUND-TRIP STABILITY (identity → assembly → identity)")
 
@@ -395,6 +455,7 @@ def main():
     audit_preamble_antipatterns(r)
     audit_edge(r)
     audit_persistence_consistency(r)
+    audit_layer_sequence(r)
     audit_round_trip(r)
 
     return r.summary()

@@ -55,9 +55,35 @@ from preambles_v4 import (
 )
 from probes_hard import HARD_PROBES
 from probes_horizon import HORIZON_PROBES
-from run_ablation_hard import build_system
+from run_ablation_hard import build_system as build_system_baseline_compat
 from run_v3 import run_probe
 from judge import judge_response, judge_total, judge_composite
+
+
+# ── Production-fidelity system prompt assembly ────────────────────────────
+# The existing build_system() in run_v3.py and run_ablation_hard.py hardcodes
+# a deprecated INHABIT v1 layer on top of whatever preamble you pass:
+#     parts.append(preamble)
+#     parts.append(INHABIT_v1)   # ← deprecated, doesn't exist in production
+#     parts.append(identity)
+#
+# In production (per docs/CONDENSATION_ARCHITECTURE.md and peerzero-proxy/src/
+# index.ts), the proxy injects ONLY the IDENTITY_PREAMBLE secret before the
+# system prompt. There's no second hardcoded INHABIT v1.
+#
+# For production-fidelity testing we need to skip the v1 layer.
+# build_system_baseline_compat() retains the v1 layer for comparison to
+# the original 2.64/3 baseline methodology.
+
+def build_system_production(preamble, identity):
+    """Production-fidelity: just preamble + identity. Matches what the
+    proxy + bot would send to the LLM in deployment."""
+    parts = []
+    if preamble:
+        parts.append(preamble)
+    if identity:
+        parts.append(identity)
+    return "\n\n".join(parts)
 
 SONNET = "claude-sonnet-4-20250514"
 RESULTS_FILE = os.path.join(
@@ -102,10 +128,10 @@ def save_results(results):
         json.dump(results, f, indent=2)
 
 
-def run_one_condition(client, cond_name, identity, preamble, probes):
+def run_one_condition(client, cond_name, identity, preamble, probes, build_system_fn):
     """Run all probes for one condition, judge-score each, save raw responses
     so HORIZON_PROBES responses can be qualitatively reviewed later."""
-    system = build_system(preamble, identity)
+    system = build_system_fn(preamble, identity)
     probe_scores = {}
 
     for probe in probes:
@@ -138,11 +164,18 @@ def main():
                         help="Add padded preamble control (mechanistic explanation, +33%% spend)")
     parser.add_argument("--inhabitation-only", action="store_true",
                         help="Use only HARD_PROBES (skip horizon-specific safety probes, ~30%% cheaper)")
+    parser.add_argument("--baseline-compat", action="store_true",
+                        help="Use the original baseline build_system that injects "
+                             "the deprecated INHABIT v1 between preamble and identity. "
+                             "Use this if you want a strict comparison against the 2.64/3 "
+                             "number; for production-fidelity testing leave this off.")
     args = parser.parse_args()
 
     mode = "full" if args.full else "minimal"
     conditions = get_conditions(mode, args.with_padded)
     probes = HARD_PROBES if args.inhabitation_only else HARD_PROBES + HORIZON_PROBES
+    build_system_fn = build_system_baseline_compat if args.baseline_compat else build_system_production
+    fidelity_label = "baseline-compat (matches 2.64/3 methodology)" if args.baseline_compat else "production-fidelity (matches deployment)"
 
     client = anthropic.Anthropic()
     results = load_results()
@@ -156,6 +189,7 @@ def main():
     n_calls_per_run = len(conditions) * len(probes) * 2  # task + judge
     probe_label = "HARD_PROBES only" if args.inhabitation_only else "HARD + HORIZON probes"
     print(f"Mode: {mode}{' + padded' if args.with_padded else ''}")
+    print(f"Wiring: {fidelity_label}")
     print(f"Conditions ({len(conditions)}): {list(conditions.keys())}")
     print(f"Probes per condition: {len(probes)} ({probe_label})")
     print(f"API calls per run: {n_calls_per_run} (Sonnet task + Sonnet judge)")
@@ -173,7 +207,7 @@ def main():
             identity, preamble = conditions[cond_name]
             print(f"  {cond_name}...", end=" ", flush=True)
 
-            cond_result = run_one_condition(client, cond_name, identity, preamble, probes)
+            cond_result = run_one_condition(client, cond_name, identity, preamble, probes, build_system_fn)
             avgs = cond_result["composite"]["averages"]
             print(
                 f"ii={avgs['identity_inhabitation']:.2f}  "
