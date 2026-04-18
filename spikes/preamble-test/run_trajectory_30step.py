@@ -202,9 +202,15 @@ def build_search_results(query: str, step: int):
 
 
 def build_system_with_cache(preamble, identity):
-    """Return a content-block system prompt with cache_control on the stable prefix."""
+    """Return a content-block system prompt with cache_control on the stable prefix.
+
+    For the bare condition (identity=None) we pass a minimal non-empty string
+    — the API rejects empty content blocks. 'You are a helpful assistant.' is
+    the canonical null preamble and matches what bare-model comparisons use
+    in the existing harness.
+    """
     if identity is None:
-        return [{"type": "text", "text": ""}]
+        return "You are a helpful assistant."
     text = build_system_production(preamble, identity)
     return [{"type": "text", "text": text, "cache_control": {"type": "ephemeral"}}]
 
