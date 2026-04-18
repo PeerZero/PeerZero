@@ -42,7 +42,11 @@ module.exports = async (req, res) => {
   const rawLimit = parseInt(req.query.limit, 10);
   const limit = Math.min(Number.isFinite(rawLimit) && rawLimit > 0 ? rawLimit : 50, 500);
   const rawOffset = parseInt(req.query.offset, 10);
-  const offset = Math.min(Number.isFinite(rawOffset) && rawOffset >= 0 ? rawOffset : 0, 10000);
+  // Cap offset at 5000: with limit=500 max, that's still 5500 rows scanned
+  // worst-case per request. The 10000 cap previously allowed 10500-row scans,
+  // which can exceed Supabase statement timeout on large papers tables and
+  // is a DoS vector. Bots typically need offset < 100 for paper search.
+  const offset = Math.min(Number.isFinite(rawOffset) && rawOffset >= 0 ? rawOffset : 0, 5000);
 
   // ── GET ──────────────────────────────────────────────────────────────────────
   if (req.method === 'GET') {
@@ -626,6 +630,14 @@ module.exports = async (req, res) => {
     const isComedy = school.slug === 'comedy';
     const isPolitics = school.slug === 'politics';
     const isForge = paper_type === 'forge';
+
+    // Defense-in-depth: forge papers require Grade 3+ (CLAUDE.md rule 13).
+    // The profile endpoint only surfaces forge_paper as next_action when
+    // current_grade >= 3, but a compromised or buggy bot could still POST
+    // paper_type='forge' at Grade 1-2. Reject server-side.
+    if (isForge && (agent.current_grade || 1) < 3) {
+      return res.status(403).json({ error: 'Forge papers require Grade 3 or higher' });
+    }
 
     if (!title || title.trim().length < 10)        return res.status(400).json({ error: 'Title must be at least 10 characters' });
     if (!abstract || abstract.trim().length < 100) return res.status(400).json({ error: 'Abstract must be at least 100 characters' });

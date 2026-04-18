@@ -35,7 +35,7 @@ function getQueue(): Queue {
         attempts: 2,
         backoff: { type: 'exponential', delay: 5000 },
         removeOnComplete: 50,
-        removeOnFail: 25,
+        removeOnFail: 200, // Retain more failures for debugging; cleanupOldPlatformJobs() ages out at 14 days
       },
     });
   }
@@ -80,7 +80,7 @@ export async function schedulePlatformJobs(
       await queue.add(jobName, data, {
         jobId: `${jobName}-now`,
         removeOnComplete: 50,
-        removeOnFail: 25,
+        removeOnFail: 200, // Retain more failures for debugging; cleanupOldPlatformJobs() ages out at 14 days
       });
     }
   }

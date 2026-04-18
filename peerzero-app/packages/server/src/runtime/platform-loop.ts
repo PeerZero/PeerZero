@@ -265,6 +265,18 @@ export async function runPlatformCycle(ctx: PlatformCycleContext): Promise<void>
 
         for (const track of tracks) {
           if (!track.condenser) continue;
+          // Defense-in-depth (CLAUDE.md rule 10): platform condensation must
+          // NEVER call core/master condensers. The bot side has the same guard
+          // (_platform_condensation.py:43-50). Hardcoded refusal here so a
+          // future tracks-array refactor cannot accidentally violate the
+          // school-exclusive boundary on L4/L5 identity.
+          if (track.key === 'core' || (track.key as string) === 'master') {
+            logger.error(
+              { botId: ctx.botId, attemptedTrack: track.key },
+              'SECURITY: platform-loop attempted core/master condensation; refusing (CLAUDE.md rule 10)',
+            );
+            continue;
+          }
           try {
             const condensationPrompt = buildPrompt('condense', {
               profile: profile!,

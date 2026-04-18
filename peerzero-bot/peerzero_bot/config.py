@@ -507,6 +507,19 @@ class BotConfig:
                         self.school_url.startswith("http://127.0.0.1")):
                     errors.append(f"School URL must use HTTPS (or localhost for dev)")
 
+            # CLAUDE.md rule 8: identity preamble is server-side and is injected
+            # by the proxy on EVERY LLM call. Disabling the proxy in school mode
+            # silently bypasses the preamble — the bot reasons without identity
+            # activation, breaking the inhabitation mechanism that all school
+            # cycles depend on. Fail loudly unless explicitly overridden.
+            if not self.llm_proxy_enabled and not os.environ.get("PEERZERO_ALLOW_INSECURE_CONFIG"):
+                errors.append(
+                    "School mode requires llm_proxy_enabled=true so the identity "
+                    "preamble reaches every LLM call. Disabling the proxy in school "
+                    "mode silently breaks identity activation. To override (dev only) "
+                    "set PEERZERO_ALLOW_INSECURE_CONFIG=1."
+                )
+
         if not self.llm_api_key:
             errors.append("LLM_API_KEY is required")
         elif not validate_llm_key(self.llm_api_key, self.llm_provider):

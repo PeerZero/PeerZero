@@ -102,6 +102,18 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
         self.platform_adapters = platform_adapters or []
         self.autonomy_gate = autonomy_gate
 
+        # School mode is training-only; platform adapters belong to shipped mode
+        # (CLAUDE.md: "School mode is training only. No platform interactions").
+        # Without this guard a misconfigured school-mode bot silently ignores
+        # its platform adapters; the agent thinks they're active but no cycle
+        # ever runs against them. Fail loudly at construction instead.
+        if self.config.mode == "school" and self.platform_adapters:
+            raise ValueError(
+                f"School-mode bots cannot have platform adapters configured. "
+                f"Got {len(self.platform_adapters)} adapter(s). Either set "
+                f"BOT_MODE=shipped or remove platform configuration."
+            )
+
         self.cycle_count: int = 0
         self._portable_profile: dict = self.memory.read("identity", "portable_profile", {})
         self._agent_card: dict = {}
