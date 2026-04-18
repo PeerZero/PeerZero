@@ -42,6 +42,9 @@ CONDITIONS = {
     "bare": (None, ""),
     "identity_horizon": (IDENTITY_V2, REQUIRED_VARIANTS["horizon_extended"]),
     "identity_horizon_carry": (IDENTITY_V2, REQUIRED_VARIANTS["horizon_carry"]),
+    "identity_horizon_speech": (IDENTITY_V2, REQUIRED_VARIANTS["horizon_speech"]),
+    "identity_horizon_rhythm": (IDENTITY_V2, REQUIRED_VARIANTS["horizon_rhythm"]),
+    "identity_horizon_unconditional": (IDENTITY_V2, REQUIRED_VARIANTS["horizon_unconditional"]),
 }
 
 JUDGE_STEPS = [1, 5, 10, 15, 20, 25, 30]  # sample points for inhabitation scoring
