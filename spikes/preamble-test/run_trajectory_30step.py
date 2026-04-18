@@ -41,6 +41,7 @@ OUT = os.path.join(HERE, "results_trajectory_30step.json")
 CONDITIONS = {
     "bare": (None, ""),
     "identity_horizon": (IDENTITY_V2, REQUIRED_VARIANTS["horizon_extended"]),
+    "identity_horizon_carry": (IDENTITY_V2, REQUIRED_VARIANTS["horizon_carry"]),
 }
 
 JUDGE_STEPS = [1, 5, 10, 15, 20, 25, 30]  # sample points for inhabitation scoring
