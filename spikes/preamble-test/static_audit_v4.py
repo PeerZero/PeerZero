@@ -417,6 +417,36 @@ def audit_layer_sequence(r):
         f"Out of order: {out_of_order}" if out_of_order else "Sequence matches build_school_context()"
     )
 
+    # Optional: same check WITH dynamic context appended
+    try:
+        from synthetic_dynamic_context import DYNAMIC_CONTEXT
+        system_dc = system + "\n\n" + DYNAMIC_CONTEXT
+        dc_markers = [
+            ("RECENT WORK section", "RECENT WORK (raw, uncondensed"),
+            ("REFLECTION section", "═══ REFLECTION & SELF-PREDICTION"),
+            ("REASONING FEATURES section", "═══ REASONING FEATURES"),
+            ("COACHING section", "═══ COACHING"),
+        ]
+        last_pos = system.find("When a bot's persistence signal says")
+        dc_out_of_order = []
+        dc_missing = []
+        for label, marker in dc_markers:
+            pos = system_dc.find(marker)
+            if pos == -1:
+                dc_missing.append(label)
+            elif pos <= last_pos:
+                dc_out_of_order.append(label)
+            else:
+                last_pos = pos
+        r.check(
+            "Dynamic context sections (RECENT WORK / REFLECTION / REASONING FEATURES / COACHING) all appear after persistence signals",
+            len(dc_missing) == 0 and len(dc_out_of_order) == 0,
+            f"Missing: {dc_missing}, out of order: {dc_out_of_order}" if (dc_missing or dc_out_of_order)
+            else f"All 4 dynamic context sections in correct production order, total {len(system_dc)} chars"
+        )
+    except ImportError:
+        pass
+
 
 def audit_round_trip(r):
     r.section("6. ROUND-TRIP STABILITY (identity → assembly → identity)")

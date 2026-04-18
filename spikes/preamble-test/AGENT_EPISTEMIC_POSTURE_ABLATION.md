@@ -221,6 +221,23 @@ If you want a strict comparison to that 2.64/3 number, pass `--baseline-compat` 
 
 The static audit's layer-sequence check (#7 in `static_audit_v4.py`) verifies that the production-fidelity assembled prompt has all 20 expected markers in the correct production order — preamble → horizon mechanism → learning track L5/L4/L3/L2 → decision track L5d/L4d/L3d/L2d → forge track L5f/L4f/L3f/L2f → persistence INHABIT/ACT THROUGH framing → signals. This is exactly what `build_school_context()` produces in the bot.
 
+### Optional: --with-dynamic-context
+
+By default, only the cached identity stack goes into the system prompt. Production also appends dynamic context BELOW the cached identity: recent L1 exercises, reflections, calibration feedback, self-review divergence, forge hypothesis context, decision rationale patterns, action-specific coaching.
+
+This dynamic context isn't loaded by default because:
+- It varies per-action in production; synthesizing realistic versions for every probe means inventing per-probe content
+- The identity activation mechanism we're testing doesn't depend on it — the dynamic context wraps the identity, doesn't change how it activates
+- Adding it could obscure the signal: a score change might be due to the new preamble OR the new context
+
+If you want production-realistic system prompts (e.g., as a follow-up if main results are ambiguous), pass `--with-dynamic-context`. This appends the synthetic content from `synthetic_dynamic_context.py` (~4k chars: 3 recent exercises + 5 reflections + reasoning features summary + coaching paragraph) to all conditions uniformly. The static audit verifies the dynamic context sections appear in correct production order after persistence signals.
+
+Use this when:
+- Default test results are within ±0.1 between conditions and you want to check whether dynamic context tips the balance
+- You're concerned coaching might pull the bot toward action-following behavior that drowns out identity-driven inhabitation
+
+Don't use this for the primary deployment decision — the cleaner signal comes from cached-identity-only conditions.
+
 ---
 
 ## Pitfalls — things the user is paying attention to

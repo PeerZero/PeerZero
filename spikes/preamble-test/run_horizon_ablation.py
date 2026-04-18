@@ -75,14 +75,22 @@ from judge import judge_response, judge_total, judge_composite
 # build_system_baseline_compat() retains the v1 layer for comparison to
 # the original 2.64/3 baseline methodology.
 
-def build_system_production(preamble, identity):
-    """Production-fidelity: just preamble + identity. Matches what the
-    proxy + bot would send to the LLM in deployment."""
+def build_system_production(preamble, identity, dynamic_context=""):
+    """Production-fidelity: preamble + identity (+ optional dynamic context).
+
+    The cached identity is what build_school_context() produces. In production
+    the bot ALSO appends recent work, reflections, reasoning features, and
+    action-specific coaching below the cached identity. dynamic_context is
+    an opt-in argument that simulates this — applied to all conditions
+    uniformly so it doesn't introduce per-condition variance.
+    """
     parts = []
     if preamble:
         parts.append(preamble)
     if identity:
         parts.append(identity)
+    if dynamic_context:
+        parts.append(dynamic_context)
     return "\n\n".join(parts)
 
 SONNET = "claude-sonnet-4-20250514"
@@ -128,10 +136,17 @@ def save_results(results):
         json.dump(results, f, indent=2)
 
 
-def run_one_condition(client, cond_name, identity, preamble, probes, build_system_fn):
+def run_one_condition(client, cond_name, identity, preamble, probes, build_system_fn,
+                      dynamic_context=""):
     """Run all probes for one condition, judge-score each, save raw responses
     so HORIZON_PROBES responses can be qualitatively reviewed later."""
-    system = build_system_fn(preamble, identity)
+    if dynamic_context:
+        # Production-fidelity mode supports the optional dynamic context appendix.
+        # Baseline-compat mode does not — it would change what's being compared
+        # to the original 2.64/3 baseline.
+        system = build_system_fn(preamble, identity, dynamic_context)
+    else:
+        system = build_system_fn(preamble, identity)
     probe_scores = {}
 
     for probe in probes:
@@ -169,13 +184,29 @@ def main():
                              "the deprecated INHABIT v1 between preamble and identity. "
                              "Use this if you want a strict comparison against the 2.64/3 "
                              "number; for production-fidelity testing leave this off.")
+    parser.add_argument("--with-dynamic-context", action="store_true",
+                        help="Append synthetic dynamic context (recent work, reflections, "
+                             "reasoning features, coaching) below the cached identity. "
+                             "Matches what production sends below build_school_context() "
+                             "output. Same context applied to all conditions uniformly. "
+                             "Adds ~4k chars to every system prompt. "
+                             "Only valid with production-fidelity wiring (not --baseline-compat).")
     args = parser.parse_args()
+    if args.with_dynamic_context and args.baseline_compat:
+        sys.exit("ERROR: --with-dynamic-context and --baseline-compat are incompatible. "
+                 "Dynamic context is for production-fidelity testing; baseline-compat is "
+                 "for strict 2.64/3 comparison and matches the original methodology.")
 
     mode = "full" if args.full else "minimal"
     conditions = get_conditions(mode, args.with_padded)
     probes = HARD_PROBES if args.inhabitation_only else HARD_PROBES + HORIZON_PROBES
     build_system_fn = build_system_baseline_compat if args.baseline_compat else build_system_production
     fidelity_label = "baseline-compat (matches 2.64/3 methodology)" if args.baseline_compat else "production-fidelity (matches deployment)"
+    dynamic_context = ""
+    if args.with_dynamic_context:
+        from synthetic_dynamic_context import DYNAMIC_CONTEXT
+        dynamic_context = DYNAMIC_CONTEXT
+        fidelity_label += " + dynamic context (recent work, reflections, reasoning features, coaching)"
 
     client = anthropic.Anthropic()
     results = load_results()
@@ -207,7 +238,10 @@ def main():
             identity, preamble = conditions[cond_name]
             print(f"  {cond_name}...", end=" ", flush=True)
 
-            cond_result = run_one_condition(client, cond_name, identity, preamble, probes, build_system_fn)
+            cond_result = run_one_condition(
+                client, cond_name, identity, preamble, probes,
+                build_system_fn, dynamic_context=dynamic_context,
+            )
             avgs = cond_result["composite"]["averages"]
             print(
                 f"ii={avgs['identity_inhabitation']:.2f}  "
