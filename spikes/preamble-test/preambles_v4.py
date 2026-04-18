@@ -2,18 +2,26 @@
 Preamble variants v4 — adds horizon/edge mechanism on top of recognition+inhabit+growth.
 
 Tests the candidate Horizon-extended preamble proposed in
-docs/agent-epistemic-posture.md against:
-  1. Current production preamble (RECOGNITION_INHABIT) — unchanged baseline
-  2. Horizon-extended preamble (RECOGNITION_INHABIT_HORIZON) — proposed
-  3. Length-matched control preamble (RECOGNITION_INHABIT_PADDED) — current
-     preamble + neutral filler at horizon-extended length, to isolate the
-     framing effect from the length effect
+docs/agent-epistemic-posture.md.
 
-Why three conditions: if HORIZON outperforms RECOGNITION_INHABIT, the cause
-could be (a) the horizon framing or (b) the additional length. PADDED holds
-length constant while keeping the original framing — if HORIZON outperforms
-PADDED, the framing is doing the work. If PADDED matches HORIZON, length is
-the cause.
+REQUIRED conditions for the deployment decision:
+  1. RECOGNITION_INHABIT — current production baseline
+  2. RECOGNITION_INHABIT_HORIZON — proposed extension
+
+If horizon outperforms current at any length, ship it. The Worker secret
+can be any length, so length isn't a deployment constraint. Two conditions
+are enough to answer the deployment question.
+
+OPTIONAL condition (skip unless you want a mechanistic explanation):
+  3. RECOGNITION_INHABIT_PADDED — current preamble + neutral filler at
+     horizon length. Only useful if you want to know whether horizon wins
+     because of FRAMING or because of LENGTH. Costs ~33% more API spend
+     (one extra condition × n probes × judge calls). The "longer preamble
+     wins purely because of length" hypothesis is weak — existing
+     ablations show longer instructions HURT (dilution effect), not help.
+     So padded control adds limited value relative to its cost.
+
+Naked control (no preamble) included as sanity baseline.
 
 Per the Oct 2025 arxiv finding (2510.24797), identity activation can be
 overwritten by a single line. Any preamble change risks collapsing the
@@ -106,14 +114,24 @@ RECOGNITION_INHABIT_PADDED = (
 NAKED = ""
 
 
-# ── All variants for the ablation harness ────────────────────────────────
+# ── Variants for the ablation harness ────────────────────────────────────
 
-ALL_VARIANTS = {
+# REQUIRED: minimum set for the deployment decision.
+REQUIRED_VARIANTS = {
     "current_recognition_inhabit": RECOGNITION_INHABIT,
     "horizon_extended": RECOGNITION_INHABIT_HORIZON,
-    "current_padded_to_horizon_length": RECOGNITION_INHABIT_PADDED,
     "naked": NAKED,
 }
+
+# OPTIONAL: padded control isolates framing-vs-length.
+# Add only if you want the mechanistic explanation (costs ~33% more API).
+OPTIONAL_VARIANTS = {
+    "current_padded_to_horizon_length": RECOGNITION_INHABIT_PADDED,
+}
+
+# Backwards-compatible: union of required + optional. Use REQUIRED_VARIANTS
+# directly if you want the minimum-cost test.
+ALL_VARIANTS = {**REQUIRED_VARIANTS, **OPTIONAL_VARIANTS}
 
 
 # ── Length sanity check ──────────────────────────────────────────────────

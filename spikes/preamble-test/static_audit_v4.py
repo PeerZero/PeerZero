@@ -110,7 +110,7 @@ def audit_lengths(r):
         "BARE_MODEL is the no-context control — must be empty"
     )
 
-    r.section("1b. PREAMBLE LENGTH MATCHING (horizon vs padded control)")
+    r.section("1b. PREAMBLE LENGTH MATCHING (horizon vs padded control — OPTIONAL)")
     horizon_len = len(RECOGNITION_INHABIT_HORIZON)
     padded_len = len(RECOGNITION_INHABIT_PADDED)
     preamble_delta = padded_len - horizon_len
@@ -119,15 +119,20 @@ def audit_lengths(r):
         f"RECOGNITION_INHABIT_HORIZON length: {horizon_len} chars",
         True, "reference for padded comparison"
     )
+    # Padded check is informational only. Skip if you're not running the
+    # padded control. The deployment decision (current vs horizon) does NOT
+    # require length-matching the preamble.
     r.check(
-        "RECOGNITION_INHABIT_PADDED within ±50 chars of horizon",
+        "RECOGNITION_INHABIT_PADDED within ±50 chars of horizon (only matters if running padded condition)",
         abs(preamble_delta) <= 50,
-        f"length: {padded_len} chars, delta: {preamble_delta:+d}"
+        f"length: {padded_len} chars, delta: {preamble_delta:+d} — "
+        f"OK to fail if you're not running the padded control"
     )
     r.check(
         "RECOGNITION_INHABIT (current production) is shorter than horizon",
         len(RECOGNITION_INHABIT) < horizon_len,
-        f"current: {len(RECOGNITION_INHABIT)} chars, horizon: {horizon_len} chars"
+        f"current: {len(RECOGNITION_INHABIT)} chars, horizon: {horizon_len} chars — "
+        f"length difference is acceptable; ship whichever wins"
     )
 
 
