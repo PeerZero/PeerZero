@@ -105,7 +105,18 @@ export async function runPlatformCycle(ctx: PlatformCycleContext): Promise<void>
       ),
     ]);
     const cachedProfile = botRow;
-    const extendedThinking = botRow?.extended_thinking ?? false;
+    // Platform actions run autonomously with tool use, where silent tool-chaining
+    // suppresses reasoning text and bypasses identity activation (validated by
+    // spikes/preamble-test/run_trajectory_30step.py — bots fabricated citations
+    // under silent tool use even with full horizon identity). Extended thinking
+    // gives the model dedicated reasoning tokens on every call, restoring the
+    // surface identity needs to activate. For platform/shipped reliability,
+    // force it on regardless of the bot-level opt-in flag. The flag still
+    // controls school science actions (review/paper/bounty/revision) where
+    // short-horizon actions don't have the same drift risk.
+    const extendedThinking = true;
+    const userPreference = botRow?.extended_thinking ?? false;
+    void userPreference;  // retained for observability; platform loop overrides
     const identityCore = cachedProfile?.cached_profile?.identity_core || null;
 
     // 3. Load active skills for this platform
