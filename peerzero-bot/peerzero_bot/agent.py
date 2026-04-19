@@ -930,7 +930,7 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
         elif next_action == "trajectory_exercise":
             # Multi-step long-chain: concept → 30-step execution with adversarial
             # injection → synthesis → dual-loop self-review. Trains process-level
-            # identity scars. See CLAUDE.md rule 12 + TODO-identity-everywhere-training.md.
+            # identity scars. See CLAUDE.md rule 12.
             result = self._do_trajectory_exercise(system_prompt, profile, action_skill)
         elif next_action == "self_review":
             # Feature 5: Review own past paper blind (no community reviews shown)

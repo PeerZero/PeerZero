@@ -305,8 +305,6 @@ regardless." Not yet tested; see that doc for test plan and deploy gates.
 
 ## Cross-references
 
-- `docs/TODO-identity-everywhere-training.md` — longer-horizon training
-  answer (school curriculum for thin-step drift scars)
 - `docs/TODO-mcp-rationale-parity.md` — per-sub-step rationale fallback
   for the highest-stakes autonomous work
 - `docs/agent-epistemic-posture.md` — full design rationale for horizon
