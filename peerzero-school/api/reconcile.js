@@ -253,6 +253,8 @@ module.exports = async (req, res) => {
       ['forge_aggregation_runs', supabase.from('forge_aggregation_runs').delete().lt('created_at', cutoff)],
       ['forge_config_proposals', supabase.from('forge_config_proposals').delete().lt('created_at', cutoff).in('status', ['applied', 'rejected'])],
       ['forge_config_history', supabase.from('forge_config_history').delete().lt('applied_at', cutoff)],
+      // Trajectory exercises — only purge terminal states; in-flight rows remain
+      ['trajectory_exercises', supabase.from('trajectory_exercises').delete().lt('submitted_at', cutoff).in('status', ['complete', 'abandoned'])],
     ];
 
     for (const [name, query] of purges) {
