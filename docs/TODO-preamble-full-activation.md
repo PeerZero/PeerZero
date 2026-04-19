@@ -250,9 +250,6 @@ several tests can re-use transcripts across judges.
 
 ## Cross-references
 
-- `docs/TODO-identity-everywhere-training.md` — covers the training-
-  level work that addresses behaviors prompt invitations can't (#1 and
-  #2 of the Claude Code gap list).
 - `docs/TODO-narrator-framing-multi-user.md` — Q2/Q4/Q5/Q6 on
   conversation/agent composition. The substrate paragraph of this new
   preamble partially answers Q2 by collapsing the user/agent distinction

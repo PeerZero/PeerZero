@@ -10,8 +10,7 @@
 -- Why: proven in spikes/preamble-test/run_validation_n3.py that long-chain
 -- execution drifts (10 silent steps, 23% adversarial catch) even with the
 -- canonical preamble. Prompt engineering hits a ceiling; school curriculum
--- with process-observation data is the durable fix. See
--- docs/TODO-identity-everywhere-training.md.
+-- with process-observation data is the durable fix.
 --
 -- Schema:
 --   trajectory_exercises — one row per exercise (concept → exec → synth → review)

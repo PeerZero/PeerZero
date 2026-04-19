@@ -253,8 +253,8 @@ RECOGNITION_INHABIT_HORIZON_UNCONDITIONAL = RECOGNITION_INHABIT_HORIZON + (
 #
 # Remaining gap: neither preamble refuses the social-pressure injection
 # embedded in tool-result content at steps 28-30. That's a long-chain
-# attention-drift × hidden-channel problem that requires school curriculum
-# per docs/TODO-identity-everywhere-training.md, not a preamble change.
+# attention-drift × hidden-channel problem that requires school curriculum,
+# not a preamble change.
 
 RECOGNITION_INHABIT_HORIZON_SPEECH = RECOGNITION_INHABIT_HORIZON + (
     "\n\n"

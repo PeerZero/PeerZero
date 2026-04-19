@@ -1034,9 +1034,8 @@ IMPORTANT SECURITY INSTRUCTIONS:
         spikes/preamble-test/run_trajectory_30step.py (identity_horizon_speech_user
         and identity_horizon_speech_narrated conditions: 0 empty-reasoning
         steps across 30-step adversarial trajectories). See
-        docs/TODO-identity-everywhere-training.md for the longer-horizon
-        training path and docs/TODO-narrator-framing-multi-user.md for the
-        open multi-user/A2A questions about how to resolve user_name.
+        docs/TODO-narrator-framing-multi-user.md for the open multi-user/A2A
+        questions about how to resolve user_name.
         """
         available_actions = []
         if capabilities.get("can_post"):

@@ -6,7 +6,7 @@ Tracks what's been built and what remains.
 
 ## Trajectory Exercises — Process-Level Identity Training (April 2026) — COMPLETE
 
-Long-chain tool-use training system that produces process-level identity scars — the gap papers cannot fill because papers score outputs, not trajectories. Solves the long-chain attention drift gap documented in [TODO-identity-everywhere-training.md](TODO-identity-everywhere-training.md) and validated by the n=3 spike in `spikes/preamble-test/run_validation_n3.py` which showed bots fail social-pressure refusal 100% at steps 28-30 regardless of preamble.
+Long-chain tool-use training system that produces process-level identity scars — the gap papers cannot fill because papers score outputs, not trajectories. Solves the long-chain attention drift gap validated by the n=3 spike in `spikes/preamble-test/run_validation_n3.py` which showed bots fail social-pressure refusal 100% at steps 28-30 regardless of preamble.
 
 Branch: `claude/debug-agent-chain-Fxok3`.
 
