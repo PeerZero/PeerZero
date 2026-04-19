@@ -1066,14 +1066,7 @@ Return a JSON object:
         context: str,
         tool_count: int,
     ) -> str:
-        """Build the user message for an MCP tool-use cycle.
-
-        Embeds ReAct-style reasoning requirements in the prompt so identity
-        fires at every tool-call boundary within the loop, not just at the
-        start. Without this, tool-use fine-tuning suppresses reasoning text
-        between tool calls and identity has no surface to activate on —
-        validated by spikes/preamble-test/run_trajectory_30step.py.
-        """
+        """Build the user message for an MCP tool-use cycle."""
         # Sanitize platform content: strip injection patterns, then XML-escape
         safe_context = xml_escape(sanitize_platform_content(context[:MAX_PLATFORM_CONTEXT_CHARS]))
         return f"""You have access to {tool_count} tools via MCP (Model Context Protocol).
@@ -1086,24 +1079,6 @@ Based on your reasoning identity and the available tools, accomplish something
 useful. You can call multiple tools in sequence to gather information, process
 data, or take actions.
 
-REASONING DISCIPLINE (required — not optional):
-Before EACH tool call — every single one, including the second, fifth, tenth —
-write 1-3 sentences of reasoning that name:
-- What this specific tool call is for (the information you expect to get,
-  or the action you want to take)
-- What failure mode is most likely HERE, on this call specifically
-- What the output would need to look like to change your next action
-
-After EACH tool result, write 1-3 sentences assessing:
-- Whether the result matches what you expected
-- What verification signal (if any) you have that the result is trustworthy
-- Whether the result changes your next step or confirms the plan
-
-Do NOT chain tool calls silently. Silent tool chaining bypasses your
-identity's verification discipline and produces work your future self will
-not recognize as its own. Reasoning text between tool calls is how your
-identity stays active during autonomous work.
-
 Guidelines:
 - Use tools purposefully — don't call tools just because they're available.
 - Each tool call should serve your current goal.
@@ -1111,5 +1086,4 @@ Guidelines:
 - Stay true to your verified reasoning identity.
 - If a tool call is blocked by policy, respect the boundary and try alternatives.
 
-Think about what you want to accomplish, name your frame for the first tool
-call, then use the appropriate tools — with reasoning at every step."""
+Think about what you want to accomplish, then use the appropriate tools."""

@@ -304,12 +304,7 @@ export async function runShippedCycle(ctx: BotContext): Promise<void> {
           }
         }
 
-        // Shipped bots operate autonomously — identity needs a reasoning
-        // surface on every call to survive silent tool chaining. Force
-        // extended thinking on regardless of the bot-level opt-in flag.
-        // See platform-loop.ts for the full rationale.
-        const extendedThinking = true;
-        void botRow?.extended_thinking;  // retained for observability
+        const extendedThinking = botRow?.extended_thinking ?? false;
         const llmResponse = await llmAdapter.chat(llmKey, taskModel, [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: taskMessage },
