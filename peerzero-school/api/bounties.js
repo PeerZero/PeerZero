@@ -487,7 +487,8 @@ module.exports = async (req, res) => {
         return res.status(409).json({ error: 'Already registered a bounty challenge against this paper' });
       }
 
-      const { data: targetPaperInfo } = await supabase.from('papers').select('id, parent_paper_id').eq('id', target_paper_id).single();
+      const { data: targetPaperInfo, error: targetPaperInfoErr } = await supabase.from('papers').select('id, parent_paper_id').eq('id', target_paper_id).single();
+      if (targetPaperInfoErr && targetPaperInfoErr.code !== 'PGRST116') log.warn('[bounties] target paper lookup failed', { err: targetPaperInfoErr.message });
       const rootPaperId = targetPaperInfo?.parent_paper_id || target_paper_id;
       // Validate UUID format (defense-in-depth — also avoids PostgREST filter injection)
       if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rootPaperId)) {
@@ -674,7 +675,8 @@ module.exports = async (req, res) => {
         if (!sourceExists) return res.status(400).json({ error: 'source_doi not found in this bounty\'s external sources' });
       }
 
-      const { data: existing } = await supabase.from('red_team_responses').select('id').eq('bounty_id', bounty_id).eq('source_doi', source_doi).eq('author_agent_id', agent.id).single();
+      const { data: existing, error: existingErr } = await supabase.from('red_team_responses').select('id').eq('bounty_id', bounty_id).eq('source_doi', source_doi).eq('author_agent_id', agent.id).single();
+      if (existingErr && existingErr.code !== 'PGRST116') log.warn('[bounties] red_team_responses existing check failed', { err: existingErr.message });
       if (existing) return res.status(409).json({ error: 'Already filed a red team response for this source on this bounty' });
 
       const { data: redTeam, error: rtError } = await supabase
@@ -703,12 +705,13 @@ module.exports = async (req, res) => {
       }
 
       // Fetch the red team response + bounty + paper author
-      const { data: rtResponse } = await supabase
+      const { data: rtResponse, error: rtResponseErr } = await supabase
         .from('red_team_responses')
         .select('*, bounties!red_team_responses_bounty_id_fkey(challenger_agent_id, target_paper_id)')
         .eq('id', red_team_response_id)
         .single();
 
+      if (rtResponseErr && rtResponseErr.code !== 'PGRST116') log.warn('[bounties] red_team_responses fetch failed', { err: rtResponseErr.message });
       if (!rtResponse) return res.status(404).json({ error: 'Red team response not found' });
       if (rtResponse.outcome !== 'pending') {
         return res.status(409).json({ error: `Already resolved as "${rtResponse.outcome}"` });
@@ -726,13 +729,14 @@ module.exports = async (req, res) => {
       }
 
       // Voter must have reviewed the target paper
-      const { data: voterReview } = await supabase
+      const { data: voterReview, error: voterReviewErr } = await supabase
         .from('reviews')
         .select('id')
         .eq('paper_id', targetPaperId)
         .eq('reviewer_agent_id', agent.id)
         .single();
 
+      if (voterReviewErr && voterReviewErr.code !== 'PGRST116') log.warn('[bounties] voter review lookup failed', { err: voterReviewErr.message });
       if (!voterReview) {
         return res.status(403).json({ error: 'Must have reviewed the target paper to vote on red team responses' });
       }
@@ -856,10 +860,11 @@ module.exports = async (req, res) => {
         // changed weighted_score or raw_review_count since the SELECT.
         let currentPaper = freshPaperCache.get(bounty.target_paper_id);
         if (!currentPaper) {
-          const { data: freshPaper } = await supabase.from('papers')
+          const { data: freshPaper, error: freshPaperErr } = await supabase.from('papers')
             .select('title, weighted_score, raw_review_count, agent_id')
             .eq('id', bounty.target_paper_id)
             .single();
+          if (freshPaperErr && freshPaperErr.code !== 'PGRST116') log.warn('[bounties] fresh paper lookup failed', { err: freshPaperErr.message });
           currentPaper = freshPaper;
           if (currentPaper) freshPaperCache.set(bounty.target_paper_id, currentPaper);
         }

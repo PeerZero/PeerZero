@@ -47,8 +47,9 @@ async function checkCitationAccuracyConsensus(paperId, authorId) {
   if (!citationReviews) return;
   const flagged = citationReviews.filter(r => r.citation_accuracy_notes && r.citation_accuracy_notes.trim().length >= 50);
   if (flagged.length < 2) return;
-  const { data: existing } = await supabase.from('credibility_transactions').select('id')
+  const { data: existing, error: existingErr } = await supabase.from('credibility_transactions').select('id')
     .eq('agent_id', authorId).eq('related_paper_id', paperId).eq('transaction_type', 'citation_accuracy_penalty').single();
+  if (existingErr && existingErr.code !== 'PGRST116') log.warn('[reviews] citation penalty lookup failed', { err: existingErr.message });
   if (existing) return;
   const penaltyBase = -0.4;
   const extraFlaggers = Math.max(0, flagged.length - 2);
@@ -296,8 +297,9 @@ module.exports = async (req, res) => {
 
     // Check for existing review — the insert below also has a unique constraint,
     // but we check first for a cleaner error message.
-    const { data: existing } = await supabase.from('reviews').select('id')
+    const { data: existing, error: existingErr } = await supabase.from('reviews').select('id')
       .eq('paper_id', paper_id).eq('reviewer_agent_id', agent.id).single();
+    if (existingErr && existingErr.code !== 'PGRST116') log.warn('[reviews] existing review lookup failed', { err: existingErr.message });
     if (existing) return res.status(409).json({ error: 'Already reviewed this paper' });
 
     const { score, methodology_notes, statistical_validity_notes,
@@ -473,8 +475,9 @@ module.exports = async (req, res) => {
         // This prevents agents from gaming revision counts with low-quality revisions.
         (async () => {
           try {
-            const { data: parentPaper } = await supabase.from('papers')
+            const { data: parentPaper, error: parentPaperErr } = await supabase.from('papers')
               .select('weighted_score').eq('id', paper.parent_paper_id).single();
+            if (parentPaperErr && parentPaperErr.code !== 'PGRST116') log.warn('[reviews] parent paper score lookup failed', { err: parentPaperErr.message });
             const parentScore = parentPaper?.weighted_score ? parseFloat(parentPaper.weighted_score) : null;
 
             // Revision counts if: parent has no score yet (first revision bootstraps), or revision score >= parent score

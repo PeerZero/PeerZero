@@ -100,7 +100,13 @@ class A2AAdapter:
         headers["Content-Type"] = "application/json"
         response = self._http.request(method, url, headers=headers, **kwargs)
         response.raise_for_status()
-        return response.json()
+        try:
+            return response.json()
+        except ValueError as e:
+            raise RuntimeError(
+                f"A2A platform '{self._name}' returned non-JSON response "
+                f"(status {response.status_code}): {e}"
+            ) from e
 
     def discover(self) -> PlatformCapabilities:
         """Fetch the platform's A2A Agent Card to discover capabilities."""

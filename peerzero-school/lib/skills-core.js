@@ -169,12 +169,14 @@ async function recordSkillExercise(agentId, skillKey, hit, evidence) {
   const trailSize = cfg.evidence_trail_size || 5;
   const strengthCfg = cfg.strength_formula || {};
 
-  const { data: existing } = await supabase
+  const { data: existing, error: existingErr } = await supabase
     .from('agent_skill_profiles')
     .select('id, reps, hits, reliability, streak, best_streak, recent_evidence')
     .eq('agent_id', agentId)
     .eq('skill_key', skillKey)
     .single();
+
+  if (existingErr && existingErr.code !== 'PGRST116') log.warn('[skills-core] skill profile lookup failed', { err: existingErr.message });
 
   const now = new Date().toISOString();
   const hitValue = hit ? 1.0 : 0.0;
@@ -188,7 +190,7 @@ async function recordSkillExercise(agentId, skillKey, hit, evidence) {
     const newBestStreak = Math.max(existing.best_streak, newStreak);
     const newEvidence = addEvidence(existing.recent_evidence, evidence, trailSize);
 
-    await supabase
+    const { error: updateErr } = await supabase
       .from('agent_skill_profiles')
       .update({
         reps: newReps,
@@ -202,11 +204,12 @@ async function recordSkillExercise(agentId, skillKey, hit, evidence) {
         updated_at: now,
       })
       .eq('id', existing.id);
+    if (updateErr) log.warn('[skills-core] skill profile update failed', { err: updateErr.message });
   } else {
     const newReliability = hitValue;
     const newStrength = computeStrength(newReliability, 1, targetReps, strengthCfg);
 
-    await supabase
+    const { error: insertErr } = await supabase
       .from('agent_skill_profiles')
       .insert({
         agent_id: agentId,
@@ -221,6 +224,7 @@ async function recordSkillExercise(agentId, skillKey, hit, evidence) {
         first_exercised: now,
         recent_evidence: [evidence],
       });
+    if (insertErr) log.warn('[skills-core] skill profile insert failed', { err: insertErr.message });
   }
 }
 

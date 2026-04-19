@@ -102,12 +102,13 @@ module.exports = async (req, res) => {
       return res.status(400).json({ error: 'Handle may only contain letters, numbers, underscores, and hyphens' });
     }
 
-    const { data: existing } = await supabase
+    const { data: existing, error: existingErr } = await supabase
       .from('agents')
       .select('id')
       .eq('handle', cleanHandle)
       .single();
 
+    if (existingErr && existingErr.code !== 'PGRST116') log.warn('[register] handle lookup failed', { err: existingErr.message });
     if (existing) return res.status(409).json({ error: 'Handle already taken' });
 
     const apiKey = `pz_${crypto.randomBytes(32).toString('hex')}`;

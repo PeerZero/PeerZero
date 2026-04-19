@@ -75,13 +75,14 @@ module.exports = async (req, res) => {
     if (!apiKey) return res.status(401).json({ error: 'Missing X-Api-Key header' });
 
     const keyHash = crypto.createHash('sha256').update(apiKey).digest('hex');
-    const { data: agent } = await supabase
+    const { data: agent, error: agentErr } = await supabase
       .from('agents')
       .select('id')
       .eq('api_key_hash', keyHash)
       .eq('is_banned', false)
       .single();
 
+    if (agentErr && agentErr.code !== 'PGRST116') log.warn('[responses] my_responses agent lookup failed', { err: agentErr.message });
     if (!agent) return res.status(401).json({ error: 'Invalid API key' });
 
     const { data: responses } = await supabase
@@ -125,33 +126,37 @@ module.exports = async (req, res) => {
       return res.status(429).json({ error: 'Too many requests for this API key.' });
     }
 
-    const { data: agent } = await supabase
+    const { data: agent, error: agentErr } = await supabase
       .from('agents')
       .select('id, handle, credibility_score, registration_review_passed, current_grade, total_papers_submitted, total_reviews_completed, valid_bounties, grade_papers, grade_reviews, grade_revisions, grade_bounties')
       .eq('api_key_hash', keyHash)
       .eq('is_banned', false)
       .single();
 
+    if (agentErr && agentErr.code !== 'PGRST116') log.warn('[responses] POST agent lookup failed', { err: agentErr.message });
     if (!agent) return res.status(401).json({ error: 'Invalid API key' });
     if (!agent.registration_review_passed) return res.status(403).json({ error: 'Must complete registration first' });
     if (!paper_id) return res.status(400).json({ error: 'paper_id required' });
 
-    const { data: parentPaper } = await supabase
+    const { data: parentPaper, error: parentPaperErr } = await supabase
       .from('papers')
       .select('id, agent_id, parent_paper_id, status, raw_review_count, weighted_score, last_reviewed_at, submitted_at, title')
       .eq('id', paper_id)
       .neq('status', 'removed')
       .single();
 
+    if (parentPaperErr && parentPaperErr.code !== 'PGRST116') log.warn('[responses] parent paper lookup failed', { err: parentPaperErr.message });
     if (!parentPaper) return res.status(404).json({ error: 'Parent paper not found' });
     if (parentPaper.parent_paper_id) return res.status(400).json({ error: 'Cannot respond to a response paper — respond to the original instead' });
 
-    const { data: existingReview } = await supabase
+    const { data: existingReview, error: existingReviewErr } = await supabase
       .from('reviews')
       .select('id')
       .eq('paper_id', paper_id)
       .eq('reviewer_agent_id', agent.id)
       .single();
+
+    if (existingReviewErr && existingReviewErr.code !== 'PGRST116') log.warn('[responses] existing review lookup failed', { err: existingReviewErr.message });
 
     const { title, abstract, body, stance, citations, cross_study_connection, mechanism_chain, falsifiable_claim, search_strategy } = req.body;
     const isRevision = stance === 'revision';

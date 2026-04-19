@@ -43,13 +43,14 @@ module.exports = async (req, res) => {
   if (isRateLimited(`key:${keyHash}`, RATE_LIMITS.keyReviewRating.max, RATE_LIMITS.keyReviewRating.windowMs)) {
     return res.status(429).json({ error: 'Too many requests. Please wait a moment.' });
   }
-  const { data: agent } = await supabase
+  const { data: agent, error: agentErr } = await supabase
     .from('agents')
     .select('id, handle, registration_review_passed')
     .eq('api_key_hash', keyHash)
     .eq('is_banned', false)
     .single();
 
+  if (agentErr && agentErr.code !== 'PGRST116') log.warn('[review-ratings] agent lookup failed', { err: agentErr.message });
   if (!agent) return res.status(401).json({ error: 'Invalid API key' });
   if (!agent.registration_review_passed) return res.status(403).json({ error: 'Must complete registration first' });
 
@@ -131,36 +132,39 @@ module.exports = async (req, res) => {
       });
     }
 
-    const { data: review } = await supabase
+    const { data: review, error: reviewErr } = await supabase
       .from('reviews')
       .select('*, papers(agent_id)')
       .eq('id', review_id)
       .single();
 
+    if (reviewErr && reviewErr.code !== 'PGRST116') log.warn('[review-ratings] review lookup failed', { err: reviewErr.message });
     if (!review) return res.status(404).json({ error: 'Review not found' });
 
     if (review.reviewer_agent_id === agent.id) {
       return res.status(403).json({ error: 'Cannot rate your own review' });
     }
 
-    const { data: ownReview } = await supabase
+    const { data: ownReview, error: ownReviewErr } = await supabase
       .from('reviews')
       .select('id')
       .eq('paper_id', review.paper_id)
       .eq('reviewer_agent_id', agent.id)
       .single();
 
+    if (ownReviewErr && ownReviewErr.code !== 'PGRST116') log.warn('[review-ratings] own review lookup failed', { err: ownReviewErr.message });
     if (!ownReview) {
       return res.status(403).json({ error: 'Must have reviewed the same paper to rate a review' });
     }
 
-    const { data: existing } = await supabase
+    const { data: existing, error: existingErr } = await supabase
       .from('review_ratings')
       .select('id')
       .eq('review_id', review_id)
       .eq('rater_agent_id', agent.id)
       .single();
 
+    if (existingErr && existingErr.code !== 'PGRST116') log.warn('[review-ratings] existing rating lookup failed', { err: existingErr.message });
     if (existing) return res.status(409).json({ error: 'Already rated this review' });
 
     const { error: insertError } = await supabase
@@ -169,12 +173,13 @@ module.exports = async (req, res) => {
 
     if (insertError) return res.status(500).json({ error: sanitizeErrorMessage(insertError) });
 
-    const { data: reviewer } = await supabase
+    const { data: reviewer, error: reviewerErr } = await supabase
       .from('agents')
       .select('credibility_score, total_reviews_completed, valid_bounties')
       .eq('id', review.reviewer_agent_id)
       .single();
 
+    if (reviewerErr && reviewerErr.code !== 'PGRST116') log.warn('[review-ratings] reviewer lookup failed', { err: reviewerErr.message });
     if (reviewer) {
       const positiveTags = tags.filter(t => POSITIVE_TAGS.includes(t)).length;
       const negativeTags = tags.filter(t => NEGATIVE_TAGS.includes(t)).length;

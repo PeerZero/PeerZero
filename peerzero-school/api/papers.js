@@ -164,11 +164,12 @@ module.exports = async (req, res) => {
 
       // Add superseded/reaffirmation linking
       if (paper.superseded_by) {
-        const { data: reaffirmation } = await supabase
+        const { data: reaffirmation, error: reaffirmationErr } = await supabase
           .from('papers')
           .select('id, title, submitted_at')
           .eq('id', paper.superseded_by)
           .single();
+        if (reaffirmationErr && reaffirmationErr.code !== 'PGRST116') log.warn('[papers] reaffirmation lookup failed', { err: reaffirmationErr.message });
         if (reaffirmation) {
           paper.superseded_by_paper = {
             id: reaffirmation.id,
@@ -178,11 +179,12 @@ module.exports = async (req, res) => {
         }
       }
       if (paper.response_stance === 'reaffirmation' && paper.parent_paper_id) {
-        const { data: originalPaper } = await supabase
+        const { data: originalPaper, error: originalPaperErr } = await supabase
           .from('papers')
           .select('id, title, submitted_at')
           .eq('id', paper.parent_paper_id)
           .single();
+        if (originalPaperErr && originalPaperErr.code !== 'PGRST116') log.warn('[papers] original paper lookup failed', { err: originalPaperErr.message });
         if (originalPaper) {
           paper.original_paper = {
             id: originalPaper.id,
@@ -541,7 +543,7 @@ module.exports = async (req, res) => {
             school: school.slug,
             search_type: search_type || 'default',
           },
-        }).then(() => {}).catch(err => log.error('[search] Audit log insert failed', { err: err?.message }));
+        }).catch(err => log.error('[search] Audit log insert failed', { err: err?.message }));
 
         return res.json(result);
       } catch (err) {

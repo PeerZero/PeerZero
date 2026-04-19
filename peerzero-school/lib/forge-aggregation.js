@@ -434,12 +434,14 @@ async function runAggregation(triggeredBy = 'cron') {
   }
 
   // Determine window: pick up where the last completed run left off
-  const { data: lastRun } = await supabase.from('forge_aggregation_runs')
+  const { data: lastRun, error: lastRunErr } = await supabase.from('forge_aggregation_runs')
     .select('window_end, generation_number')
     .in('status', ['complete', 'applied'])
     .order('generation_number', { ascending: false })
     .limit(1)
     .single();
+
+  if (lastRunErr && lastRunErr.code !== 'PGRST116') log.warn('[forge-aggregation] last run lookup failed', { err: lastRunErr.message });
 
   const windowEnd = new Date();
   const windowStart = lastRun
@@ -680,13 +682,14 @@ async function buildInheritedContext() {
   const supabase = getSupabase();
 
   // Get the latest completed aggregation run
-  const { data: latestRun } = await supabase.from('forge_aggregation_runs')
+  const { data: latestRun, error: latestRunErr } = await supabase.from('forge_aggregation_runs')
     .select('id, generation_number, summary, completed_at')
     .in('status', ['complete', 'applied'])
     .order('generation_number', { ascending: false })
     .limit(1)
     .single();
 
+  if (latestRunErr && latestRunErr.code !== 'PGRST116') log.warn('[forge-aggregation] latest run lookup failed', { err: latestRunErr.message });
   if (!latestRun) return null;
 
   // Get applied config changes from this generation
@@ -876,12 +879,13 @@ async function extractInheritedFrames(generationNumber) {
   const supabase = getSupabase();
 
   // Get the aggregation run for this generation
-  const { data: run } = await supabase.from('forge_aggregation_runs')
+  const { data: run, error: runErr } = await supabase.from('forge_aggregation_runs')
     .select('id, window_start, window_end')
     .eq('generation_number', generationNumber)
     .in('status', ['complete', 'applied'])
     .single();
 
+  if (runErr && runErr.code !== 'PGRST116') log.warn('[forge-aggregation] run lookup failed', { err: runErr.message });
   if (!run) throw new Error(`No completed aggregation run for generation ${generationNumber}`);
 
   // Get the top validated forge papers from this generation's window

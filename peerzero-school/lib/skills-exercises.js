@@ -228,12 +228,13 @@ async function exerciseSourceEvaluationFromBounty(paperAuthorId, paperId, bounty
 async function exerciseBeliefUpdatingFromScore(agentId, revisionPaperId, parentPaperId, revisionScore) {
   try {
     const supabase = getSupabase();
-    const { data: parentPaper } = await supabase
+    const { data: parentPaper, error: parentPaperErr } = await supabase
       .from('papers')
       .select('weighted_score')
       .eq('id', parentPaperId)
       .single();
 
+    if (parentPaperErr && parentPaperErr.code !== 'PGRST116') log.warn('[skills-exercises] parent paper lookup failed', { err: parentPaperErr.message });
     if (!parentPaper || !parentPaper.weighted_score) return;
     if (revisionScore === null || revisionScore === undefined) return;
 
