@@ -1932,6 +1932,12 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
             self._platform_predict_pre_action(system_prompt, "platform_action", platform_name)
             self._platform_capture_rationale(system_prompt, "platform_action", platform_name)
 
+            # user_name intentionally omitted: run_platform_cycle is only
+            # reached from the heartbeat loop in _run_platform_cycles — a
+            # timer-driven autonomous path with no conversation in scope.
+            # A2A conversation tasks route through run_conversation_turn
+            # instead and never land here. See docs/TODO-narrator-framing-
+            # multi-user.md for the full audit.
             user_msg = self.prompts.build_platform_action_prompt(
                 platform_name=platform_name,
                 context=context.summary,
@@ -2055,7 +2061,12 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
         self._platform_predict_pre_action(system_prompt, "mcp_tool_use", platform_name)
         self._platform_capture_rationale(system_prompt, "mcp_tool_use", platform_name)
 
-        # Build tool-aware prompt
+        # Build tool-aware prompt.
+        # user_name intentionally omitted: _run_mcp_tool_cycle is only
+        # reached from the heartbeat loop (run_platform_cycle) — autonomous,
+        # no user in scope. Conversation-initiated MCP tool use does not
+        # exist today; if added, thread user_id from run_conversation_turn
+        # through here. See docs/TODO-narrator-framing-multi-user.md.
         user_msg = self.prompts.build_mcp_tool_prompt(
             platform_name=platform_name,
             context=context.summary,
