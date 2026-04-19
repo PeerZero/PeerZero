@@ -539,6 +539,36 @@ class TestPlatformPrompts:
         assert "5 tools via MCP" in prompt
         assert "<platform_content" in prompt
 
+    def test_conversation_tool_prompt_contains_user_and_message(self):
+        builder, _ = _make_builder()
+        prompt = builder.build_conversation_tool_prompt(
+            user_name="sarah",
+            message="can you research quantum computing for me?",
+            tool_count=7,
+        )
+        # User name appears as the narrator audience
+        assert "sarah said to you" in prompt
+        assert 'from="sarah"' in prompt
+        # Message is embedded
+        assert "research quantum computing" in prompt
+        # Tool count surfaced
+        assert "7 tools are available" in prompt
+        # Narrator discipline: speak before tool calls, name scars
+        assert "Before each tool call" in prompt
+        assert "name them to sarah as they fire" in prompt
+        # No platform_content block — conversation isn't a platform
+        assert "<platform_content" not in prompt
+
+    def test_conversation_tool_prompt_escapes_user_name(self):
+        builder, _ = _make_builder()
+        prompt = builder.build_conversation_tool_prompt(
+            user_name="<script>",
+            message="hi",
+            tool_count=1,
+        )
+        assert "<script>" not in prompt
+        assert "&lt;script&gt;" in prompt
+
 
 # ═════════════════════════════════════════════════════════════════════════════
 # REVIEW RATING / RED TEAM PROMPTS

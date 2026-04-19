@@ -167,6 +167,11 @@ class BotConfig:
     conversational_memory_enabled: bool = True  # enable for shipped mode conversation
     conversational_memory_path: str = ""        # base dir for per-user DBs (default: memory_path/conversations)
     conversational_memory_encryption_key: str = ""  # from CONVERSATIONAL_MEMORY_KEY env var
+    # When True, conversation turns can call MCP tools mid-reply. Tools are
+    # aggregated across all configured MCP adapters. The conversational memory
+    # injection stays pinned as system prompt across every tool call, so
+    # felt_portrait of the user remains in attention for the whole trajectory.
+    conversation_tool_use_enabled: bool = True
 
     # ── Security ──────────────────────────────────────────────────────────
     audit_log: bool = True

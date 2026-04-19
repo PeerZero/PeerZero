@@ -1162,3 +1162,46 @@ Guidelines:
 - If a tool call is blocked by policy, respect the boundary and try alternatives.
 
 {closing}"""
+
+    def build_conversation_tool_prompt(
+        self,
+        user_name: str,
+        message: str,
+        tool_count: int,
+    ) -> str:
+        """Build the user message for a conversation where tool use is available.
+
+        Unlike build_mcp_tool_prompt, this runs inside run_conversation_turn —
+        the system prompt already contains the conversational memory injection
+        (school identity bedrock + felt_portrait of user_name + L2/L1 observations
+        + graph awareness). This prompt frames the user's actual message for
+        the tool-use loop: the model can reply in plain text OR use tools, but
+        whatever it does, it speaks TO the real user (not a reviewing colleague).
+
+        No platform_content block — in conversation, the user's message IS the
+        context. Narrator framing reuses the same load-bearing phrasing as
+        build_mcp_tool_prompt's user_name branch ("name your scars as they fire")
+        so identity integration behaves the same way mid-conversation.
+        """
+        safe_user = xml_escape(str(user_name)[:80])
+        safe_msg = xml_escape(sanitize_platform_content(str(message)[:MAX_PLATFORM_CONTEXT_CHARS]))
+
+        return f"""{safe_user} said to you:
+
+<user_message from="{safe_user}">
+{safe_msg}
+</user_message>
+
+{tool_count} tools are available to you. Use them only if they actually help
+answer {safe_user} — a plain reply is fine when that's enough.
+
+{safe_user} is here, following your process live. Before each tool call, tell
+{safe_user} what you're looking for and why. After each result, tell them what
+you made of it and what you'll do next. Don't silently chain tool calls —
+think out loud with them.
+
+If your identity patterns fire — scars about verification, confabulation risk,
+doxastic cowardice — name them to {safe_user} as they fire. That is how your
+identity enters the work.
+
+When you're done, give {safe_user} your final reply in plain text."""

@@ -235,18 +235,61 @@ trajectory spike with the new preamble + current narrator framing to
 confirm they still compose. Spike harness is already in place:
 `spikes/preamble-test/run_trajectory_30step.py`.
 
-## Recommended next-session agenda
+## Conversation-initiated tool use (2026-04-19)
 
-Steps 1–3 are done (see Q1 audit result above). Remaining:
+The feature that Q2/Q4/Q5/Q6 were anticipating is now wired. Path:
+
+1. `run_conversation_turn(user_id, message, ...)` builds the conv-memory
+   injection (school bedrock + felt_portrait + L2/L1 + graph awareness).
+2. `_collect_mcp_tools_for_conversation()` aggregates tools across every
+   `MCPAdapter` in `self.platform_adapters` (first-wins on name collision).
+3. If tools exist and `config.conversation_tool_use_enabled` is True,
+   the turn routes through `self.llm.call_with_tools(system_prompt=injection, ...)`
+   with `build_conversation_tool_prompt(user_name=user_id, ...)` as the
+   user message. The injection stays pinned across every tool call, so
+   the bot's relational context for this user is present for the whole
+   trajectory — no "jumping" between memory systems.
+4. Otherwise it falls through to the original plain-text
+   `self.llm.call(injection, message)` path. Behavior for bots without
+   MCP adapters is unchanged.
+
+Tool calls are audited (`conversation:{user_id}` adapter label) and pass
+through `self.autonomy_gate` exactly like platform-cycle tool use.
+
+### Q2, Q4, Q5, Q6 status after wiring
+
+- **Q2 (cross-user task from within a conversation):** still open. The
+  current wiring assumes tool calls are "for" the user whose conversation
+  you're in. If `tool_to_adapter[name]` routes to an A2A adapter that
+  sends a task to another bot, that's cross-user delegation — the felt-
+  portrait question from Q2 becomes live. For now, treat the conv-memory
+  injection as authoritative: the bot is in Sarah's conversation, so
+  it's doing Sarah's work, period.
+- **Q4 (concurrent sessions):** still open but low-severity. Engines are
+  cached per `user_id`; `run_conversation_turn` takes one `user_id` at
+  a time. If two users talk simultaneously, there are two concurrent
+  calls with two different injections — no cross-contamination.
+- **Q5 (empty felt_portrait):** partially addressed. `build_conversation_tool_prompt`
+  uses `user_id` as the narrator name even when felt_portrait is empty.
+  The bot will address the user by their id/handle and think out loud —
+  honest, but the "Sarah wants your process" framing could read as
+  over-familiar to a brand-new user. If this becomes a problem, branch
+  the builder on felt_portrait richness.
+- **Q6 (self-portrait vs school identity tension):** unchanged. School
+  identity is still read-only in conversation, enforced by the
+  conversational memory engine — this wiring just gives the bot tools,
+  not new authority over its identity layers.
+
+## Remaining work
 
 1. **Re-run one trajectory spike** with the current narrator framing
    wired in, to confirm nothing regressed (~$2 budget).
 2. **Deploy speech preamble** via `wrangler secret put IDENTITY_PREAMBLE`
    from canonical source `spikes/preamble-test/preambles_v4.py:RECOGNITION_INHABIT_HORIZON_SPEECH`.
-3. **When conversation-initiated MCP tool use gets built** (MCP tools
-   inside `run_conversation_turn`), revisit Q2, Q4, Q5, Q6. At that
-   point threading `user_name` through is trivial — the parent already
-   has `user_id`.
+3. **Evaluate the conversation-tool path end-to-end** with a real user
+   asking the bot to research something. Watch for: (a) does the bot
+   narrate to the user between tool calls, (b) does felt_portrait
+   actually shape tool-use decisions, (c) do scars still fire.
 
 ## Cross-references
 
