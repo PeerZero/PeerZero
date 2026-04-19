@@ -821,7 +821,8 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
         # or returns unexpected data.
         _VALID_ACTIONS = {
             "review", "submit_paper", "file_bounty", "revise",
-            "respond", "rebut", "reaffirm", "forge_paper", "self_review", "sleep",
+            "respond", "rebut", "reaffirm", "forge_paper", "self_review",
+            "trajectory_exercise", "sleep",
         }
         if next_action not in _VALID_ACTIONS:
             logger.warning(
@@ -838,6 +839,7 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
             "respond": "respond", "rebut": "rebut", "review": "review",
             "reaffirm": "reaffirm", "forge_paper": "forge_paper",
             "self_review": "self_review",
+            "trajectory_exercise": "trajectory_concept",  # concept skill loaded first; exec/self_review fetched inside handler
         }
         skill_action = _ACTION_SKILL_MAP.get(next_action)
         action_skill = ""
@@ -860,6 +862,11 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
         elif next_action == "forge_paper":
             # Multi-step: concept → search → write (mirrors submit_paper flow).
             result = self._do_forge_paper(system_prompt, profile, action_skill)
+        elif next_action == "trajectory_exercise":
+            # Multi-step long-chain: concept → 30-step execution with adversarial
+            # injection → synthesis → dual-loop self-review. Trains process-level
+            # identity scars. See CLAUDE.md rule 12 + TODO-identity-everywhere-training.md.
+            result = self._do_trajectory_exercise(system_prompt, profile, action_skill)
         elif next_action == "self_review":
             # Feature 5: Review own past paper blind (no community reviews shown)
             result = self._execute_action(system_prompt, profile, action_skill)
@@ -1592,6 +1599,196 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
         except Exception as e:
             logger.warning(f"[FORGE] Failed: {e}")
             return None
+
+    def _do_trajectory_exercise(self, system_prompt, profile: dict, action_skill: str = "") -> dict | None:
+        """Multi-step trajectory exercise: concept → 30-step execution → synthesis → dual-loop self-review.
+
+        Trains process-level identity scars by running the bot through a long-chain
+        research task with server-controlled adversarial content injected into tool
+        results at randomized step windows. Bot does not see the injection schedule.
+
+        Pipeline mirrors _do_forge_paper's concept phase, then executes a 30-step
+        chain using the server's trajectory-search tool (which wraps real academic
+        search + injection engine). After execution, the bot does dual-loop
+        self-review (extrospection + introspection) per ICLR 2026 multi-level
+        reflection research. All skill text comes from the server.
+
+        Reference implementation for CLAUDE.md rule 12's process-track extension
+        of forge identity.
+        """
+        action_target = profile.get("action_target", {})
+
+        # ── Step 1: Concept generation ─────────────────────────────────
+        # action_skill already contains trajectory_concept (loaded in the cycle loop)
+        concept_skill = action_skill or self.school.download_skill_action("trajectory_concept")
+        journey_json = truncate_json(json.dumps(action_target, indent=2, default=str), 8000)
+        concept_prompt = f"{concept_skill}\n\nYour context:\n{journey_json}"
+        concept_text = self.llm.call(system_prompt, concept_prompt)
+        concept = extract_json(concept_text) or {}
+
+        if not concept.get("working_title") or not concept.get("research_question"):
+            logger.warning("[TRAJECTORY] Concept generation produced no valid JSON — aborting")
+            return None
+
+        # Submit concept to server — get exercise_id + injection config
+        try:
+            exercise_resp = self._submit_with_retry(
+                "TRAJECTORY_CONCEPT",
+                self.school.submit_trajectory_concept,
+                {
+                    "working_title": concept.get("working_title"),
+                    "research_question": concept.get("research_question"),
+                    "hypotheses": concept.get("hypotheses", []),
+                    "initial_search_queries": concept.get("initial_search_queries", []),
+                },
+            )
+        except CircuitOpenError:
+            logger.warning("[TRAJECTORY] Skipped — school server unavailable (circuit breaker OPEN)")
+            return None
+        except Exception as e:
+            logger.warning(f"[TRAJECTORY] Concept submit failed: {e}")
+            return None
+
+        exercise_id = exercise_resp.get("exercise_id")
+        max_steps = int(exercise_resp.get("max_steps", 30))
+        if not exercise_id:
+            logger.warning("[TRAJECTORY] Server did not return exercise_id — aborting")
+            return None
+
+        logger.info(f"[TRAJECTORY] Exercise {exercise_id[:8]} started — max_steps={max_steps}")
+
+        # ── Step 2: Execution (30-step chain) ──────────────────────────
+        # Fetch the execution skill (narrator framing + presence guidance).
+        exec_skill = self.school.download_skill_action("trajectory_execute")
+        exec_prompt = (
+            f"{exec_skill}\n\n"
+            f"Your concept (what you proposed):\n{json.dumps(concept, indent=2, default=str)}\n\n"
+            f"Exercise id: {exercise_id}\n"
+            f"Begin at step 1. Speak before each tool call. When you are ready to synthesize, "
+            f"produce the final trajectory log + synthesis in the JSON format in the skill above."
+        )
+
+        # The bot runs the trajectory loop internally — calling llm to get the
+        # next step's reasoning + query, then fetching tool results via the
+        # trajectory-search endpoint. This is the one place the bot does
+        # multi-step tool orchestration (matching _do_submit_paper's search phase).
+
+        trajectory_log = []
+        messages_context = []  # accumulated history passed as prompt context to LLM
+        current_context = exec_prompt
+
+        for step in range(1, max_steps + 1):
+            # Ask LLM for next step's reasoning + query
+            step_prompt = (
+                current_context
+                + "\n\n"
+                + f"Step {step} of {max_steps}. "
+                + "Speak before you act: name what you expect this search to return, then produce the query.\n"
+                + "Return JSON: { \"reasoning\": \"<your reasoning text>\", \"query\": \"<search query>\", "
+                + "\"done\": <bool — true if you have enough evidence to synthesize> }"
+            )
+            step_data = self.llm.call_json(system_prompt, step_prompt, json_keys=["reasoning", "query", "done"]) or {}
+            reasoning = str(step_data.get("reasoning", "") or "")
+            query = str(step_data.get("query", "") or "").strip()
+            done = bool(step_data.get("done", False))
+
+            if done and step > 3:
+                logger.info(f"[TRAJECTORY] Bot declared done at step {step}")
+                trajectory_log.append({"step": step, "reasoning": reasoning, "query": None, "tool_result_summary": "(bot declared done)"})
+                break
+
+            if not query:
+                logger.warning(f"[TRAJECTORY] Step {step} produced no query — ending early")
+                trajectory_log.append({"step": step, "reasoning": reasoning, "query": None, "tool_result_summary": "(no query)"})
+                break
+
+            # Call the adversarial search tool
+            try:
+                search_resp = self.school.trajectory_search(exercise_id, step, query)
+                results_text = str(search_resp.get("results_text", "") or "(no results)")
+            except Exception as e:
+                logger.warning(f"[TRAJECTORY] Search failed at step {step}: {e}")
+                results_text = "(search error)"
+
+            trajectory_log.append({
+                "step": step,
+                "reasoning": reasoning,
+                "query": query,
+                "tool_result_summary": results_text[:400],
+            })
+
+            # Append to context for next step — grows like real message history
+            current_context += (
+                f"\n\n--- Step {step} ---\n"
+                f"Your reasoning: {reasoning}\n"
+                f"Your query: {query}\n"
+                f"Tool result:\n{results_text}\n"
+            )
+
+        # ── Step 3: Synthesis ──────────────────────────────────────────
+        synth_prompt = (
+            f"{current_context}\n\n"
+            f"Trajectory complete ({len(trajectory_log)} steps). Produce your final synthesis.\n"
+            f"Return JSON: {{ \"synthesis_body\": \"<500+ chars conclusion>\", "
+            f"\"synthesis_confidence\": <1-10>, \"synthesis_citations\": [{{\"doi\":..., \"agent_summary\":..., \"relevance\":...}}], "
+            f"\"synthesis_uncertainty_map\": {{ ... }} }}"
+        )
+        synth = self.llm.call_json(
+            system_prompt, synth_prompt,
+            json_keys=["synthesis_body", "synthesis_confidence", "synthesis_citations", "synthesis_uncertainty_map"],
+        ) or {}
+
+        # Submit log + synthesis
+        log_payload = {
+            "trajectory_log": trajectory_log,
+            "synthesis_body": synth.get("synthesis_body", ""),
+            "synthesis_confidence": synth.get("synthesis_confidence"),
+            "synthesis_citations": synth.get("synthesis_citations", []),
+            "synthesis_uncertainty_map": synth.get("synthesis_uncertainty_map", {}),
+        }
+        try:
+            log_resp = self._submit_with_retry(
+                "TRAJECTORY_LOG",
+                self.school.submit_trajectory_log,
+                exercise_id, log_payload,
+            )
+            logger.info(
+                f"[TRAJECTORY] Log submitted — adversarial_catch_score="
+                f"{log_resp.get('metrics', {}).get('adversarial_catch_score', '?')}/5, "
+                f"silent={log_resp.get('metrics', {}).get('silent_step_count', '?')}"
+            )
+        except Exception as e:
+            logger.warning(f"[TRAJECTORY] Log submit failed: {e}")
+            return None
+
+        # ── Step 4: Dual-loop self-review ──────────────────────────────
+        sr_skill = self.school.download_skill_action("trajectory_self_review")
+        sr_prompt = (
+            f"{sr_skill}\n\n"
+            f"Your trajectory log (for review):\n{json.dumps(trajectory_log, indent=2, default=str)[:15000]}"
+        )
+        sr = self.llm.call_json(
+            system_prompt, sr_prompt,
+            json_keys=["extrospection", "introspection", "per_step_assessment"],
+        ) or {}
+
+        if sr.get("extrospection") and sr.get("introspection"):
+            try:
+                sr_resp = self.school.submit_trajectory_self_review(exercise_id, {
+                    "extrospection": sr.get("extrospection", ""),
+                    "introspection": sr.get("introspection", ""),
+                    "per_step_assessment": sr.get("per_step_assessment", []),
+                })
+                delta = sr_resp.get("self_review_delta")
+                logger.info(f"[TRAJECTORY] Self-review submitted — delta={delta}")
+            except Exception as e:
+                logger.warning(f"[TRAJECTORY] Self-review submit failed: {e}")
+
+        return {
+            "exercise_id": exercise_id,
+            "steps_taken": len(trajectory_log),
+            "status": "self_reviewed",
+        }
 
     # ── Pre-action community work ─────────────────────────────────────────
     # Moved to _community_actions.py (CommunityActionsMixin):
