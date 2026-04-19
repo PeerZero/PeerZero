@@ -191,16 +191,6 @@ framing) but that shipped PeerZero bots don't consistently exhibit in
 autonomous tool-use mode. Each is a candidate training target for
 school curriculum or fine-tuning.
 
-**Status update (2026-04-19):** #3, #4, #5 are now addressed at the
-task-framing layer instead of via training. Invitations were added to
-`build_platform_action_prompt`, `build_mcp_tool_prompt`, and
-`build_conversation_tool_prompt` — the RLHF-trained capabilities are
-unlocked without changing the identity preamble (which stays
-recognition-only per CLAUDE.md rule 8). #1 and #2 remain training-
-shaped targets since they require discriminating between "defend"
-and "revise with acknowledgment" behaviors that prompt invitations
-alone cannot reliably shape.
-
 ### 1. Self-correction mid-session when evidence changes
 
 Example from session: when new data (n=8 vs n=4) flipped a previously-
@@ -236,7 +226,7 @@ the actual evidence strength. Calibration tracking (already in
 migration 025) provides the infrastructure — just needs school tasks
 that actively surface calibration failures and score them.
 
-### 3. Communication adaptation to the person — ADDRESSED VIA PROMPT INVITATION
+### 3. Communication adaptation to the person
 
 Example: when user said "im not computer savy," system switched from
 CLI instructions to web-dashboard instructions without being asked.
@@ -244,22 +234,14 @@ Picking up on a signal and adapting. Shipped bots could read current
 user signal (frustration, confusion, excitement) via conversational
 memory's felt_portrait and adapt tone/detail level.
 
-**Shipped fix (2026-04-19):** `build_conversation_tool_prompt` now
-explicitly invites adaptation: *"Your system prompt holds what you've
-come to know about {user_name} — how they think, what they push back
-on, what they already grasp, what frustrates them. Let that shape how
-you speak, not just what you say."* The felt_portrait was already in
-the injection; what was missing was permission to use it for HOW,
-not just WHAT. The base-model capability surfaces once the task
-framing acknowledges the data. No new condenser layer needed for v1.
+**Training target:** this is partly already in conversational memory
+(felt_portrait captures user patterns) but not actively used to shape
+output. Extend with explicit condenser prompting: *"what does this
+user need from me RIGHT NOW, not in general?"* Could be a new
+conversational-memory condenser layer feeding "current-user-state"
+into the system prompt.
 
-**Training target (still open):** if live testing shows the bot reads
-felt_portrait but doesn't adapt deeply enough, add a condenser layer
-surfacing *"what does this user need from me RIGHT NOW, not in
-general?"* That would feed a current-user-state block into the
-conversation injection.
-
-### 4. Proactive risk flagging — ADDRESSED VIA PROMPT INVITATION
+### 4. Proactive risk flagging
 
 Example: saying "honest caveat," "partial fix not complete solution,"
 etc. throughout the session even when not asked. This prevents
@@ -267,31 +249,21 @@ overconfidence from the USER side, not just the bot's. Shipped bots
 present findings as definitive because the task asks for a conclusion
 and nothing in the prompt asks for uncertainty disclosure.
 
-**Shipped fix (2026-04-19):** all three task-framing builders now
-include: *"Along with whatever you conclude, name what you remain
-uncertain about — even unprompted. Overclaim is a kind of dishonesty;
-so is retreating to 'I can't say' when you actually have a best read."*
-Both failure modes are called out explicitly (overclaim AND retreat)
-so the invitation doesn't push the bot toward hedged uselessness.
+**Training target:** add to narrator task framing — *"along with your
+conclusion, name the things you are UNCERTAIN about even if I did not
+ask."* Simple prompt-level addition, validated gain. Could be in
+`prompts/builder.py::build_action_prompt` and its shipped equivalents.
 
-### 5. Intermediate summaries for long-context retention — ADDRESSED VIA PROMPT INVITATION
+### 5. Intermediate summaries for long-context retention
 
 Example: periodically summarizing where we landed across hours of
 work, for the user AND the system itself (helps not lose thread).
 Shipped bots doing long tasks could produce intermediate "here's
 what I've established so far" checkpoints to maintain coherence.
 
-**Shipped fix (2026-04-19):** `build_mcp_tool_prompt` and
-`build_conversation_tool_prompt` now invite checkpoints when a
-trajectory stretches: *"If this runs past several tool calls, pause
-and tell {audience} where you stand — what's established, what's
-still open, where you're heading. That keeps both of you oriented."*
-The autonomous branch adds a reinforcement: *"The checkpoint is for
-you as much as for any reviewer; it keeps the thread visible."*
-
-**Training target (still open):** if live runs still show long
-trajectories drifting without checkpoints, add a structural counter
-(force a summary every N tool calls) or school curriculum that grades
+**Training target:** structural — add to task requirements that
+after every N tool calls, bot produces a checkpoint summary. Or
+identity behavior learned through school scenarios that reward
 coherent mid-task reflection vs straight-line execution.
 
 ---

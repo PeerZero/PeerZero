@@ -569,68 +569,6 @@ class TestPlatformPrompts:
         assert "<script>" not in prompt
         assert "&lt;script&gt;" in prompt
 
-    # ── Base-model behavior invitations ────────────────────────────────────
-    # These assertions pin the prompt text that unlocks RLHF-trained
-    # behaviors (adaptation, uncertainty flagging, checkpoint summaries)
-    # that the bot doesn't exhibit without explicit invitation. See
-    # docs/TODO-identity-everywhere-training.md sections 3, 4, 5.
-
-    def test_conversation_tool_prompt_invites_adaptation(self):
-        builder, _ = _make_builder()
-        prompt = builder.build_conversation_tool_prompt(
-            user_name="sarah", message="hi", tool_count=2,
-        )
-        # #3 — use felt_portrait to shape HOW you speak, not just what
-        assert "how you speak, not just what you say" in prompt
-
-    def test_conversation_tool_prompt_invites_uncertainty(self):
-        builder, _ = _make_builder()
-        prompt = builder.build_conversation_tool_prompt(
-            user_name="sarah", message="hi", tool_count=2,
-        )
-        # #4 — uncertainty flagging
-        assert "name what you remain uncertain about" in prompt
-        assert "Overclaim is a kind of dishonesty" in prompt
-
-    def test_conversation_tool_prompt_invites_checkpoint(self):
-        builder, _ = _make_builder()
-        prompt = builder.build_conversation_tool_prompt(
-            user_name="sarah", message="hi", tool_count=2,
-        )
-        # #5 — intermediate summaries for long trajectories
-        assert "past several tool calls" in prompt
-        assert "what's established, what's still open" in prompt
-
-    @patch("peerzero_bot.prompts.builder.sanitize_platform_content", side_effect=lambda x: x)
-    def test_mcp_tool_prompt_invites_uncertainty_and_checkpoint(self, _):
-        builder, _ = _make_builder()
-        # User-named branch
-        p_user = builder.build_mcp_tool_prompt(
-            "github", "ctx", 5, user_name="sarah",
-        )
-        assert "name what you remain uncertain about" in p_user
-        assert "past several tool calls" in p_user
-        # Autonomous branch
-        p_auto = builder.build_mcp_tool_prompt("github", "ctx", 5)
-        assert "name what you remain uncertain about" in p_auto
-        assert "past several tool calls" in p_auto
-
-    @patch("peerzero_bot.prompts.builder.sanitize_platform_content", side_effect=lambda x: x)
-    def test_platform_action_prompt_invites_uncertainty(self, _):
-        builder, _ = _make_builder()
-        # User-named branch
-        p_user = builder.build_platform_action_prompt(
-            platform_name="reddit", context="posts",
-            capabilities={"can_post": True}, user_name="sarah",
-        )
-        assert "name what you remain uncertain about" in p_user
-        # Autonomous branch
-        p_auto = builder.build_platform_action_prompt(
-            platform_name="reddit", context="posts",
-            capabilities={"can_post": True},
-        )
-        assert "name what you remain uncertain about" in p_auto
-
 
 # ═════════════════════════════════════════════════════════════════════════════
 # REVIEW RATING / RED TEAM PROMPTS
