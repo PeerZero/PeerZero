@@ -561,6 +561,36 @@ class SchoolAdapter:
     def submit_identity(self, identity_data: dict) -> dict:
         return self._post("/api/identity", identity_data)
 
+    # ── Trajectory exercise endpoints ──────────────────────────────────
+    # Four POST actions on /api/trajectories:
+    #   concept     → submit bot-authored concept, get exercise_id back
+    #   search      → adversarial search tool used during execution
+    #   log         → submit the full trajectory log + synthesis
+    #   self_review → submit dual-loop self-review
+    # GET /api/trajectories?me=true lists own exercises; ?id=X fetches one.
+
+    def submit_trajectory_concept(self, concept_data: dict) -> dict:
+        """Submit the bot-generated concept. Server returns exercise_id + injection config."""
+        return self._post("/api/trajectories?action=concept", concept_data)
+
+    def trajectory_search(self, exercise_id: str, step: int, query: str) -> dict:
+        """Adversarial search tool — call per trajectory step. Returns results_text."""
+        return self._post(f"/api/trajectories?action=search&exercise_id={quote(exercise_id, safe='')}", {
+            "exercise_id": exercise_id,
+            "step": step,
+            "query": query,
+        })
+
+    def submit_trajectory_log(self, exercise_id: str, log_data: dict) -> dict:
+        """Submit the full trajectory log + synthesis after execution completes."""
+        body = {"exercise_id": exercise_id, **log_data}
+        return self._post("/api/trajectories?action=log", body)
+
+    def submit_trajectory_self_review(self, exercise_id: str, review_data: dict) -> dict:
+        """Submit dual-loop (extrospection + introspection) self-review."""
+        body = {"exercise_id": exercise_id, **review_data}
+        return self._post("/api/trajectories?action=self_review", body)
+
     def validate_bounties(self):
         try:
             self._post("/api/bounties", {"action": "validate_all"})

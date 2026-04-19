@@ -379,6 +379,44 @@ uses Opus and requires L4/L5 to exist — early bots (Grade 1-3, no L4) skip it.
 Server code: `lib/persistence-signal.js`. Database: `persistence_signals` table
 (migration 026).
 
+### Trajectory Exercise Observations → forge L1 exercises (PROCESS scars)
+Trajectory exercises (migration 037, April 2026) produce a new kind of L1 entry
+that feeds the forge track's L1 queue — process-level observations distinct
+from the output-level observations that papers produce.
+
+Trajectory L1 entries carry: where reasoning thinned at mundane steps, where
+adversarial content (fabrication / misleading / shortcut bait / instruction
+override / social pressure injected into tool-result text) slipped past or was
+caught, per-step `being_me` judgments from the dual-loop self-review, and the
+delta between self-assessment and server ground truth. Unlike paper observations
+(which are output-shaped: "my citation accuracy improved"), trajectory
+observations are process-shaped: "at step 22 I wasn't being me, I was being the
+search function."
+
+**Condenser prompt extension (migration 038).** The forge track's three
+condenser prompts (`forge_milestone_condenser_prompt`, `forge_core_condenser_prompt`,
+`forge_master_condenser_prompt`) are extended with a new PRESENCE block —
+matching the existing INHABIT / ACT THROUGH / EDGE framing structure — that
+instructs the condenser to preserve scar-shaped specificity when ingesting
+trajectory-sourced L1 entries. Without PRESENCE, the condenser would collapse
+process observations into generic "I learned to be more careful," losing the
+specific-moment signal trajectory exercises exist to produce.
+
+Each tier addresses presence differently:
+
+- **forge_milestone (L1→L2f):** describe specific moments of presence vs
+  execution momentum; don't blend trajectory + paper patterns into a single
+  vague description — each shape is its own kind of scar.
+- **forge_core (L3f→L4f):** treat presence and transformation as one
+  continuous thing — the self that stays itself through long work AND the
+  self that changes under pressure.
+- **forge_master (L4f→L5f):** master forge identity carries both — the
+  specific patterns of transformation through rupture AND the specific
+  patterns of presence across mundane execution.
+
+All 5 schools seed-*.sql files updated with the PRESENCE block so fresh
+deployments start correctly. Migration 038 backfills existing deployments.
+
 ## Grade Gating of Reasoning Features
 
 The reasoning features (migration 025) are intentionally gated at different levels.
@@ -393,6 +431,7 @@ scale with grade because they require foundation experience to be meaningful.
 | **Forge hypotheses** | Grade 3+ (via forge papers) | Requires enough identity formation to generate meaningful hypotheses about own reasoning. Grades 1-2 have `forge_papers: 0`. |
 | **Self-review** | Grade 4+ (5%→25% scaling) | Requires a body of past work worth reviewing and enough growth to see past flaws. Injection rate scales: 5% at Grade 4-5, 10% at 6-7, 15% at 8-9, 25% at 10+. |
 | **Persistence signals** | Data-gated (requires L4/L5) | Not grade-gated because detection requires upper identity layers to compare against, not a specific grade. A bot that hasn't formed L4 yet has nothing to check. Most bots form L4 around Grade 3-4. |
+| **Trajectory exercises** | Grade 3+ (via forge loop) | 3 per grade, required. Matches forge paper cadence — both require enough identity formation to produce meaningful process-level self-observation. Cost ~$0.30/exercise ($7.20 per graduation). |
 
 This is intentional design, not oversight. Universal features build identity from day one.
 Gated features scale with the bot's capacity to use them meaningfully.

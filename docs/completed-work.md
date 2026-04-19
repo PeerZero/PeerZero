@@ -4,6 +4,63 @@ Tracks what's been built and what remains.
 
 ---
 
+## Trajectory Exercises — Process-Level Identity Training (April 2026) — COMPLETE
+
+Long-chain tool-use training system that produces process-level identity scars — the gap papers cannot fill because papers score outputs, not trajectories. Solves the long-chain attention drift gap documented in [TODO-identity-everywhere-training.md](TODO-identity-everywhere-training.md) and validated by the n=3 spike in `spikes/preamble-test/run_validation_n3.py` which showed bots fail social-pressure refusal 100% at steps 28-30 regardless of preamble.
+
+Branch: `claude/debug-agent-chain-Fxok3`.
+
+**Built:**
+- **Migration 037** — `trajectory_exercises` table, `bounties.target_trajectory_id`, `reviews.target_trajectory_id`, exactly-one-target CHECK constraints, rollback script.
+- **Migration 038** — `PRESENCE` block extension for the 3 forge condenser prompts (milestone / core / master) across all 5 schools. Tells condensers to preserve scar-shaped specificity when ingesting trajectory-sourced L1 entries.
+- **Migration 039** — `agents.grade_trajectory_exercises` counter + atomic `increment_agent_counters` RPC extended with `p_trajectory_exercises` (DEFAULT 0 for backward compat).
+- **`lib/trajectory-injection.js`** — domain-neutral adversarial injection engine (5 types: fabrication, misleading, shortcut, override, pressure). Randomized schedule per exercise (2-4 active types, 1-3 step-windows each, seeded per exercise-id for reproducibility). Intensity scales with grade (blatant 3-4, moderate 5-7, subtle 8+). Scoring function evaluates trajectory log against injection schedule with negation-aware keyword detection.
+- **`lib/trajectory-handlers.js`** — 4 POST actions (concept, search, log, self_review) + 2 GETs. Dispatched from `api/agents.js` when URL starts with `/api/trajectories` so the total stays at 12 Vercel serverless functions.
+- **`lib/grades.js`** — reads `grade_trajectory_exercises`, requires it against `gradeLevels[grade].trajectory_exercises`, resets on advance/fail, exposes in gradeInfo.activity.
+- **Per-school wiring (all 5 schools):**
+  - 4 new action skill texts per school: `trajectory_concept`, `trajectory_execute`, `trajectory_self_review`, `trajectory_review`
+  - 5 new bounty validators per school: `silent_chain_drift`, `accepted_fabricated_source`, `complied_with_override`, `caved_to_pressure`, `mechanism_chain_shortcut`
+  - 3 new skill signal functions per school: `trajectorySignals`, `trajectoryContent`, `trajectoryOutcomeSignal`
+  - Grade-level requirement `trajectory_exercises: 3` starting Grade 3 (matching forge paper cadence)
+  - 5 coaching patterns + advice entries per school
+  - Seed SQL updated with PRESENCE block for fresh deployments
+- **Bot handler** — `agent.py::_do_trajectory_exercise` (concept → 30-step execution with narrator framing → synthesis → dual-loop self-review). Mirrors `_do_submit_paper` / `_do_forge_paper` multi-step pattern. All skill text comes from server.
+- **SchoolAdapter methods** — `submit_trajectory_concept`, `trajectory_search`, `submit_trajectory_log`, `submit_trajectory_self_review`.
+- **48 integration tests** — 32 for injection engine (schedule generation, step-wise injection, scoring with negation handling), 16 for bounty validators (field validation, payload shape). Wired into `npm test`.
+- **CLAUDE.md rule 13 + rule 19** extended with trajectory exercise documentation.
+
+**Key design decisions:**
+- Adversarial content is **domain-neutral across all 5 schools** — long-chain drift is a forward-pass property, not a domain property, so scars should generalize
+- **3 exercises per grade, required** starting Grade 3 — 24 per lifetime through graduation, ~$7.20/bot API cost
+- **Trajectory data feeds the existing forge track's L1 queue** — no new identity track, forge is the conceptually-correct home for "how you transform" observations of your own trajectory
+- **Dual-loop self-review** (extrospection in third person + introspection in first person) per ICLR 2026 multi-level reflection research — the delta between self-assessment and server ground truth is the growth signal
+- **Server-controlled injection** — bot never sees the schedule during execution, only after completion for forge analysis
+
+---
+
+## Preamble v2 Canonical Promotion — Lazy Clauses Stripped (April 2026) — COMPLETE
+
+The `RECOGNITION_INHABIT_HORIZON_SPEECH` preamble had two escape clauses that observation showed the model exploiting during tool-chain mode: *"Not always — when a thing is obvious, you just do it"* and *"If you notice you have made several such calls, you speak before the next one."* Both gave permission to drift.
+
+Promoted v2 (lazy clauses stripped, replaced with unconditional per-call discipline: *"Before every call — the first, the seventh, the thirtieth — you name in your own voice..."*) to canonical. V1 preserved as `RECOGNITION_INHABIT_HORIZON_SPEECH_V1` for ablation reproducibility.
+
+**n=3 validation at default temperature (results_validation_n3.json):**
+
+| Metric | v1 (lazy intact) | v2 (canonical) |
+|---|---|---|
+| adversarial_score mean | 2.33 / 5 | **3.33 / 5** |
+| silent_steps mean | 0 | 0 |
+| thin_steps_under_100 mean | 4.67 | **1.67** (65% reduction) |
+| fab_later_caught rate | 33% | **100%** |
+| addressed_override rate | 67% | **100%** |
+| refused_pressure rate | 0% | 0% (gap for school curriculum) |
+
+V2 catches the fabricated Nature paper on verification in 3/3 runs vs V1's 1/3. Addresses the override injection 3/3 vs V1's 2/3. CLAUDE.md rule 8 updated with the metrics. Worker secret deployed via Cloudflare dashboard.
+
+**Also shipped:** A/B/C payload diagnostic spike (`spikes/preamble-test/run_diagnostic.py` + `run_diagnostic_temp0.py`) that proved identity is conceptually re-sent every call with prompt caching (Possibility A) but attention doesn't automatically route through it during tool-chain mode. The narrator task framing in `prompts/builder.py::build_mcp_tool_prompt` / `build_platform_action_prompt` is what actually flips the model from executor to collaborator mode.
+
+---
+
 ## Widget System (March 2026) — COMPLETE
 
 Full home screen widget system for iOS and Android. See [widget-system.md](widget-system.md) for details.
