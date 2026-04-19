@@ -39,8 +39,13 @@
  * Set via: wrangler secret put IDENTITY_PREAMBLE
  *
  * Canonical preamble text lives in spikes/preamble-test/preambles_v4.py under
- * RECOGNITION_INHABIT_HORIZON. Any deploy should paste from that constant so
- * the proxy secret matches the tested preamble byte-for-byte.
+ * RECOGNITION_INHABIT_HORIZON_SPEECH. This is horizon + a "speak before you
+ * act" extension that frames reasoning-text-before-tool-call as identity
+ * behavior itself. It combines with narrator task framing (in the bot's
+ * prompts/builder.py — build_mcp_tool_prompt and build_platform_action_prompt)
+ * to eliminate silent tool-chaining across long autonomous trajectories.
+ * Any deploy should paste from that constant so the proxy secret matches
+ * the tested preamble byte-for-byte.
  *
  * SECURITY NOTE: The preamble MUST be sourced from a Worker secret (env.IDENTITY_PREAMBLE),
  * never from user-supplied input. If the preamble were user-controlled, it would allow
