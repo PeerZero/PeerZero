@@ -50,7 +50,11 @@ rules:
       - pattern: |
           await $OBJ.from($TABLE).insert($DATA);
       - pattern-not-inside: |
-          const { $$$VARS } = await $OBJ.from($TABLE).insert($DATA);
+          $X = await $OBJ.from(...).$METHOD(...);
+      - pattern-not-inside: |
+          $X = await $OBJ.from(...).$METHOD(...).$M2(...);
+      - pattern-not-inside: |
+          $X = await $OBJ.from(...).$METHOD(...).$M2(...).$M3(...);
     message: >
       Supabase .insert() discards the result. If the insert fails, the
       error is silently lost. Destructure: `const { error } = await ...`
@@ -91,10 +95,13 @@ rules:
   - id: untracked-setinterval
     patterns:
       - pattern: setInterval(...)
-      - pattern-not: $VAR = setInterval(...)
-      - pattern-not: const $VAR = setInterval(...)
-      - pattern-not: let $VAR = setInterval(...)
-      - pattern-not: setInterval(...).unref()
+      - pattern-not-inside: |
+          $VAR = setInterval(...);
+      - pattern-not-inside: |
+          const $VAR = setInterval(...);
+      - pattern-not-inside: |
+          let $VAR = setInterval(...);
+      - pattern-not-inside: setInterval(...).unref()
     message: >
       setInterval() return value not captured. Without a reference, the
       interval can never be cleared — potential memory leak. Assign it

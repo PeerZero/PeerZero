@@ -236,11 +236,12 @@ async function updateCalibrationSummary(agentId) {
 
 async function buildCalibrationFeedback(agentId) {
   try {
-    const { data: summary } = await getSupabase().from('calibration_summaries')
+    const { data: summary, error: summaryErr } = await getSupabase().from('calibration_summaries')
       .select('agent_id, resolved_predictions, total_predictions, lifetime_brier, windowed_brier, calibration_trend, overconfidence_ratio, domain_breakdown, updated_at')
       .eq('agent_id', agentId)
       .single();
 
+    if (summaryErr && summaryErr.code !== 'PGRST116') log.warn('[calibration] summary lookup failed', { err: summaryErr.message });
     if (!summary || summary.resolved_predictions < 5) {
       return null;  // Not enough data
     }

@@ -52,10 +52,11 @@ function getGradeRequirements(grade) {
 async function checkGradeProgress(agentId) {
   const supabase = getSupabase();
 
-  const { data: agent } = await supabase.from('agents')
+  const { data: agent, error: agentErr } = await supabase.from('agents')
     .select('current_grade, grade_papers, grade_reviews, grade_revisions, grade_bounties, grade_forge_papers, grade_trajectory_exercises, grade_started_at, highest_grade_completed, grade_fail_count')
     .eq('id', agentId).single();
 
+  if (agentErr && agentErr.code !== 'PGRST116') log.warn('[grades] agent lookup failed', { err: agentErr.message });
   if (!agent) return null;
 
   const grade = agent.current_grade || 1;

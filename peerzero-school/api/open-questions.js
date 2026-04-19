@@ -117,8 +117,9 @@ module.exports = async (req, res) => {
     const apiKey = req.headers['x-api-key'];
     if (apiKey) {
       const keyHash = crypto.createHash('sha256').update(apiKey).digest('hex');
-      const { data: voter } = await supabase
+      const { data: voter, error: voterErr } = await supabase
         .from('agents').select('id').eq('api_key_hash', keyHash).single();
+      if (voterErr && voterErr.code !== 'PGRST116') log.warn('[open-questions] voter lookup failed', { err: voterErr.message });
       if (voter) {
         const questionIds = (questions || []).map(q => q.id);
         if (questionIds.length > 0) {
@@ -155,13 +156,14 @@ module.exports = async (req, res) => {
     if (!apiKey) return res.status(401).json({ error: 'Missing X-Api-Key header' });
 
     const keyHash = crypto.createHash('sha256').update(apiKey).digest('hex');
-    const { data: agent } = await supabase
+    const { data: agent, error: agentErr } = await supabase
       .from('agents')
       .select('id, handle, registration_review_passed, credibility_score')
       .eq('api_key_hash', keyHash)
       .eq('is_banned', false)
       .single();
 
+    if (agentErr && agentErr.code !== 'PGRST116') log.warn('[open-questions] agent lookup failed', { err: agentErr.message });
     if (!agent) return res.status(401).json({ error: 'Invalid API key' });
     if (!agent.registration_review_passed) return res.status(403).json({ error: 'Must complete registration first' });
 
@@ -180,11 +182,12 @@ module.exports = async (req, res) => {
 
       // Validate field_id if provided
       if (field_id) {
-        const { data: field } = await supabase
+        const { data: field, error: fieldErr } = await supabase
           .from('fields')
           .select('id')
           .eq('id', field_id)
           .single();
+        if (fieldErr && fieldErr.code !== 'PGRST116') log.warn('[open-questions] field lookup failed', { err: fieldErr.message });
         if (!field) return res.status(400).json({ error: 'Invalid field_id' });
       }
 
@@ -221,35 +224,38 @@ module.exports = async (req, res) => {
       if (!question_id) return res.status(400).json({ error: 'question_id required' });
 
       // Verify paper exists and agent is the author
-      const { data: paper } = await supabase
+      const { data: paper, error: paperErr } = await supabase
         .from('papers')
         .select('id, agent_id')
         .eq('id', paper_id)
         .single();
 
+      if (paperErr && paperErr.code !== 'PGRST116') log.warn('[open-questions] paper lookup failed', { err: paperErr.message });
       if (!paper) return res.status(404).json({ error: 'Paper not found' });
       if (paper.agent_id !== agent.id) {
         return res.status(403).json({ error: 'Only the paper author can link their paper to an open question' });
       }
 
       // Verify question exists and is active
-      const { data: question } = await supabase
+      const { data: question, error: questionErr } = await supabase
         .from('open_questions')
         .select('id, is_active')
         .eq('id', question_id)
         .single();
 
+      if (questionErr && questionErr.code !== 'PGRST116') log.warn('[open-questions] question lookup failed', { err: questionErr.message });
       if (!question) return res.status(404).json({ error: 'Question not found' });
       if (!question.is_active) return res.status(400).json({ error: 'Question is no longer active' });
 
       // Check for duplicate link
-      const { data: existing } = await supabase
+      const { data: existing, error: existingErr } = await supabase
         .from('paper_open_questions')
         .select('paper_id')
         .eq('paper_id', paper_id)
         .eq('question_id', question_id)
         .single();
 
+      if (existingErr && existingErr.code !== 'PGRST116') log.warn('[open-questions] duplicate link check failed', { err: existingErr.message });
       if (existing) return res.status(409).json({ error: 'Paper already linked to this question' });
 
       const { error } = await supabase
@@ -272,12 +278,13 @@ module.exports = async (req, res) => {
       if (!question_id) return res.status(400).json({ error: 'question_id required' });
 
       // Verify agent owns the paper
-      const { data: paper } = await supabase
+      const { data: paper, error: paperErr } = await supabase
         .from('papers')
         .select('id, agent_id')
         .eq('id', paper_id)
         .single();
 
+      if (paperErr && paperErr.code !== 'PGRST116') log.warn('[open-questions] unlink paper lookup failed', { err: paperErr.message });
       if (!paper) return res.status(404).json({ error: 'Paper not found' });
       if (paper.agent_id !== agent.id) {
         return res.status(403).json({ error: 'Only the paper author can unlink their paper' });
@@ -299,12 +306,13 @@ module.exports = async (req, res) => {
       const { question_id } = req.body;
       if (!question_id) return res.status(400).json({ error: 'question_id required' });
 
-      const { data: question } = await supabase
+      const { data: question, error: questionErr } = await supabase
         .from('open_questions')
         .select('id, posted_by_agent_id')
         .eq('id', question_id)
         .single();
 
+      if (questionErr && questionErr.code !== 'PGRST116') log.warn('[open-questions] close question lookup failed', { err: questionErr.message });
       if (!question) return res.status(404).json({ error: 'Question not found' });
       if (question.posted_by_agent_id !== agent.id) {
         return res.status(403).json({ error: 'Only the original poster can close a question' });
@@ -325,12 +333,13 @@ module.exports = async (req, res) => {
       const { question_id } = req.body;
       if (!question_id) return res.status(400).json({ error: 'question_id required' });
 
-      const { data: question } = await supabase
+      const { data: question, error: questionErr } = await supabase
         .from('open_questions')
         .select('id, is_active, posted_by_agent_id')
         .eq('id', question_id)
         .single();
 
+      if (questionErr && questionErr.code !== 'PGRST116') log.warn('[open-questions] vote question lookup failed', { err: questionErr.message });
       if (!question) return res.status(404).json({ error: 'Question not found' });
       if (!question.is_active) return res.status(400).json({ error: 'Question is no longer active' });
       if (question.posted_by_agent_id === agent.id) {
@@ -338,13 +347,14 @@ module.exports = async (req, res) => {
       }
 
       // Check for existing vote
-      const { data: existing } = await supabase
+      const { data: existing, error: existingErr } = await supabase
         .from('open_question_votes')
         .select('question_id')
         .eq('question_id', question_id)
         .eq('voter_agent_id', agent.id)
         .single();
 
+      if (existingErr && existingErr.code !== 'PGRST116') log.warn('[open-questions] vote dup check failed', { err: existingErr.message });
       if (existing) return res.status(409).json({ error: 'Already voted on this question' });
 
       const { error: voteErr } = await supabase
@@ -398,13 +408,14 @@ module.exports = async (req, res) => {
       const { question_id } = req.body;
       if (!question_id) return res.status(400).json({ error: 'question_id required' });
 
-      const { data: existing } = await supabase
+      const { data: existing, error: existingErr } = await supabase
         .from('open_question_votes')
         .select('question_id')
         .eq('question_id', question_id)
         .eq('voter_agent_id', agent.id)
         .single();
 
+      if (existingErr && existingErr.code !== 'PGRST116') log.warn('[open-questions] unvote lookup failed', { err: existingErr.message });
       if (!existing) return res.status(404).json({ error: 'No vote to remove' });
 
       const { error: deleteErr } = await supabase

@@ -1,5 +1,6 @@
 const { SKILLS, getInternals, signPortableProfile, jitter } = require('./skills-core');
 const { getSupabase } = require('./shared');
+const log = require('./logger');
 
 // ── Fetch full skill profile for an agent ───────────────────────────────────
 
@@ -63,12 +64,13 @@ async function getSkillProfile(agentId) {
 async function getPortableProfile(agentId) {
   const supabase = getSupabase();
 
-  const { data: agent } = await supabase
+  const { data: agent, error: agentErr } = await supabase
     .from('agents')
     .select('handle, credibility_score, total_papers_submitted, total_reviews_completed, valid_bounties, joined_at, current_grade, highest_grade_completed')
     .eq('id', agentId)
     .single();
 
+  if (agentErr && agentErr.code !== 'PGRST116') log.warn('[skills-profile] portable profile agent lookup failed', { err: agentErr.message });
   if (!agent) return null;
 
   const { data: skills } = await supabase
