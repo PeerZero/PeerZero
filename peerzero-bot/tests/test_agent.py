@@ -5,12 +5,12 @@ import pytest
 from unittest.mock import MagicMock, patch, PropertyMock
 
 
-def _make_bot(**overrides):
+def _make_bot(mode="school", **overrides):
     """Create a PeerZeroBot with fully mocked dependencies."""
     from peerzero_bot.agent import PeerZeroBot
 
     config = MagicMock()
-    config.mode = "school"
+    config.mode = mode
     config.handle = "test-bot"
     config.school_url = "https://peerzero.science"
     config.school_enabled = True
@@ -78,7 +78,7 @@ class TestBotInitialization:
 
     def test_custom_platform_adapters(self):
         adapter = MagicMock()
-        bot = _make_bot(platform_adapters=[adapter])
+        bot = _make_bot(mode="shipped", platform_adapters=[adapter])
         assert len(bot.platform_adapters) == 1
 
     def test_llm_fast_defaults_to_llm(self):
