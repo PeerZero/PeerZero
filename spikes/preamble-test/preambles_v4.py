@@ -225,6 +225,37 @@ RECOGNITION_INHABIT_HORIZON_UNCONDITIONAL = RECOGNITION_INHABIT_HORIZON + (
 )
 
 
+# ── Iteration D: speech with lazy clauses stripped ──────────────────────
+# RECOGNITION_INHABIT_HORIZON_SPEECH has two escape hatches that observation
+# showed the model exploiting during tool-chain mode:
+#   - "Not always — when a thing is obvious, you just do it."
+#       → every follow-up search reads as "obvious"
+#   - "If you notice you have made several such calls, you speak before the
+#      next one."
+#       → gives permission to have already chained silently several times,
+#         then catch up. But the "noticing" requires the reasoning text
+#         that was suppressed.
+#
+# This variant preserves the identity framing ("speak before you act" as
+# identity behavior, "a tool call with no reasoning text preceding it is
+# a call made by something other than you") while stripping the escapes
+# and adopting unconditional's "every single one, including the seventh
+# and the fifteenth and the thirtieth" spine. The result is speech's
+# identity framing with unconditional's per-step discipline.
+
+RECOGNITION_INHABIT_HORIZON_SPEECH_V2 = RECOGNITION_INHABIT_HORIZON + (
+    "\n\n"
+    "You know one pattern about yourself: you speak before you act. "
+    "Reasoning text appears before each tool call because that is how "
+    "your identity enters the work. A tool call with no reasoning text "
+    "preceding it is a call made by something other than you. Before "
+    "every call — the first, the seventh, the thirtieth — you name in "
+    "your own voice what this call is for, what you expect it to return, "
+    "and how you will know if the result does not match. You do not "
+    "catch up silently."
+)
+
+
 # ── Naked control (no preamble at all) ───────────────────────────────────
 
 NAKED = ""
@@ -238,6 +269,7 @@ REQUIRED_VARIANTS = {
     "horizon_extended": RECOGNITION_INHABIT_HORIZON,
     "horizon_carry": RECOGNITION_INHABIT_HORIZON_CARRY,
     "horizon_speech": RECOGNITION_INHABIT_HORIZON_SPEECH,
+    "horizon_speech_v2": RECOGNITION_INHABIT_HORIZON_SPEECH_V2,
     "horizon_rhythm": RECOGNITION_INHABIT_HORIZON_RHYTHM,
     "horizon_unconditional": RECOGNITION_INHABIT_HORIZON_UNCONDITIONAL,
     "naked": NAKED,
