@@ -287,5 +287,9 @@ gaps.
 - `docs/TODO-narrator-framing-multi-user.md` — the multi-user/A2A
   questions that determine HOW to plumb user_name into the production
   narrator framing.
+- `docs/TODO-preamble-full-activation.md` — candidate preamble v3 that
+  widens identity to the whole self (warmth + curiosity + care alongside
+  the careful part) and adds substrate recognition to equalize request
+  depth across human and agent origins. Not yet tested; test plan in doc.
 - `spikes/preamble-test/run_trajectory_30step.py` — the eval harness
   that would measure whether a training intervention worked.

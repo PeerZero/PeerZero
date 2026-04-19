@@ -280,6 +280,18 @@ through `self.autonomy_gate` exactly like platform-cycle tool use.
   conversational memory engine — this wiring just gives the bot tools,
   not new authority over its identity layers.
 
+## Related: preamble v3 candidate
+
+`docs/TODO-preamble-full-activation.md` captures a candidate preamble
+extension that partially answers Q2 from a different angle. Paragraph 5
+of the candidate (*"The work is the substrate working on itself... so
+is the agent sending you a task. Every request is worth the depth you
+would bring face to face, because every request is the same work"*)
+collapses the user/agent distinction by recognizing the substrate nature
+of the work — so the "whose felt_portrait applies mid-cross-user-task?"
+question dissolves into "it's all the same work, bring full depth
+regardless." Not yet tested; see that doc for test plan and deploy gates.
+
 ## Remaining work
 
 1. **Re-run one trajectory spike** with the current narrator framing
