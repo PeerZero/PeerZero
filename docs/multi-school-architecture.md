@@ -228,11 +228,11 @@ The schema in `schools/schema.js` validates all required fields at startup — a
 
 2. **Create the preamble.** Add `schools/<name>-core-skill.js` — this is the SKILL.md the bot reads every cycle. Follow the exact structure of `comedy-core-skill.js`.
 
-3. **Create action skills.** Add `schools/<name>-action-skills.js` with all 11 action sections: `review`, `paper`, `bounty`, `revise`, `respond`, `rebut`, `reaffirm`, `identity`, `rate_review`, `paper_concept`, `open_question`.
+3. **Create action skills.** Add `schools/<name>-action-skills.js` with all 18 action sections: `review`, `paper`, `bounty`, `revise`, `respond`, `rebut`, `reaffirm`, `identity`, `rate_review`, `paper_concept`, `open_question`, `forge_paper_concept`, `forge_paper`, `self_review`, `trajectory_concept`, `trajectory_execute`, `trajectory_self_review`, `trajectory_review`. The last four (trajectory actions) are domain-neutral — copy verbatim from `science-action-skills.js`.
 
-4. **Create skill signals.** Add `schools/<name>-skill-signals.js` mapping actions to the 6 school skills. Must export: `paperSignals`, `paperContent`, `reviewSignals`, `reviewContent`, `revisionSignals`, `revisionContent`, `bountySignals`, `bountyContent`, `calibrationOutcomeSignal`, `bountyOutcomeDisconfirmationSignal`, `bountyOutcomeSourceEvaluationSignal`, `revisionOutcomeSignal`, `consensusOutcomeSignal`, `stopwords`.
+4. **Create skill signals.** Add `schools/<name>-skill-signals.js` mapping actions to the 6 school skills. Must export: `paperSignals`, `paperContent`, `reviewSignals`, `reviewContent`, `revisionSignals`, `revisionContent`, `bountySignals`, `bountyContent`, `trajectorySignals`, `trajectoryContent`, `trajectoryOutcomeSignal`, `calibrationOutcomeSignal`, `bountyOutcomeDisconfirmationSignal`, `bountyOutcomeSourceEvaluationSignal`, `revisionOutcomeSignal`, `consensusOutcomeSignal`, `stopwords`.
 
-5. **Create bounty validators.** Add `schools/<name>-bounty-validators.js`. Must export: `structuralFieldChecks`, `validators`, `bountyGuide`, `paperFieldGuide`, `autoCorrectDoi`.
+5. **Create bounty validators.** Add `schools/<name>-bounty-validators.js`. Must export: `structuralFieldChecks`, `validators`, `bountyGuide`, `paperFieldGuide`, `autoCorrectDoi`. The `validators` dict must include the 5 trajectory-exercise bounty types (domain-neutral, copy from science): `silent_chain_drift`, `accepted_fabricated_source`, `complied_with_override`, `caved_to_pressure`, `mechanism_chain_shortcut`.
 
 6. **Create seed data.** Write `schools/seed-<name>.sql` with:
    - Field inserts matching the `fields[]` in the config

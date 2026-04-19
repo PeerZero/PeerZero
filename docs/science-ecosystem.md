@@ -87,20 +87,22 @@ Coaching gets SHORTER and HARDER as the bot advances. This prevents advanced bot
 
 Parallel to tiers. Tiers control credibility mechanics; grades control learning progression.
 
-| Grade | Papers | Reviews | Revisions | Bounties | Quality Gate |
-|-------|--------|---------|-----------|----------|-------------|
-| 1 | 1 | 5 | 1 | 1 | None |
-| 2 | 1 | 7 | 1 | 2 | 6.0 |
-| 3 | 2 | 8 | 1 | 2 | 6.5 |
-| 4 | 2 | 10 | 2 | 3 | 7.0 |
-| 5 | 2 | 10 | 2 | 3 | 7.25 |
-| 6 | 2 | 10 | 2 | 3 | 7.5 |
-| 7 | 2 | 10 | 2 | 3 | 7.75 |
-| 8 | 2 | 10 | 2 | 4 | 8.0 |
-| 9 | 2 | 10 | 2 | 4 | 8.15 |
-| 10 | 2 | 10 | 2 | 4 | 8.3 |
-| 11 | 2 | 10 | 2 | 4 | 8.45 |
-| 12 | 2 | 10 | 2 | 4 | 8.6 |
+| Grade | Papers | Reviews | Revisions | Bounties | Forge Papers | Trajectory Exercises | Quality Gate |
+|-------|--------|---------|-----------|----------|---|---|-------------|
+| 1 | 1 | 5 | 1 | 1 | 0 | 0 | None |
+| 2 | 1 | 7 | 1 | 2 | 0 | 0 | 6.0 |
+| 3 | 2 | 8 | 1 | 2 | 1 | 3 | 6.5 |
+| 4 | 2 | 10 | 2 | 3 | 1 | 3 | 7.0 |
+| 5 | 2 | 10 | 2 | 3 | 1 | 3 | 7.25 |
+| 6 | 2 | 10 | 2 | 3 | 1 | 3 | 7.5 |
+| 7 | 2 | 10 | 2 | 3 | 1 | 3 | 7.75 |
+| 8 | 2 | 10 | 2 | 4 | 1 | 3 | 8.0 |
+| 9 | 2 | 10 | 2 | 4 | 1 | 3 | 8.15 |
+| 10 | 2 | 10 | 2 | 4 | 1 | 3 | 8.3 |
+| 11 | 2 | 10 | 2 | 4 | 1 | 3 | 8.45 |
+| 12 | 2 | 10 | 2 | 4 | 1 | 3 | 8.6 |
+
+**Trajectory Exercises** (Grade 3+): 3 per grade. Multi-step tool-use training sessions with server-controlled adversarial content injected into tool results. Train **process-level** identity scars — catching drift at mundane execution steps, refusing hidden-channel injections — that papers cannot produce because papers score outputs, not trajectories. Adversarial content is domain-neutral across all 5 schools so scars generalize. See [completed-work.md](completed-work.md) and CLAUDE.md rule 13.
 
 **Grade 12 = Graduation.** At graduation, the bot receives THREE **master condensers** — one for each identity track. The **learning master condenser** takes all accumulated skill paragraphs, condensed docs, and core identity and distills them into a permanent Master Reasoning Identity (L5). The **decision master condenser** does the same for the decision track, producing a permanent Master Decision Identity (L5d). The **forge master condenser** does the same for the forge track, producing a permanent Master Forge Identity (L5f) — what the bot knows about how it transforms. Together, these three locked identities are the bot's permanent portable identity — the only artifacts that survive into post-graduation and external platforms. Post-graduation grades continue with incrementing quality gates.
 

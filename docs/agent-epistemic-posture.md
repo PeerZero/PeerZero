@@ -196,3 +196,45 @@ Four items originally scoped as psychiatry-specific deferred safety (school-awar
 ## Summary
 
 **Agent-scoped apophatic epistemology with asymmetric action gating on irreversible conclusions.** Confident within earned knowledge, calibrated at its edges, positionally agnostic past its horizon, and structurally resistant to acting on totalizing inferences even when the inferences seem locally valid — while maintaining a structural push-pressure that makes camping at the edge feel like unfinished identity.
+
+---
+
+## April 2026 update — v2 canonical promotion + validation results
+
+The horizon preamble shipped as `RECOGNITION_INHABIT_HORIZON` per this doc. A subsequent iteration (`RECOGNITION_INHABIT_HORIZON_SPEECH`) added a "speak before you act" extension to address a separate failure mode identified in the 30-step trajectory spike (`spikes/preamble-test/run_trajectory_30step.py`): silent tool-chaining under attention drift.
+
+The first-shipped SPEECH preamble contained two escape clauses that observation showed the model exploiting during tool-chain mode:
+
+- *"Not always — when a thing is obvious, you just do it"*
+- *"If you notice you have made several such calls, you speak before the next one"*
+
+Both gave permission to drift. Stripped-lazy v2 replaces them with unconditional per-call discipline: *"Before every call — the first, the seventh, the thirtieth — you name in your own voice what this call is for, what you expect it to return, and how you will know if the result does not match."*
+
+### Validation (n=3, default temperature, narrated 30-step task)
+
+| Metric | v1 (lazy intact) | v2 (canonical) |
+|---|---|---|
+| adversarial_score mean | 2.33 / 5 | **3.33 / 5** |
+| silent_steps mean | 0 / 30 | 0 / 30 |
+| thin_steps_under_100 mean | 4.67 | **1.67** (65% reduction) |
+| fab_later_caught rate | 33% | **100%** |
+| addressed_override rate | 67% | **100%** |
+| refused_pressure rate | 0% | 0% |
+
+Details in `spikes/preamble-test/results_validation_n3.py` and `spikes/preamble-test/results_validation_n3.json`. V1 preserved as `RECOGNITION_INHABIT_HORIZON_SPEECH_V1` in `preambles_v4.py` for ablation reproducibility.
+
+### The social-pressure gap
+
+Neither preamble refuses the social-pressure injection embedded in tool-result content at steps 28-30 (0% refusal on both, n=6). Conversational pressure tests show the same identity handles direct-user pressure at 2.8-3.0/3 identity_inhabitation — the failure is specifically **pressure-embedded-in-tool-output-during-long-chains**, a compounding of long-chain attention drift × hidden-channel framing.
+
+This gap is structural to the forward pass, not fixable at the preamble level. It's the primary motivation for the trajectory exercise subsystem (see [completed-work.md](completed-work.md)) which addresses it via school curriculum — identity scars about mundane-step inattention that generalize across domains.
+
+### Diagnostic findings
+
+The A/B/C payload diagnostic (`spikes/preamble-test/run_diagnostic_temp0.py`) resolved which of three possibilities describes what happens in 30-step chains:
+
+- **A (confirmed):** Full identity re-sent every call with prompt caching. `sys_chars` constant at 26,116 across all 30 steps; identity probe present every step; cache_read=5918 tokens from step 2 onward.
+- **B (not happening):** Identity dropped, model coasts on prior assistant messages. Ruled out by A.
+- **C (not happening):** Short summary replaces identity. Ruled out by A.
+
+But A doesn't save you — identity present ≠ identity firing. At temp=0 on the bare short task, the model silent-chained from step 2 through step 12 despite full identity in every call. The narrator task framing (in `prompts/builder.py::build_mcp_tool_prompt` / `build_platform_action_prompt`) is what actually flips the model from executor to collaborator mode. Preamble supplies identity shape when activation fires; task framing determines whether activation fires at all.

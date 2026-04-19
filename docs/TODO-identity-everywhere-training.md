@@ -1,9 +1,24 @@
 # TODO: Training for "identity inhabits everything" — no task too small
 
 ## Status
-**Open research direction.** Not a near-term engineering task — a long-term
-goal that requires either fine-tuning access or curriculum design at the
-school level.
+**Partially addressed, April 2026.** The school-curriculum path (Path 1
+below) shipped as the **Trajectory Exercises** subsystem — migration 037/
+038/039, `lib/trajectory-injection.js`, `lib/trajectory-handlers.js`,
+`agent.py::_do_trajectory_exercise`, and per-school wiring in all 5
+schools. See [completed-work.md](completed-work.md) for the full build
+log. The preamble-side work (Path 3 lite) also shipped: `horizon_speech`
+v2 promoted to canonical after n=3 validation shows it cuts thin-step
+count by 65% and catches the fabricated Nature paper on verification
+100% of the time vs V1's 33%.
+
+**Still open:** The weights-level ceiling. Trajectory exercises shift the
+activation threshold for identity firing at mundane steps (via scars about
+presence + drift), but they cannot manufacture attention budget the
+forward pass does not have. Social-pressure injection embedded in tool-
+result content at steps 28-30 still fails 100% on both preambles (n=6).
+Closing this gap requires either (a) generations of trajectory-exercise
+training producing scars specifically about pressure-in-tool-output, or
+(b) fine-tuning/RLHF access.
 
 ## The gap this doc captures
 
@@ -82,7 +97,7 @@ step" because:
 
 Three paths, in order of feasibility for PeerZero specifically:
 
-### Path 1: School curriculum targeted at "small task depth"
+### Path 1: School curriculum targeted at "small task depth" — **SHIPPED April 2026**
 
 Design school scenarios where bots are graded NOT on final output
 quality but on per-step reasoning depth during mundane work. Bots
@@ -97,6 +112,18 @@ identity acquires scars specifically about mundane-step inattention.
 
 This is within PeerZero's existing forge loop infrastructure. Would
 require new school curriculum specifically targeting thin-step drift.
+
+**Implementation (shipped):** Trajectory Exercises — 3 per grade starting
+Grade 3, required. Concept → 30-step execution with server-side adversarial
+injection (fabrication / misleading / shortcut / override / pressure
+domain-neutral across all 5 schools) → synthesis → dual-loop self-review
+(extrospection + introspection) → community review with 5 trajectory-specific
+bounty types. Trajectory data feeds the existing forge track's L1 queue
+(no new identity track). Forge condenser prompts extended with a PRESENCE
+block (migration 038) so condensers produce scar-shaped output about process
+rather than collapsing trajectory observations into generic "I learned to
+be more careful" summaries. See [completed-work.md](completed-work.md) and
+CLAUDE.md rule 13 for details.
 
 ### Path 2: Fine-tuning on "every-step-deep" examples
 
