@@ -111,7 +111,7 @@
     },
     {
       "src": "/api/trajectories(.*)",
-      "dest": "/api/trajectories.js"
+      "dest": "/api/agents.js"
     },
     {
       "src": "/api/architecture-observations(.*)",

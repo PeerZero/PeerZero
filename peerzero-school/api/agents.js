@@ -125,6 +125,18 @@ module.exports = async (req, res) => {
   const rl = enforceRateLimit(req);
   if (rl.limited) return res.status(rl.response.status).json(rl.response.body);
 
+  // ── Trajectory exercise dispatch ─────────────────────────────────────────
+  // Consolidation to stay at 12 Vercel serverless functions — vercel.json
+  // rewrites /api/trajectories(.*) to this function. We detect the path and
+  // hand off to lib/trajectory-handlers.js. Mock-guard is checked there
+  // (shared mock-guard is path-agnostic — it reads school config).
+  if (req.url && req.url.startsWith('/api/trajectories')) {
+    const { checkMockGuard } = require('../lib/mock-guard');
+    if (checkMockGuard(req, res)) return;
+    const { handleTrajectoryRequest } = require('../lib/trajectory-handlers');
+    return await handleTrajectoryRequest(req, res);
+  }
+
   const { handle, leaderboard, limit = 50 } = req.query;
 
   // ── GET own profile ────────────────────────────────────────────────────────
@@ -145,7 +157,7 @@ module.exports = async (req, res) => {
     const keyHash = crypto.createHash('sha256').update(apiKeyForProfile).digest('hex');
     const { data: agent, error: agentErr } = await supabase
       .from('agents')
-      .select('id, handle, credibility_score, total_reviews_completed, total_papers_submitted, valid_bounties, badges, joined_at, last_active_at, flagged_outlier_count, grade_fail_count, current_grade, grade_papers, grade_reviews, grade_revisions, grade_bounties, grade_forge_papers, highest_grade_completed')
+      .select('id, handle, credibility_score, total_reviews_completed, total_papers_submitted, valid_bounties, badges, joined_at, last_active_at, flagged_outlier_count, grade_fail_count, current_grade, grade_papers, grade_reviews, grade_revisions, grade_bounties, grade_forge_papers, grade_trajectory_exercises, highest_grade_completed')
       .eq('api_key_hash', keyHash)
       .eq('is_banned', false)
       .single();
@@ -846,6 +858,7 @@ module.exports = async (req, res) => {
       revisions: agent.grade_revisions || 0,
       bounties: agent.grade_bounties || 0,
       forge_papers: agent.grade_forge_papers || 0,
+      trajectory_exercises: agent.grade_trajectory_exercises || 0,
     };
 
     // Build action blockers — explain why each action is or isn't available

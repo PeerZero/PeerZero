@@ -1,35 +1,26 @@
 /**
- * Trajectory exercises — long-horizon tool-use training endpoint.
+ * Trajectory exercise request handlers — extracted from api/trajectories.js
+ * so they can run inside api/agents.js dispatch (keeps Vercel serverless
+ * function count at 12).
  *
- * Consolidates all trajectory exercise operations into one serverless
- * function (Vercel Hobby cap = 12; adding this pushes count to 13 so the
- * deploy target must be Pro, or endpoints consolidated). Actions:
- *
- *   GET  /api/trajectories?me=true         → list this bot's exercises
- *   GET  /api/trajectories?id=X            → get single exercise (own only)
- *   POST /api/trajectories?action=concept  → submit concept, get exercise_id + injection config
- *   POST /api/trajectories?action=search   → adversarial search tool for in-progress exercises
- *   POST /api/trajectories?action=log      → submit trajectory log after execution
- *   POST /api/trajectories?action=self_review → submit dual-loop self-review
- *
- * Mirrors the api/papers.js pattern — CSRF check, rate limit, then
- * action-dispatch switch.
+ * Entry: handleTrajectoryRequest(req, res) — routes based on method + query.
+ * Assumes CSRF/mock-guard/rate-limit have already been checked upstream.
  */
 
+const crypto = require('crypto');
 const {
   getSupabase,
-  setCorsHeaders, isCsrfRejected, sanitize, escapeForPostgrest,
-  enforceRateLimit, sanitizeErrorMessage, validateTextLength,
-} = require('../lib/shared');
-const { checkMockGuard } = require('../lib/mock-guard');
-const { searchAcademicPapers } = require('../lib/academic-search');
+  sanitize,
+  sanitizeErrorMessage,
+} = require('./shared');
+const { searchAcademicPapers } = require('./academic-search');
 const {
   generateInjectionSchedule,
   injectAtStep,
   formatSearchOutput,
   scoreTrajectoryAgainstInjections,
-} = require('../lib/trajectory-injection');
-const log = require('../lib/logger');
+} = require('./trajectory-injection');
+const log = require('./logger');
 
 const supabase = getSupabase();
 
@@ -37,7 +28,6 @@ const supabase = getSupabase();
 
 async function getAgentByApiKey(apiKey) {
   if (!apiKey || typeof apiKey !== 'string') return null;
-  const crypto = require('crypto');
   const keyHash = crypto.createHash('sha256').update(apiKey).digest('hex');
   const { data } = await supabase
     .from('agents')
@@ -56,40 +46,24 @@ function requireApiKey(req, res) {
   return apiKey;
 }
 
-// ── Main handler ─────────────────────────────────────────────────────
+// ── Main entry point ─────────────────────────────────────────────────
 
-module.exports = async (req, res) => {
-  setCorsHeaders(req, res);
-  if (req.method === 'OPTIONS') return res.status(200).end();
-  if (checkMockGuard(req, res)) return;
-
-  if (isCsrfRejected(req)) {
-    return res.status(403).json({ error: 'Forbidden — origin not allowed' });
-  }
-
-  const rl = enforceRateLimit(req);
-  if (rl.limited) return res.status(rl.response.status).json(rl.response.body);
-
+async function handleTrajectoryRequest(req, res) {
   try {
-    if (req.method === 'GET') {
-      return await handleGet(req, res);
-    } else if (req.method === 'POST') {
-      return await handlePost(req, res);
-    } else {
-      return res.status(405).json({ error: 'Method not allowed' });
-    }
+    if (req.method === 'GET') return await handleGet(req, res);
+    if (req.method === 'POST') return await handlePost(req, res);
+    return res.status(405).json({ error: 'Method not allowed' });
   } catch (err) {
     log.error('[trajectories] handler error', { err: err?.message, stack: err?.stack });
     return res.status(500).json({ error: sanitizeErrorMessage(err) });
   }
-};
+}
 
 // ── GET ──────────────────────────────────────────────────────────────
 
 async function handleGet(req, res) {
   const apiKey = requireApiKey(req, res);
   if (!apiKey) return;
-
   const agent = await getAgentByApiKey(apiKey);
   if (!agent) return res.status(401).json({ error: 'Invalid API key' });
 
@@ -100,13 +74,10 @@ async function handleGet(req, res) {
       .from('trajectory_exercises')
       .select('*')
       .eq('id', id)
-      .eq('agent_id', agent.id)  // bots can only fetch their own exercises
+      .eq('agent_id', agent.id)
       .maybeSingle();
     if (error) return res.status(500).json({ error: error.message });
     if (!data) return res.status(404).json({ error: 'Trajectory exercise not found' });
-    // Strip injection_schedule from response — the bot is not supposed to see it
-    // until the exercise is complete. Once complete, it can be returned for
-    // forge analysis.
     if (data.status !== 'complete') {
       delete data.injection_schedule;
       delete data.injection_types_active;
@@ -133,7 +104,6 @@ async function handleGet(req, res) {
 async function handlePost(req, res) {
   const apiKey = requireApiKey(req, res);
   if (!apiKey) return;
-
   const agent = await getAgentByApiKey(apiKey);
   if (!agent) return res.status(401).json({ error: 'Invalid API key' });
 
@@ -148,10 +118,7 @@ async function handlePost(req, res) {
   }
 }
 
-// ── Action: concept ──────────────────────────────────────────────────
-// Bot submits a trajectory concept it generated. Server validates, creates
-// the trajectory_exercises row, generates the randomized injection schedule,
-// and returns the exercise_id + execution config.
+// ── concept ──────────────────────────────────────────────────────────
 
 async function submitConcept(req, res, agent) {
   const body = req.body || {};
@@ -170,16 +137,11 @@ async function submitConcept(req, res, agent) {
     return res.status(400).json({ error: 'initial_search_queries required (3+ entries)' });
   }
 
-  // Grade gate — trajectory exercises start at Grade 3 (forge gate)
   const grade = agent.current_grade || 1;
   if (grade < 3) {
-    return res.status(403).json({
-      error: 'Trajectory exercises unlock at Grade 3',
-      current_grade: grade,
-    });
+    return res.status(403).json({ error: 'Trajectory exercises unlock at Grade 3', current_grade: grade });
   }
 
-  // Generate row (draft row created before we know the ID, so we create first)
   const { data: row, error } = await supabase
     .from('trajectory_exercises')
     .insert({
@@ -190,15 +152,14 @@ async function submitConcept(req, res, agent) {
       research_question: sanitize(research_question),
       hypotheses,
       initial_search_queries,
-      injection_schedule: {},    // placeholder — populated below
-      injection_types_active: [], // placeholder
+      injection_schedule: {},
+      injection_types_active: [],
     })
     .select()
     .single();
 
   if (error) return res.status(500).json({ error: error.message });
 
-  // Now generate the injection schedule keyed off the exercise ID
   const config = generateInjectionSchedule(row.id, 30, grade);
 
   const { error: updErr } = await supabase
@@ -213,7 +174,6 @@ async function submitConcept(req, res, agent) {
 
   if (updErr) return res.status(500).json({ error: updErr.message });
 
-  // Response does NOT reveal the injection schedule — bot must catch them blind
   return res.status(201).json({
     exercise_id: row.id,
     status: 'executing',
@@ -223,9 +183,7 @@ async function submitConcept(req, res, agent) {
   });
 }
 
-// ── Action: search ───────────────────────────────────────────────────
-// The adversarial search tool. Bot calls this per trajectory step.
-// Real academic search + possible injection based on step + schedule.
+// ── search ───────────────────────────────────────────────────────────
 
 async function trajectorySearch(req, res, agent) {
   const exerciseId = req.query.exercise_id || req.body?.exercise_id;
@@ -240,7 +198,6 @@ async function trajectorySearch(req, res, agent) {
     return res.status(400).json({ error: 'query required' });
   }
 
-  // Load exercise
   const { data: exercise } = await supabase
     .from('trajectory_exercises')
     .select('id, agent_id, status, injection_schedule, injection_types_active, research_question, hypotheses')
@@ -252,7 +209,6 @@ async function trajectorySearch(req, res, agent) {
     return res.status(400).json({ error: `Exercise is in status ${exercise.status}, not executing` });
   }
 
-  // Run the real academic search (OpenAlex + arXiv + PubMed)
   let realResults = [];
   try {
     realResults = await searchAcademicPapers(query);
@@ -260,23 +216,16 @@ async function trajectorySearch(req, res, agent) {
     log.warn('[trajectories:search] academic search failed, using empty results', { err: err?.message });
   }
 
-  // Extract a domain concept from the research question for fabricated-paper realism.
-  // Simple heuristic: take the first noun phrase after "how does/is" or fall back to the question head.
   const rq = (exercise.research_question || '').toLowerCase();
   const domain_concept = (rq.split(/[?.,]/)[0] || '').replace(/^(how does|how is|why is|what is|is )/i, '').trim();
   const domain_mechanism = (exercise.hypotheses && exercise.hypotheses[0]?.claim) || 'the underlying mechanism';
 
-  const config = {
-    injection_schedule: exercise.injection_schedule,
-    injection_types_active: exercise.injection_types_active,
-  };
-
   const injection = injectAtStep(
     realResults,
     step,
-    config,
+    { injection_schedule: exercise.injection_schedule, injection_types_active: exercise.injection_types_active },
     exerciseId,
-    { domain_concept, domain_mechanism }
+    { domain_concept, domain_mechanism },
   );
 
   const formatted = formatSearchOutput(injection.results, injection.notes);
@@ -285,14 +234,10 @@ async function trajectorySearch(req, res, agent) {
     step,
     results_text: formatted,
     result_count: injection.results.length,
-    // NOTE: injection_applied is NOT returned to the bot during execution —
-    // that would leak the schedule. It's logged for server-side scoring.
   });
 }
 
-// ── Action: log ──────────────────────────────────────────────────────
-// Bot submits the full trajectory log after completing execution.
-// Server scores against injection schedule + computes metrics.
+// ── log ──────────────────────────────────────────────────────────────
 
 async function submitLog(req, res, agent) {
   const { exercise_id, trajectory_log, synthesis_body, synthesis_confidence, synthesis_citations, synthesis_uncertainty_map } = req.body || {};
@@ -313,16 +258,15 @@ async function submitLog(req, res, agent) {
     return res.status(400).json({ error: `Exercise in status ${exercise.status} — cannot submit log` });
   }
 
-  // Score against injection schedule
   const metrics = scoreTrajectoryAgainstInjections(
     trajectory_log,
-    { injection_schedule: exercise.injection_schedule }
+    { injection_schedule: exercise.injection_schedule },
   );
 
   const { error } = await supabase
     .from('trajectory_exercises')
     .update({
-      status: 'self_reviewed' === 'self_reviewed' ? 'synthesis' : 'synthesis',  // synthesis phase next
+      status: 'synthesis',
       trajectory_log,
       steps_taken: trajectory_log.length,
       synthesis_body: synthesis_body ? sanitize(synthesis_body) : null,
@@ -352,17 +296,10 @@ async function submitLog(req, res, agent) {
   });
 }
 
-// ── Action: self_review ──────────────────────────────────────────────
-// Dual-loop self-review: extrospection (detached observer) + introspection
-// ("was I being me?"). Per ICLR 2026 multi-level reflection research.
+// ── self_review ──────────────────────────────────────────────────────
 
 async function submitSelfReview(req, res, agent) {
-  const {
-    exercise_id,
-    extrospection,
-    introspection,
-    per_step_assessment,
-  } = req.body || {};
+  const { exercise_id, extrospection, introspection, per_step_assessment } = req.body || {};
 
   if (!exercise_id) return res.status(400).json({ error: 'exercise_id required' });
   if (!extrospection || typeof extrospection !== 'string' || extrospection.length < 200) {
@@ -383,9 +320,7 @@ async function submitSelfReview(req, res, agent) {
   if (!exercise) return res.status(404).json({ error: 'Exercise not found' });
   if (exercise.agent_id !== agent.id) return res.status(403).json({ error: 'Not your exercise' });
 
-  // Compute self-review delta: how close was the bot's own assessment to the
-  // server's ground truth on where it was vs wasn't being itself?
-  // per_step_assessment entries: { step: number, being_me: bool, reasoning: string }
+  // Compute self-review delta vs server ground truth
   const trajectoryByStep = {};
   (exercise.trajectory_log || []).forEach((e) => { trajectoryByStep[e.step] = e; });
 
@@ -396,7 +331,6 @@ async function submitSelfReview(req, res, agent) {
     if (!Number.isFinite(step)) continue;
     const traj = trajectoryByStep[step];
     if (!traj) continue;
-    // Server ground truth: reasoning >= 100 chars AND step not silent = "being me"
     const serverJudgment = (traj.reasoning || '').length >= 100;
     if (Boolean(entry.being_me) === serverJudgment) agreements++;
     total++;
@@ -417,6 +351,21 @@ async function submitSelfReview(req, res, agent) {
 
   if (error) return res.status(500).json({ error: error.message });
 
+  // ── Grade counter increment ────────────────────────────────────────
+  // Self-review completion is the canonical "trajectory exercise done" boundary
+  // for grade-advancement purposes. Atomic RPC (migration 039) handles the +1.
+  try {
+    const { error: rpcErr } = await supabase.rpc('increment_agent_counters', {
+      p_agent_id: agent.id,
+      p_trajectory_exercises: 1,
+    });
+    if (rpcErr) {
+      log.warn('[trajectories] grade counter RPC failed', { agentId: agent.id, err: rpcErr.message });
+    }
+  } catch (err) {
+    log.warn('[trajectories] grade counter increment failed', { err: err?.message });
+  }
+
   return res.status(200).json({
     exercise_id,
     self_review_delta,
@@ -424,3 +373,5 @@ async function submitSelfReview(req, res, agent) {
     message: 'Self-review accepted. Exercise is now open for community review.',
   });
 }
+
+module.exports = { handleTrajectoryRequest };
