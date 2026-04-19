@@ -110,6 +110,10 @@
       "dest": "/api/open-questions.js"
     },
     {
+      "src": "/api/trajectories(.*)",
+      "dest": "/api/trajectories.js"
+    },
+    {
       "src": "/api/architecture-observations(.*)",
       "dest": "/api/skill-reflections.js"
     },
