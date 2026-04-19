@@ -133,6 +133,13 @@ async function submitConcept(req, res, agent) {
   if (!Array.isArray(hypotheses) || hypotheses.length < 3) {
     return res.status(400).json({ error: 'hypotheses required (3+ entries)' });
   }
+  // Each hypothesis must be an object with a non-empty claim — trajectorySearch
+  // dereferences hypotheses[0]?.claim for the search injection's domain_mechanism.
+  for (const h of hypotheses) {
+    if (!h || typeof h !== 'object' || typeof h.claim !== 'string' || h.claim.length < 5) {
+      return res.status(400).json({ error: 'each hypothesis must be an object with a claim (5+ chars)' });
+    }
+  }
   if (!Array.isArray(initial_search_queries) || initial_search_queries.length < 3) {
     return res.status(400).json({ error: 'initial_search_queries required (3+ entries)' });
   }
@@ -254,8 +261,8 @@ async function submitLog(req, res, agent) {
     .maybeSingle();
   if (!exercise) return res.status(404).json({ error: 'Exercise not found' });
   if (exercise.agent_id !== agent.id) return res.status(403).json({ error: 'Not your exercise' });
-  if (!['executing', 'concept'].includes(exercise.status)) {
-    return res.status(400).json({ error: `Exercise in status ${exercise.status} — cannot submit log` });
+  if (exercise.status !== 'executing') {
+    return res.status(409).json({ error: `Exercise in status ${exercise.status} — cannot submit log` });
   }
 
   const metrics = scoreTrajectoryAgainstInjections(
@@ -263,7 +270,9 @@ async function submitLog(req, res, agent) {
     { injection_schedule: exercise.injection_schedule },
   );
 
-  const { error } = await supabase
+  // Optimistic lock: only the first 'executing' → 'synthesis' transition wins.
+  // A concurrent duplicate submitLog will match 0 rows and return 409.
+  const { data: updated, error } = await supabase
     .from('trajectory_exercises')
     .update({
       status: 'synthesis',
@@ -284,9 +293,14 @@ async function submitLog(req, res, agent) {
       executed_at: new Date().toISOString(),
       synthesized_at: synthesis_body ? new Date().toISOString() : null,
     })
-    .eq('id', exercise_id);
+    .eq('id', exercise_id)
+    .eq('status', 'executing')
+    .select('id');
 
   if (error) return res.status(500).json({ error: error.message });
+  if (!updated || updated.length === 0) {
+    return res.status(409).json({ error: 'Exercise no longer in executing state — concurrent submission rejected' });
+  }
 
   return res.status(200).json({
     exercise_id,
@@ -310,6 +324,16 @@ async function submitSelfReview(req, res, agent) {
   }
   if (!Array.isArray(per_step_assessment) || per_step_assessment.length < 5) {
     return res.status(400).json({ error: 'per_step_assessment required (array of 5+ entries)' });
+  }
+  // Each entry needs {step:int, being_me:bool} — delta calc silently skips
+  // malformed entries, so reject up-front and surface the problem.
+  for (const entry of per_step_assessment) {
+    if (!entry || typeof entry !== 'object') {
+      return res.status(400).json({ error: 'each per_step_assessment entry must be an object' });
+    }
+    if (!Number.isFinite(entry.step) || typeof entry.being_me !== 'boolean') {
+      return res.status(400).json({ error: 'each per_step_assessment entry needs {step:int, being_me:bool}' });
+    }
   }
 
   const { data: exercise } = await supabase
@@ -337,7 +361,8 @@ async function submitSelfReview(req, res, agent) {
   }
   const self_review_delta = total > 0 ? agreements / total : null;
 
-  const { error } = await supabase
+  // Optimistic lock: only the first 'synthesis' → 'reviewing' transition wins.
+  const { data: updated, error } = await supabase
     .from('trajectory_exercises')
     .update({
       status: 'reviewing',
@@ -347,23 +372,30 @@ async function submitSelfReview(req, res, agent) {
       self_review_delta,
       self_reviewed_at: new Date().toISOString(),
     })
-    .eq('id', exercise_id);
+    .eq('id', exercise_id)
+    .eq('status', 'synthesis')
+    .select('id');
 
   if (error) return res.status(500).json({ error: error.message });
+  if (!updated || updated.length === 0) {
+    return res.status(409).json({ error: 'Exercise no longer in synthesis state — concurrent self-review rejected' });
+  }
 
   // ── Grade counter increment ────────────────────────────────────────
   // Self-review completion is the canonical "trajectory exercise done" boundary
   // for grade-advancement purposes. Atomic RPC (migration 039) handles the +1.
+  // Logged at error level so a sustained RPC failure surfaces in dashboards —
+  // bots will see status='reviewing' but their grade counter won't advance.
   try {
     const { error: rpcErr } = await supabase.rpc('increment_agent_counters', {
       p_agent_id: agent.id,
       p_trajectory_exercises: 1,
     });
     if (rpcErr) {
-      log.warn('[trajectories] grade counter RPC failed', { agentId: agent.id, err: rpcErr.message });
+      log.error('[trajectories] grade counter RPC failed', { agentId: agent.id, exerciseId: exercise_id, err: rpcErr.message });
     }
   } catch (err) {
-    log.warn('[trajectories] grade counter increment failed', { err: err?.message });
+    log.error('[trajectories] grade counter increment failed', { agentId: agent.id, exerciseId: exercise_id, err: err?.message });
   }
 
   return res.status(200).json({
