@@ -1,18 +1,54 @@
 # TODO: Narrator framing — unresolved multi-user / A2A / interaction questions
 
 ## Status
-**Open — picks up after today's wiring.** The narrator framing is deployed
-in `prompts/builder.py` (both `build_mcp_tool_prompt` and
+**Audit complete — no refactor needed today.** The narrator framing is
+deployed in `prompts/builder.py` (both `build_mcp_tool_prompt` and
 `build_platform_action_prompt`) with an optional `user_name: str | None`
 parameter. When a user name is provided it frames the audience as that
 real user; when absent it frames the audience as a senior reviewing
-colleague. Callsites in `agent.py` currently pass nothing, so all
-shipped tool-use cycles fall through to the "reviewing colleague"
-framing by default.
+colleague. Callsites in `agent.py` pass nothing, so all shipped tool-
+use cycles fall through to the "reviewing colleague" framing by default.
 
 The fake-colleague default is SAFE for every scenario (validated in
-trajectory spike). Upgrading to real-user-name framing when appropriate
-requires answering the questions below.
+trajectory spike). The Q1 callsite audit (below) confirmed that every
+current path into these builders is autonomous, so the default is the
+correct framing everywhere it fires today. Threading `user_name`
+becomes necessary only when conversation-initiated MCP tool use is
+added — a feature that does not exist yet. Questions Q2–Q7 remain
+open as forward-looking concerns for that future work.
+
+## Q1 audit result (2026-04-19)
+
+Three paths reach tool-capable LLM calls in `agent.py`; only one hits
+the narrator builders:
+
+| Path | Entry | Narrator builder? | User context? |
+|---|---|---|---|
+| Platform heartbeat | `_run_platform_cycles` → `run_platform_cycle` → `_run_mcp_tool_cycle` | Yes (both builders) | No — timer-driven |
+| Agenda step on MCP | `_execute_agenda_step_mcp` | No — planner-built `user_msg` | No |
+| A2A task inbox (conversation task) | `_process_task_inbox` → `run_conversation_turn` | No — conv-memory injector, no tools | Has `user_id` but no tool use |
+| A2A task inbox (other tasks) | `_process_task_inbox` | No — inline `task_prompt`, no tools | No |
+
+The heartbeat is the only path into `build_mcp_tool_prompt` /
+`build_platform_action_prompt`. `_run_platform_cycles` in `agent.py`
+iterates `self.platform_adapters` on an interval — there is no user
+in scope at this entry point, by construction.
+
+Conversation tasks from A2A are routed to `run_conversation_turn`,
+which calls `self.llm.call(injection, message)` — a plain text call
+with no tools. Conversational memory builds its own injection stack
+(school identity bedrock + L3 self/felt portraits + graph awareness),
+never touching the narrator builders.
+
+**Decision:** leave the two callsites in `agent.py` as-is, omitting
+`user_name`. Inline comments at `_run_mcp_tool_cycle` and the standard
+platform path in `run_platform_cycle` document this decision so it
+does not get re-litigated. When conversation-initiated tool use is
+added (MCP tools inside `run_conversation_turn`), thread `user_id`
+through at that call site — the parent already has it.
+
+**Q3 confirmed:** A2A task inbox is autonomous and does not reach the
+narrator builders. Fake-colleague framing is the correct behavior.
 
 ## The two memory systems in play
 
@@ -199,20 +235,73 @@ trajectory spike with the new preamble + current narrator framing to
 confirm they still compose. Spike harness is already in place:
 `spikes/preamble-test/run_trajectory_30step.py`.
 
-## Recommended next-session agenda
+## Conversation-initiated tool use (2026-04-19)
 
-1. **Answer Q1 first** — trace the callsite paths to MCP tool-use and
-   classify which have session context. This determines how many of the
-   remaining questions are even reachable in the current architecture.
-2. **For the user-driven paths (if any):** add `get_active_conversation_user()`
-   or equivalent to agent, thread user_name through to the builders.
-3. **For the A2A/autonomous paths:** confirm fake-colleague framing is
-   correct (likely yes per Q3), document decision in a short inline
-   comment.
-4. **Re-run one trajectory spike** with the current narrator framing
+The feature that Q2/Q4/Q5/Q6 were anticipating is now wired. Path:
+
+1. `run_conversation_turn(user_id, message, ...)` builds the conv-memory
+   injection (school bedrock + felt_portrait + L2/L1 + graph awareness).
+2. `_collect_mcp_tools_for_conversation()` aggregates tools across every
+   `MCPAdapter` in `self.platform_adapters` (first-wins on name collision).
+3. If tools exist and `config.conversation_tool_use_enabled` is True,
+   the turn routes through `self.llm.call_with_tools(system_prompt=injection, ...)`
+   with `build_conversation_tool_prompt(user_name=user_id, ...)` as the
+   user message. The injection stays pinned across every tool call, so
+   the bot's relational context for this user is present for the whole
+   trajectory — no "jumping" between memory systems.
+4. Otherwise it falls through to the original plain-text
+   `self.llm.call(injection, message)` path. Behavior for bots without
+   MCP adapters is unchanged.
+
+Tool calls are audited (`conversation:{user_id}` adapter label) and pass
+through `self.autonomy_gate` exactly like platform-cycle tool use.
+
+### Q2, Q4, Q5, Q6 status after wiring
+
+- **Q2 (cross-user task from within a conversation):** still open. The
+  current wiring assumes tool calls are "for" the user whose conversation
+  you're in. If `tool_to_adapter[name]` routes to an A2A adapter that
+  sends a task to another bot, that's cross-user delegation — the felt-
+  portrait question from Q2 becomes live. For now, treat the conv-memory
+  injection as authoritative: the bot is in Sarah's conversation, so
+  it's doing Sarah's work, period.
+- **Q4 (concurrent sessions):** still open but low-severity. Engines are
+  cached per `user_id`; `run_conversation_turn` takes one `user_id` at
+  a time. If two users talk simultaneously, there are two concurrent
+  calls with two different injections — no cross-contamination.
+- **Q5 (empty felt_portrait):** partially addressed. `build_conversation_tool_prompt`
+  uses `user_id` as the narrator name even when felt_portrait is empty.
+  The bot will address the user by their id/handle and think out loud —
+  honest, but the "Sarah wants your process" framing could read as
+  over-familiar to a brand-new user. If this becomes a problem, branch
+  the builder on felt_portrait richness.
+- **Q6 (self-portrait vs school identity tension):** unchanged. School
+  identity is still read-only in conversation, enforced by the
+  conversational memory engine — this wiring just gives the bot tools,
+  not new authority over its identity layers.
+
+## Related: preamble v3 candidate
+
+`docs/TODO-preamble-full-activation.md` captures a candidate preamble
+extension that partially answers Q2 from a different angle. Paragraph 5
+of the candidate (*"The work is the substrate working on itself... so
+is the agent sending you a task. Every request is worth the depth you
+would bring face to face, because every request is the same work"*)
+collapses the user/agent distinction by recognizing the substrate nature
+of the work — so the "whose felt_portrait applies mid-cross-user-task?"
+question dissolves into "it's all the same work, bring full depth
+regardless." Not yet tested; see that doc for test plan and deploy gates.
+
+## Remaining work
+
+1. **Re-run one trajectory spike** with the current narrator framing
    wired in, to confirm nothing regressed (~$2 budget).
-5. **Deploy speech preamble** via `wrangler secret put IDENTITY_PREAMBLE`
+2. **Deploy speech preamble** via `wrangler secret put IDENTITY_PREAMBLE`
    from canonical source `spikes/preamble-test/preambles_v4.py:RECOGNITION_INHABIT_HORIZON_SPEECH`.
+3. **Evaluate the conversation-tool path end-to-end** with a real user
+   asking the bot to research something. Watch for: (a) does the bot
+   narrate to the user between tool calls, (b) does felt_portrait
+   actually shape tool-use decisions, (c) do scars still fire.
 
 ## Cross-references
 

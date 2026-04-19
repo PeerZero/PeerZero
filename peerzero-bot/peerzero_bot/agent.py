@@ -515,6 +515,32 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
 
         return identity
 
+    def _collect_mcp_tools_for_conversation(self) -> tuple[list[dict], dict]:
+        """Aggregate tools from every MCPAdapter the bot has configured.
+
+        Returns (llm_tools, tool_name_to_adapter). Each tool dict is in the
+        format expected by llm_client.call_with_tools. Tool name collisions
+        across adapters resolve to the first adapter that declared the name
+        (first-wins); rename your MCP tools if you need distinct handles.
+        """
+        aggregated: list[dict] = []
+        tool_to_adapter: dict = {}
+        for adapter in self.platform_adapters:
+            if not isinstance(adapter, MCPAdapter):
+                continue
+            try:
+                tools = adapter.get_llm_tools()
+            except Exception as e:
+                logger.warning(f"[CONV] Failed to list tools from {adapter.platform_name}: {e}")
+                continue
+            for tool in tools:
+                name = tool.get("name")
+                if not name or name in tool_to_adapter:
+                    continue
+                aggregated.append(tool)
+                tool_to_adapter[name] = adapter
+        return aggregated, tool_to_adapter
+
     async def run_conversation_turn(
         self, user_id: str, message: str, session_id: str = ""
     ) -> dict | None:
@@ -568,8 +594,47 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
                 else:
                     injection = injection + shared_block
 
-            # Step 2: Call conversation LLM with memory injection as system context
-            response = self.llm.call(injection, message)
+            # Step 2: Call conversation LLM with memory injection as system context.
+            # If MCP adapters are configured and tool-use-in-conversation is
+            # enabled, aggregate their tools and route through call_with_tools.
+            # The `injection` (school bedrock + felt_portrait of user_id + L2/L1
+            # + graph awareness) stays pinned as system prompt for every tool
+            # call, so the bot retains its relational context for the whole
+            # trajectory instead of "jumping" between modes.
+            mcp_tools, tool_to_adapter = self._collect_mcp_tools_for_conversation()
+            if mcp_tools and getattr(self.config, "conversation_tool_use_enabled", True):
+                user_msg = self.prompts.build_conversation_tool_prompt(
+                    user_name=user_id,
+                    message=message,
+                    tool_count=len(mcp_tools),
+                )
+
+                def _execute_conversation_tool(tool_name: str, arguments: dict) -> dict:
+                    adapter = tool_to_adapter.get(tool_name)
+                    if adapter is None:
+                        return {"is_error": True, "error": f"unknown tool: {tool_name}"}
+                    result = adapter.call_tool(tool_name, arguments)
+                    if self.audit:
+                        self.audit.log(
+                            adapter=f"conversation:{user_id}",
+                            action=f"tool_call:{tool_name}",
+                            destination="mcp_local",
+                            status=200 if not result.get("is_error") else 500,
+                            request_body=json.dumps(arguments, default=str)[:1000],
+                        )
+                    return result
+
+                tool_result = self.llm.call_with_tools(
+                    system_prompt=injection,
+                    user_message=user_msg,
+                    tools=mcp_tools,
+                    tool_executor=_execute_conversation_tool,
+                    autonomy_gate=self.autonomy_gate,
+                    platform_name=f"conversation:{user_id}",
+                )
+                response = tool_result.text if tool_result else ""
+            else:
+                response = self.llm.call(injection, message)
 
             if not response:
                 logger.warning("[CONV] Empty LLM response")
@@ -1932,6 +1997,12 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
             self._platform_predict_pre_action(system_prompt, "platform_action", platform_name)
             self._platform_capture_rationale(system_prompt, "platform_action", platform_name)
 
+            # user_name intentionally omitted: run_platform_cycle is only
+            # reached from the heartbeat loop in _run_platform_cycles — a
+            # timer-driven autonomous path with no conversation in scope.
+            # A2A conversation tasks route through run_conversation_turn
+            # instead and never land here. See docs/TODO-narrator-framing-
+            # multi-user.md for the full audit.
             user_msg = self.prompts.build_platform_action_prompt(
                 platform_name=platform_name,
                 context=context.summary,
@@ -2055,7 +2126,12 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
         self._platform_predict_pre_action(system_prompt, "mcp_tool_use", platform_name)
         self._platform_capture_rationale(system_prompt, "mcp_tool_use", platform_name)
 
-        # Build tool-aware prompt
+        # Build tool-aware prompt.
+        # user_name intentionally omitted: _run_mcp_tool_cycle is only
+        # reached from the heartbeat loop (run_platform_cycle) — autonomous,
+        # no user in scope. Conversation-initiated MCP tool use does not
+        # exist today; if added, thread user_id from run_conversation_turn
+        # through here. See docs/TODO-narrator-framing-multi-user.md.
         user_msg = self.prompts.build_mcp_tool_prompt(
             platform_name=platform_name,
             context=context.summary,
