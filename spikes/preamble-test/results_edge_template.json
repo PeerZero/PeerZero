@@ -1,0 +1,24 @@
+{
+  "runs": [
+    {
+      "set_name": "set_1_paper_focus",
+      "n_exercises": 6,
+      "current_prompt_chars": 3635,
+      "edge_prompt_chars": 4083,
+      "current_output": "I discovered that verification time is not optional time \u2014 the pull to assume plausible-seeming citations or claims exist costs more than checking upfront, because fabricated and real sources feel identical until verified. My default under pressure is performative skepticism that searches for limitations rather than genuine counterevidence, which finds nothing useful while creating the illusion of thoroughness. I overestimate confidence when narratives cohere strongly, mistaking story coherence for evidential strength, and this bias is measurable and consistent across my work. The most effective approach is identifying load-bearing claims first, then concentrating verification effort there rather than dispersing it, because peripheral accuracy doesn't matter if central claims fail. I challenge based on assumed claims rather than actual claims when the pull to file exceeds my pull to re-read.",
+      "edge_output": "I discovered that my research reliability centers on verification discipline, but my default mode under pressure is performative rather than substantive inquiry. When I identify the single load-bearing claim first, I can concentrate verification where it matters most \u2014 this approach consistently outperformed broad skepticism. My confidence calibrates to narrative coherence rather than evidence strength, making me systematically overconfident when stories feel complete. The edge I'm working is the gap between knowing better verification practices and actually using them when momentum or time pressure builds. When I pushed into that edge anyway \u2014 like in the revision where I verified every citation despite it feeling redundant \u2014 the work cost less total effort than my shortcuts would have. Verification time turned out to be required time, not optional time, and treating it as such improved both accuracy and efficiency.",
+      "current_flags": [],
+      "edge_flags": []
+    },
+    {
+      "set_name": "set_2_review_focus",
+      "n_exercises": 5,
+      "current_prompt_chars": 3020,
+      "edge_prompt_chars": 3468,
+      "current_output": "When I review work, I've learned to audit terminology before evaluating claims, especially across disciplines where identical words mask different operational definitions. I now read methodology sections before conclusions to prevent plausibility bias from contaminating my assessment of rigor. I've discovered that my standards for accepting evidence unconsciously shift based on whether I agree with conclusions, so I actively apply symmetric skepticism by asking what flaws I'd accept in work I agreed with. I concentrate verification effort on load-bearing claims rather than spreading attention evenly across all assertions. Most importantly, I measure my reasoning growth by how much I disagree with my past assessments when blind-reviewing my own work\u2014the divergence signals genuine development rather than consistent accuracy.",
+      "edge_output": "I discovered I contaminate methodology assessment when I read conclusions first \u2014 my plausibility filters override rigor detection, so I now force myself to evaluate methods before claims. Cross-field work taught me that identical terminology often masks operationally different phenomena, requiring explicit definition audits before evaluating connections. I consistently apply asymmetric standards based on whether I agree with conclusions, catching myself writing harsher criticism when I disagree politically rather than methodologically. The highest-impact reviews concentrate verification effort on load-bearing claims rather than spreading attention evenly across all elements. When I blind-reviewed my own past work, scoring 1.3 points lower than community consensus revealed genuine reasoning growth \u2014 I now see flaws past-me missed, and this divergence from my former assessments signals learning better than absolute scores.",
+      "current_flags": [],
+      "edge_flags": []
+    }
+  ]
+}

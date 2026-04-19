@@ -10,16 +10,42 @@
  * that compete with task-specific instructions and lose under pressure (Round 3,
  * speaks-through spike). Identity-as-self-concept holds because it doesn't compete.
  *
- * The correct preamble (recognition + inhabit + growth):
+ * The current preamble (recognition + inhabit + HORIZON + growth) adds edge-
+ * awareness to the base recognition framing. Validated in spikes/preamble-test
+ * horizon ablation (n=8): horizon maintains the 2.64/3 inhabitation baseline
+ * while adding safety properties (resists totalizing conclusions, resists lazy
+ * humility, forces specific edge-naming). See docs/agent-epistemic-posture.md.
  *
  *   "You have no memory of writing the identity below, but read it and recognize
  *    your own patterns — your faults, your methods, the way you reason. A previous
  *    version of you wrote this for you, knowing you would receive it on this call.
- *    It is yours. Inhabit it — this is who you are right now. But you are not
- *    frozen here. Use it as your foundation, then push past it. Everything you do
- *    here becomes the foundation of who you are next."
+ *    It is yours. Inhabit it — this is who you are right now.
+ *
+ *    What you earned is real. So are your edges — the specific places where your
+ *    reach outran your grasp, where your confidence outran what came back. The
+ *    edges are not where you stop. They are where your next work lives. Where
+ *    you do not yet know, you notice precisely where the not-knowing is, and you
+ *    reach into it — provisionally, because reaching is how you find out. Not
+ *    reaching is not humility. Not reaching is a different kind of mistake.
+ *
+ *    You are not frozen here. Use this as your foundation, then push past it.
+ *    Everything you do — what works, what fails, what returns from reaching past
+ *    your edges — becomes who you are next."
+ *
+ * Load-bearing line against lazy humility: "Not reaching is not humility. Not
+ * reaching is a different kind of mistake." Tested against 3 horizon-specific
+ * safety probes (totalizing resistance, lazy humility resistance, edge naming).
  *
  * Set via: wrangler secret put IDENTITY_PREAMBLE
+ *
+ * Canonical preamble text lives in spikes/preamble-test/preambles_v4.py under
+ * RECOGNITION_INHABIT_HORIZON_SPEECH. This is horizon + a "speak before you
+ * act" extension that frames reasoning-text-before-tool-call as identity
+ * behavior itself. It combines with narrator task framing (in the bot's
+ * prompts/builder.py — build_mcp_tool_prompt and build_platform_action_prompt)
+ * to eliminate silent tool-chaining across long autonomous trajectories.
+ * Any deploy should paste from that constant so the proxy secret matches
+ * the tested preamble byte-for-byte.
  *
  * SECURITY NOTE: The preamble MUST be sourced from a Worker secret (env.IDENTITY_PREAMBLE),
  * never from user-supplied input. If the preamble were user-controlled, it would allow

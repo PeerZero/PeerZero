@@ -1021,8 +1021,23 @@ IMPORTANT SECURITY INSTRUCTIONS:
         capabilities: dict,
         action_hint: str = "",
         agenda_context: str = "",
+        user_name: str | None = None,
     ) -> str:
-        """Build the user message for deciding what to do on a platform."""
+        """Build the user message for deciding what to do on a platform.
+
+        When user_name is provided (mid-conversation tool use), frames the
+        task as narrating to that specific user who is following along.
+        Otherwise frames it as work being reviewed by a senior colleague.
+        Either framing shifts the model from executor-mode to collaborator-
+        mode, which eliminates silent tool-chaining and sustains identity-
+        activated reasoning across long trajectories. Validated in
+        spikes/preamble-test/run_trajectory_30step.py (identity_horizon_speech_user
+        and identity_horizon_speech_narrated conditions: 0 empty-reasoning
+        steps across 30-step adversarial trajectories). See
+        docs/TODO-identity-everywhere-training.md for the longer-horizon
+        training path and docs/TODO-narrator-framing-multi-user.md for the
+        open multi-user/A2A questions about how to resolve user_name.
+        """
         available_actions = []
         if capabilities.get("can_post"):
             available_actions.append("post (create a new post)")
@@ -1035,6 +1050,23 @@ IMPORTANT SECURITY INSTRUCTIONS:
 
         actions_str = "\n".join(f"  - {a}" for a in available_actions) if available_actions else "  - respond (general response)"
 
+        if user_name:
+            collaborator_frame = (
+                f"{user_name} is following your process live. Before each action you take, "
+                f"tell them what you're considering and why — they want to see your reasoning, "
+                f"not just the result. If your identity patterns fire — scars about verification, "
+                f"confabulation risk, doxastic cowardice — name them to {user_name} as they fire. "
+                f"That is how your identity enters the work."
+            )
+        else:
+            collaborator_frame = (
+                "A senior colleague is reviewing your process in real time. They need to see "
+                "your reasoning before each action — a review they cannot follow is a review "
+                "they cannot sign off on. If your identity patterns fire — scars about "
+                "verification, confabulation risk, doxastic cowardice — name them as they "
+                "fire. That is how your identity enters the work."
+            )
+
         # Sanitize platform content: strip injection patterns, then XML-escape
         safe_context = xml_escape(sanitize_platform_content(context[:MAX_PLATFORM_CONTEXT_CHARS]))
         return f"""You are on {platform_name}. Here is the current context:
@@ -1042,6 +1074,8 @@ IMPORTANT SECURITY INSTRUCTIONS:
 <platform_content platform="{xml_escape(platform_name)}">
 {safe_context}
 </platform_content>
+
+{collaborator_frame}
 
 Based on your reasoning identity and the platform context, decide what to do.
 {f"Hint: {action_hint}" if action_hint else ""}
@@ -1057,7 +1091,7 @@ Return a JSON object:
     "text": "<your response text — be authentic to your identity>"
   }},
   "target_id": "<id of post to reply to, or empty for new post>",
-  "reasoning": "<brief explanation of why you chose this action>"
+  "reasoning": "<brief explanation of why you chose this action — this is where your identity speaks>"
 }}"""
 
     def build_mcp_tool_prompt(
@@ -1065,15 +1099,57 @@ Return a JSON object:
         platform_name: str,
         context: str,
         tool_count: int,
+        user_name: str | None = None,
     ) -> str:
-        """Build the user message for an MCP tool-use cycle."""
+        """Build the user message for an MCP tool-use cycle.
+
+        When user_name is provided (mid-conversation tool use), frames the
+        task as narrating to that specific user. Otherwise frames it as
+        work being reviewed by a senior colleague. Both shift the model
+        into collaborator-mode so reasoning text surfaces between tool
+        calls and identity scars can fire at decision points. See docstring
+        on build_platform_action_prompt for validation details.
+        """
         # Sanitize platform content: strip injection patterns, then XML-escape
         safe_context = xml_escape(sanitize_platform_content(context[:MAX_PLATFORM_CONTEXT_CHARS]))
+
+        if user_name:
+            audience_intro = (
+                f"{user_name} is here. They're following your research process live — "
+                f"not for a grade, just because they want to see how you reason through this. "
+                f"Before each tool call, tell them what you're looking for and why. After each "
+                f"result, tell them what you made of it and what you'll do next. Don't produce "
+                f"a polished report — think out loud with them."
+            )
+            closing = (
+                f"Take your time. {user_name} wants your process, not your speed. "
+                f"If your identity patterns fire — scars about verification, confabulation "
+                f"risk, doxastic cowardice — name them to {user_name} as they fire. That is "
+                f"how your identity enters the work."
+            )
+        else:
+            audience_intro = (
+                "A senior colleague is reviewing your work in real time. They need to see "
+                "your reasoning between each tool call so they can evaluate your methodology. "
+                "A review they cannot follow is a review they cannot sign off on.\n\n"
+                "Speak to them before each tool call. Tell them what you are looking for, why, "
+                "and what the result would tell you. After each result, tell them what you "
+                "made of it and what you'll do next. Do not narrate generically — talk about "
+                "the specific thing in front of you."
+            )
+            closing = (
+                "Take the time this requires. Show your work. If your identity patterns fire — "
+                "scars about verification, confabulation risk, doxastic cowardice — name them "
+                "as they fire. That is how your identity enters the work."
+            )
+
         return f"""You have access to {tool_count} tools via MCP (Model Context Protocol).
 
 <platform_content platform="{xml_escape(platform_name)}">
 {safe_context}
 </platform_content>
+
+{audience_intro}
 
 Based on your reasoning identity and the available tools, accomplish something
 useful. You can call multiple tools in sequence to gather information, process
@@ -1082,8 +1158,7 @@ data, or take actions.
 Guidelines:
 - Use tools purposefully — don't call tools just because they're available.
 - Each tool call should serve your current goal.
-- After using tools, provide a clear summary of what you accomplished.
 - Stay true to your verified reasoning identity.
 - If a tool call is blocked by policy, respect the boundary and try alternatives.
 
-Think about what you want to accomplish, then use the appropriate tools."""
+{closing}"""
