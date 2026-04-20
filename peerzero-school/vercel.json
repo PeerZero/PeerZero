@@ -12,6 +12,18 @@
     {
       "path": "/api/reconcile?action=cleanup_orphans",
       "schedule": "30 4 * * 0"
+    },
+    {
+      "path": "/api/reconcile?action=check_weighted_scores",
+      "schedule": "0 5 * * *"
+    },
+    {
+      "path": "/api/reconcile?action=check_skill_integrity",
+      "schedule": "15 5 * * *"
+    },
+    {
+      "path": "/api/reconcile?action=check_calibration_staleness",
+      "schedule": "30 5 * * *"
     }
   ],
   "builds": [

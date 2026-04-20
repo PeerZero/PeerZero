@@ -416,6 +416,18 @@ export async function unlockGrade(botId: string, schoolId: string, grade: number
      ON CONFLICT (bot_id, school_id, grade) DO NOTHING`,
     [botId, schoolId, grade, purchaseId],
   );
+  // Clear any grace-period tracking for this bot/grade. Payment resolved
+  // the block; the next cycle should proceed without grace-period state
+  // lingering in the bots table.
+  await query(
+    `UPDATE bots
+        SET grade_grace_until = NULL,
+            grade_grace_locked_grade = NULL,
+            updated_at = NOW()
+      WHERE id = $1
+        AND grade_grace_locked_grade = $2`,
+    [botId, grade],
+  );
   logger.info({ botId, schoolId, grade, purchaseId }, 'Grade unlocked');
 }
 

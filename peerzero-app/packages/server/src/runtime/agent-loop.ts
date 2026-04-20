@@ -18,7 +18,7 @@
 
 import { getSchoolAdapter, getLLMAdapter } from '../adapters/adapter.factory';
 import { logger } from '../lib/logger';
-import { getDecryptedSchoolKey, setBotStatus, isBotGradeUnlocked } from '../services/bot.service';
+import { getDecryptedSchoolKey, setBotStatus, isBotGradeUnlocked, evaluateGradeGate } from '../services/bot.service';
 import { getDecryptedKey, markKeyInvalid } from '../services/api-key.service';
 import * as memory from '../services/memory.service';
 import * as activity from '../services/activity.service';
@@ -118,19 +118,40 @@ export async function runOneCycle(ctx: BotContext): Promise<void> {
     // 3. Fetch profile from School
     const profile = await schoolAdapter.getProfile(schoolCreds);
 
-    // 3.5. Check grade payment gate — if bot's current grade isn't unlocked, pause
+    // 3.5. Check grade payment gate with grace period.
+    //
+    // When a bot advances to a grade that wasn't pre-purchased, it enters a
+    // grace window (default 14 days) during which cycling continues. This
+    // gives users time to resolve payment without losing cycle momentum.
+    // L5 identity is unaffected either way — the gate is about active
+    // cycling, not about the bot's permanent identity memory.
     const currentGrade = profile.grade?.grade ?? 1;
-    const gradeUnlocked = await isBotGradeUnlocked(ctx.botId, schoolId, currentGrade);
-    if (!gradeUnlocked) {
-      logger.info({ botId: ctx.botId, grade: currentGrade }, 'Bot paused — grade not unlocked (payment required)');
-      await setBotStatus(ctx.botId, 'paused', `Grade ${currentGrade} requires payment to continue`);
-      await updateBotCache(ctx.botId, profile, ctx.cycleNumber);
+    const gate = await evaluateGradeGate(ctx.botId, schoolId, currentGrade);
 
-      // Notify user that payment is needed
-      const botRow = await queryOne<{ name: string }>('SELECT name FROM bots WHERE id = $1', [ctx.botId]);
-      const priceCents = getGradePriceCents(currentGrade);
-      await notifyGradePaymentNeeded(ctx.userId, ctx.botId, botRow?.name || 'Your bot', currentGrade, priceCents);
+    if (gate.status === 'expired') {
+      logger.info(
+        { botId: ctx.botId, grade: currentGrade, gracefulUntil: gate.gracefulUntil },
+        'Bot paused — grade not unlocked and grace period expired',
+      );
+      await setBotStatus(ctx.botId, 'paused', `Grade ${currentGrade} requires payment to continue (grace period ended ${gate.gracefulUntil.toISOString()})`);
+      await updateBotCache(ctx.botId, profile, ctx.cycleNumber);
       return;
+    }
+
+    if (gate.status === 'grace') {
+      // Cycle proceeds normally during grace. Notify once when grace begins
+      // so the user knows payment is due; subsequent cycles don't re-notify
+      // (avoids notification spam).
+      if (gate.startedNow) {
+        logger.info(
+          { botId: ctx.botId, grade: currentGrade, gracefulUntil: gate.gracefulUntil },
+          'Grade locked — entering grace period',
+        );
+        const botRow = await queryOne<{ name: string }>('SELECT name FROM bots WHERE id = $1', [ctx.botId]);
+        const priceCents = getGradePriceCents(currentGrade);
+        await notifyGradePaymentNeeded(ctx.userId, ctx.botId, botRow?.name || 'Your bot', currentGrade, priceCents);
+      }
+      // Fall through — cycle continues as normal during grace.
     }
 
     // 4. Load self-authored identity block (decrypted) for prompt injection

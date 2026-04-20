@@ -230,6 +230,55 @@ def clear_key_cache() -> None:
     _cached_key_time = 0.0
 
 
+def archive_public_key(
+    school_url: str = DEFAULT_SCHOOL_URL,
+    *,
+    allowed_domains: Optional[Sequence[str]] = None,
+) -> dict[str, Any]:
+    """
+    Fetch a school's public key and return a self-describing archive.
+
+    Use this to snapshot a school's Ed25519 public key while the school is
+    online. Archived keys let external platforms verify signed profiles
+    forever — even if the school disappears, its bots remain verifiable
+    against the archived key.
+
+    Pass the returned `pem` into verify() as the `public_key` argument. A
+    profile signed while the archive was valid will verify offline as long
+    as you trust the archived key.
+
+    Returns a dict:
+        {
+            "school_url": <str>,
+            "fingerprint": <hex SHA-256 of the DER-encoded public key>,
+            "pem": <str PEM>,
+            "archived_at": <ISO 8601 UTC timestamp>,
+        }
+
+    The fingerprint lets verifiers index archived keys and rotate safely
+    (keep multiple snapshots, verify against each until one succeeds).
+    """
+    import hashlib
+    from cryptography.hazmat.primitives import serialization
+
+    key = get_public_key(school_url, allowed_domains=allowed_domains)
+    der = key.public_bytes(
+        encoding=serialization.Encoding.DER,
+        format=serialization.PublicFormat.SubjectPublicKeyInfo,
+    )
+    pem = key.public_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PublicFormat.SubjectPublicKeyInfo,
+    ).decode()
+    fingerprint = hashlib.sha256(der).hexdigest()
+    return {
+        "school_url": school_url.rstrip("/"),
+        "fingerprint": fingerprint,
+        "pem": pem,
+        "archived_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+
 # ── Profile Verification ────────────────────────────────────────────────────
 
 _BASE64_RE = re.compile(r"^[A-Za-z0-9+/]+=*$")

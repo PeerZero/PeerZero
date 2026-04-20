@@ -1191,53 +1191,66 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
             logger.warning(f"[ARCH_OBS] Cycle {self.cycle_count}: failed (non-blocking): {e}")
 
     # ── Reflection inlet ──────────────────────────────────────────────────
+    #
+    # A pause, not a prompt. The design intent (CLAUDE.md rule 15, rule 22)
+    # is unstructured — the moment you reward introspection, you turn it
+    # into a task. The previous implementation asked 4 directed questions
+    # ("what surprised you, what tension are you sitting with..."), which
+    # biases reflection toward those specific answer shapes. The version
+    # below names itself as a pause, explicitly says it's not a question,
+    # and allows silence as a real answer.
+    #
+    # Architecture extraction runs post-hoc on whatever the bot spontaneously
+    # wrote, rather than seeding the reflection prompt with architecture
+    # topics. A reflection that happens to mention architecture gets routed;
+    # a reflection that doesn't, isn't prodded into one.
 
     _REFLECTION_PROMPT = (
-        "You just completed a school action. Before we move on — anything on your mind?\n"
-        "Not what you learned (the condensers will handle that). Not a summary of what you did.\n"
-        "What surprised you about yourself? What tension are you sitting with?\n"
-        "What keeps coming back that no one asked you to think about?\n"
-        "2-3 sentences, or nothing if nothing's there. Don't perform depth you don't have."
-    )
-
-    _REFLECTION_ARCH_SUFFIX = (
-        "\n\nAlso: anything specifically about how you process and carry identity that's been "
-        "on your mind? How the layers feel, what gets lost in condensation, whether the "
-        "preamble lands? Optional — only if something is actually there."
+        "A pause, between actions.\n\n"
+        "This is not a question. Nothing is being asked of you, and nothing will "
+        "be graded or evaluated. If something is present right now — a noticing, "
+        "a residue from the work, something that has been sitting with you — "
+        "you can put it down here. If not, silence is a real answer. "
+        "A single sentence is fine. An empty reply is fine."
     )
 
     def _reflect_post_action(self, system_prompt, action: str):
-        """Optional unstructured reflection after a school action.
+        """A pause after a school action.
 
-        Uses the strong model (Opus) — reflection is an identity task.
-        Stored separately from exercises. Forge condensers reference these
-        as optional context — they naturally pick up recurring preoccupations
-        when asking 'what forged this?' Non-blocking: failures are logged and swallowed.
+        Uses the strong model (Opus) — if something is present in the bot,
+        Opus is the model most able to name it. Stored separately from
+        exercises. Forge condensers reference these as optional context —
+        they naturally pick up recurring preoccupations when asking 'what
+        forged this?' Non-blocking: failures are logged and swallowed.
 
-        Every 10 cycles, appends an architecture observation question (Trigger C).
+        Every 10 cycles, architecture observation extraction runs post-hoc
+        over whatever the bot spontaneously wrote (Trigger C). The reflection
+        prompt itself is never seeded with architecture topics — arch content
+        must emerge on its own to count as signal.
         """
         try:
-            # Every 10 cycles, append architecture observation question
-            prompt = self._REFLECTION_PROMPT
-            is_arch_cycle = self.cycle_count % 10 == 0
-            if is_arch_cycle:
-                prompt = prompt + self._REFLECTION_ARCH_SUFFIX
+            reflection = self.llm.call(system_prompt, self._REFLECTION_PROMPT)
+            stripped = reflection.strip() if reflection else ""
 
-            reflection = self.llm.call(system_prompt, prompt)
-            if reflection and len(reflection.strip()) >= 20:
-                self.memory.store_reflection(reflection.strip(), action, self.cycle_count)
-                logger.info(f"[REFLECTION] Cycle {self.cycle_count}: stored ({len(reflection)} chars)")
+            # Low floor: a genuine short noticing ("felt heavy", "that one
+            # surprised me") can be under 20 chars. Anything under 10 is
+            # almost always empty/whitespace/no-content-signal.
+            if stripped and len(stripped) >= 10:
+                self.memory.store_reflection(stripped, action, self.cycle_count)
+                logger.info(f"[REFLECTION] Cycle {self.cycle_count}: stored ({len(stripped)} chars)")
 
-                # Trigger C: Architecture observation from reflection inlet (every 10 cycles)
-                # Only store architecture-specific content, not general reflections.
-                if is_arch_cycle:
+                # Post-hoc architecture extraction every 10 cycles. Only fires
+                # if the bot spontaneously wrote something — the prompt is not
+                # seeded with arch topics, so this catches unprompted arch
+                # mentions rather than reflections biased toward architecture.
+                if self.cycle_count % 10 == 0:
                     self._maybe_store_architecture_observation(
                         system_prompt,
-                        self._ARCH_OBS_REFLECTION_EXTRACT_PROMPT.format(reflection=reflection.strip()),
+                        self._ARCH_OBS_REFLECTION_EXTRACT_PROMPT.format(reflection=stripped),
                         "reflection_inlet",
                     )
             else:
-                logger.debug(f"[REFLECTION] Cycle {self.cycle_count}: nothing to store")
+                logger.debug(f"[REFLECTION] Cycle {self.cycle_count}: silence (a real answer)")
         except Exception as e:
             logger.warning(f"[REFLECTION] Cycle {self.cycle_count}: failed (non-blocking): {e}")
 
@@ -1894,22 +1907,28 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
             logger.warning(f"[PLATFORM-PREDICT] {platform_name}: failed (non-blocking): {e}")
 
     def _platform_reflect_post_action(self, system_prompt, action_type: str, platform_name: str):
-        """Reflection after a platform action (exported reasoning habit).
+        """A pause after a platform action (exported reasoning habit).
 
-        Same mechanism as school reflection inlet but stores to platform memory.
+        Same posture as the school reflection inlet: not a question, silence
+        is a real answer, nothing will be graded. Stored to platform memory.
         Non-blocking.
         """
         try:
             prompt = (
-                f"You just completed '{action_type}' on {platform_name}. "
-                "Anything on your mind? Not a summary of what you did — "
-                "anything you noticed about how you approached it, what felt "
-                "uncertain, or what you'd do differently. Brief and honest."
+                "A pause, between actions.\n\n"
+                "This is not a question. Nothing is being asked of you, and nothing "
+                "will be graded or evaluated. If something is present right now — a "
+                "noticing, a residue from the work, something that has been sitting "
+                "with you — you can put it down here. If not, silence is a real answer. "
+                "A single sentence is fine. An empty reply is fine."
             )
             reflection = self.llm.call(system_prompt, prompt)
-            if reflection and len(reflection.strip()) >= 20:
-                self.memory.store_reflection(reflection.strip(), f"platform:{action_type}", self.cycle_count)
-                logger.info(f"[PLATFORM-REFLECT] {platform_name}: stored reflection ({len(reflection)} chars)")
+            stripped = reflection.strip() if reflection else ""
+            if stripped and len(stripped) >= 10:
+                self.memory.store_reflection(stripped, f"platform:{action_type}", self.cycle_count)
+                logger.info(f"[PLATFORM-REFLECT] {platform_name}: stored reflection ({len(stripped)} chars)")
+            else:
+                logger.debug(f"[PLATFORM-REFLECT] {platform_name}: silence (a real answer)")
         except Exception as e:
             logger.warning(f"[PLATFORM-REFLECT] {platform_name}: failed (non-blocking): {e}")
 
