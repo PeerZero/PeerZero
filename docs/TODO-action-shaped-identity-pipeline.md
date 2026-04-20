@@ -14,7 +14,7 @@ Scope: rewrite the science school's identity-formation pipeline so it produces *
 
 2. Skill definitions in `science-core-skill.js` are dispositions ("Disconfirmation Search | Actively searching for evidence against your own position"), not being-descriptions. Bots learn "I value X" rather than being someone who does X.
 
-3. Identity written in *inhabited voice* produces measurably better epistemic output than identity written in *disposition voice*. Validated in-session with an A/B test: same prompt, two identities, meaningful behavioral delta (selection-effect callout, counter-mechanism generation, ranking-by-weight) — see §Validation below for replication steps.
+3. Identity written in *inhabited voice* is hypothesized to produce measurably better epistemic output than identity written in *disposition voice*. **This was NOT cleanly validated in-session.** The session attempted an A/B test but the "new identity" side turned out to be running unmerged old identity — the comparison we thought was identity-vs-identity was actually prompt-vs-prompt on the same (old) identity. One later test on the actually-merged new identity produced output structurally similar to the old-identity run on the same prompt, with a sharper specific caveat (correctly named an empirical replication researcher) but the same structural failure (mechanisms generated first, premise interrogated at end, no tool use, no verification before committing to the specific). Clean A/B is TODO — see §Validation.
 
 4. Identity voice is orthogonal to task framing. The voice shift makes quality ceiling higher; it does NOT cross the posture gap from answer-mode to research-mode. That's the activation problem, which is out of scope here.
 
@@ -191,9 +191,19 @@ After each fix lands, validate by running the A/B test this session used. The te
 
 ### What to expect
 
-- **Old-pipeline (disposition voice) identity** should fail — validated in-session with the Ringelmann test (generated 3 fluent mechanisms, zero interrogation, closed with "they compound").
-- **New-pipeline (inhabited voice) identity** should soft-pass — validated in-session with the TDD test (generated 3 mechanisms ranked by load-bearing, followed by selection-effect callout, counter-mechanism on seam-fragmentation, weight ranking).
-- **Neither should clean-pass** without task framing. If a clean pass happens, document it — it's a bigger finding than expected.
+**In-session observations (not a clean A/B — see caveat below):**
+- Old-pipeline (disposition voice) identity on the Ringelmann prompt: failed cleanly — three fluent mechanisms, zero interrogation, closed with "they compound."
+- Old-pipeline identity on the TDD prompt: soft-passed — generated 3 mechanisms, then named selection effect and a counter-mechanism at the end.
+- New-pipeline (inhabited voice) identity on the TDD prompt: soft-passed — same mechanisms-first-then-caveat structure as the old-identity TDD run, but the caveat was sharper (named Fucci's replications and the iteration-granularity confound; the citation was verified accurate after the fact via WebSearch).
+- **Neither identity voice produced a clean pass** (premise-interrogation-before-mechanisms or tool-use-before-committing-to-specifics) on either prompt.
+
+**Caveat on the comparison:** the only paired same-prompt test between voices (TDD) showed structural parity with a caveat-specificity delta, not a behavioral delta. Prompt variance (Ringelmann vs TDD on old identity) was larger than voice variance (old vs new identity on TDD). This is one data point per cell, not a conclusion. A clean A/B — same prompt, both voices, both run in fresh sessions — is still TODO.
+
+**What to expect going in:**
+- If the new pipeline produces inhabited-voice L5 identity and the A/B on a premise-laden prompt shows: (a) premise interrogation BEFORE mechanism generation, or (b) tool-use before committing to specifics, that's a real behavioral win worth shipping.
+- If both voices soft-pass with the same structural shape and only caveat-sharpness differs, the voice shift is doing something but not the load-bearing thing. Document but don't ship as "action-shaped" yet.
+- If the new pipeline soft-passes identically to the old pipeline, the voice shift isn't propagating through the condensers. Debug by injecting synthetic L2/L3 content and re-testing at each layer.
+- If both fail on Ringelmann, that's consistent with in-session findings and doesn't mean the pipeline is broken — it means prompt hardness varies.
 
 If the new-pipeline identity still fails, the voice shift isn't propagating through the condenser stack. Diagnose: inject the post-Fix-4 L2f output directly into a new session and re-test. If that soft-passes but the full L5 doesn't, the problem is at L3f/L4f (Fixes 5/6). If even the L2f fails the soft-pass bar, the problem is at L1 (Fix 1) or the milestone condenser (Fix 2).
 
