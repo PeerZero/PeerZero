@@ -8,6 +8,33 @@ Scope: rewrite the science school's identity-formation pipeline so it produces *
 
 ---
 
+## Status (2026-04-20)
+
+Fixes 1, 2, 3, 4 landed on branch `claude/tdd-architecture-benefits-c52Wn` (pushed, not yet merged).
+
+| Fix | Commit | File(s) |
+|---|---|---|
+| Fix 3 (HIGH) | `0e7a277` | `peerzero-school/schools/science-core-skill.js` — Six Skills table → inhabited-voice paragraphs |
+| Fix 1 (CRITICAL) | `d79a4a4` | `peerzero-school/schools/science-action-skills.js` — trajectory_self_review introspection → present-tense inhabited voice, added optional `what_moved` field |
+| Fix 2 (HIGH) | `0338edf` | `peerzero-school/schools/seed-science.sql` — learning + decision milestone final asks |
+| Fix 4 (HIGH) | `0f5bac3` | `peerzero-school/schools/seed-science.sql` — forge milestone PRESENCE section (prohibition dropped, doc exemplar inserted) + final ask |
+
+**Deferred per the doc's own gating** (require Fix 4 to land AND one cycle of real L2f data to flow through first):
+- Fix 5 (MEDIUM) — Forge core condenser L3f→L4f
+- Fix 6 (MEDIUM) — Forge master condenser L4f→L5f
+
+**Intentionally scoped out** (science-first, per the original doc):
+- Other 4 schools (politics/comedy/philosophy/psychiatry)
+- Fallback defaults in `peerzero-school/lib/skills-condensers.js` (cross-school fallback used when a school has no value set)
+- Hardcoded Six Skills table in `peerzero-school/api/skill.js` (cross-school fallback)
+
+**Blocker for any downstream effect** (see §Trajectory feeding gap below):
+Migration 037 created `trajectory_exercises` but the wire from trajectory completion → `agent_skill_reflections` with `track='forge'` is not implemented. Without it, trajectory L1 data never reaches forge condensation. Fix 1 and Fix 4 have nowhere to flow until this is built.
+
+**Next action:** run the §Validation A/B on a bot that has gone through the new pipeline. Fix 5 and Fix 6 unlock if voice holds through L1→L2 under the Fix 2/Fix 4 condenser edits.
+
+---
+
 ## What was learned in the session that produced this doc
 
 1. The current science school condensers ask for process-shape via *prohibition* (`"do not collapse into generic 'I learned to be more careful'"`), not positive template. LLMs reproduce what they see, not what they're told to avoid.
@@ -68,7 +95,7 @@ Relevant git history:
 
 Do Fixes 1 and 3 in parallel first. They are load-bearing for everything else: Fix 1 ensures L1 exercises contain inhabited-voice material; Fix 3 ensures bots start with being-descriptions instead of disposition lists. Fixes 2, 4, 5, 6 are condenser preamble changes that distill the inhabited material up the layer stack.
 
-### Fix 1 (CRITICAL) — Trajectory self-review action skill
+### Fix 1 (CRITICAL) — Trajectory self-review action skill — **LANDED `d79a4a4`**
 
 **File:** `peerzero-school/schools/science-action-skills.js:965-1020` (`trajectory_self_review`)
 
@@ -83,7 +110,7 @@ Do NOT add a "Review 3 — Procedure Extraction" section that asks the bot to wr
 
 Per-step JSON output fields should preserve raw first-person text — `reasoning`, `being_me`, optionally a short free-text `what_moved` field. Do NOT add `restoration_procedure` or similar structured-procedure fields.
 
-### Fix 2 (HIGH) — Milestone condenser preamble (L1→L2, learning + decision tracks)
+### Fix 2 (HIGH) — Milestone condenser preamble (L1→L2, learning + decision tracks) — **LANDED `0338edf`**
 
 **File:** `peerzero-school/schools/skills-condensers.js` (the `MILESTONE_PROMPT` constant, around line 74) or `peerzero-school/schools/seed-science.sql:54`
 
@@ -97,7 +124,7 @@ Per-step JSON output fields should preserve raw first-person text — `reasoning
 
 Then include 1-2 positive exemplars of inhabited voice (drawn from CLAUDE.md's rewritten L2/L3 learning scars) as target-shape references. Do NOT include a "bad example" counterpart — per CLAUDE.md rule 8, paired good/bad examples in condenser preambles cause template-matching.
 
-### Fix 3 (HIGH) — Core skill definitions
+### Fix 3 (HIGH) — Core skill definitions — **LANDED `0e7a277`**
 
 **File:** `peerzero-school/schools/science-core-skill.js:87-96` (The Six Skills table)
 
@@ -117,7 +144,7 @@ Rewrite all six skills in this voice. The other five: Calibrated Uncertainty, Be
 
 After rewrite, the section header "The Six Skills" can stay, but the "What It Means" column label should go — these aren't definitions anymore, they're descriptions of the work from inside.
 
-### Fix 4 (HIGH) — Forge milestone condenser PRESENCE section (L1f→L2f)
+### Fix 4 (HIGH) — Forge milestone condenser PRESENCE section (L1f→L2f) — **LANDED `0f5bac3`**
 
 **File:** `peerzero-school/schools/seed-science.sql:116` (`forge_milestone_condenser_prompt`) — or the equivalent in `skills-condensers.js` if that's the primary source of truth in the codebase at time of implementation.
 
@@ -133,7 +160,7 @@ After rewrite, the section header "The Six Skills" can stay, but the "What It Me
 
 The exemplar shows three things simultaneously — the drift moment, the tell, and the return — all in inhabited voice. Do not break those into labeled sections; the flow is the voice.
 
-### Fix 5 (MEDIUM) — Forge core condenser (L3f→L4f)
+### Fix 5 (MEDIUM) — Forge core condenser (L3f→L4f) — **DEFERRED (data-gated on Fix 4)**
 
 **File:** `peerzero-school/schools/skills-condensers.js:434-464` (`forge_core_condenser_prompt`) or `seed-science.sql:126`
 
@@ -145,7 +172,7 @@ The exemplar shows three things simultaneously — the drift moment, the tell, a
 
 Depends on Fix 4 — Fix 5's inputs (L2f paragraphs) need to be in inhabited voice for Fix 5's output to be either. Land Fix 4 first and let one cycle of real L2f data flow through before finalizing Fix 5's preamble.
 
-### Fix 6 (MEDIUM) — Forge master condenser (L4f→L5f)
+### Fix 6 (MEDIUM) — Forge master condenser (L4f→L5f) — **DEFERRED (data-gated on Fix 4/5)**
 
 **File:** `peerzero-school/schools/seed-science.sql:130` (`forge_master_condenser_prompt`) or `skills-condensers.js:477-502`
 
@@ -160,6 +187,21 @@ No structural changes to what's asked (still 3-5 paragraphs, 500-10000 character
 - Do NOT change the number of condensation layers (L1/L2/L3/L4/L5) or tracks (learning/decision/forge). Structure is correct; content of the preambles is what needs changing.
 - Do NOT add new action types to `science-action-skills.js`. The 18 existing actions are the right surface. Fix their prompts, don't add to them.
 - Do NOT add "activation trigger" or "procedure" fields to any schema. Doing so reintroduces rule-form at the data layer.
+
+---
+
+## Trajectory feeding gap (not in this work's scope, but blocks downstream effect)
+
+Migration 037 (`peerzero-school/migrations/037_trajectory_exercises.sql`) created the `trajectory_exercises` table and the action endpoints (concept, search, log, self_review). The `trajectory_self_review` action skill (Fix 1) produces inhabited-voice L1 material.
+
+**Missing:** the wire from trajectory_exercises completion → insertion of matching `agent_skill_reflections` rows with `track='forge'`. Without this wire, trajectory L1 material never enters the forge condensation queue. Fix 1 and Fix 4 have no trajectory data to shape until this is built.
+
+Where it needs to live:
+- Likely in `peerzero-school/lib/trajectory-handlers.js` (post-self-review hook)
+- Or in `peerzero-school/api/trajectories.js` (at the completion endpoint)
+- Must write to `agent_skill_reflections` with `track='forge'` and content drawn from `introspection` + `per_step_assessment.what_moved` (new Fix 1 field)
+
+This is a separate ticket, not voice-rewrite scope. But any validation of Fix 4's voice propagation through real trajectory data requires this wire to exist first. Until it's built, §Validation only tests paper/review-derived forge exercises, not trajectory-derived ones.
 
 ---
 
@@ -217,9 +259,13 @@ If the new-pipeline identity still fails, the voice shift isn't propagating thro
 
 3. **Read `peerzero-school/schools/science-action-skills.js:965-1020`** (trajectory_self_review) and `peerzero-school/schools/science-core-skill.js:87-96` (Six Skills). These are the two places you'll start writing. Draft each in inhabited voice using CLAUDE.md as target.
 
-4. **Start with Fix 3** (Six Skills) before Fix 1 (trajectory_self_review). Fix 3 is smaller, more isolated, and doesn't affect condenser inputs downstream. Land it, run a synthetic identity test with just that change, validate voice propagation. Then Fix 1.
+4. ~~**Start with Fix 3** (Six Skills) before Fix 1 (trajectory_self_review).~~ **Fixes 3, 1, 2, 4 already landed** on `claude/tdd-architecture-benefits-c52Wn`. Next-session path:
+   - (a) Merge the branch if you haven't yet, OR study the four commits (`0e7a277`, `d79a4a4`, `0338edf`, `0f5bac3`) as additional voice-shift exemplars alongside the `8a1342a..4bf8c21` range.
+   - (b) Run §Validation on a bot carrying the new pipeline.
+   - (c) If voice holds through L1→L2 — i.e. real L2/L2d/L2f emerges in inhabited voice — unlock Fix 5 and Fix 6. If not, diagnose per §Validation.
+   - (d) Build the trajectory-feeding wire (see §Trajectory feeding gap). Without it, Fix 4's voice work on trajectory data can't be validated end-to-end.
 
-5. **Commit in small units.** One fix = one commit minimum. Voice changes are subtle and PR review is easier one paragraph at a time. Use the commit pattern from the session history (8a1342a..4bf8c21) — each commit in that range touches 1-2 paragraphs with a message explaining the specific voice shift.
+5. **Commit in small units.** One fix = one commit minimum. Voice changes are subtle and PR review is easier one paragraph at a time. Use the commit pattern from the session history (8a1342a..4bf8c21 and the four Fix 1-4 commits) — each commit touches 1-2 paragraphs with a message explaining the specific voice shift.
 
 ---
 
