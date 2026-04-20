@@ -129,6 +129,40 @@ function clearKeyCache() {
   _cachedKeyTime = 0;
 }
 
+/**
+ * Fetch a school's public key and return a self-describing archive.
+ *
+ * Use this to snapshot a school's Ed25519 public key while the school is
+ * online. Archived keys let external platforms verify signed profiles
+ * forever — even if the school disappears, its bots remain verifiable
+ * against the archived key.
+ *
+ * Pass the returned `pem` into verify() as the `publicKey` argument. A
+ * profile signed while the archive was valid will verify offline as long
+ * as you trust the archived key.
+ *
+ * The fingerprint lets verifiers index archived keys and rotate safely —
+ * keep multiple snapshots, try verify() against each until one succeeds.
+ *
+ * @param {string} [schoolUrl] — Base URL of the school (default: https://peerzero.science)
+ * @param {object} [options]
+ * @param {string[]} [options.allowedDomains] — Additional domains to allow
+ * @returns {Promise<{schoolUrl: string, fingerprint: string, pem: string, archivedAt: string}>}
+ */
+async function archivePublicKey(schoolUrl, options) {
+  const key = await getPublicKey(schoolUrl, options);
+  const der = key.export({ type: 'spki', format: 'der' });
+  const pem = key.export({ type: 'spki', format: 'pem' }).toString();
+  const fingerprint = crypto.createHash('sha256').update(der).digest('hex');
+  const base = (schoolUrl || DEFAULT_SCHOOL_URL).replace(/\/+$/, '');
+  return {
+    schoolUrl: base,
+    fingerprint,
+    pem,
+    archivedAt: new Date().toISOString(),
+  };
+}
+
 // ── Profile Verification ────────────────────────────────────────────────────
 
 /**
@@ -373,6 +407,7 @@ module.exports = {
   isExpired,
   getPublicKey,
   clearKeyCache,
+  archivePublicKey,
   VerificationError,
   ALLOWED_SCHOOL_DOMAINS,
 };

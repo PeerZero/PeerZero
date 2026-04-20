@@ -7,6 +7,7 @@ from peerzero_sdk.verify import (
     is_expired,
     get_public_key,
     clear_key_cache,
+    archive_public_key,
     VerificationError,
     ALLOWED_SCHOOL_DOMAINS,
 )
@@ -18,6 +19,7 @@ __all__ = [
     "is_expired",
     "get_public_key",
     "clear_key_cache",
+    "archive_public_key",
     "VerificationError",
     "ALLOWED_SCHOOL_DOMAINS",
 ]

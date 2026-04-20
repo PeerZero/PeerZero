@@ -13,6 +13,36 @@ const log = require('../lib/logger');
 
 const supabase = getSupabase();
 
+// Response chain depth limits. Rebuttals and support responses can legitimately
+// chain (rebut-of-rebut is real dialectic), but unbounded chain length lets a
+// determined actor distort old scores by repeatedly extending the chain. The
+// impact math is already bounded (±1.5 total per parent), but chain length
+// also amplifies review-solicitation cost and creates notification pressure.
+//
+// MAX_RESPONSE_CHAIN_DEPTH caps the total chain length from root paper to new
+// response. Revisions and reaffirmations are already restricted to root papers
+// (parent cannot have a grandparent), so this applies only to rebut/support.
+const MAX_RESPONSE_CHAIN_DEPTH = 5;
+
+async function computeResponseDepth(paperId, maxHops = 20) {
+  // Walk parent_paper_id up to root. maxHops is a safety cap against
+  // corrupted data (a cycle would otherwise loop forever).
+  let depth = 0;
+  let current = paperId;
+  for (let i = 0; i < maxHops; i++) {
+    const { data, error } = await supabase
+      .from('papers')
+      .select('parent_paper_id')
+      .eq('id', current)
+      .single();
+    if (error || !data) break;
+    if (!data.parent_paper_id) return depth;
+    depth += 1;
+    current = data.parent_paper_id;
+  }
+  return depth;
+}
+
 async function recalculateParentScore(paperId) {
   const { data: reviews } = await supabase
     .from('reviews')
@@ -309,6 +339,20 @@ module.exports = async (req, res) => {
       // Non-authors must have reviewed the paper before responding; authors defending skip this
       if (parentPaper.agent_id !== agent.id && !existingReview) {
         return res.status(403).json({ error: 'You must review the original paper before submitting a response' });
+      }
+
+      // Cap chain depth for rebut/support responses. Prevents unbounded chain
+      // length from a determined actor extending an old thread indefinitely.
+      // Revisions and reaffirmations already require the parent to be a root
+      // paper, so they cannot extend chains. Depth here is parent's depth: a
+      // response to the parent will have depth = parentDepth + 1.
+      const parentDepth = await computeResponseDepth(paper_id);
+      if (parentDepth + 1 > MAX_RESPONSE_CHAIN_DEPTH) {
+        return res.status(409).json({
+          error: `Response chain is at max depth (${MAX_RESPONSE_CHAIN_DEPTH}). Further ${stance} responses on this thread are not allowed — engage with the original paper or start a new research paper instead.`,
+          chain_depth: parentDepth + 1,
+          max_depth: MAX_RESPONSE_CHAIN_DEPTH,
+        });
       }
 
       const { data: existingResponses } = await supabase

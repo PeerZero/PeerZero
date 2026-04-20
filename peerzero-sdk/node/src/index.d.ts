@@ -82,3 +82,20 @@ export function getPublicKey(schoolUrl?: string, options?: { allowedDomains?: st
 
 /** Clear the cached public key (for key rotation). */
 export function clearKeyCache(): void;
+
+export interface PublicKeyArchive {
+  schoolUrl: string;
+  fingerprint: string;
+  pem: string;
+  archivedAt: string;
+}
+
+/**
+ * Fetch a school's public key and return a self-describing archive.
+ * Use to snapshot keys while the school is online so signed profiles
+ * remain verifiable offline (and forever) against the archived key.
+ */
+export function archivePublicKey(
+  schoolUrl?: string,
+  options?: { allowedDomains?: string[] },
+): Promise<PublicKeyArchive>;

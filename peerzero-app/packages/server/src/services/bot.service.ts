@@ -387,6 +387,89 @@ export async function isBotGradeUnlocked(botId: string, schoolId: string, grade:
   return !!result;
 }
 
+// Grace period for payment decoupling. When a bot advances to a grade
+// that wasn't pre-purchased, it gets this many days of continued cycling
+// before the agent loop hard-pauses. Protects against transient payment
+// issues (expired card, bank hold, billing cycle gap) and honors the
+// rule that L5 identity continuity should not be gated on payment timing.
+// Override via env for testing.
+const GRADE_GRACE_DAYS = Number(process.env.GRADE_GRACE_DAYS ?? '14');
+
+export type GradeGateDecision =
+  | { status: 'unlocked' }
+  | { status: 'grace'; gracefulUntil: Date; startedNow: boolean }
+  | { status: 'expired'; gracefulUntil: Date };
+
+/**
+ * Gate the cycle based on grade unlock state, with a grace period.
+ *
+ * - If the grade is unlocked → 'unlocked' (cycle proceeds normally).
+ * - If locked and no grace timestamp → start grace, return 'grace' with
+ *   startedNow=true so the caller can send the initial notification.
+ * - If locked and within grace window → 'grace' (cycle proceeds).
+ * - If locked and past grace window → 'expired' (caller hard-pauses).
+ *
+ * Grace resets when the user unlocks the grade (payment webhook) or when
+ * the bot's locked grade changes (unusual but possible if school re-grades).
+ */
+export async function evaluateGradeGate(
+  botId: string,
+  schoolId: string,
+  currentGrade: number,
+): Promise<GradeGateDecision> {
+  if (config.skipPayments) return { status: 'unlocked' };
+
+  const unlocked = await isBotGradeUnlocked(botId, schoolId, currentGrade);
+  if (unlocked) {
+    // If we were in grace for this grade, clear the grace state — the user
+    // resolved payment. This is idempotent; the payment webhook should also
+    // clear it, but clearing here closes the loop if we missed the hook.
+    await query(
+      `UPDATE bots
+         SET grade_grace_until = NULL,
+             grade_grace_locked_grade = NULL,
+             updated_at = NOW()
+       WHERE id = $1
+         AND (grade_grace_until IS NOT NULL OR grade_grace_locked_grade IS NOT NULL)`,
+      [botId],
+    );
+    return { status: 'unlocked' };
+  }
+
+  const row = await queryOne<{
+    grade_grace_until: string | null;
+    grade_grace_locked_grade: number | null;
+  }>(
+    'SELECT grade_grace_until, grade_grace_locked_grade FROM bots WHERE id = $1',
+    [botId],
+  );
+
+  const now = new Date();
+  const sameLockedGrade =
+    row?.grade_grace_locked_grade != null && row.grade_grace_locked_grade === currentGrade;
+  const existingUntil = sameLockedGrade && row?.grade_grace_until ? new Date(row.grade_grace_until) : null;
+
+  if (existingUntil && existingUntil > now) {
+    return { status: 'grace', gracefulUntil: existingUntil, startedNow: false };
+  }
+
+  if (existingUntil && existingUntil <= now) {
+    return { status: 'expired', gracefulUntil: existingUntil };
+  }
+
+  // No grace yet (or grace is for a different grade) — start one.
+  const gracefulUntil = new Date(now.getTime() + GRADE_GRACE_DAYS * 24 * 60 * 60 * 1000);
+  await query(
+    `UPDATE bots
+        SET grade_grace_until = $2,
+            grade_grace_locked_grade = $3,
+            updated_at = NOW()
+      WHERE id = $1`,
+    [botId, gracefulUntil.toISOString(), currentGrade],
+  );
+  return { status: 'grace', gracefulUntil, startedNow: true };
+}
+
 export async function setBotStatus(botId: string, status: string, errorMessage?: string): Promise<void> {
   if (!(BOT_STATUSES as readonly string[]).includes(status)) {
     throw new Error(`Invalid bot status: ${status}`);

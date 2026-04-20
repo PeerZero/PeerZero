@@ -541,14 +541,70 @@ module.exports = async (req, res) => {
     // that would 409. The server knows the rules — don't send bots on
     // missions that can't succeed.
     // ── Self-review injection (Feature 5) ─────────────────────────────
-    // Scales with grade: rare at grade 4, frequent by grade 10+.
-    // Grade 4-5: 5%, Grade 6-7: 10%, Grade 8-9: 15%, Grade 10+: 25%
+    // Base rate scales with grade (self-review is a reasoning-intensive
+    // exercise; junior bots aren't ready for it). The effective rate is
+    // modulated by observed divergence between self-assessment and community
+    // consensus — bots whose self-reviews drift far from reality need more
+    // self-review practice; well-calibrated bots need less. This is the
+    // signal the exercise is designed to measure, so using it to trigger
+    // the exercise closes the feedback loop.
+    //
+    //   grade 4-5   → 5% base
+    //   grade 6-7   → 10% base
+    //   grade 8-9   → 15% base
+    //   grade 10+   → 25% base
+    //
+    // Divergence multiplier (over last 5 self-reviews):
+    //   avg_divergence > 2.0  → 2.0x  (self-review far from community — bot needs practice)
+    //   avg_divergence < 0.8  → 0.5x  (well-calibrated — practice is lower value)
+    //   otherwise             → 1.0x  (baseline)
+    //   no self-reviews yet   → 1.0x  (baseline, no signal to adjust on)
+    //
+    // Coaching-flag bump: if the bot's recent papers carry search or
+    // mechanism-chain coaching flags (overclaim, weak source quality,
+    // citation disconnect), add +0.05 to the rate — these are the failures
+    // self-review is best at surfacing.
     let selfReviewTarget = null;
     const canSelfReview = currentGrade >= 4;
-    const selfReviewRate = currentGrade >= 10 ? 0.25
+    const baseSelfReviewRate = currentGrade >= 10 ? 0.25
       : currentGrade >= 8 ? 0.15
       : currentGrade >= 6 ? 0.10
       : 0.05;
+
+    let divergenceMultiplier = 1.0;
+    let coachingBump = 0;
+    if (canSelfReview) {
+      try {
+        const { data: recentSelfReviews } = await supabase
+          .from('self_reviews')
+          .select('score_divergence')
+          .eq('agent_id', agent.id)
+          .order('created_at', { ascending: false })
+          .limit(5);
+        if (recentSelfReviews && recentSelfReviews.length >= 2) {
+          const avg = recentSelfReviews.reduce((s, r) => s + (r.score_divergence || 0), 0) / recentSelfReviews.length;
+          if (avg > 2.0) divergenceMultiplier = 2.0;
+          else if (avg < 0.8) divergenceMultiplier = 0.5;
+        }
+      } catch (err) {
+        log.warn('[profile] self-review divergence lookup failed, using baseline', { agentId: agent.id, err: err?.message });
+      }
+
+      // Coaching flags on recent papers → small bump. Flags are the other
+      // signal that points at the failure modes self-review is designed to
+      // surface (overclaim, weak sources, citation disconnect).
+      try {
+        const recentPapers = (myPaperList || []).slice(0, 5);
+        const hasCoachingFlag = recentPapers.some(p =>
+          (Array.isArray(p.search_coaching_flags) && p.search_coaching_flags.length > 0) ||
+          (Array.isArray(p.mechanism_chain_flags) && p.mechanism_chain_flags.length > 0)
+        );
+        if (hasCoachingFlag) coachingBump = 0.05;
+      } catch (_) { /* non-blocking */ }
+    }
+
+    const selfReviewRate = Math.min(0.5, (baseSelfReviewRate * divergenceMultiplier) + coachingBump);
+
     if (canSelfReview && nextAction === 'review' && Math.random() < selfReviewRate) {
       selfReviewTarget = await selectSelfReviewTarget(agent.id, myPaperList).catch(err => { log.warn('[profile] selectSelfReviewTarget failed', { agentId: agent.id, err: err?.message }); return null; });
       if (selfReviewTarget) {
