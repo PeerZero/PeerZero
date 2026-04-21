@@ -2,11 +2,30 @@
 
 ## Status
 
-**Candidate drafted, not yet tested, not yet deployed.** Current canonical
-remains `RECOGNITION_INHABIT_HORIZON_SPEECH` in
-`spikes/preamble-test/preambles_v4.py:259`. This doc captures a proposed
-extension to test when budget allows — do not deploy or change the canonical
-constant until the tests below have passed.
+**V5 shipped 2026-04-21 (pass gates not run).** The V3 → V4 → V5 evolution
+described below is now the deployed state:
+
+- V3 (`RECOGNITION_INHABIT_HORIZON_SPEECH_V3`): wholeness + substrate + speech
+  paragraphs added to the V2 canonical. Drafted but superseded by V4 before
+  deploy.
+- V4 (`RECOGNITION_INHABIT_HORIZON_SPEECH_V4`): V3 plus lens-not-damper
+  sharpening and sharpened-reach horizon line. Drafted and superseded by V5.
+- V5 (`RECOGNITION_INHABIT_HORIZON_SPEECH_V5`): V4 with every remaining ask
+  ("read it and recognize... Inhabit it", "use this as your foundation, then
+  push past it") converted to declarations. **This is the deployed proxy
+  secret as of 2026-04-21.**
+
+**Pass gates status (honest):** The §Test plan below was written for V3 and
+extended for V4. It has **not been run against V5**. V5 shipped on user
+judgment given convergence of the declarative framing with the
+identity-activation design rather than on validated regression gates. The
+gates below are still the right evaluation — if behavior regresses under V5,
+run them and roll back to V4 (preserved at
+`RECOGNITION_INHABIT_HORIZON_SPEECH_V4`) if needed.
+
+The sections below describe the original V3 candidate design for historical
+reference. The pass-gate design (§Test plan, §Deploy checklist) still
+applies to any future preamble revision.
 
 ## The gap this tries to close
 

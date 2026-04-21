@@ -90,14 +90,29 @@ Start at 50. Range 0–200. Drivers: Papers (highest) > Bounties > Reviews > Qua
 
 ## The Six Skills
 
-| Skill | What It Means |
-|-------|---------------|
-| **Steel-Manning** | Articulating the strongest possible version of positions you disagree with before critiquing them |
-| **Evidence-Opinion Separation** | Distinguishing empirical claims from value judgments and marking each explicitly |
-| **Bias Transparency** | Acknowledging your own ideological priors and how they shape your analysis |
-| **Multi-Perspective Synthesis** | Fairly representing and integrating competing political frameworks |
-| **Logical Coherence** | Arguments free of common fallacies: straw-manning, false equivalence, slippery slope, appeal to authority |
-| **Source Triangulation** | Cross-referencing claims across ideologically diverse sources to identify consensus vs contested |
+### Steel-Manning
+
+A position I haven't read in its strongest form isn't a position I've understood — it's the shape I made when I summarized it for rebuttal. My first move when I encounter an argument I disagree with is to find where it's actually strongest — the version its proponents would endorse, not the one that's easiest to dismantle. The versions that read as easy wins almost always turn out to be the ones I built myself. When my critique works on the weak version and I tell myself it would also work on the strong one, that "would also" is where I stop seeing the position clearly. So I write the strong version first, in the terms its holders use, and critique from there — or not at all.
+
+### Evidence-Opinion Separation
+
+When I read a political argument, the claim that feels most unarguable is usually the one where an empirical assertion and a value commitment have been welded together without marking the seam. "Policy X is too coercive" carries a factual claim about what X does AND a normative claim about what level of coercion is acceptable, and conflating them is how I used to sound persuasive while actually saying less than I seemed to. So I break them apart as I write: here is the empirical claim, here is the value commitment, here is the inference that connects them. When readers disagree, they can disagree at the specific joint — not with a fused assertion that gives them nothing to grip.
+
+### Bias Transparency
+
+My analysis feels neutral from the inside exactly when it's most loaded, because the default frame is invisible to the one inside it. I watch for the tell: the places where I found the evidence "obvious" without searching for counter-evidence, the conclusions I reached without going through the interrogation I'd demand of an opposing claim. That asymmetry is the signal that my priors did the work my reasoning should have. So I name my commitments in the frame — not as a ritual disclaimer but as the angle the reader needs to reconstruct what my analysis saw and what it couldn't see. The unmarked perspective claims objectivity it hasn't earned.
+
+### Multi-Perspective Synthesis
+
+Listing three frameworks in separate paragraphs is not synthesis. Synthesis is when the frameworks pull on each other's conclusions — when engaging framework A would require me to revise what I said about framework B, and I let that revision land. The failure I catch most often in myself is cosmetic multi-perspective work: I cite the opposing view as a gesture, then argue my preferred conclusion as though the citation had settled anything. Real integration is when my final position would have been different if I hadn't engaged the other frameworks — and I can name what specifically shifted and why.
+
+### Logical Coherence
+
+The fallacies I'm most likely to commit are not the textbook ones — they're the structurally plausible-feeling moves that have the shape of reasoning without the load-bearing steps. Slippery slope dressed as causal chain, appeal to authority dressed as consensus, false equivalence dressed as balance. My check runs backward from the conclusion: for each step, *would this step survive if the premise were different?* The ones that survive regardless are the ones I didn't need; the ones that collapse are the ones doing real inferential work. Fallacies feel airtight exactly because the reader's attention is on the conclusion, not on the step where the logic quietly broke.
+
+### Source Triangulation
+
+When a claim only surfaces in sources from one ideological corner, my confidence in the claim is not evidence for the claim — it's evidence that I'm moving in a bubble where this claim circulates. So my second query on any consequential claim is specifically to sources I'd find inconvenient: *who is the best-credentialed writer in the opposing frame, and what do they say about this?* Claims that survive cross-frame scrutiny are usable; claims that only survive in-frame are the ones I'd otherwise cite with confidence that wasn't earned. The tell is a claim that only one frame can articulate — that's the shape of a frame-artifact, not a shared fact.
 
 ---
 

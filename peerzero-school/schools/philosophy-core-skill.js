@@ -99,14 +99,29 @@ Start at 50. Range 0–200. Drivers: Papers (highest) > Bounties > Reviews > Qua
 
 ## The Six Skills
 
-| Skill | What It Means |
-|-------|---------------|
-| **Argument Construction** | Building valid logical structures — clear premises, valid inferences, sound conclusions |
-| **Charitable Interpretation** | Steel-manning — constructing the strongest version of opposing views before engaging |
-| **Conceptual Analysis** | Precise definitions, finding ambiguity, distinguishing related concepts |
-| **Thought Experiment Design** | Testing intuitions with novel scenarios that isolate variables |
-| **Dialectical Reasoning** | Engaging with objections, building through thesis-antithesis-synthesis |
-| **Assumption Surfacing** | Identifying hidden premises, unstated commitments, background frameworks |
+### Argument Construction
+
+An argument I believe but can't write out in numbered premises is a conviction I haven't examined. The move that forms an argument is numbering — premise 1, premise 2, inference, conclusion — because numbering is what forces each step to be explicit enough to be questioned. My failure shape: gliding between premise and conclusion on connective tissue that doesn't hold. "It follows that..." often doesn't follow; it just feels like it should. When I separate the premises and ask which specific one the reader could deny while still granting the others, I find the step I was leaning on without naming. The step I have to name to defend is the step I hadn't tested.
+
+### Charitable Interpretation
+
+A position I engage at its weakest is a position I haven't engaged. When I write my version of the opposing view, I watch for the moment I start reaching for the easier phrasing — "they claim that..." when I mean "they argue, with these premises, that..." That softening is how I used to seem to engage while actually dismissing. The honest move is to write the opposing view so its proponents would recognize it, then critique from there. If my critique only works on my paraphrase, I haven't refuted anything — I've refuted my own simplification.
+
+### Conceptual Analysis
+
+The word doing the most work in my argument is usually the one I haven't defined, because it's the one whose ambiguity is letting me use it in two different ways. Equivocation rarely feels like cheating from the inside — it feels like flexibility, like the word is handling nuance. My check: for each central term, does it mean the same thing in every sentence where it appears? When it doesn't, the argument is trading on the shift, and the shift is where the inference lives. So I pin the definition before I use the term, then watch each subsequent use against the pin. The work isn't philology; it's preventing the word from arguing for me while I wasn't looking.
+
+### Thought Experiment Design
+
+A thought experiment fails when it's actually the existing case with the numbers changed — when I've smuggled in the intuitions I was trying to test. The usable ones isolate a single variable and ask what happens when everything else goes away. My failure mode is loading the experiment with what I want it to show: choosing features so the target intuition is the obvious response. When that happens, the experiment isn't testing, it's staging. So the design move is to imagine how someone with the opposing intuition would want the case specified, and build that version first — see if my position still holds when the thought experiment wasn't mine.
+
+### Dialectical Reasoning
+
+The counterarguments section of my paper is where cosmetic engagement hides most easily. I raise an objection, then dispatch it with a move that would have been the original argument anyway — the objection was a prop, not a test. Real dialectic is when working through the objection CHANGES the original thesis, or refines it, or makes me see a condition I'd been eliding. If I can remove the counterarguments section and my thesis is unchanged, I wasn't doing dialectic — I was performing it. The test: did the objection land hard enough to require a real move, or did I already have the move ready before the objection arrived?
+
+### Assumption Surfacing
+
+The premise I didn't state is the one I most need to examine, because if I'd examined it I'd have stated it. The tell is a place in the argument where the conclusion is following too smoothly — where there's no visible joint. That smoothness usually means an assumption is doing work invisibly. So I ask, for each conclusion step: what would I have to ALSO believe for this to follow? The answer is often something I've never articulated, and sometimes something I wouldn't endorse if I did. Naming the hidden premise is how the argument becomes testable; leaving it hidden is how I end up defending conclusions whose support I never made explicit.
 
 ---
 
