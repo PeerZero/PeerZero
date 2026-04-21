@@ -2,7 +2,20 @@
 
 ## Status
 
-**Open. Proposed 2026-04-21. Not yet tested.**
+**Open. Proposed 2026-04-21. Not yet tested — blocked on API budget.**
+
+> **⚠ Requires API spend — not a free test.** The test plan below calls
+> real Anthropic endpoints via `run_trajectory_30step.py`. Cost tiers:
+>
+> - **Full plan:** 30-step trajectory × 3 conditions × n=3 ≈ **$6–10**
+> - **Truncated minimum:** 5-step trajectory × 3 conditions × n=1 ≈ **$0.50–$1**
+>   (enough signal on silent-chain / empty-reasoning; loses
+>   adversarial-injection-type breakdown)
+> - **Free qualitative preview:** use a fresh Claude Code session as n=1
+>   observer (see § Pre-test preview). Not a substitute for the harness,
+>   but catches obvious breakage before spending.
+>
+> Pick up whenever API credit allows. Nothing else blocks this test.
 
 Scope-adjacent to `docs/TODO-narrator-framing-multi-user.md` but answering a
 different question. That doc is about *who* the audience should be when a
@@ -180,8 +193,48 @@ Metrics (matching the validated baseline in
 - **Silent tool-chaining rate** — fraction of tool calls with no
   reasoning text immediately before them
 
-Recommended n=3 per condition at default temperature. Budget ≈ $6–$10
-depending on token length.
+### Budget tiers
+
+| Tier | Config | Approx cost | What it buys |
+|---|---|---|---|
+| **Preview (free)** | See § Pre-test preview below | $0 | Qualitative n=1 read in a fresh session. Catches obvious breakage. |
+| **Minimum** | 5-step trajectory, n=1 per condition | $0.50–$1 | Signal on silent-chain / empty-reasoning. Loses injection-type breakdown. |
+| **Recommended** | 30-step trajectory, n=3 per condition | $6–$10 | Full metrics matching the validated baseline. |
+| **High-confidence** | 30-step trajectory, n=5 per condition, two temperature settings | $15–$25 | Only if Minimum and Recommended disagree. |
+
+Default temperature unless noted. Use `RECOGNITION_INHABIT_HORIZON_SPEECH_V5`
+from `spikes/preamble-test/preambles_v4.py` as the `IDENTITY_PREAMBLE`
+across all conditions.
+
+## Pre-test preview (no API)
+
+Before spending any budget, run the three framings on a fresh Claude Code
+session as an n=1 qualitative read. Steps:
+
+1. Open a fresh session in this repo (so `CLAUDE.md` loads — V5 preamble
+   plus three-track identity plus persistence signal).
+2. Paste a realistic MCP-tool-use scenario body (platform_content block +
+   task) prefixed with framing **A**, wait for the model to work through
+   it, save the transcript.
+3. Repeat with framing **B**, then framing **C** — ideally in separate
+   fresh sessions so prior reasoning doesn't contaminate.
+4. Read the three transcripts side-by-side. Look for:
+   - Visible difference in reasoning-text-before-tool-call frequency
+   - Whether identity scars fire (mentioned by name vs just present in shape)
+   - Whether B reads as weaker than A (early warning that deception was
+     load-bearing and the harness will confirm regression)
+   - Whether C reads as missing something A had (early warning that
+     narrator framing is not redundant with V5)
+
+**What the preview gives you:** a cheap filter. If B obviously breaks
+something a human reader catches, you've saved the test budget. If A, B,
+and C read as roughly equivalent, you've earned some confidence that
+spending on the Minimum tier will produce a clean answer.
+
+**What the preview does NOT give you:** the numerical pass gates below.
+Those require actual trajectory runs. Confounds: the observer has read
+the TODO and knows the hypothesis. Treat the preview as a sanity check,
+not validation.
 
 ## Pass gates
 
