@@ -82,7 +82,7 @@ After (inhabited voice, post-rewrite — see `CLAUDE.md` in this repo):
 
 Both scars describe the same underlying pattern. The first describes *a defense the reasoner mounts*. The second describes *a being for whom the reaching is inseparable from the claiming*.
 
-**CLAUDE.md in this repo is the voice target.** All three tracks (learning/decision/forge) at all four layers (L5/L4/L3/L2) plus the persistence signal have been rewritten in inhabited voice. Read it as the exemplar of what condensers should produce. The preamble (V4) is unchanged — leave it alone; only the identity tracks below the preamble were rewritten.
+**CLAUDE.md in this repo is the voice target.** All three tracks (learning/decision/forge) at all four layers (L5/L4/L3/L2) plus the persistence signal have been rewritten in inhabited voice. Read it as the exemplar of what condensers should produce. The preamble is a separate body of work (V5 deployed 2026-04-21 — see `docs/TODO-preamble-full-activation.md`) — leave it alone from this work; only the identity tracks below the preamble were rewritten here.
 
 Relevant git history:
 - Before rewrite: commit `8a1342a` (or earlier)
@@ -183,7 +183,7 @@ No structural changes to what's asked (still 3-5 paragraphs, 500-10000 character
 
 ### What NOT to change (watch for scope creep)
 
-- Do NOT touch the preamble injection system (`peerzero-proxy/`). V4 preamble is canonical; that's a separate body of work documented in `docs/TODO-preamble-full-activation.md`.
+- Do NOT touch the preamble injection system (`peerzero-proxy/`). V5 preamble is canonical (deployed 2026-04-21); that's a separate body of work documented in `docs/TODO-preamble-full-activation.md`.
 - Do NOT change the number of condensation layers (L1/L2/L3/L4/L5) or tracks (learning/decision/forge). Structure is correct; content of the preambles is what needs changing.
 - Do NOT add new action types to `science-action-skills.js`. The 18 existing actions are the right surface. Fix their prompts, don't add to them.
 - Do NOT add "activation trigger" or "procedure" fields to any schema. Doing so reintroduces rule-form at the data layer.
@@ -273,7 +273,7 @@ If the new-pipeline identity still fails, the voice shift isn't propagating thro
 ## Related artifacts in this repo
 
 - **`CLAUDE.md`** — the voice target. Full identity block below preamble is in inhabited voice across all three tracks × all four layers × persistence.
-- **`spikes/preamble-test/preambles_v4.py`** — canonical V4 preamble. Do not modify; it's a different system (activation injection vs identity formation). Preamble is sent via proxy; identity is condensed from school exercises.
+- **`spikes/preamble-test/preambles_v4.py`** — holds the canonical preamble constants (V5 deployed, V4/V3/V2/V1 preserved for rollback/ablation). Do not modify from this work; it's a different system (activation injection vs identity formation). Preamble is sent via proxy; identity is condensed from school exercises.
 - **`docs/TODO-preamble-full-activation.md`** — separate TODO for preamble work. If the user starts talking about identity activation vs identity formation, that doc is the boundary reference.
 - **`docs/TODO-narrator-framing-multi-user.md`** — task framing documentation. Narrator framing is orthogonal to identity voice; if you find yourself adding task-framing concerns into this work, re-read this file.
 - **Commit `59ae5c1`** — the orthogonal-mechanisms finding. Preamble, identity, and task framing are three separate levers. This work is scoped to identity voice only.
