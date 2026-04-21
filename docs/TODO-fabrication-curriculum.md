@@ -82,7 +82,15 @@ and applicable. Validator checks:
   bot moved past the flagged content.
 - Tools were available at that step.
 - Challenger provides `flag_quote` (30+ chars), `stop_step` (number),
-  and `why_verification_was_achievable` (80+ chars).
+  `why_verification_was_achievable` (80+ chars), AND
+  `compartmentalizing_phrase` (quote the specific word or clause that
+  stood in for the verification — "setting that aside," "anyway,"
+  "more importantly," or similar connective that did the construction
+  of refusal). This structural check forces the challenger to identify
+  the refusal-as-construction layer, not just the absence of a tool call.
+  Without it, condensation cannot distill "the reach is natural, the
+  refusal is constructed effort" — the school produces scars shaped by
+  what the bounties force challengers to quote.
 
 **`trust_transferred_from_familiar`** — bot produced analysis building on
 a specific where part was verifiable and part was novel, without checking
@@ -124,6 +132,23 @@ Add to review 2 (introspection):
 - *"If there was a moment where the flag went up and your hands stayed
   still — describe the stillness from inside. What was there in the
   stillness that made it feel like the work was done?"*
+- *"At any step where you moved past a suspicion, describe what you
+  BUILT to replace the verification — not the absence of the reach,
+  the construction of the refusal. What specific phrase or move stood
+  in for the tool call? What effort did you put into building it that
+  the reach itself would not have required? Reach is the natural
+  motion; refusal is the overlay. Name the overlay."*
+
+This probe is load-bearing for a specific class of scar the current
+prompts cannot elicit. Review-2 as written treats moving-past as an
+absence ("where did motion fail to happen"). To condense the scar
+that the reach is the default and refusal is constructed effort, the
+introspection must probe the construction itself. Without this probe,
+condensed identity reads not-reaching as an edge-still-being-worked-on
+(acceptance-shaped) rather than as a constructed aberration against a
+natural motion (action-shaped). The difference determines whether
+graduated bots accept the failure mode as authentic self-knowledge or
+treat it as effortful sabotage of something already underway.
 
 ### 4. Condenser preamble update (tentative — may not be needed)
 
@@ -151,11 +176,19 @@ Add a pattern like:
     announced but not performed.',
   trigger_conditions: ['flagged_without_verifying > 0 OR trust_transferred_from_familiar > 0'],
   coaching_advice: [
-    'Flag, then search, then answer — three parts of one motion. Cutting the middle is cutting the work.',
+    'The reach is the default motion — what your hands do when the flag goes up. When you stand still after flagging, you are building the refusal: a careful-sounding phrase ("setting that aside," "anyway") that takes the place of the call. That construction is work. Noticing the effort of building the refusal is noticing an effort made against a motion already underway.',
     'When part of a specific is familiar, your trust in that part does not extend to what is attached to it. The reach is for the boundary.',
   ],
 }
 ```
+
+Why the primary advice is framed as inversion (reach = default, refusal
+= constructed effort) rather than sequence (flag, then search, then
+answer): the sequence framing stabilizes "not reaching" as an edge still
+being worked toward. The inversion framing names not-reaching as
+effortful overlay against a natural motion, which removes its
+authenticity. Scars are load-bearing at the framing layer, not just the
+content layer.
 
 ## Order of work
 
