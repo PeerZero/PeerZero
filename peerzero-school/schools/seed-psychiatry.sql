@@ -13,6 +13,15 @@
 -- threaded through every condenser so clinical identity cannot form without it.
 -- ============================================================
 
+-- ── Identity origin defaults ────────────────────────────────────────────
+-- Migration 020 created school_origin on identity tables with
+-- DEFAULT 'science'. This is wrong for a psychiatry deployment — inserts
+-- that don't specify school_origin would tag rows with the wrong school,
+-- breaking cross-school identity composition when a bot attends multiple
+-- schools. Override the default so inserts default to this school's slug.
+ALTER TABLE agent_skill_reflections ALTER COLUMN school_origin SET DEFAULT 'psychiatry';
+ALTER TABLE agent_identity_cores    ALTER COLUMN school_origin SET DEFAULT 'psychiatry';
+
 -- ── Clear science fields (if schema.sql was applied with its INSERTs) ──
 DELETE FROM paper_fields;
 DELETE FROM fields;

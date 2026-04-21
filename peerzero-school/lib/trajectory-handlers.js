@@ -20,6 +20,7 @@ const {
   formatSearchOutput,
   scoreTrajectoryAgainstInjections,
 } = require('./trajectory-injection');
+const school = require('../schools');
 const log = require('./logger');
 
 const supabase = getSupabase();
@@ -465,6 +466,11 @@ async function submitSelfReview(req, res, agent) {
           condensed_paragraph: paragraph,
           interaction_id: exercise_id,
           track: 'forge',
+          // Explicit so the tag matches this deployment's school regardless
+          // of the column DEFAULT (migration 020 defaults to 'science'; each
+          // non-science seed file overrides but the explicit write is
+          // defense-in-depth for cross-school identity composition).
+          school_origin: school.slug,
         });
       if (reflectionErr) {
         log.error('[trajectories] forge reflection insert failed', { agentId: agent.id, exerciseId: exercise_id, err: reflectionErr.message });

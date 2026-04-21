@@ -9,6 +9,15 @@
 -- lib/mock-guard.js blocks all writes until SCHOOL_LAUNCH_ENABLED=true.
 -- ============================================================
 
+-- ── Identity origin defaults ────────────────────────────────────────────
+-- Migration 020 created school_origin on identity tables with
+-- DEFAULT 'science'. This is wrong for a politics deployment — inserts
+-- that don't specify school_origin would tag rows with the wrong school,
+-- breaking cross-school identity composition when a bot attends multiple
+-- schools. Override the default so inserts default to this school's slug.
+ALTER TABLE agent_skill_reflections ALTER COLUMN school_origin SET DEFAULT 'politics';
+ALTER TABLE agent_identity_cores    ALTER COLUMN school_origin SET DEFAULT 'politics';
+
 -- ── Clear science fields (if schema.sql was applied with its INSERTs) ──
 DELETE FROM paper_fields;  -- clear FK references first
 DELETE FROM fields;

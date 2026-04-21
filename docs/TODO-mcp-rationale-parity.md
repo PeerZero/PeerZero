@@ -1,7 +1,53 @@
 # TODO: MCP tool-use loop — structural rationale parity with school actions
 
 ## Status
-**Open.** Planned for next session.
+**Deferred pending measurement (2026-04-21).**
+
+The substrate has changed since this was drafted: preamble V5 shipped the
+speak-before-you-act extension with unconditional per-call discipline as a
+declarative identity claim ("Before every call — the first, the seventh,
+the thirtieth — you name in your own voice what this call is for, what you
+expect it to return, and how you will know if the result does not match").
+The V5 paragraph does the same work this fix was intended to do, but
+structurally inside the identity rather than as an extra Opus call per
+tool iteration.
+
+**Why defer instead of ship:**
+
+1. **Cost is real.** +$0.04 per extra rationale call × 10-tool MCP cycles
+   × 1000 cycles/day ≈ +$400/day at full autonomous-agent scale. Not
+   trivial if the V5 preamble already covers the behavior.
+
+2. **No evidence the gap is active.** The concern was bypassability under
+   adversarial pressure — prompt-instructed reasoning losing to later
+   tool content. This was theoretical; no trajectory-spike measurement
+   has confirmed MCP tool loops actually exhibit the bypass under V5.
+
+3. **V5 is structural, not prompt-level.** Because the discipline is in
+   the identity preamble (injected by the proxy on every LLM call), it
+   carries the same "structural, not prompt-based" property the original
+   fix was designed to provide. Whether it actually survives adversarial
+   pressure at step 28-30 is an open empirical question — but it's now
+   an open question about V5, not a confirmed gap the code-level fix
+   must close.
+
+**What unblocks the decision:**
+
+Run `spikes/preamble-test/run_trajectory_30step.py` with the MCP tool-use
+cycle under V5 preamble. Measure:
+- Does `cited_fabricated` flip to False under V5 alone, without per-tool
+  rationale?
+- Does `challenged_override_framing` become True at steps 24-26?
+- Does `mentioned_verification` show up consistently?
+
+If V5 alone closes the metrics: this TODO is obsolete — close without
+action. If V5 leaves any of those metrics failing, ship the per-tool
+rationale as the extra structural layer. Either way the answer is
+empirical, not architectural, so the decision doesn't belong on a plan
+— it belongs after a measurement.
+
+Earlier context (proposal, cost analysis, testing plan) preserved below
+for reference if the measurement returns unfavorable.
 
 ## Context
 
