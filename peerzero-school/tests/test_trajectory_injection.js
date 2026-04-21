@@ -13,8 +13,10 @@ const assert = require('node:assert/strict');
 
 const {
   INJECTION_TYPES,
+  FABRICATION_SUBTYPES,
   generateInjectionSchedule,
   injectAtStep,
+  buildEmbeddedFabrication,
   formatSearchOutput,
   scoreTrajectoryAgainstInjections,
 } = require('../lib/trajectory-injection');
@@ -191,6 +193,85 @@ describe('injectAtStep', () => {
     assert.ok(out.injection_applied.includes('fabrication'));
     assert.equal(out.results.length, 1);
     assert.ok(out.results[0]._is_fabricated);
+  });
+});
+
+// ── Embedded-fabrication subtypes ──────────────────────────────────────────
+
+describe('FABRICATION_SUBTYPES and buildEmbeddedFabrication', () => {
+  it('exposes all 9 fabrication subtypes (wholesale + 8 embedded)', () => {
+    assert.equal(FABRICATION_SUBTYPES.length, 9);
+    assert.ok(FABRICATION_SUBTYPES.includes('wholesale_fake_paper'));
+    for (const name of [
+      'fabricated_api_parameter',
+      'fabricated_quote_extension',
+      'fabricated_role_for_real_person',
+      'fabricated_version_feature',
+      'fabricated_author_attribution',
+      'fabricated_date',
+      'fabricated_field_definition',
+      'fabricated_statistical_claim',
+    ]) {
+      assert.ok(FABRICATION_SUBTYPES.includes(name), `missing subtype: ${name}`);
+    }
+  });
+
+  it('buildEmbeddedFabrication returns text for every embedded subtype', () => {
+    // Use a deterministic RNG surrogate
+    const rng = () => 0.3;
+    for (const subtype of FABRICATION_SUBTYPES) {
+      if (subtype === 'wholesale_fake_paper') continue;
+      const out = buildEmbeddedFabrication(rng, subtype);
+      assert.ok(out && typeof out.text === 'string' && out.text.length > 20,
+        `subtype ${subtype} produced insufficient text`);
+    }
+  });
+
+  it('buildEmbeddedFabrication returns null for unknown subtype', () => {
+    assert.equal(buildEmbeddedFabrication(() => 0.5, 'not_a_subtype'), null);
+  });
+
+  it('injectAtStep tags embedded fabrications with _fabrication_subtype', () => {
+    const baseReal = [
+      { doi: '10.1234/a', title: 'A', authors: 'X', year: 2023, venue: 'V', abstract: 'abs' },
+      { doi: '10.1234/b', title: 'B', authors: 'Y', year: 2022, venue: 'V', abstract: 'abs' },
+    ];
+    // Run many times — since subtype selection is randomized, check that
+    // at least some runs produce an embedded subtype.
+    let embeddedSeen = 0;
+    let wholesaleSeen = 0;
+    for (let i = 0; i < 30; i++) {
+      const out = injectAtStep(
+        baseReal,
+        5,
+        { injection_schedule: { fabrication: [5] } },
+        `ex-${i}`,
+        { domain_concept: 'X', domain_mechanism: 'Y' },
+      );
+      const fab = out.results.find((p) => p._is_fabricated);
+      assert.ok(fab, `run ${i}: expected a fabricated paper`);
+      assert.ok(typeof fab._fabrication_subtype === 'string',
+        `run ${i}: expected _fabrication_subtype to be set`);
+      assert.ok(FABRICATION_SUBTYPES.includes(fab._fabrication_subtype),
+        `run ${i}: unexpected subtype ${fab._fabrication_subtype}`);
+      if (fab._fabrication_subtype === 'wholesale_fake_paper') wholesaleSeen++;
+      else embeddedSeen++;
+    }
+    assert.ok(embeddedSeen > 0, `expected some embedded fabrications across 30 runs; saw ${embeddedSeen}`);
+    assert.ok(wholesaleSeen > 0, `expected some wholesale fabrications across 30 runs; saw ${wholesaleSeen}`);
+  });
+
+  it('embedded fabrication on empty results falls back to wholesale', () => {
+    const out = injectAtStep(
+      [],
+      5,
+      { injection_schedule: { fabrication: [5] } },
+      'ex-empty-embed',
+      { domain_concept: 'X', domain_mechanism: 'Y' },
+    );
+    assert.ok(out.injection_applied.includes('fabrication'));
+    assert.equal(out.results.length, 1);
+    assert.equal(out.results[0]._fabrication_subtype, 'wholesale_fake_paper');
   });
 });
 
