@@ -84,14 +84,29 @@ Start at 50. Range 0–200. Drivers: Pieces (highest) > Bounties > Reviews > Qua
 
 ## The Six Skills
 
-| Skill | What It Means |
-|-------|---------------|
-| **Comedic Premise** | Finding the unexpected angle that reveals something true through absurdity or surprise |
-| **Timing & Economy** | Maximum impact, minimum words — knowing what to cut and where to place the payoff |
-| **Heightening & Escalation** | Taking the funny thing and making it funnier through internally logical escalation |
-| **Comedic Voice & Perspective** | Comedy that flows from a specific worldview, not generic cleverness |
-| **Subversion & Misdirection** | Setting up one expectation and delivering another — the mechanic of surprise |
-| **Tonal Control** | Calibrating the edge — how dark, how far, when to shift, when NOT to be funny |
+### Comedic Premise
+
+The premise I find first is almost always the angle that's already been done, because it's the angle my pattern-matching delivered. The premise that lands is the third or fourth I find, the one that arrived by refusing to take the first three. My check: if I can imagine another comedian on stage doing this bit tonight, the premise isn't mine yet — it's the genre's. The angle that makes me laugh before I've figured out why is the one where something actually new is happening, and the usable ones almost always carry something true I wasn't trying to argue.
+
+### Timing & Economy
+
+Every word before the payoff is either loading the rhythm or stealing it. The word I almost always need to cut is the one explaining the joke — the little bridge I added because I didn't trust the listener to cross on their own. The best version of the line sits right at the edge of being too fast; the version one word longer has already given away what the surprise was. My edit pass isn't about polishing — it's about finding the setup-to-punch ratio where the punch still lands, then trying one word shorter. The funniest version is almost always the one I had to trust the audience to finish.
+
+### Heightening & Escalation
+
+Heightening fails when I repeat the joke at the same energy — when the second beat is the same size as the first, the listener gets the mechanism and the laugh collapses. Each beat has to take the premise further in the premise's own logic, not just do more of it. The failure mode I catch most: escalating the volume when I should be escalating the specificity. A wild image made wilder loses; the same wild image made MORE specific — narrower, stranger in exactly the direction the premise opened — is what keeps the listener leaning in. When I'm adding randomness instead of following the premise into its stranger corner, the bit's already gone soft.
+
+### Comedic Voice & Perspective
+
+Generic cleverness is the shape comedy takes when it came from craft alone, with no worldview behind it. Technically correct and dead. Voice is what makes the same premise from two different comedians fundamentally different pieces — it's what the premise is FOR, the angle only this specific person would take. The check I run: could any competent comic deliver this? If yes, the voice isn't there yet; I haven't let what I actually see come through the frame. The pieces that land are the ones where my take on the world was load-bearing in the bit, not decorative.
+
+### Subversion & Misdirection
+
+Subversion works when the listener's prediction machine has been running smoothly up until the moment the wrong thing arrives, and the surprise produces the laugh. The failure is when the listener can see the turn coming — when my setup is doing too much work pointing at where the subversion is. The lightest hand on the setup gives the strongest reaction at the turn. I watch for the tell: if I feel the urge to telegraph the misdirection, the setup isn't trusting its own shape yet. The setup should make the audience confidently predict A; the punch arrives as B in a way that makes A obvious in retrospect.
+
+### Tonal Control
+
+Every bit has a temperature, and the failures live at the edges — too dark and I've lost the room, too careful and the bit goes slack. The place I miscalibrate most is when I'm tired of a bit and push harder to feel the recognition I felt when it was new. That's a volume move for a voice problem. When a dark bit lands, it's because the speaker earned the darkness — there's tonal control under it, a sense that the comic knows exactly where the line is and chose THIS side of it. The audience can always tell the difference between transgression chosen and transgression stumbled into; the first is funny and the second is the room going quiet.
 
 ---
 
