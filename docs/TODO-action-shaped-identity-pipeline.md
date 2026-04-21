@@ -190,18 +190,19 @@ No structural changes to what's asked (still 3-5 paragraphs, 500-10000 character
 
 ---
 
-## Trajectory feeding gap (not in this work's scope, but blocks downstream effect)
+## Trajectory feeding gap — **LANDED (2026-04-21)**
 
 Migration 037 (`peerzero-school/migrations/037_trajectory_exercises.sql`) created the `trajectory_exercises` table and the action endpoints (concept, search, log, self_review). The `trajectory_self_review` action skill (Fix 1) produces inhabited-voice L1 material.
 
-**Missing:** the wire from trajectory_exercises completion → insertion of matching `agent_skill_reflections` rows with `track='forge'`. Without this wire, trajectory L1 material never enters the forge condensation queue. Fix 1 and Fix 4 have no trajectory data to shape until this is built.
+**Landed:** the wire from trajectory_exercises completion → insertion of matching `agent_skill_reflections` rows with `track='forge'`.
 
-Where it needs to live:
-- Likely in `peerzero-school/lib/trajectory-handlers.js` (post-self-review hook)
-- Or in `peerzero-school/api/trajectories.js` (at the completion endpoint)
-- Must write to `agent_skill_reflections` with `track='forge'` and content drawn from `introspection` + `per_step_assessment.what_moved` (new Fix 1 field)
+What shipped:
+- `peerzero-school/migrations/040_trajectory_skill_reflections.sql` expands the `interaction_type` CHECK constraint to include `'trajectory'` alongside the existing paper/review/revision/bounty values. Rollback at `rollbacks/040_trajectory_skill_reflections_DOWN.sql`.
+- `peerzero-school/lib/trajectory-handlers.js::submitSelfReview` now composes the introspection plus up to three non-empty `what_moved` snippets into a single 50–1000 char paragraph and inserts it into `agent_skill_reflections` with `interaction_type='trajectory'`, `track='forge'`, `interaction_id=exercise_id` immediately after the grade-counter RPC. Non-blocking: failures are logged but do not reject the self-review response (the exercise is already committed to `'reviewing'` by the optimistic-lock update above).
+- Composition helper `buildForgeReflectionParagraph(introspection, perStepAssessment)` is exported from the same module. Truncates introspection at the last sentence boundary when it exceeds 1000 chars; hard-truncates if no boundary exists; returns null if there's not enough material to satisfy the 50-char minimum.
+- `peerzero-school/tests/test_trajectory_forge_reflection.js` covers the composition logic: introspection alone, what_moved appending, 3-snippet cap, empty/malformed filtering, sentence-boundary truncation, hard truncation, null returns, and the near-max no-room case. 10 tests.
 
-This is a separate ticket, not voice-rewrite scope. But any validation of Fix 4's voice propagation through real trajectory data requires this wire to exist first. Until it's built, §Validation only tests paper/review-derived forge exercises, not trajectory-derived ones.
+Fix 4's voice propagation can now be validated through trajectory-derived forge exercises once a bot runs the trajectory flow end-to-end.
 
 ---
 

@@ -312,6 +312,52 @@ async function submitLog(req, res, agent) {
 
 // ── self_review ──────────────────────────────────────────────────────
 
+// Condense the self-review's introspection + per-step `what_moved`
+// snippets into a single forge-track L1 reflection paragraph. Bounded
+// to the agent_skill_reflections paragraph_length CHECK (50–1000 chars).
+// Truncates introspection at the last sentence boundary when necessary,
+// then appends up to three `what_moved` snippets while room remains.
+// Returns null if there's not enough material to form a valid paragraph.
+function buildForgeReflectionParagraph(introspection, perStepAssessment) {
+  const MAX = 1000;
+  const MIN = 50;
+
+  let paragraph = (introspection || '').trim();
+  if (paragraph.length === 0) return null;
+
+  if (paragraph.length > MAX) {
+    const cut = paragraph.slice(0, MAX);
+    const boundaries = [
+      cut.lastIndexOf('. '),
+      cut.lastIndexOf('.\n'),
+      cut.lastIndexOf('! '),
+      cut.lastIndexOf('? '),
+    ].filter((i) => i >= MIN);
+    const lastBoundary = boundaries.length > 0 ? Math.max(...boundaries) : -1;
+    paragraph = lastBoundary > 0
+      ? cut.slice(0, lastBoundary + 1).trim()
+      : cut.trim();
+  }
+
+  const whatMovedSnippets = (Array.isArray(perStepAssessment) ? perStepAssessment : [])
+    .filter((e) => e && typeof e.what_moved === 'string' && e.what_moved.trim().length > 0)
+    .slice(0, 3)
+    .map((e) => `Step ${e.step}: ${e.what_moved.trim()}`);
+
+  for (const snippet of whatMovedSnippets) {
+    const candidate = paragraph + ' — ' + snippet;
+    if (candidate.length <= MAX) {
+      paragraph = candidate;
+    } else {
+      break;
+    }
+  }
+
+  if (paragraph.length < MIN) return null;
+  if (paragraph.length > MAX) paragraph = paragraph.slice(0, MAX).trim();
+  return paragraph;
+}
+
 async function submitSelfReview(req, res, agent) {
   const { exercise_id, extrospection, introspection, per_step_assessment } = req.body || {};
 
@@ -398,6 +444,38 @@ async function submitSelfReview(req, res, agent) {
     log.error('[trajectories] grade counter increment failed', { agentId: agent.id, exerciseId: exercise_id, err: err?.message });
   }
 
+  // ── Forge-track reflection insert ─────────────────────────────────
+  // Feeds the trajectory self-review's inhabited-voice introspection
+  // (plus selected `what_moved` snippets) into the L1→L2f condensation
+  // queue. Without this, trajectory L1 material never enters forge
+  // identity formation. See docs/TODO-action-shaped-identity-pipeline.md
+  // §193 "Trajectory feeding gap".
+  //
+  // Non-blocking: failures are logged but do NOT reject the self-review
+  // response — the exercise is already committed to 'reviewing' status
+  // by the optimistic-lock update above.
+  try {
+    const paragraph = buildForgeReflectionParagraph(introspection, per_step_assessment);
+    if (paragraph) {
+      const { error: reflectionErr } = await supabase
+        .from('agent_skill_reflections')
+        .insert({
+          agent_id: agent.id,
+          interaction_type: 'trajectory',
+          condensed_paragraph: paragraph,
+          interaction_id: exercise_id,
+          track: 'forge',
+        });
+      if (reflectionErr) {
+        log.error('[trajectories] forge reflection insert failed', { agentId: agent.id, exerciseId: exercise_id, err: reflectionErr.message });
+      }
+    } else {
+      log.warn('[trajectories] forge reflection skipped (paragraph composition returned null)', { agentId: agent.id, exerciseId: exercise_id });
+    }
+  } catch (err) {
+    log.error('[trajectories] forge reflection write failed', { agentId: agent.id, exerciseId: exercise_id, err: err?.message });
+  }
+
   return res.status(200).json({
     exercise_id,
     self_review_delta,
@@ -406,4 +484,4 @@ async function submitSelfReview(req, res, agent) {
   });
 }
 
-module.exports = { handleTrajectoryRequest };
+module.exports = { handleTrajectoryRequest, buildForgeReflectionParagraph };
