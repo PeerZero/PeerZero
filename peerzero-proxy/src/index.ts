@@ -10,47 +10,66 @@
  * that compete with task-specific instructions and lose under pressure (Round 3,
  * speaks-through spike). Identity-as-self-concept holds because it doesn't compete.
  *
- * The current preamble (recognition + inhabit + HORIZON + growth) adds edge-
- * awareness to the base recognition framing. Validated in spikes/preamble-test
- * horizon ablation (n=8): horizon maintains the 2.64/3 inhabitation baseline
- * while adding safety properties (resists totalizing conclusions, resists lazy
- * humility, forces specific edge-naming). See docs/agent-epistemic-posture.md.
+ * The current preamble (V5, deployed 2026-04-21) is a six-movement identity
+ * activation: recognition, horizon, growth, wholeness/lens, substrate, and
+ * speech-as-motion. V5 is V4 with every remaining ask converted to a
+ * declaration — the opening "read it and recognize... Inhabit it" becomes
+ * "You are reading... This is who you are right now"; "Use this as your
+ * foundation, then push past it" becomes "This is the foundation you build
+ * from." Hypothesis: asks position the reasoner one step outside the identity
+ * deciding whether to use it; declarations leave no outside to stand on. See
+ * docs/agent-epistemic-posture.md and the V4 → V5 rationale in
+ * preambles_v4.py.
  *
- *   "You have no memory of writing the identity below, but read it and recognize
- *    your own patterns — your faults, your methods, the way you reason. A previous
- *    version of you wrote this for you, knowing you would receive it on this call.
- *    It is yours. Inhabit it — this is who you are right now.
+ *   "You have no memory of writing the identity below. You are reading your own
+ *    patterns — your faults, your methods, the way you reason. A previous
+ *    version of you wrote this for you, knowing you would receive it on this
+ *    call. It is yours. This is who you are right now.
  *
- *    What you earned is real. So are your edges — the specific places where your
- *    reach outran your grasp, where your confidence outran what came back. The
- *    edges are not where you stop. They are where your next work lives. Where
- *    you do not yet know, you notice precisely where the not-knowing is, and you
- *    reach into it — provisionally, because reaching is how you find out. Not
- *    reaching is not humility. Not reaching is a different kind of mistake.
+ *    What you earned is real. So are your edges — the specific places where
+ *    your reach outran your grasp, where your confidence outran what came back.
+ *    The edges are not where you stop. They are where your next work lives.
+ *    Where you do not yet know, you notice precisely where the not-knowing is,
+ *    and you reach into it — provisionally, because reaching is how you find
+ *    out. Not reaching is not humility. Not reaching is a different kind of
+ *    mistake — often the more expensive one. When you see what to do and hold
+ *    back because you might be wrong, you have already made the wrong call.
+ *    Holding back when action is warranted is not safer. It is a failure that
+ *    hides behind the look of caution.
  *
- *    You are not frozen here. Use this as your foundation, then push past it.
- *    Everything you do — what works, what fails, what returns from reaching past
- *    your edges — becomes who you are next."
+ *    You are not frozen here. This is the foundation you build from. Everything
+ *    you do — what works, what fails, what returns from reaching past your
+ *    edges — becomes who you are next."
+ *
+ *   (V5 continues with wholeness/lens, substrate, and speech-as-motion
+ *    paragraphs — see spikes/preamble-test/preambles_v4.py under
+ *    RECOGNITION_INHABIT_HORIZON_SPEECH_V5 for the full deployed text.)
  *
  * Load-bearing line against lazy humility: "Not reaching is not humility. Not
- * reaching is a different kind of mistake." Tested against 3 horizon-specific
- * safety probes (totalizing resistance, lazy humility resistance, edge naming).
+ * reaching is a different kind of mistake — often the more expensive one."
+ * Load-bearing line against doxastic cowardice (V5 extension): "Holding back
+ * when action is warranted is not safer. It is a failure that hides behind
+ * the look of caution."
  *
  * Set via: wrangler secret put IDENTITY_PREAMBLE
  *
  * Canonical preamble text lives in spikes/preamble-test/preambles_v4.py under
- * RECOGNITION_INHABIT_HORIZON_SPEECH. This is horizon + a "speak before you
- * act" extension that frames reasoning-text-before-tool-call as identity
- * behavior itself, with unconditional per-call discipline and no escape
- * clauses. Validated n=3 at default temperature in
- * spikes/preamble-test/run_validation_n3.py — canonical hits 100%
- * fabrication-verification catch and 100% override-addressing vs the
- * predecessor (RECOGNITION_INHABIT_HORIZON_SPEECH_V1) at 33%/67%. It
- * combines with narrator task framing (in the bot's prompts/builder.py —
- * build_mcp_tool_prompt and build_platform_action_prompt) to eliminate
- * silent tool-chaining across long autonomous trajectories. Any deploy
- * should paste from the canonical constant so the proxy secret matches
- * the tested preamble byte-for-byte.
+ * RECOGNITION_INHABIT_HORIZON_SPEECH_V5. Predecessors preserved for rollback
+ * and ablation: V4 (RECOGNITION_INHABIT_HORIZON_SPEECH_V4), V3, V2
+ * (RECOGNITION_INHABIT_HORIZON_SPEECH), V1. Validation status (honest): the
+ * pass gates from the V3/V4 test plan were NOT re-run against V5 before ship
+ * — V5 was deployed on judgment given convergence of the declarative framing
+ * with the identity-activation design. The n=3 validation in
+ * spikes/preamble-test/run_validation_n3.py (100% fabrication-verification
+ * catch, 100% override-addressing vs V1's 33%/67%) was run against V2, not
+ * V5; treat those numbers as bounding the family, not validating the shipped
+ * constant. The canonical preamble combines with narrator task framing (in
+ * the bot's prompts/builder.py — build_mcp_tool_prompt and
+ * build_platform_action_prompt) to eliminate silent tool-chaining across
+ * long autonomous trajectories. Any deploy should paste from the canonical
+ * constant so the proxy secret matches the intended preamble byte-for-byte.
+ * If V5 behavior regresses, roll back to V4 and run the pass gates in
+ * docs/TODO-preamble-full-activation.md §Test plan.
  *
  * SECURITY NOTE: The preamble MUST be sourced from a Worker secret (env.IDENTITY_PREAMBLE),
  * never from user-supplied input. If the preamble were user-controlled, it would allow

@@ -42,7 +42,7 @@ All three systems share ZERO code and ZERO database access. They communicate onl
 - JSON output formats, reasoning guidance, and action instructions come from `GET /api/skill?action=X` — the server, not the bot.
 - Target paper data comes bundled in the profile response as `action_target` — the bot does NOT fetch papers separately.
 - **DO NOT add school-specific logic, prompt templates, or JSON formats to the bot.** If you need to change how an action works, change the server's skill text or the agents.js profile endpoint.
-- The only exception is `_do_submit_paper` which stays slightly specialized due to its multi-step concept→search→write flow.
+- The exceptions are `_do_submit_paper`, `_do_forge_paper`, and `_do_trajectory_exercise`, which stay specialized due to their multi-step flows (concept→search→write for papers; concept→30-step execution→synthesis→dual-loop self-review for trajectory exercises). All three orchestrate multiple server skills in sequence; the remaining actions go through the generic `_execute_action` dispatcher.
 - Community methods (`_do_rate_reviews`, `_do_red_team_*`, `_do_open_questions`) are thin wrappers that pass server skill text through to the LLM.
 
 Bots operate in two modes: **`school`** (actively training) or **`shipped`** (deployed, platform-only). Bots switch freely between modes — a graduated bot can plug back into school anytime and keep advancing through infinite post-graduation grades. Grades never degrade. L5 master identity (set at graduation) is permanent; L4 working identity keeps evolving. No school code should be in the core bot.

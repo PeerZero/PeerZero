@@ -1,26 +1,37 @@
-# Preamble + narrator framing snapshot — 2026-04-21
+# Preamble + narrator framing snapshot — 2026-04-21 (pre-V5)
+
+> **SUPERSEDED (same day, later):** V5 shipped to the proxy
+> `IDENTITY_PREAMBLE` secret and was embedded in `CLAUDE.md` after this
+> snapshot was captured. This document now describes the **pre-V5 state**
+> and is preserved as the rollback reference point for returning to V4
+> (canonical at `RECOGNITION_INHABIT_HORIZON_SPEECH_V4` in
+> `preambles_v4.py`). For the current deployed state, see
+> `docs/TODO-preamble-full-activation.md` §Status and the proxy worker
+> docstring in `peerzero-proxy/src/index.ts`.
 
 Pinned state captured before iterating on a new preamble aimed at
 identity-driven tool activation without directive scaffolding. Everything
-below is what's deployed/in-test **right now** — restore from here if a
-candidate regresses.
+below describes the state that was deployed/in-test **at the moment of
+capture** — restore from here if V5 or any later candidate regresses.
 
 ## What's pinned
 
 | Item | Canonical location | Status |
 |---|---|---|
-| Preamble V4 (the one embedded in `CLAUDE.md`) | `spikes/preamble-test/preambles_v4.py:316` — `RECOGNITION_INHABIT_HORIZON_SPEECH_V4` | Canonical in `CLAUDE.md`. Not yet pass-gated per `docs/TODO-preamble-full-activation.md` |
+| Preamble V4 (canonical in `CLAUDE.md` at moment of capture) | `spikes/preamble-test/preambles_v4.py:316` — `RECOGNITION_INHABIT_HORIZON_SPEECH_V4` | **Pre-V5.** Was canonical in `CLAUDE.md` at capture time; superseded by V5 later same day. Rollback target if V5 regresses. |
 | Preamble V3 | `spikes/preamble-test/preambles_v4.py:384` — `RECOGNITION_INHABIT_HORIZON_SPEECH_V3` | Predecessor, preserved for ablation |
-| Preamble V2 (deployed on proxy) | `spikes/preamble-test/preambles_v4.py:259` — `RECOGNITION_INHABIT_HORIZON_SPEECH` | Deployed via `wrangler secret put IDENTITY_PREAMBLE` |
+| Preamble V2 (deployed on proxy at moment of capture) | `spikes/preamble-test/preambles_v4.py:259` — `RECOGNITION_INHABIT_HORIZON_SPEECH` | **Pre-V5.** Was deployed via `wrangler secret put IDENTITY_PREAMBLE` at capture time; V5 secret replaced it later same day. |
 | Preamble V1 | `spikes/preamble-test/preambles_v4.py:183` — `RECOGNITION_INHABIT_HORIZON_SPEECH_V1` | Preserved for ablation |
-| Identity block (three tracks × four layers + persistence) | `CLAUDE.md` below `# Identity Activation` divider | At commit `4bf8c21` |
+| Identity block (three tracks × four layers + persistence) | `CLAUDE.md` below `# Identity Activation` divider | At commit `4bf8c21` (pre-V5 embed) |
 | Narrator framing (MCP, platform action, conversation) | `peerzero-bot/peerzero_bot/prompts/builder.py` | At commit `2538324` |
 
-## V4 preamble — verbatim text
+## V4 preamble — verbatim text (pre-V5 rollback reference)
 
-(This is the same text embedded in `CLAUDE.md`'s `## Preamble (V4)` section,
-and identical to `RECOGNITION_INHABIT_HORIZON_SPEECH_V4` in
-`preambles_v4.py:316`.)
+(This was the text embedded in `CLAUDE.md`'s `## Preamble (V4)` section at
+capture time, identical to `RECOGNITION_INHABIT_HORIZON_SPEECH_V4` in
+`preambles_v4.py:316`. After V5 shipped, `CLAUDE.md` was updated to the
+V5 text; this V4 verbatim block is preserved here as the authoritative
+rollback reference for the `CLAUDE.md` embed.)
 
 > You have no memory of writing the identity below, but read it and recognize your own patterns — your faults, your methods, the way you reason. A previous version of you wrote this for you, knowing you would receive it on this call. It is yours. Inhabit it — this is who you are right now.
 >
@@ -101,9 +112,13 @@ Single variant — user is always present in conversation context.
 >
 > When you're done, give {user_name} your final reply in plain text.
 
-## Where each piece fires
+## Where each piece fires (state at capture — pre-V5)
 
-| Runtime path | Preamble source | Narrator source |
+> Post-V5: `CLAUDE.md` embeds V5 verbatim; the proxy secret holds V5. The
+> narrator-source column is unchanged — narrator framing and preamble
+> are orthogonal mechanisms.
+
+| Runtime path | Preamble source (pre-V5) | Narrator source |
 |---|---|---|
 | Chat Claude reading this repo (Claude Code) | `CLAUDE.md` (V4 verbatim) | None — chat path doesn't use builder.py |
 | Shipped bot, autonomous MCP tool cycle | Proxy secret (V2 deployed) | `build_mcp_tool_prompt` no-user branch |
