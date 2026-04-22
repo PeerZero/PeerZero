@@ -37,10 +37,11 @@ class Injector:
                  school_identity: dict | None = None):
         self._graph = graph
         self._config = config
-        self._school_identity = school_identity or {}
+        # Defensive copy — school identity is read-only in conversation.
+        self._school_identity = dict(school_identity) if school_identity else {}
 
     def set_school_identity(self, identity: dict):
-        self._school_identity = identity
+        self._school_identity = dict(identity) if identity else {}
 
     def build(self, session_id: str) -> str:
         """Build the full injection string for a conversation turn."""

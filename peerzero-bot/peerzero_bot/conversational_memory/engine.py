@@ -56,14 +56,18 @@ class ConversationalMemoryEngine:
         self._graph = Graph(self._db, self._config)
         self._filter = Filter(self._config, llm_call)
         self._salience = SalienceDetector(self._config, llm_call)
+        # Defensive copy at the boundary — school identity is read-only in
+        # conversation (CLAUDE.md rule 24). Each module keeps its own shallow
+        # copy so upstream mutations never leak in. Values are strings so
+        # shallow copy is sufficient.
         self._condenser = Condenser(self._graph, self._config, llm_call, school_identity)
         self._injector = Injector(self._graph, self._config, school_identity)
         self._sleep = SleepConsolidation(self._db, self._graph, self._config)
-        self._school_identity = school_identity or {}
+        self._school_identity = dict(school_identity) if school_identity else {}
 
     def set_school_identity(self, identity: dict):
         """Update school identity (e.g., after graduation or re-enrollment)."""
-        self._school_identity = identity
+        self._school_identity = dict(identity) if identity else {}
         self._condenser.set_school_identity(identity)
         self._injector.set_school_identity(identity)
 
