@@ -210,6 +210,35 @@ module.exports = async (req, res) => {
     const cutoff = new Date(Date.now() - RETENTION_DAYS * 24 * 60 * 60 * 1000).toISOString();
     const results = {};
 
+    // Trajectory stuck-state reconciliation runs first. An exercise that
+    // stalls in 'executing' or 'synthesis' for more than STUCK_HOURS hours
+    // is assumed dead (bot crash, container restart, token-cap cutoff
+    // between steps) and flipped to 'abandoned' so (a) the retention purge
+    // below can remove it after RETENTION_DAYS and (b) the grade counter
+    // never mysteriously stalls waiting on a zombie row. The window is
+    // intentionally much shorter than retention — stuck rows shouldn't
+    // compound over months of cron cycles.
+    const STUCK_HOURS = parseInt(process.env.TRAJECTORY_STUCK_HOURS || '24', 10);
+    const stuckCutoff = new Date(Date.now() - STUCK_HOURS * 60 * 60 * 1000).toISOString();
+    try {
+      const { count: stuckCount, error: stuckErr } = await supabase
+        .from('trajectory_exercises')
+        .update({ status: 'abandoned' }, { count: 'exact' })
+        .in('status', ['executing', 'synthesis'])
+        .lt('submitted_at', stuckCutoff);
+      if (stuckErr) {
+        results['trajectory_stuck_cleanup'] = { error: stuckErr.message };
+        log.warn('[retention] Trajectory stuck-state cleanup failed', { err: stuckErr.message });
+      } else {
+        results['trajectory_stuck_cleanup'] = { abandoned: stuckCount || 0, stuck_hours: STUCK_HOURS };
+        if (stuckCount && stuckCount > 0) {
+          log.warn('[retention] Marked stuck trajectory exercises as abandoned', { count: stuckCount, stuck_hours: STUCK_HOURS });
+        }
+      }
+    } catch (err) {
+      results['trajectory_stuck_cleanup'] = { error: err?.message || 'Unknown error' };
+    }
+
     // Simple delete with filter for each table
     // Checkpoint credibility before purging transactions (if checkpoints table exists)
     try {

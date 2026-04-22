@@ -172,6 +172,12 @@ class BotConfig:
     # injection stays pinned as system prompt across every tool call, so
     # felt_portrait of the user remains in attention for the whole trajectory.
     conversation_tool_use_enabled: bool = True
+    # Soft cap on tokens per conversation turn. Exceeding this logs a warning
+    # (operators can alert on the warn-rate for abusive conversations) but
+    # doesn't abort mid-turn since the tool loop already committed. The
+    # daily_token_budget above is the hard cap; this surfaces single-turn
+    # outliers below that threshold. 0 disables the warning.
+    conversation_turn_token_cap: int = 30000
 
     # ── Security ──────────────────────────────────────────────────────────
     audit_log: bool = True

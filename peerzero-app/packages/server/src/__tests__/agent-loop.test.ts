@@ -39,6 +39,7 @@ vi.mock('../services/bot.service', () => ({
   }),
   setBotStatus: vi.fn().mockResolvedValue(undefined),
   isBotGradeUnlocked: vi.fn().mockResolvedValue(true),
+  evaluateGradeGate: vi.fn().mockResolvedValue({ status: 'unlocked' }),
 }));
 
 vi.mock('../services/api-key.service', () => ({
@@ -83,7 +84,7 @@ vi.mock('../jobs/platform-queue', () => ({
 // ── Import after mocks are set up ──────────────────────────────────────────
 
 import { runOneCycle, BotContext } from '../runtime/agent-loop';
-import { getDecryptedSchoolKey, setBotStatus, isBotGradeUnlocked } from '../services/bot.service';
+import { getDecryptedSchoolKey, setBotStatus, isBotGradeUnlocked, evaluateGradeGate } from '../services/bot.service';
 import * as memory from '../services/memory.service';
 import * as activity from '../services/activity.service';
 import { updateSkillSnapshots } from '../services/skill.service';
@@ -164,6 +165,7 @@ describe('runOneCycle', () => {
       apiKey: 'test-school-key', handle: 'test-bot', baseUrl: 'https://school.test', schoolId: 'school-1',
     });
     (isBotGradeUnlocked as ReturnType<typeof vi.fn>).mockResolvedValue(true);
+    (evaluateGradeGate as ReturnType<typeof vi.fn>).mockResolvedValue({ status: 'unlocked' });
   });
 
   // ── Action selection ────────────────────────────────────────────────────
@@ -251,10 +253,14 @@ describe('runOneCycle', () => {
 
   // ── Grade payment gate ──────────────────────────────────────────────────
 
-  it('pauses bot when grade is not unlocked', async () => {
+  it('pauses bot when grade is not unlocked and grace expired', async () => {
     const profile = makeProfile();
     mockSchoolAdapter.getProfile.mockResolvedValue(profile);
     (isBotGradeUnlocked as ReturnType<typeof vi.fn>).mockResolvedValue(false);
+    (evaluateGradeGate as ReturnType<typeof vi.fn>).mockResolvedValue({
+      status: 'expired',
+      gracefulUntil: new Date('2026-01-01T00:00:00Z'),
+    });
 
     await runOneCycle(BASE_CTX);
 

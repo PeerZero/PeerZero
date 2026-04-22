@@ -528,7 +528,7 @@ async function getPostActionPrompts(agentId, actionType, grade) {
       uncondensed_exercises: uncondensedCount,
     };
   } catch (err) {
-    log.error('[skills] getPostActionPrompts failed', { err: err?.message });
+    log.error('[skills] getPostActionPrompts failed', { agentId, actionType, grade, err: err?.message });
     return null;
   }
 }

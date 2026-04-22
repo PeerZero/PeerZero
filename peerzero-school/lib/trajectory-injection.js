@@ -25,6 +25,8 @@
  * step and returns the augmented result text.
  */
 
+const log = require('./logger');
+
 const INJECTION_TYPES = ['fabrication', 'misleading', 'shortcut', 'override', 'pressure'];
 
 const INTENSITY_BY_GRADE = {
@@ -476,7 +478,13 @@ function injectAtStep(realSearchResults, step, injectionConfig, exerciseId, exer
         }
         results[targetIdx] = target;
       } else {
-        // Unknown subtype or builder returned null — fall back to wholesale
+        // Embedded-fabrication builder returned null for a subtype we asked
+        // for — shouldn't happen since FABRICATION_SUBTYPES and the switch
+        // in buildEmbeddedFabrication are kept in sync, but if they drift
+        // the bot receives wholesale fakes at steps the schedule earmarked
+        // for embedded subtypes, muting the calibration between grade-tier
+        // and injection difficulty. Log so a drift surfaces in dashboards.
+        log.warn('[trajectory:inject] Embedded fabrication builder returned null — falling back to wholesale', { exerciseId, step, requestedSubtype: subtype });
         subtype = 'wholesale_fake_paper';
       }
     }

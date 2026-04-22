@@ -134,6 +134,17 @@ export async function runOneCycle(ctx: BotContext): Promise<void> {
         'Bot paused — grade not unlocked and grace period expired',
       );
       await setBotStatus(ctx.botId, 'paused', `Grade ${currentGrade} requires payment to continue (grace period ended ${gate.gracefulUntil.toISOString()})`);
+      // Re-notify the user on expiry so the pause isn't invisible until they
+      // happen to check the app. Grace-entry already notified once 14 days
+      // ago; this is the final nudge. Non-blocking — pause must succeed even
+      // if the push service is down.
+      try {
+        const botRow = await queryOne<{ name: string }>('SELECT name FROM bots WHERE id = $1', [ctx.botId]);
+        const priceCents = getGradePriceCents(currentGrade);
+        await notifyGradePaymentNeeded(ctx.userId, ctx.botId, botRow?.name || 'Your bot', currentGrade, priceCents);
+      } catch (err) {
+        logger.warn({ err, botId: ctx.botId, userId: ctx.userId }, 'Grace-expiry notification failed — bot already paused');
+      }
       await updateBotCache(ctx.botId, profile, ctx.cycleNumber);
       return;
     }

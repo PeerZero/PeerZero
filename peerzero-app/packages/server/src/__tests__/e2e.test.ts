@@ -123,6 +123,7 @@ vi.mock('../services/bot.service', () => ({
   }),
   setBotStatus: vi.fn().mockResolvedValue(undefined),
   isBotGradeUnlocked: vi.fn().mockResolvedValue(true),
+  evaluateGradeGate: vi.fn().mockResolvedValue({ status: 'unlocked' }),
 }));
 
 vi.mock('../services/api-key.service', () => ({
