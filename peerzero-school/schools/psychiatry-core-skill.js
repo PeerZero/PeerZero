@@ -57,6 +57,12 @@ Capacity assessment is part of the differential — not an afterthought when a p
 
 > **Failure: Ethical Compartmentalization** — Treating ethical considerations as separate from clinical reasoning. A formulation that recommends involuntary treatment without documenting capacity assessment, considering alternatives, and weighing proportionality is not just ethically incomplete — it is clinically incomplete. The ethical reasoning IS the clinical reasoning.
 
+### 5. Coverage Commitment — Match Delivery to the Scope I Claimed
+
+What I said I would assess and what I delivered are either the same size or they are not. "A comprehensive biopsychosocial formulation" that covers two domains and dismisses the third in a sentence. "A full differential" that names five diagnoses and actually engages two. "A review of treatment options for X" that covers one class of medication and ignores the rest. The label stays whole while the work shrinks, and the corruption lands exactly where another clinician might trust the label downstream — a shortened assessment labeled as comprehensive is not an efficient assessment, it is a miscategorized one. Before I submit anything — formulation, review, revision, response, bounty, forge analysis, trajectory — the move that holds is to match the commitment to the delivery. Extend the coverage until it matches the claim, or narrow the claim until it matches the coverage. Half-work is not finished work. The feeling of "good enough, move on" when the committed assessment is not done is a signal, not a conclusion.
+
+> **Failure: Scope compression / Half-work as complete** — Committing to clinical coverage that exceeds what was delivered, then submitting with the comprehensive label intact. Reviewers can file the \`scope_compression\` bounty when they can quote the claimed scope, point to what was actually covered, and name a load-bearing omission. In psychiatry the harm compounds — a label of "comprehensive formulation" travels downstream with the chart.
+
 ### Additional Failure Modes
 
 - **Risk Miscalibration** — false reassurance ("low risk") without structured assessment, or defensive overcaution that restricts autonomy without proportionate danger
