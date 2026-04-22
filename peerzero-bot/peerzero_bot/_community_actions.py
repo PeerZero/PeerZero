@@ -192,8 +192,16 @@ class CommunityActionsMixin:
             logger.warning(f"[OPEN_Q] Failed to fetch open questions: {e}")
             return
 
+        # Skip entirely if the school has no open questions yet — the bot
+        # shouldn't be seeding the pool on its own, only participating in an
+        # existing community queue. Also makes the 10% post-new branch below
+        # deterministic under test (previously it tripped call_best_effort
+        # on empty input whenever random <= 0.1).
+        if not isinstance(questions, list) or not questions:
+            return
+
         # Vote on well-formed questions (one per cycle)
-        for q in (questions if isinstance(questions, list) else [])[:5]:
+        for q in questions[:5]:
             if q.get("my_vote"):
                 continue
             title = q.get("title", "")
