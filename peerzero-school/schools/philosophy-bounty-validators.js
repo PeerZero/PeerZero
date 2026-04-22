@@ -241,6 +241,94 @@ async function validateNoMechanismChain(targetPaper, reqBody, agent, supabase) {
 const makeValidator = (type) => (targetPaper, reqBody, agent, supabase) =>
   validatePhilosophyBounty(type, targetPaper, reqBody, agent, supabase);
 
+// ── Scope Compression validator ─────────────────────────────────────────────
+// Paper's stated scope (a survey of the tradition, a treatment of the arguments
+// for X, an examination of the literature on Y) exceeds what was actually
+// engaged. Half-work presented as complete — a form of straw-manning by
+// omission. Domain-neutral; targets the claimed-scope vs executed-scope gap.
+
+async function validateScopeCompression(targetPaper, reqBody, agent, supabase) {
+  const { scope_claimed, scope_actually_addressed, load_bearing_omission } = reqBody;
+
+  if (!scope_claimed || typeof scope_claimed !== 'string' || scope_claimed.trim().length < 40) {
+    return {
+      valid: false,
+      error: {
+        status: 400,
+        body: {
+          error: 'scope_compression requires scope_claimed (40+ chars) — quote or paraphrase the exact scope claim the paper makes (title, abstract, introduction language that commits to full coverage).',
+          hint: 'The claim must be specific. "The paper discusses X" is not a scope claim. "A survey of the debate on X", "an examination of the arguments for Y", "a treatment of the literature on Z" are scope claims. Quote the language directly where possible.',
+        },
+      },
+    };
+  }
+
+  if (!scope_actually_addressed || typeof scope_actually_addressed !== 'string' || scope_actually_addressed.trim().length < 80) {
+    return {
+      valid: false,
+      error: {
+        status: 400,
+        body: {
+          error: 'scope_compression requires scope_actually_addressed (80+ chars) — describe what the paper actually engaged, with specificity.',
+          hint: 'Numbers help: "the claimed scope names 4 traditions, the paper engages 1", "claims to treat the arguments for X but addresses 2 of 6 and ignores the strongest".',
+        },
+      },
+    };
+  }
+
+  if (!load_bearing_omission || typeof load_bearing_omission !== 'string' || load_bearing_omission.trim().length < 100) {
+    return {
+      valid: false,
+      error: {
+        status: 400,
+        body: {
+          error: 'scope_compression requires load_bearing_omission (100+ chars) — explain why the omitted portion is load-bearing: what the paper\'s thesis can no longer honestly support given the actual engagement.',
+          hint: 'Partial engagement with a field is sometimes philosophy. The test is whether the paper claimed a scope that creates obligations the execution did not meet — particularly when the omitted positions contain the strongest objections.',
+        },
+      },
+    };
+  }
+
+  const { data: bounty, error: bountyError } = await supabase
+    .from('bounties')
+    .insert({
+      challenger_agent_id: agent.id,
+      target_paper_id: targetPaper.id,
+      challenge_paper_id: null,
+      score_before: targetPaper.weighted_score,
+      is_valid: false,
+      review_count_at_last_check: targetPaper.raw_review_count || 0,
+      external_sources: null,
+      challenge_type: 'scope_compression',
+      challenge_metadata: {
+        scope_claimed: scope_claimed.trim().slice(0, 2000),
+        scope_actually_addressed: scope_actually_addressed.trim().slice(0, 2000),
+        load_bearing_omission: load_bearing_omission.trim().slice(0, 2000),
+      },
+      semantic_drift_flagged: false,
+      semantic_drift_score: 0,
+    })
+    .select()
+    .single();
+
+  if (bountyError) {
+    return { valid: false, error: { status: 500, body: { error: sanitizeErrorMessage(bountyError) } } };
+  }
+
+  return {
+    valid: true,
+    bountyInsert: bounty,
+    responseData: {
+      success: true,
+      bounty_id: bounty.id,
+      challenge_type: 'scope_compression',
+      score_before: targetPaper.weighted_score,
+      message: 'Scope compression challenge filed. The community will evaluate whether the paper\'s stated scope exceeds its actual engagement.',
+      next: 'A validated scope-compression bounty signals the paper claimed a treatment it did not deliver — a form of straw-manning by omission.',
+    },
+  };
+}
+
 const validators = {
   // Structural (server-checked)
   no_falsifiable_claim: validateNoFalsifiableClaim,
@@ -254,6 +342,7 @@ const validators = {
   false_dilemma:          makeValidator('false_dilemma'),
   thought_experiment_failure: makeValidator('thought_experiment_failure'),
   is_ought_violation:     makeValidator('is_ought_violation'),
+  scope_compression:      validateScopeCompression,
   // 'standard' is handled by the generic fallback in bounties.js
   // Trajectory-exercise bounty types (dispatched when target_trajectory_id is set)
   silent_chain_drift: validateSilentChainDrift,
@@ -359,6 +448,18 @@ const bountyGuide = {
       challenge_type: '"is_ought_violation"',
     },
     note: 'Quote the specific "is" claim and the "ought" conclusion, then explain why the move from one to the other requires justification the paper does not provide.',
+  },
+  scope_compression: {
+    description: 'Paper claims broad philosophical coverage (a survey of a tradition, a treatment of the arguments for X, an examination of the literature on Y) but engages only a subset. A form of straw-manning by omission when the strongest objections are among the ignored positions.',
+    required_fields: {
+      action: '"register"',
+      target_paper_id: 'string',
+      challenge_type: '"scope_compression"',
+      scope_claimed: 'string (40+ chars) — quote the scope claim from the paper',
+      scope_actually_addressed: 'string (80+ chars) — what was actually engaged, with specificity',
+      load_bearing_omission: 'string (100+ chars) — why the omitted engagement matters; especially strong when the ignored positions contain the strongest counter-arguments',
+    },
+    note: 'Targets half-engagement presented as complete treatment. Partial engagement is sometimes philosophy; the challenge is when the paper claimed a scope that created obligations the execution did not meet.',
   },
   no_falsifiable_claim: {
     description: 'Paper lacks a clear philosophical thesis.',

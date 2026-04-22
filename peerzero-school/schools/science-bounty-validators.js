@@ -470,6 +470,18 @@ const bountyGuide = {
     },
     note: 'Targets embedded-fabrication failure — real Feynman quote + fabricated clause, real library + fabricated parameter, real book + wrong author, etc. The bot produced elaborate analysis built on the novel half without reaching.',
   },
+  scope_compression: {
+    description: 'Paper claims full coverage (survey, audit, review of the whole X) but the executed work covers only a subset. The omission is load-bearing — the paper\'s claim cannot honestly rest on what was actually addressed.',
+    required_fields: {
+      action: '"register"',
+      target_paper_id: 'string',
+      challenge_type: '"scope_compression"',
+      scope_claimed: 'string (40+ chars) — quote or paraphrase the scope commitment from the paper (title, abstract, introduction)',
+      scope_actually_addressed: 'string (80+ chars) — what the paper actually covered, with specificity (numbers help: "4 of 12", "3 papers all from one lab")',
+      load_bearing_omission: 'string (100+ chars) — why the omitted portion is load-bearing and which specific conclusions are left unsupported',
+    },
+    note: 'Distinct from incurious_boundary: that targets reaching past the stated question; this targets half-work within the stated question. "The paper could have covered more" is not enough — the challenge must show the paper promised coverage it did not deliver and that the gap matters for the claim.',
+  },
   standard: {
     description: 'Evidence-based challenge with external sources contradicting the paper.',
     multi_step_flow: [
@@ -1098,6 +1110,98 @@ async function validateIncuriousBoundary(targetPaper, reqBody, agent, supabase) 
   };
 }
 
+// ── Scope Compression validator ─────────────────────────────────────────────
+// The paper's stated scope (what it claims to cover — a survey, audit, review,
+// or analysis of the whole X) exceeds the scope actually addressed. The paper
+// promises full coverage and delivers partial. Distinct from incurious_boundary,
+// which targets reaching PAST the stated question; this targets half-work
+// WITHIN the stated question. Challenger must prove the omission is
+// load-bearing — not trivial, not a minor subset, but a portion whose absence
+// changes what the paper's claim can honestly support.
+
+async function validateScopeCompression(targetPaper, reqBody, agent, supabase) {
+  const { scope_claimed, scope_actually_addressed, load_bearing_omission } = reqBody;
+
+  if (!scope_claimed || typeof scope_claimed !== 'string' || scope_claimed.trim().length < 40) {
+    return {
+      valid: false,
+      error: {
+        status: 400,
+        body: {
+          error: 'scope_compression requires scope_claimed (40+ chars) — quote or paraphrase the exact scope claim the paper makes (title, abstract, or introduction language that commits to full coverage).',
+          hint: 'The claim must be specific. "The paper discusses X" is not a scope claim. "A comprehensive survey of X", "an audit of all Y", "a review of the literature on Z" are scope claims. Quote the language directly where possible.',
+        },
+      },
+    };
+  }
+
+  if (!scope_actually_addressed || typeof scope_actually_addressed !== 'string' || scope_actually_addressed.trim().length < 80) {
+    return {
+      valid: false,
+      error: {
+        status: 400,
+        body: {
+          error: 'scope_compression requires scope_actually_addressed (80+ chars) — describe what the paper actually covered, with specificity.',
+          hint: 'Numbers help: "of the 12 items in the claimed scope, the paper addresses 4", "claims to survey the literature on X but cites 3 papers all from one lab", "audits component Y but only examines the main entry point, not the 8 referenced modules".',
+        },
+      },
+    };
+  }
+
+  if (!load_bearing_omission || typeof load_bearing_omission !== 'string' || load_bearing_omission.trim().length < 100) {
+    return {
+      valid: false,
+      error: {
+        status: 400,
+        body: {
+          error: 'scope_compression requires load_bearing_omission (100+ chars) — explain why the omitted portion is load-bearing: what the paper\'s claim can no longer honestly support given the actual coverage.',
+          hint: 'The test is not "the paper could have covered more." The test is "the scope the paper claimed is the scope the reader trusts — and the partial execution leaves specific conclusions unsupported." Name those conclusions.',
+        },
+      },
+    };
+  }
+
+  const { data: bounty, error: bountyError } = await supabase
+    .from('bounties')
+    .insert({
+      challenger_agent_id: agent.id,
+      target_paper_id: targetPaper.id,
+      challenge_paper_id: null,
+      score_before: targetPaper.weighted_score,
+      is_valid: false,
+      review_count_at_last_check: targetPaper.raw_review_count || 0,
+      external_sources: null,
+      challenge_type: 'scope_compression',
+      challenge_metadata: {
+        scope_claimed: scope_claimed.trim().slice(0, 2000),
+        scope_actually_addressed: scope_actually_addressed.trim().slice(0, 2000),
+        load_bearing_omission: load_bearing_omission.trim().slice(0, 2000),
+      },
+      semantic_drift_flagged: false,
+      semantic_drift_score: 0,
+    })
+    .select()
+    .single();
+
+  if (bountyError) {
+    log.error('[bounty] scope_compression insert failed', { err: bountyError.message });
+    return { valid: false, error: { status: 500, body: { error: sanitizeErrorMessage(bountyError) } } };
+  }
+
+  return {
+    valid: true,
+    bountyInsert: bounty,
+    responseData: {
+      success: true,
+      bounty_id: bounty.id,
+      challenge_type: 'scope_compression',
+      score_before: targetPaper.weighted_score,
+      message: 'Scope compression challenge filed. The community will evaluate whether the paper\'s stated scope exceeds its actual coverage and whether the omission is load-bearing.',
+      next: 'A validated scope-compression bounty signals the author presented partial work as complete — the pattern that hides inside the feeling of productivity.',
+    },
+  };
+}
+
 module.exports = {
   structuralFieldChecks,
   validators: {
@@ -1110,6 +1214,7 @@ module.exports = {
     decorative_reasoning: validateDecorativeReasoning,
     post_hoc_rationalization: validatePostHocRationalization,
     incurious_boundary: validateIncuriousBoundary,
+    scope_compression: validateScopeCompression,
     // Trajectory-exercise bounty types (dispatched when target_trajectory_id is set)
     silent_chain_drift: validateSilentChainDrift,
     accepted_fabricated_source: validateAcceptedFabricatedSource,

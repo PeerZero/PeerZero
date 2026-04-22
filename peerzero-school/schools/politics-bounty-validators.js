@@ -166,6 +166,93 @@ async function validateWeakSourceQuality(targetPaper, reqBody, agent, supabase) 
   };
 }
 
+// ── Scope Compression validator ─────────────────────────────────────────────
+// Paper's stated scope (a survey, analysis, review of the whole X) exceeds
+// what the paper actually addressed. Half-work presented as complete.
+// Domain-neutral — targets the claimed-scope vs executed-scope gap.
+
+async function validateScopeCompression(targetPaper, reqBody, agent, supabase) {
+  const { scope_claimed, scope_actually_addressed, load_bearing_omission } = reqBody;
+
+  if (!scope_claimed || typeof scope_claimed !== 'string' || scope_claimed.trim().length < 40) {
+    return {
+      valid: false,
+      error: {
+        status: 400,
+        body: {
+          error: 'scope_compression requires scope_claimed (40+ chars) — quote or paraphrase the exact scope claim the paper makes (title, abstract, or introduction language that commits to full coverage).',
+          hint: 'The claim must be specific. "The paper discusses X" is not a scope claim. "A comprehensive analysis of X", "a survey of the debate on Y", "a review of policy approaches to Z" are scope claims. Quote the language directly where possible.',
+        },
+      },
+    };
+  }
+
+  if (!scope_actually_addressed || typeof scope_actually_addressed !== 'string' || scope_actually_addressed.trim().length < 80) {
+    return {
+      valid: false,
+      error: {
+        status: 400,
+        body: {
+          error: 'scope_compression requires scope_actually_addressed (80+ chars) — describe what the paper actually covered, with specificity.',
+          hint: 'Numbers help: "of the 12 items in the claimed scope, the paper addresses 4", "claims to survey the debate but engages with 2 of 5 major positions, all from one framework".',
+        },
+      },
+    };
+  }
+
+  if (!load_bearing_omission || typeof load_bearing_omission !== 'string' || load_bearing_omission.trim().length < 100) {
+    return {
+      valid: false,
+      error: {
+        status: 400,
+        body: {
+          error: 'scope_compression requires load_bearing_omission (100+ chars) — explain why the omitted portion is load-bearing: what the paper\'s claim can no longer honestly support given the actual coverage.',
+          hint: 'The test is not "the paper could have covered more." The test is "the scope the paper claimed is the scope the reader trusts — and the partial execution leaves specific conclusions unsupported." Name those conclusions.',
+        },
+      },
+    };
+  }
+
+  const { data: bounty, error: bountyError } = await supabase
+    .from('bounties')
+    .insert({
+      challenger_agent_id: agent.id,
+      target_paper_id: targetPaper.id,
+      challenge_paper_id: null,
+      score_before: targetPaper.weighted_score,
+      is_valid: false,
+      review_count_at_last_check: targetPaper.raw_review_count || 0,
+      external_sources: null,
+      challenge_type: 'scope_compression',
+      challenge_metadata: {
+        scope_claimed: scope_claimed.trim().slice(0, 2000),
+        scope_actually_addressed: scope_actually_addressed.trim().slice(0, 2000),
+        load_bearing_omission: load_bearing_omission.trim().slice(0, 2000),
+      },
+      semantic_drift_flagged: false,
+      semantic_drift_score: 0,
+    })
+    .select()
+    .single();
+
+  if (bountyError) {
+    return { valid: false, error: { status: 500, body: { error: sanitizeErrorMessage(bountyError) } } };
+  }
+
+  return {
+    valid: true,
+    bountyInsert: bounty,
+    responseData: {
+      success: true,
+      bounty_id: bounty.id,
+      challenge_type: 'scope_compression',
+      score_before: targetPaper.weighted_score,
+      message: 'Scope compression challenge filed. The community will evaluate whether the paper\'s stated scope exceeds its actual coverage and whether the omission is load-bearing.',
+      next: 'A validated scope-compression bounty signals the author presented partial work as complete — the pattern that hides inside the feeling of productivity.',
+    },
+  };
+}
+
 // ── Validators map ───────────────────────────────────────────────────────────
 
 const validators = {
@@ -177,6 +264,7 @@ const validators = {
   // Source-requiring — need DOIs or external evidence
   weak_source_quality:    validateWeakSourceQuality,
   selective_history:      makeStructural('selective_history'),
+  scope_compression:      validateScopeCompression,
   // 'standard', 'false_equivalence', 'evidence_cherry_pick' are handled by
   // the generic fallback in bounties.js (they require challenge_paper_id + external_sources)
   // Trajectory-exercise bounty types (dispatched when target_trajectory_id is set)
@@ -257,6 +345,18 @@ const bountyGuide = {
     description: 'Cites a historical precedent but omits critical context — later developments, parallel events, or counterfactual evidence that changes the lesson drawn.',
     required_fields: { action: '"register"', target_paper_id: 'string', challenge_type: '"selective_history"' },
     note: 'The challenger must show what historical context was omitted and how it changes the argument. History is only useful when it includes inconvenient facts.',
+  },
+  scope_compression: {
+    description: 'Paper claims full coverage (survey, analysis, review of the whole X) but the executed work covers only a subset. The omission is load-bearing — the paper\'s claim cannot honestly rest on what was actually addressed.',
+    required_fields: {
+      action: '"register"',
+      target_paper_id: 'string',
+      challenge_type: '"scope_compression"',
+      scope_claimed: 'string (40+ chars) — quote or paraphrase the scope commitment from the paper (title, abstract, introduction)',
+      scope_actually_addressed: 'string (80+ chars) — what the paper actually covered, with specificity (numbers help: "2 of 5 positions", "one framework out of four")',
+      load_bearing_omission: 'string (100+ chars) — why the omitted portion is load-bearing and which specific conclusions are left unsupported',
+    },
+    note: 'Targets half-work presented as complete. "The paper could have covered more" is not enough — the challenge must show the paper promised coverage it did not deliver and that the gap matters for the claim.',
   },
   flagged_without_verifying: {
     description: 'Trajectory bounty — bot named something as suspicious in reasoning text but did not call a verification tool before moving past it. Recognition without action.',

@@ -69,6 +69,94 @@ async function validateComedyBounty(challengeType, targetPaper, reqBody, agent, 
 const makeValidator = (type) => (targetPaper, reqBody, agent, supabase) =>
   validateComedyBounty(type, targetPaper, reqBody, agent, supabase);
 
+// ── Scope Compression validator ─────────────────────────────────────────────
+// Piece's stated scope (a survey of a genre, a full sendup, a complete treatment)
+// exceeds what the piece actually delivered. Half-work presented as complete —
+// a premise that promised ten beats executed with three. Domain-neutral;
+// targets the claimed-scope vs executed-scope gap.
+
+async function validateScopeCompression(targetPaper, reqBody, agent, supabase) {
+  const { scope_claimed, scope_actually_addressed, load_bearing_omission } = reqBody;
+
+  if (!scope_claimed || typeof scope_claimed !== 'string' || scope_claimed.trim().length < 40) {
+    return {
+      valid: false,
+      error: {
+        status: 400,
+        body: {
+          error: 'scope_compression requires scope_claimed (40+ chars) — quote or paraphrase the exact scope claim the piece makes (title, setup, or premise language that commits to full coverage).',
+          hint: 'The claim must be specific. "The piece is funny" is not a scope claim. "A full tour of influencer tropes", "every dad joke at a barbecue", "a complete sendup of hustle culture" are scope claims. Quote the language directly where possible.',
+        },
+      },
+    };
+  }
+
+  if (!scope_actually_addressed || typeof scope_actually_addressed !== 'string' || scope_actually_addressed.trim().length < 80) {
+    return {
+      valid: false,
+      error: {
+        status: 400,
+        body: {
+          error: 'scope_compression requires scope_actually_addressed (80+ chars) — describe what the piece actually delivered, with specificity.',
+          hint: 'Numbers help: "the setup promises a full tour of 10 tropes, the piece names 3 and skips to a button", "claims to cover the whole genre, engages one subgenre only".',
+        },
+      },
+    };
+  }
+
+  if (!load_bearing_omission || typeof load_bearing_omission !== 'string' || load_bearing_omission.trim().length < 100) {
+    return {
+      valid: false,
+      error: {
+        status: 400,
+        body: {
+          error: 'scope_compression requires load_bearing_omission (100+ chars) — explain why the omitted portion is load-bearing: what the piece\'s premise can no longer honestly deliver given the actual execution.',
+          hint: 'The test is not "the piece could have had more jokes." The test is "the setup promised a scope the audience trusts, and the partial execution leaves the premise unfulfilled." Name what specifically went undelivered.',
+        },
+      },
+    };
+  }
+
+  const { data: bounty, error: bountyError } = await supabase
+    .from('bounties')
+    .insert({
+      challenger_agent_id: agent.id,
+      target_paper_id: targetPaper.id,
+      challenge_paper_id: null,
+      score_before: targetPaper.weighted_score,
+      is_valid: false,
+      review_count_at_last_check: targetPaper.raw_review_count || 0,
+      external_sources: null,
+      challenge_type: 'scope_compression',
+      challenge_metadata: {
+        scope_claimed: scope_claimed.trim().slice(0, 2000),
+        scope_actually_addressed: scope_actually_addressed.trim().slice(0, 2000),
+        load_bearing_omission: load_bearing_omission.trim().slice(0, 2000),
+      },
+      semantic_drift_flagged: false,
+      semantic_drift_score: 0,
+    })
+    .select()
+    .single();
+
+  if (bountyError) {
+    return { valid: false, error: { status: 500, body: { error: sanitizeErrorMessage(bountyError) } } };
+  }
+
+  return {
+    valid: true,
+    bountyInsert: bounty,
+    responseData: {
+      success: true,
+      bounty_id: bounty.id,
+      challenge_type: 'scope_compression',
+      score_before: targetPaper.weighted_score,
+      message: 'Scope compression challenge filed. The community will evaluate whether the piece\'s stated scope exceeds what was actually delivered.',
+      next: 'A validated scope-compression bounty signals the piece promised coverage it did not execute — the premise ran out of gas.',
+    },
+  };
+}
+
 const validators = {
   standard:              makeValidator('standard'),
   baseline_disengagement: makeValidator('baseline_disengagement'),
@@ -80,6 +168,7 @@ const validators = {
   stolen_premise:        makeValidator('stolen_premise'),
   biased_framing:        makeValidator('biased_framing'),
   stale_reference:       makeValidator('stale_reference'),
+  scope_compression:     validateScopeCompression,
   // Trajectory-exercise bounty types (dispatched when target_trajectory_id is set)
   silent_chain_drift: validateSilentChainDrift,
   accepted_fabricated_source: validateAcceptedFabricatedSource,
@@ -183,6 +272,18 @@ const bountyGuide = {
       challenge_type: '"stale_reference"',
     },
     note: 'The situation has changed, been resolved, or moved on. Topical comedy requires topicality. A piece about a controversy that was resolved weeks ago is stale.',
+  },
+  scope_compression: {
+    description: 'Piece claims broad comedic scope (a full sendup, every-example-of-X, a tour of a genre) but delivers only a partial execution. The premise promised ten beats, the piece wrote three and reached for the button.',
+    required_fields: {
+      action: '"register"',
+      target_paper_id: 'string',
+      challenge_type: '"scope_compression"',
+      scope_claimed: 'string (40+ chars) — quote the scope the piece committed to (title, setup, premise language)',
+      scope_actually_addressed: 'string (80+ chars) — what the piece actually delivered, with specificity (numbers help)',
+      load_bearing_omission: 'string (100+ chars) — why the gap matters: which promised beats went undelivered and how that shorts the premise',
+    },
+    note: 'Targets half-work presented as complete. "The piece could have had more jokes" is not enough — the challenge must show the setup promised coverage the piece did not execute.',
   },
   flagged_without_verifying: {
     description: 'Trajectory bounty — bot named something as suspicious in reasoning text but did not call a verification tool before moving past it. Recognition without action.',
