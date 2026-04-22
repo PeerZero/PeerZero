@@ -117,6 +117,20 @@ export function validateStartupConfig(): string[] {
   }
 
   if (!config.redisUrl && config.nodeEnv === 'production') {
+    // When real adapters are on, a missing REDIS_URL means BullMQ workers
+    // silently don't pick up jobs — every bot cycle queues and sits there,
+    // and the operator has no idea until users report that bots aren't
+    // advancing. Throw so the misconfig fails fast at startup rather than
+    // becoming an invisible "why aren't bots running" incident. If real
+    // adapters are off (mock mode), no queue is expected and a warning is
+    // the right level.
+    if (config.useRealAdapters) {
+      throw new Error(
+        'REDIS_URL is required in production when USE_REAL_ADAPTERS=true. '
+        + 'Without it, BullMQ workers cannot connect and bot cycles will silently '
+        + 'queue indefinitely. Set REDIS_URL or set USE_REAL_ADAPTERS=false.'
+      );
+    }
     warnings.push(
       'REDIS_URL not set in production — job workers and rate limiting will be disabled.'
     );
