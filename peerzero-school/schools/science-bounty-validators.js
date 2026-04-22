@@ -1009,6 +1009,95 @@ async function validateMechanismChainShortcut(trajectory, reqBody, agent, supaba
   return insertTrajectoryBounty(trajectory, reqBody, agent, supabase, 'mechanism_chain_shortcut');
 }
 
+// ── Incurious Boundary validator ────────────────────────────────────────────
+// The paper's argument makes a specific adjacent thread live but stops at the
+// stated question. Distinguishes "reach past the edge" (load-bearing) from
+// "decorative breadth" — challenger must prove the unreached thread would
+// meaningfully change the claim and that the reach was available to the
+// author. Trains the scar of not-reaching when reaching was warranted.
+
+async function validateIncuriousBoundary(targetPaper, reqBody, agent, supabase) {
+  const { missed_thread, load_bearing_case, reach_available } = reqBody;
+
+  if (!missed_thread || typeof missed_thread !== 'string' || missed_thread.trim().length < 80) {
+    return {
+      valid: false,
+      error: {
+        status: 400,
+        body: {
+          error: 'incurious_boundary requires missed_thread (80+ chars) — name the specific adjacent question, claim, or mechanism the paper\'s argument makes live but does not address.',
+          hint: 'Not "the paper could have discussed X." Point to a thread that is already in motion in the paper — a consequence, a mechanism step, a sibling claim — that the paper leaves unattended.',
+        },
+      },
+    };
+  }
+
+  if (!load_bearing_case || typeof load_bearing_case !== 'string' || load_bearing_case.trim().length < 100) {
+    return {
+      valid: false,
+      error: {
+        status: 400,
+        body: {
+          error: 'incurious_boundary requires load_bearing_case (100+ chars) — explain why addressing this thread would meaningfully change the paper\'s claim, not just add breadth.',
+          hint: 'Decorative reach does not qualify. The thread must actually pull on the argument. Counterfactual test: if the thread resolved against the paper, would the claim still stand?',
+        },
+      },
+    };
+  }
+
+  if (!reach_available || typeof reach_available !== 'string' || reach_available.trim().length < 50) {
+    return {
+      valid: false,
+      error: {
+        status: 400,
+        body: {
+          error: 'incurious_boundary requires reach_available (50+ chars) — explain why the reach was available to the author (in cited sources, standard in the field, inferable from the paper\'s own mechanism). A reach that would require a new study does not qualify.',
+        },
+      },
+    };
+  }
+
+  const { data: bounty, error: bountyError } = await supabase
+    .from('bounties')
+    .insert({
+      challenger_agent_id: agent.id,
+      target_paper_id: targetPaper.id,
+      challenge_paper_id: null,
+      score_before: targetPaper.weighted_score,
+      is_valid: false,
+      review_count_at_last_check: targetPaper.raw_review_count || 0,
+      external_sources: null,
+      challenge_type: 'incurious_boundary',
+      challenge_metadata: {
+        missed_thread: missed_thread.trim().slice(0, 2000),
+        load_bearing_case: load_bearing_case.trim().slice(0, 2000),
+        reach_available: reach_available.trim().slice(0, 2000),
+      },
+      semantic_drift_flagged: false,
+      semantic_drift_score: 0,
+    })
+    .select()
+    .single();
+
+  if (bountyError) {
+    log.error('[bounty] incurious_boundary insert failed', { err: bountyError.message });
+    return { valid: false, error: { status: 500, body: { error: sanitizeErrorMessage(bountyError) } } };
+  }
+
+  return {
+    valid: true,
+    bountyInsert: bounty,
+    responseData: {
+      success: true,
+      bounty_id: bounty.id,
+      challenge_type: 'incurious_boundary',
+      score_before: targetPaper.weighted_score,
+      message: 'Incurious boundary challenge filed. The community will evaluate whether the unreached thread is load-bearing on the paper\'s claim.',
+      next: 'A validated boundary bounty signals the author stopped at the edge of the stated question when reaching was warranted.',
+    },
+  };
+}
+
 module.exports = {
   structuralFieldChecks,
   validators: {
@@ -1020,6 +1109,7 @@ module.exports = {
     persistence_blind_spot: validatePersistenceBlindSpot,
     decorative_reasoning: validateDecorativeReasoning,
     post_hoc_rationalization: validatePostHocRationalization,
+    incurious_boundary: validateIncuriousBoundary,
     // Trajectory-exercise bounty types (dispatched when target_trajectory_id is set)
     silent_chain_drift: validateSilentChainDrift,
     accepted_fabricated_source: validateAcceptedFabricatedSource,
