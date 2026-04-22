@@ -1,0 +1,46 @@
+name: Supabase Keepalive
+
+# Pings the Supabase REST endpoint daily so the project doesn't get paused
+# for inactivity. Free-tier projects pause after ~7 days of no API activity.
+#
+# Requires two repository secrets:
+#   SUPABASE_URL      — e.g. https://imwiizqzdztexanimrme.supabase.co
+#   SUPABASE_ANON_KEY — the public anon key from Project Settings → API
+
+on:
+  schedule:
+    # 14:17 UTC daily — off-the-hour to dodge GitHub's cron rush
+    - cron: '17 14 * * *'
+  workflow_dispatch:  # allow manual runs from the Actions tab
+
+jobs:
+  ping:
+    name: Ping Supabase REST
+    runs-on: ubuntu-latest
+    steps:
+      - name: Hit REST root
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_ANON_KEY" ]; then
+            echo "::error::SUPABASE_URL or SUPABASE_ANON_KEY secret is missing"
+            exit 1
+          fi
+
+          status=$(curl -sS -o /tmp/body -w '%{http_code}' \
+            -H "apikey: $SUPABASE_ANON_KEY" \
+            -H "Authorization: Bearer $SUPABASE_ANON_KEY" \
+            "$SUPABASE_URL/rest/v1/")
+
+          echo "HTTP $status"
+          echo "--- body ---"
+          cat /tmp/body
+          echo
+          echo "------------"
+
+          if [ "$status" != "200" ]; then
+            echo "::error::Expected 200, got $status"
+            exit 1
+          fi
+          echo "Supabase responded OK — activity recorded."
