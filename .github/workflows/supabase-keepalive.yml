@@ -18,7 +18,7 @@ jobs:
     name: Ping Supabase REST
     runs-on: ubuntu-latest
     steps:
-      - name: Hit REST root
+      - name: Query fields table
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
@@ -28,10 +28,13 @@ jobs:
             exit 1
           fi
 
+          # /rest/v1/ (the root listing) requires service_role. Hit a table
+          # with a public SELECT policy instead so the anon key works and
+          # PostgREST runs a real DB query.
           status=$(curl -sS -o /tmp/body -w '%{http_code}' \
             -H "apikey: $SUPABASE_ANON_KEY" \
             -H "Authorization: Bearer $SUPABASE_ANON_KEY" \
-            "$SUPABASE_URL/rest/v1/")
+            "$SUPABASE_URL/rest/v1/fields?select=id&limit=1")
 
           echo "HTTP $status"
           echo "--- body ---"
