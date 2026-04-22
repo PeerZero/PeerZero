@@ -31,6 +31,7 @@ vi.mock('../../adapters/adapter.factory', () => ({
 
 const mockSetBotStatus = vi.fn().mockResolvedValue(undefined);
 const mockIsBotGradeUnlocked = vi.fn().mockResolvedValue(true);
+const mockEvaluateGradeGate = vi.fn().mockResolvedValue({ status: 'unlocked' });
 const mockGetDecryptedSchoolKey = vi.fn().mockResolvedValue({
   apiKey: 'test-school-key',
   handle: 'test-bot',
@@ -42,6 +43,7 @@ vi.mock('../../services/bot.service', () => ({
   getDecryptedSchoolKey: (...args: any[]) => mockGetDecryptedSchoolKey(...args),
   setBotStatus: (...args: any[]) => mockSetBotStatus(...args),
   isBotGradeUnlocked: (...args: any[]) => mockIsBotGradeUnlocked(...args),
+  evaluateGradeGate: (...args: any[]) => mockEvaluateGradeGate(...args),
 }));
 
 vi.mock('../../services/api-key.service', () => ({
@@ -465,10 +467,10 @@ describe('determineAction', () => {
 // =============================================================================
 
 describe('grade payment gate', () => {
-  it('pauses bot when grade is not unlocked', async () => {
+  it('pauses bot when grade is not unlocked and grace expired', async () => {
     const profile = makeProfile({ grade: { grade: 3 } as any });
     mockSchoolAdapter.getProfile.mockResolvedValue(profile);
-    mockIsBotGradeUnlocked.mockResolvedValue(false);
+    mockEvaluateGradeGate.mockResolvedValue({ status: 'expired', gracefulUntil: new Date('2026-01-01T00:00:00Z') });
     mockQueryOne.mockResolvedValue({ name: 'TestBot' });
 
     await runOneCycle(BASE_CTX);
@@ -479,10 +481,10 @@ describe('grade payment gate', () => {
     expect(routeAction).not.toHaveBeenCalled();
   });
 
-  it('sends grade payment notification when paused', async () => {
+  it('sends grade payment notification when grace expires', async () => {
     const profile = makeProfile({ grade: { grade: 4 } as any });
     mockSchoolAdapter.getProfile.mockResolvedValue(profile);
-    mockIsBotGradeUnlocked.mockResolvedValue(false);
+    mockEvaluateGradeGate.mockResolvedValue({ status: 'expired', gracefulUntil: new Date('2026-01-01T00:00:00Z') });
     mockQueryOne.mockResolvedValue({ name: 'MyBot' });
 
     await runOneCycle(BASE_CTX);
@@ -492,10 +494,28 @@ describe('grade payment gate', () => {
     );
   });
 
+  it('sends grade payment notification once when grace period begins', async () => {
+    const profile = makeProfile({ grade: { grade: 4 } as any });
+    mockSchoolAdapter.getProfile.mockResolvedValue(profile);
+    mockEvaluateGradeGate.mockResolvedValue({
+      status: 'grace',
+      gracefulUntil: new Date('2026-12-31T00:00:00Z'),
+      startedNow: true,
+    });
+    mockQueryOne.mockResolvedValue({ name: 'MyBot' });
+
+    await runOneCycle(BASE_CTX);
+
+    expect(mockNotifyGradePaymentNeeded).toHaveBeenCalledWith(
+      'user-1', 'bot-1', 'MyBot', 4, 499,
+    );
+    expect(routeAction).toHaveBeenCalled();
+  });
+
   it('continues normally when grade is unlocked', async () => {
     const profile = makeProfile();
     mockSchoolAdapter.getProfile.mockResolvedValue(profile);
-    mockIsBotGradeUnlocked.mockResolvedValue(true);
+    mockEvaluateGradeGate.mockResolvedValue({ status: 'unlocked' });
 
     await runOneCycle(BASE_CTX);
 
@@ -511,7 +531,7 @@ describe('grade payment gate', () => {
 
     await runOneCycle(BASE_CTX);
 
-    expect(mockIsBotGradeUnlocked).toHaveBeenCalledWith('bot-1', 'school-1', 1);
+    expect(mockEvaluateGradeGate).toHaveBeenCalledWith('bot-1', 'school-1', 1);
   });
 });
 

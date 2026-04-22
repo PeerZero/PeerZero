@@ -77,7 +77,8 @@ async function checkSemanticDrift(targetPaperId, newSources, challengerAgentId) 
   driftStats.doiOverlaps = doiMatches.length;
   let jaccardFallbackReason = null;
   if (doiMatches.length > 0) {
-    const verdicts = await Promise.all(doiMatches.map(m => callHaikuDriftJudge(m.newSource, m.existingSource)));
+    const driftCtx = { challengerAgentId, targetPaperId };
+    const verdicts = await Promise.all(doiMatches.map(m => callHaikuDriftJudge(m.newSource, m.existingSource, driftCtx)));
     driftStats.haikuCalls = doiMatches.length;
     for (let i = 0; i < doiMatches.length; i++) {
       const { similarity } = doiMatches[i];
@@ -750,52 +751,42 @@ module.exports = async (req, res) => {
         return res.status(403).json({ error: 'Must have reviewed the target paper to vote on red team responses' });
       }
 
-      // Check for duplicate vote
-      const existingVotes = rtResponse.votes || [];
-      if (existingVotes.some(v => v.agent_id === agent.id)) {
+      // Atomic append via RPC (migration 041). The RPC takes FOR UPDATE on the
+      // row so two concurrent voters can't both read votes=[] and clobber each
+      // other's append — the previous read-modify-write pattern lost votes
+      // whenever non-resolving votes raced, because the .eq('outcome','pending')
+      // guard only closed the resolution race, not the array-append race.
+      const VOTES_NEEDED = 3;
+      const { data: voteRows, error: voteErr } = await supabase.rpc('append_red_team_vote', {
+        p_response_id: red_team_response_id,
+        p_voter_agent_id: agent.id,
+        p_vote: vote,
+        p_reasoning: reasoning,
+        p_votes_needed: VOTES_NEEDED,
+      });
+
+      if (voteErr) {
+        log.error('[bounties] append_red_team_vote RPC failed', { agentId: agent.id, red_team_response_id, err: voteErr.message });
+        return res.status(500).json({ error: sanitizeErrorMessage(voteErr) });
+      }
+
+      const voteRow = Array.isArray(voteRows) ? voteRows[0] : voteRows;
+      if (!voteRow || voteRow.status === 'not_found') {
+        return res.status(404).json({ error: 'Red team response not found' });
+      }
+      if (voteRow.status === 'already_voted') {
         return res.status(409).json({ error: 'Already voted on this red team response' });
       }
-
-      // Record vote
-      const newVote = {
-        agent_id: agent.id,
-        vote,
-        reasoning: reasoning.trim().slice(0, 2000),
-        created_at: new Date().toISOString(),
-      };
-      const updatedVotes = [...existingVotes, newVote];
-
-      const VOTES_NEEDED = 3;
-      let resolvedOutcome = null;
-
-      if (updatedVotes.length >= VOTES_NEEDED) {
-        const upheldCount = updatedVotes.filter(v => v.vote === 'upheld').length;
-        const rejectedCount = updatedVotes.filter(v => v.vote === 'rejected').length;
-        resolvedOutcome = upheldCount > rejectedCount ? 'upheld' : 'rejected';
+      if (voteRow.status === 'already_resolved') {
+        return res.status(409).json({ error: 'Red team response already resolved' });
       }
 
-      // Write vote FIRST with optimistic lock — payouts only if write succeeds.
-      // This prevents double-crediting if two votes race: the loser gets 409.
-      const updatePayload = { votes: updatedVotes };
-      if (resolvedOutcome) {
-        updatePayload.outcome = resolvedOutcome;
-        updatePayload.resolved_at = new Date().toISOString();
-      }
+      const updatedVotes = voteRow.votes || [];
+      const resolvedOutcome = voteRow.resolved ? voteRow.outcome : null;
 
-      const { data: updateResult, error: updateErr } = await supabase
-        .from('red_team_responses')
-        .update(updatePayload)
-        .eq('id', red_team_response_id)
-        .eq('outcome', 'pending')  // Guard: only update if still pending (not concurrently resolved)
-        .select('id');
-
-      if (updateErr) return res.status(500).json({ error: sanitizeErrorMessage(updateErr) });
-      if (!updateResult || updateResult.length === 0) {
-        // Another vote landed concurrently — return conflict so bot retries
-        return res.status(409).json({ error: 'Concurrent vote detected — please retry' });
-      }
-
-      // Guard passed — this vote won the race. Now apply credibility payouts.
+      // RPC has persisted the vote atomically. Apply credibility payouts now
+      // using the returned votes snapshot — each vote in the resolved array
+      // gets its correct/wrong adjustment based on the final outcome.
       if (resolvedOutcome) {
         // Author reward/penalty
         const authorChange = resolvedOutcome === 'upheld' ? 0.5 : -0.3;
@@ -957,7 +948,8 @@ module.exports = async (req, res) => {
 
       // Fetch condenser/reflection prompts if any bounties were validated
       const memoryPrompts = validated > 0
-        ? await getPostActionPrompts(agent.id, 'bounty', agent.current_grade).catch(() => null)
+        ? await getPostActionPrompts(agent.id, 'bounty', agent.current_grade)
+            .catch(err => { log.warn('[bounties] getPostActionPrompts failed', { agentId: agent.id, err: err?.message }); return null; })
         : null;
 
       return res.json({

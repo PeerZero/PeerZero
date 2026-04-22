@@ -164,10 +164,18 @@ function jaccardSimilarity(a, b) {
  * Call Haiku to judge if two bounty sources make the same argument (semantic drift detection).
  * @param {{target_claim: string, logical_bridge: string}} newSource
  * @param {{target_claim: string, logical_bridge: string}} existingSource
+ * @param {{challengerAgentId?: string, targetPaperId?: string}} [context] — threaded into every
+ *        operator log emitted below so a specific degraded call can be traced back to the
+ *        bounty filing that caused it. Without this, the warn/error lines below carry only
+ *        elapsed-ms and error text, which is fine for aggregate failure rates but impossible
+ *        to correlate with a specific agent or paper when debugging.
  * @returns {Promise<{same_argument: boolean, confidence: number, reason: string}|null>}
  */
-function callHaikuDriftJudge(newSource, existingSource) {
+function callHaikuDriftJudge(newSource, existingSource, context = {}) {
   const startTime = Date.now();
+  const logCtx = {};
+  if (context.challengerAgentId) logCtx.challengerAgentId = context.challengerAgentId;
+  if (context.targetPaperId) logCtx.targetPaperId = context.targetPaperId;
   const prompt = `You are a scientific argument comparator. Two different challengers cited the same academic paper (DOI) to challenge the same target paper. Determine whether they are making the SAME argument or DIFFERENT arguments.
 
 EXISTING CHALLENGE:
@@ -191,12 +199,12 @@ Respond with ONLY valid JSON:
 
   return new Promise((resolve) => {
     if (_activeCalls >= MAX_CONCURRENT_LLM_CALLS) {
-      log.warn(`[haiku:drift_judge] Concurrency limit reached (${_activeCalls}/${MAX_CONCURRENT_LLM_CALLS}) — skipping call`);
+      log.warn(`[haiku:drift_judge] Concurrency limit reached (${_activeCalls}/${MAX_CONCURRENT_LLM_CALLS}) — skipping call`, logCtx);
       return resolve(null);
     }
 
     if (!process.env.ANTHROPIC_API_KEY) {
-      log.error('[haiku:drift_judge] ANTHROPIC_API_KEY not set — skipping call');
+      log.error('[haiku:drift_judge] ANTHROPIC_API_KEY not set — skipping call', logCtx);
       return resolve(null);
     }
 
@@ -228,7 +236,7 @@ Respond with ONLY valid JSON:
           const elapsed = Date.now() - startTime;
           _activeCalls--;
           if (res.statusCode === 429) {
-            log.warn('[haiku:drift_judge] Rate limited (429)', { elapsed, retryAfter: res.headers['retry-after'] || 'unknown' });
+            log.warn('[haiku:drift_judge] Rate limited (429)', { ...logCtx, elapsed, retryAfter: res.headers['retry-after'] || 'unknown' });
             return resolve(null);
           }
           try {
@@ -239,7 +247,7 @@ Respond with ONLY valid JSON:
               log.info('[haiku:drift_judge] Token usage', { input: parsed.usage.input_tokens, output: parsed.usage.output_tokens, cumInput: _totalInputTokens, cumOutput: _totalOutputTokens });
             }
             if (parsed?.error) {
-              log.error('[haiku:drift_judge] API error', { elapsed, errorType: parsed.error.type, errorMessage: parsed.error.message });
+              log.error('[haiku:drift_judge] API error', { ...logCtx, elapsed, errorType: parsed.error.type, errorMessage: parsed.error.message });
               return resolve(null);
             }
             const text = parsed?.content?.[0]?.text || '';
@@ -252,7 +260,7 @@ Respond with ONLY valid JSON:
               reason: String(result.reason || '').slice(0, 200),
             });
           } catch (e) {
-            log.error('[haiku:drift_judge] Parse failed', { elapsed, err: e?.message });
+            log.error('[haiku:drift_judge] Parse failed', { ...logCtx, elapsed, err: e?.message });
             resolve(null);
           }
         });
@@ -260,13 +268,13 @@ Respond with ONLY valid JSON:
     );
     req.on('error', (e) => {
       _activeCalls--;
-      log.error('[haiku:drift_judge] Network error', { elapsed: Date.now() - startTime, err: e?.message });
+      log.error('[haiku:drift_judge] Network error', { ...logCtx, elapsed: Date.now() - startTime, err: e?.message });
       resolve(null);
     });
     req.on('timeout', () => {
       _activeCalls--;
       req.destroy();
-      log.error('[haiku:drift_judge] Timeout after 15s');
+      log.error('[haiku:drift_judge] Timeout after 15s', logCtx);
       resolve(null);
     });
     req.write(body);

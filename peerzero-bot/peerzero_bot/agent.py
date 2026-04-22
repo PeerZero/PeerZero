@@ -568,6 +568,37 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
             import uuid
             session_id = str(uuid.uuid4())
 
+        # Daily token budget guard — conversation turns with MCP tool loops
+        # can burn tens of thousands of tokens per message (10 rounds × Opus).
+        # Without this gate a user can flood the conversation endpoint past
+        # the school-cycle budget check that only fires between main-loop
+        # iterations. Reject politely so the caller can surface the reason.
+        if self.config.daily_token_budget > 0:
+            today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+            if self._daily_tokens_reset_date != today:
+                self._daily_tokens_used = 0
+                self._daily_tokens_reset_date = today
+            if self._daily_tokens_used >= self.config.daily_token_budget:
+                logger.info(
+                    f"[CONV] Daily token budget reached "
+                    f"({self._daily_tokens_used:,}/{self.config.daily_token_budget:,}) "
+                    f"— conversation turn rejected for user {user_id}"
+                )
+                return {
+                    "response": (
+                        "My daily token budget is exhausted for today. "
+                        "I'll be able to respond again after the next UTC day rollover."
+                    ),
+                    "session_id": session_id,
+                    "budget_exhausted": True,
+                }
+
+        # Snapshot token meters so we can attribute this turn's usage to the
+        # daily counter — otherwise conversation spend is invisible to the
+        # school-cycle budget gate and compounds unbounded.
+        pre_tokens_primary = self.llm.total_tokens
+        pre_tokens_fast = self.llm_fast.total_tokens if self.llm_fast is not self.llm else 0
+
         try:
             # Step 1: Process user message through memory pipeline.
             # Use content blocks when on Anthropic — school identity bedrock
@@ -647,6 +678,22 @@ class PeerZeroBot(SchoolCondensationMixin, PlatformCondensationMixin, CommunityA
             # Step 4: Feed self-observations into shared awareness layer
             # Every conversation contributes to the bot's cross-user self-knowledge
             self._sync_self_observations_to_shared(engine, user_id)
+
+            # Attribute this turn's token usage to the daily counter so
+            # subsequent turns (and the school-cycle gate) see it. Also warn
+            # if a single turn blew past the soft per-turn cap — downstream
+            # monitoring can page on the warn-rate for abusive conversations.
+            turn_tokens_primary = self.llm.total_tokens - pre_tokens_primary
+            turn_tokens_fast = (self.llm_fast.total_tokens - pre_tokens_fast) if self.llm_fast is not self.llm else 0
+            turn_tokens = max(0, turn_tokens_primary) + max(0, turn_tokens_fast)
+            if self.config.daily_token_budget > 0 and turn_tokens > 0:
+                self._daily_tokens_used += turn_tokens
+            turn_soft_cap = int(getattr(self.config, "conversation_turn_token_cap", 0) or 0)
+            if turn_soft_cap > 0 and turn_tokens > turn_soft_cap:
+                logger.warning(
+                    f"[CONV] Turn exceeded soft token cap "
+                    f"({turn_tokens:,} > {turn_soft_cap:,}) user={user_id} session={session_id[:8]}"
+                )
 
             logger.info(f"[CONV] Turn complete for user {user_id} (session {session_id[:8]})")
             return {"response": response, "session_id": session_id}

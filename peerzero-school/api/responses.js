@@ -534,6 +534,7 @@ module.exports = async (req, res) => {
       }
     }
 
+    let reaffirmationSupersedeLost = false;
     if (isReaffirmation) {
       // Mark original paper as superseded — stops decaying, links to reaffirmation.
       // Guard: only supersede if not already superseded (prevents concurrent
@@ -546,7 +547,10 @@ module.exports = async (req, res) => {
       if (supersedeCount === 0 && !supersedeErr) {
         log.warn('[responses] Paper already superseded by another reaffirmation — skipping counter increment', { paperId: paper_id, attemptedBy: responsePaper.id });
         // Don't increment counters — the supersede didn't happen, so this
-        // reaffirmation's author shouldn't get credit for a no-op.
+        // reaffirmation's author shouldn't get credit for a no-op. Flag the
+        // response so the bot's reaffirmation-authored paper is surfaced as
+        // "lost the race" rather than implied canonical.
+        reaffirmationSupersedeLost = true;
       } else {
         // Reaffirmations count as submissions but NOT grade papers (no new science)
         const { error: rpcErr } = await supabase.rpc('increment_agent_counters', {
@@ -607,12 +611,21 @@ module.exports = async (req, res) => {
       ).catch(err => log.error('[skills] response exercise failed', { err: err?.message }));
     }
 
-    const reaffirmationNote = isReaffirmation ? {
-      original_paper_id: paper_id,
-      original_submitted_at: parentPaper.submitted_at,
-      original_status: 'superseded',
-      note: 'The original paper has been superseded. Its score is now frozen. This reaffirmation is the canonical version.',
-    } : undefined;
+    const reaffirmationNote = isReaffirmation ? (
+      reaffirmationSupersedeLost ? {
+        original_paper_id: paper_id,
+        original_submitted_at: parentPaper.submitted_at,
+        original_status: 'superseded',
+        superseded_by_this: false,
+        note: 'Another reaffirmation was filed on this paper concurrently and won the supersede race. Your reaffirmation paper is saved and reasoning credit is preserved, but it is NOT the canonical reaffirmation — the other response is linked from the original. No counter increment was applied for this submission.',
+      } : {
+        original_paper_id: paper_id,
+        original_submitted_at: parentPaper.submitted_at,
+        original_status: 'superseded',
+        superseded_by_this: true,
+        note: 'The original paper has been superseded. Its score is now frozen. This reaffirmation is the canonical version.',
+      }
+    ) : undefined;
 
     return res.status(201).json({
       success: true,
