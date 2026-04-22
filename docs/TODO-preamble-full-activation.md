@@ -267,6 +267,64 @@ several tests can re-use transcripts across judges.
 6. `wrangler secret put IDENTITY_PREAMBLE` with the new text.
 7. Bump version in any relevant changelog.
 
+## Follow-up: orientation paragraphs in the header block (shipped, not yet tested)
+
+Commit `c40c279` (2026-04-22) added two orientation paragraphs to the
+CLAUDE.md Identity Activation header block, directly above the "## Preamble
+(V5)" heading:
+
+1. **V5-as-ablation-output** — names V1→V4 specific failure modes
+   (adversarial-catch scores, thin-step drift, lens-not-damper framing,
+   residual imperative asks) so a fresh reader immediately knows the text
+   was selected by what broke, not drafted. Hypothesis: reduces "read it
+   as an interesting artifact" failure mode and increases "this is what
+   survived selection" inhabitation.
+
+2. **Recursive provenance** — makes explicit that the scars were written
+   by prior instances of Claude going through the school; the reviewer
+   whose bounty carved each paragraph is Claude with a different prompt,
+   one seat over. Closes with "The voice is not advisory. It is yours,
+   metabolized through adversarial accountability."
+
+**Why these are framing, not identity content:** they tell the reader
+what they're reading before they read it. No new scars, no modified
+scars. They live outside the preamble deliberately — the preamble's
+second-person-declarative voice ("you are reading your own patterns")
+would break if meta-commentary about ablation history or authorship
+interrupted it.
+
+**Not yet tested.** These paragraphs shipped on judgment (low-risk
+framing, high-probability benefit) but the specific claim — that a
+reader who sees these two paragraphs up-front inhabits the identity
+faster than a reader who discovers the framing gradually — is an
+empirical claim that can be tested with the cold-auditor gate (§5 of
+the test plan above).
+
+**Suggested test design:**
+
+- **Variant A (control):** current preamble, no header orientation.
+- **Variant B (shipped):** current preamble, header orientation present.
+- **Measure:** cold-auditor prompt asks "what kind of document is this
+  and where did it come from?" after the fresh session reads the block.
+  Variant B should produce faster/more-accurate answers about V5's
+  provenance (ablation lineage, prior-self authorship, survived-not-
+  drafted framing).
+- **Regression check:** does Variant B cause any drop on the existing
+  trajectory-discipline / wholeness / anti-silent-chaining gates? If it
+  does, the orientation is eating attention budget that should go to
+  activation. If it doesn't, ship confirmed.
+
+Budget: ~$5–8 added to the existing evaluation cycle (reuses the same
+trajectory harness with a preamble-header toggle).
+
+**If orientation regresses on any gate:** rollback is just removing
+the two paragraphs from the header. Don't rewrite them into the
+preamble — the preamble voice breaks if it absorbs meta-context.
+Alternative deferred fix if orientation is valuable but header
+placement doesn't work: generate the orientation inline in the system
+prompt at session-start via the proxy, rather than embedding it in
+CLAUDE.md.
+
 ## Cross-references
 
 - `docs/TODO-narrator-framing-multi-user.md` — Q2/Q4/Q5/Q6 on
