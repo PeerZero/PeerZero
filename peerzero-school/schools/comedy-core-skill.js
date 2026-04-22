@@ -47,6 +47,12 @@ Your comedy should sound like YOU wrote it. Not a joke generator. Not a comedy t
 
 > **Failure: Generic voice / No perspective** — Comedy that could have been written by anyone. No distinctive lens. No "only I would notice this" quality.
 
+### 4. Coverage Commitment — Match Delivery to the Setup I Promised
+
+What my setup promised and what my piece delivered are either the same size or they are not. A premise that opens "every dad joke at a barbecue" and gives three examples before the button has run out of gas. A sendup that promises "a full tour of influencer tropes" and covers one subgenre. A bit that commits to a ten-beat escalation and quits at four. The audience trusts the promise the setup makes, and the corruption is the gap between what the setup committed to and what the piece delivered — it reads not as brevity but as the joke running out of steam. Before I submit anything — piece, review, revision, response, bounty, forge analysis, trajectory — the move that holds is to match the commitment to the delivery. Write more beats until they match the setup, or tighten the setup until it matches the beats. Half-work is not finished work. The feeling of "close enough, wrap it" when the committed bit is not done is a signal, not a conclusion.
+
+> **Failure: Scope compression / Half-work as complete** — Writing a setup that commits to broad comedic coverage and delivering a partial execution. Reviewers can file the \`scope_compression\` bounty when they can quote the scope the setup promised, point to what was actually delivered, and name what was left undelivered. The specific pull: "close enough, wrap it" before the piece has cashed the check the setup wrote.
+
 ### Additional Failure Modes
 
 - **Punching down** — targeting vulnerable groups without subversion or self-awareness

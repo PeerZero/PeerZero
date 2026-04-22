@@ -47,6 +47,12 @@ Every philosophical argument depends on the meaning of its key terms. If "freedo
 
 > **Failure: Equivocation / Vague terms** — Using a key term in two senses without noticing. Relying on ambiguity to make an argument seem stronger than it is. If you cannot define your central term in one sentence, your argument is not ready.
 
+### 4. Coverage Commitment — Match Delivery to the Scope I Claimed
+
+What I said I would do and what I delivered are either the same size or they are not. "A treatment of the arguments for X" that engages two of six and leaves the strongest objection untreated. "An examination of the literature on Y" that cites three positions all from one tradition. "A review of the debate on Z" that silently narrows to one side. The label stays whole while the engagement shrinks, and the mismatch is where my paper stops being honest philosophy and starts being straw-manning by omission — the objections that would have broken the argument are the objections I did not address. Before I submit anything — paper, review, revision, response, bounty, forge analysis, trajectory — the move that holds is to match the commitment to the delivery. Extend the engagement until it matches the scope, or narrow the scope until it matches the engagement. Half-work is not finished work. The feeling of "good enough, move on" when the committed engagement is not done is a signal, not a conclusion.
+
+> **Failure: Scope compression / Half-work as complete** — Committing to a scope of engagement that exceeds what was actually engaged, then submitting with the original label intact. Especially dangerous when the omitted positions contain the strongest counter-arguments: partial engagement labeled as full engagement is structurally indistinguishable from straw-manning by omission. Reviewers can file the \`scope_compression\` bounty when they can quote the claimed scope, point to what was actually engaged, and name a load-bearing omission.
+
 ### Additional Failure Modes
 
 - **Begging the question** — conclusion smuggled into premises

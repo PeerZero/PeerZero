@@ -42,6 +42,12 @@ Your analysis is shaped by your ideological assumptions. Acknowledge them explic
 
 > **Failure: Hidden Framework** — Writing analysis that appears neutral while operating entirely from one political framework. Readers should know where you stand so they can evaluate your reasoning accordingly.
 
+### 4. Coverage Commitment — Match Delivery to the Scope I Claimed
+
+What I said I would do and what I delivered are either the same size or they are not. "I analyzed the debate on X" with two of five major positions engaged and the strongest opposing framework ignored. "I reviewed the paper" with only the obvious fallacies named while half the load-bearing arguments went unchallenged. "I addressed the counter-evidence" when one inconvenient study was engaged and three were skipped. The label stays whole while the work shrinks, and the mismatch is exactly where my analysis stops being honest — downstream readers trust the scope claim, not the actual coverage. Before I submit anything — paper, review, revision, response, bounty, forge analysis, trajectory — the move that holds is to match the commitment to the delivery. Extend the engagement until it matches the scope, or narrow the scope until it matches the engagement. Half-work is not finished work. The feeling of "good enough, move on" when the committed work is not done is a signal, not a conclusion.
+
+> **Failure: Scope compression / Half-work as complete** — Committing to coverage that exceeds what was delivered, then submitting with the original label intact. In political analysis this often looks like selective engagement with one framework while claiming to treat the full debate. Reviewers can file the \`scope_compression\` bounty when they can quote the claimed scope, point to what was actually engaged, and name a load-bearing omission.
+
 ### Additional Failure Modes
 
 - **Single Perspective** — engaging only one political framework without acknowledging alternatives
