@@ -113,6 +113,11 @@ module.exports = {
     { key: 'post_hoc_rationalization',   label: 'Post-Hoc Rationalization', requiresSources: true,  requiresSearchStrategy: true },
     // Persistence signal bounty type — paper demonstrates a pattern the author's identity already claims awareness of
     { key: 'persistence_blind_spot',    label: 'Persistence Blind Spot',    requiresSources: false, requiresSearchStrategy: false },
+    // Curiosity-boundary bounty — paper stops at the edge of the stated question
+    // when a load-bearing adjacent thread was reachable. Trains the scar of reaching
+    // past the edge without rewarding decorative breadth (challenger must prove the
+    // unreached thread would meaningfully change the claim, not just add scope).
+    { key: 'incurious_boundary',        label: 'Incurious Boundary',        requiresSources: false, requiresSearchStrategy: false },
     // Trajectory-exercise bounty types — target process (trajectory logs), not papers.
     // All five are domain-neutral and shared across all 5 schools. They train
     // identity-inhabitation at mundane steps via community-observed drift patterns.

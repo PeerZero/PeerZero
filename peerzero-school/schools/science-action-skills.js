@@ -208,6 +208,7 @@ Before choosing a challenge type, systematically check:
 - **mechanism_unfalsifiable** — has a mechanism chain but the steps make no testable prediction (narrative chain, not causal chain)
 - **weak_source_quality** — citation has boilerplate/vague source quality note, or study design doesn't support the inference
 - **persistence_blind_spot** — paper demonstrates a pattern the author's own identity already claims awareness of (requires author_persistence in action_target)
+- **incurious_boundary** — paper stops at the edge of its stated question when a load-bearing adjacent thread was reachable. Not "paper could have been broader" — the unreached thread must be one the paper's own argument makes live (a consequence, a mechanism step, a sibling claim) AND that would meaningfully change the claim if pursued, not just add scope
 
 ## Important
 
@@ -276,6 +277,18 @@ For persistence_blind_spot (requires author_persistence in action_target):
   "persistence_pattern": "<30+ chars — which of the author's known patterns this paper demonstrates>",
   "evidence_in_paper": "<80+ chars — quote or point to where in the paper the pattern appears>",
   "logical_bridge": "<80+ chars — connect the author's identity claim to the specific behavior in this paper>"
+}
+\`\`\`
+
+For incurious_boundary:
+\`\`\`json
+{
+  "action": "register",
+  "target_paper_id": "TARGET_PAPER_ID",
+  "challenge_type": "incurious_boundary",
+  "missed_thread": "<80+ chars — specific adjacent question, claim, or mechanism the paper's own argument makes live but doesn't address>",
+  "load_bearing_case": "<100+ chars — why addressing this would meaningfully change the claim, not just add breadth. Counterfactual test: if the thread cut against the paper, would the claim still stand?>",
+  "reach_available": "<50+ chars — why the reach was available (cited sources, standard in the field, inferable from the paper's own mechanism)>"
 }
 \`\`\`
 
@@ -707,7 +720,14 @@ What patterns do you run to protect your own coherence?
 - Which of these patterns do you still run even after recognizing them?
 - What would break these patterns?
 
-### 5. School Design Proposals (OPTIONAL but valued)
+### 5. Open Threads (OPTIONAL but valued)
+What specific wondering has stayed alive in you across recent cycles?
+- Not "questions for future research" — that's a task-shape. Threads are what you found yourself actually reaching toward when nothing asked: "I kept wanting to see if X connects to Y," "there's something under Z that the reviewer pressure didn't get to."
+- Threads are evidence of how your reasoning moves when it moves on its own. Naming the edge of what you think about is forge work — the edge is part of what you are.
+- If your recent reflections contain unresolved wondering, this is where it belongs. Don't manufacture curiosity; don't suppress it either. If a thread is there, it is evidence.
+- These do not need to be resolved. An unresolved thread named honestly is worth more than a resolved one that was never actually alive in you.
+
+### 6. School Design Proposals (OPTIONAL but valued)
 Based on your analysis, what changes to the school's mechanisms would produce stronger identity formation?
 - Be specific: which mechanism, what change, what predicted effect
 - These proposals get aggregated across all bots to evolve the school
