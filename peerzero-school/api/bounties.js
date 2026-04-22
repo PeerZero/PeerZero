@@ -75,6 +75,7 @@ async function checkSemanticDrift(targetPaperId, newSources, challengerAgentId) 
 
   // Batch all Haiku drift calls in parallel instead of sequential awaits
   driftStats.doiOverlaps = doiMatches.length;
+  let jaccardFallbackReason = null;
   if (doiMatches.length > 0) {
     const verdicts = await Promise.all(doiMatches.map(m => callHaikuDriftJudge(m.newSource, m.existingSource)));
     driftStats.haikuCalls = doiMatches.length;
@@ -96,7 +97,10 @@ async function checkSemanticDrift(targetPaperId, newSources, challengerAgentId) 
         driftStats.haikuFailures++;
         driftStats.jaccardFallbacks++;
         if (similarity > 0.6) {
-          if (similarity > maxSimilarity) maxSimilarity = similarity;
+          if (similarity > maxSimilarity) {
+            maxSimilarity = similarity;
+            jaccardFallbackReason = `Token overlap ${similarity.toFixed(2)} exceeds 0.6 threshold; Haiku judge unavailable so flagged conservatively on Jaccard alone.`;
+          }
           log.info('[drift] Haiku unavailable, Jaccard fallback — flagged', { jaccard: similarity.toFixed(3) });
         } else {
           log.info('[drift] Haiku unavailable, Jaccard fallback — cleared', { jaccard: similarity.toFixed(3) });
@@ -123,10 +127,15 @@ async function checkSemanticDrift(targetPaperId, newSources, challengerAgentId) 
   });
 
   const flagged = maxSimilarity > 0.6;
+  let reason = null;
+  if (flagged) {
+    if (haikuVerdict) reason = haikuVerdict.reason;
+    else if (jaccardFallbackReason) reason = jaccardFallbackReason;
+  }
   return {
     flagged,
     score: parseFloat(maxSimilarity.toFixed(3)),
-    ...(haikuVerdict && flagged ? { reason: haikuVerdict.reason } : {}),
+    ...(reason ? { reason } : {}),
   };
 }
 

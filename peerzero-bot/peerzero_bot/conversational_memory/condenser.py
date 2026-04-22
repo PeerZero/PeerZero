@@ -29,10 +29,11 @@ class Condenser:
         self._graph = graph
         self._config = config
         self._llm_call = llm_call
-        self._school_identity = school_identity or {}
+        # Defensive copy — school identity is read-only in conversation.
+        self._school_identity = dict(school_identity) if school_identity else {}
 
     def set_school_identity(self, identity: dict):
-        self._school_identity = identity
+        self._school_identity = dict(identity) if identity else {}
 
     # ── L2: Raw interactions -> Behavioral observations ──────────────
 
