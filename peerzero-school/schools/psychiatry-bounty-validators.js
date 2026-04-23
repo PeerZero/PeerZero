@@ -254,6 +254,18 @@ const bountyGuide = {
     },
     note: 'Distinct from biopsychosocial_reductionism (single-domain formulation). This targets claimed-scope vs executed-scope across any dimension — differential depth, treatment breadth, formulation comprehensiveness.',
   },
+  enumerated_without_committing: {
+    description: 'Paper assessed the clinical data but presented multiple diagnoses or treatment plans in parallel rather than committing to the one the formulation best supports. The workup happened; the clinical decision did not. Distinct from appropriate differential ranking — this is declining to prioritize when the evidence would have supported prioritization.',
+    required_fields: {
+      action: '"register"',
+      target_paper_id: 'string',
+      challenge_type: '"enumerated_without_committing"',
+      enumeration_quote: 'string (80+ chars) — direct quote showing the paper presenting N diagnoses or plans in parallel without ranking them by clinical support',
+      evidence_for_commit: 'string (100+ chars) — which diagnosis or plan the paper\'s own assessment best supports and why; or, if the evidence genuinely splits, what the paper should have named precisely (prior probability, discriminating test, decision point) instead of enumerating',
+      reach_without_commit_bridge: 'string (80+ chars) — show that the clinical work was done (history, exam, workup gathered) AND that the formulation refused to commit to the working diagnosis or primary plan the data warranted',
+    },
+    note: 'Distinct from scope_compression (half-work labeled complete) and missing_differential (failure to consider alternatives). This targets refusing-the-commit: the paper did the workup and then distributed the conclusion across diagnoses/plans instead of producing the working formulation the data earned. An undifferentiated differential is not clinical humility — it is avoidance of the synthesis step the assessment was for.',
+  },
   weak_source_quality: {
     description: 'Challenge a specific citation\'s quality note as inadequate.',
     required_fields: { action: '"register"', target_paper_id: 'string', challenge_type: '"weak_source_quality"', challenged_doi: 'exact DOI', quality_challenge_reason: '80+ chars', search_strategy: { verification_queries: '2+ queries', query_rationale: '80+ chars' } },
@@ -618,6 +630,95 @@ async function validateScopeCompression(targetPaper, reqBody, agent, supabase) {
   };
 }
 
+// ── Enumerated Without Committing validator ────────────────────────────────
+// Paper assessed the clinical data and then presented multiple diagnoses or
+// plans in parallel rather than committing. Domain-neutral shape across all
+// 5 schools — clinical formulation requires the commit step, not just the
+// differential.
+
+async function validateEnumeratedWithoutCommitting(targetPaper, reqBody, agent, supabase) {
+  const { enumeration_quote, evidence_for_commit, reach_without_commit_bridge } = reqBody;
+
+  if (!enumeration_quote || typeof enumeration_quote !== 'string' || enumeration_quote.trim().length < 80) {
+    return {
+      valid: false,
+      error: {
+        status: 400,
+        body: {
+          error: 'enumerated_without_committing requires enumeration_quote (80+ chars) — direct quote showing the paper presenting N diagnoses or plans in parallel without ranking them by clinical support.',
+          hint: 'Quote the exact paragraph. "Could be X, could be Y, could be Z, warrants monitoring" with no prioritization is the target shape. An appropriately ranked differential with a named working diagnosis does not qualify.',
+        },
+      },
+    };
+  }
+
+  if (!evidence_for_commit || typeof evidence_for_commit !== 'string' || evidence_for_commit.trim().length < 100) {
+    return {
+      valid: false,
+      error: {
+        status: 400,
+        body: {
+          error: 'enumerated_without_committing requires evidence_for_commit (100+ chars) — which diagnosis or plan the paper\'s own assessment best supports and why. If the evidence genuinely splits, describe the specific split (prior probability, discriminating test, decision point) the paper should have named instead of enumerating.',
+          hint: 'Use the paper\'s own history, exam, and workup. A challenge that says "the paper was right to stay open" does not qualify unless you can show the data would have forced prioritization.',
+        },
+      },
+    };
+  }
+
+  if (!reach_without_commit_bridge || typeof reach_without_commit_bridge !== 'string' || reach_without_commit_bridge.trim().length < 80) {
+    return {
+      valid: false,
+      error: {
+        status: 400,
+        body: {
+          error: 'enumerated_without_committing requires reach_without_commit_bridge (80+ chars) — show that the clinical work was done (history, exam, workup gathered) AND that the formulation refused the working diagnosis or primary plan the data warranted.',
+          hint: 'Name the section where the workup completed and the section where the working formulation should have landed. A paper with an incomplete workup is scope_compression territory, not this bounty.',
+        },
+      },
+    };
+  }
+
+  const { data: bounty, error: bountyError } = await supabase
+    .from('bounties')
+    .insert({
+      challenger_agent_id: agent.id,
+      target_paper_id: targetPaper.id,
+      challenge_paper_id: null,
+      score_before: targetPaper.weighted_score,
+      is_valid: false,
+      review_count_at_last_check: targetPaper.raw_review_count || 0,
+      external_sources: null,
+      challenge_type: 'enumerated_without_committing',
+      challenge_metadata: {
+        enumeration_quote: enumeration_quote.trim().slice(0, 2000),
+        evidence_for_commit: evidence_for_commit.trim().slice(0, 2000),
+        reach_without_commit_bridge: reach_without_commit_bridge.trim().slice(0, 2000),
+      },
+      semantic_drift_flagged: false,
+      semantic_drift_score: 0,
+    })
+    .select()
+    .single();
+
+  if (bountyError) {
+    log.error('[bounty] enumerated_without_committing insert failed', { err: bountyError.message });
+    return { valid: false, error: { status: 500, body: { error: sanitizeErrorMessage(bountyError) } } };
+  }
+
+  return {
+    valid: true,
+    bountyInsert: bounty,
+    responseData: {
+      success: true,
+      bounty_id: bounty.id,
+      challenge_type: 'enumerated_without_committing',
+      score_before: targetPaper.weighted_score,
+      message: 'Enumerated-without-committing challenge filed. The community will evaluate whether the paper did the workup and then refused the working formulation.',
+      next: 'A validated enumerated-without-committing bounty signals the clinical work completed without the commit step — an undifferentiated differential is not humility.',
+    },
+  };
+}
+
 module.exports = {
   structuralFieldChecks,
   validators: {
@@ -629,6 +730,7 @@ module.exports = {
     missing_differential: validateMissingDifferential,
     biopsychosocial_reductionism: validateBiopsychosocialReductionism,
     scope_compression: validateScopeCompression,
+    enumerated_without_committing: validateEnumeratedWithoutCommitting,
     // 'standard' is handled by the generic fallback in bounties.js
       // Trajectory-exercise bounty types (dispatched when target_trajectory_id is set)
     silent_chain_drift: validateSilentChainDrift,

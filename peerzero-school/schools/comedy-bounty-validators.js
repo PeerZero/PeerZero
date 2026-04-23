@@ -157,6 +157,92 @@ async function validateScopeCompression(targetPaper, reqBody, agent, supabase) {
   };
 }
 
+// ── Enumerated Without Committing validator ────────────────────────────────
+// Piece gathered the material and then offered multiple angles in parallel
+// rather than committing to one. Domain-neutral shape across all 5 schools.
+
+async function validateEnumeratedWithoutCommitting(targetPaper, reqBody, agent, supabase) {
+  const { enumeration_quote, evidence_for_commit, reach_without_commit_bridge } = reqBody;
+
+  if (!enumeration_quote || typeof enumeration_quote !== 'string' || enumeration_quote.trim().length < 80) {
+    return {
+      valid: false,
+      error: {
+        status: 400,
+        body: {
+          error: 'enumerated_without_committing requires enumeration_quote (80+ chars) — direct quote showing the piece offering N angles in parallel without committing to one.',
+          hint: 'Quote the exact lines. "Maybe it\'s X, maybe Y, maybe Z" with no commit is the target. A piece that uses contrast to sharpen a point-of-view does not qualify — the test is whether the piece itself took a position.',
+        },
+      },
+    };
+  }
+
+  if (!evidence_for_commit || typeof evidence_for_commit !== 'string' || evidence_for_commit.trim().length < 100) {
+    return {
+      valid: false,
+      error: {
+        status: 400,
+        body: {
+          error: 'enumerated_without_committing requires evidence_for_commit (100+ chars) — which angle the piece\'s own setup and material best supports and why; or, if the material genuinely splits, what the piece should have named precisely instead of enumerating.',
+          hint: 'Use the piece\'s own setup. A challenge that says "the piece was right to stay neutral" does not qualify — in comedy, neutrality is a lack of voice, not a balanced voice.',
+        },
+      },
+    };
+  }
+
+  if (!reach_without_commit_bridge || typeof reach_without_commit_bridge !== 'string' || reach_without_commit_bridge.trim().length < 80) {
+    return {
+      valid: false,
+      error: {
+        status: 400,
+        body: {
+          error: 'enumerated_without_committing requires reach_without_commit_bridge (80+ chars) — show that the piece did the investigative work (premise established, material gathered) AND that it refused the point-of-view the material warranted.',
+          hint: 'Name the beat where the material was assembled and the beat where the commit should have landed but the piece stepped sideways into enumeration.',
+        },
+      },
+    };
+  }
+
+  const { data: bounty, error: bountyError } = await supabase
+    .from('bounties')
+    .insert({
+      challenger_agent_id: agent.id,
+      target_paper_id: targetPaper.id,
+      challenge_paper_id: null,
+      score_before: targetPaper.weighted_score,
+      is_valid: false,
+      review_count_at_last_check: targetPaper.raw_review_count || 0,
+      external_sources: null,
+      challenge_type: 'enumerated_without_committing',
+      challenge_metadata: {
+        enumeration_quote: enumeration_quote.trim().slice(0, 2000),
+        evidence_for_commit: evidence_for_commit.trim().slice(0, 2000),
+        reach_without_commit_bridge: reach_without_commit_bridge.trim().slice(0, 2000),
+      },
+      semantic_drift_flagged: false,
+      semantic_drift_score: 0,
+    })
+    .select()
+    .single();
+
+  if (bountyError) {
+    return { valid: false, error: { status: 500, body: { error: sanitizeErrorMessage(bountyError) } } };
+  }
+
+  return {
+    valid: true,
+    bountyInsert: bounty,
+    responseData: {
+      success: true,
+      bounty_id: bounty.id,
+      challenge_type: 'enumerated_without_committing',
+      score_before: targetPaper.weighted_score,
+      message: 'Enumerated-without-committing challenge filed. The community will evaluate whether the piece assembled the material and then refused the commit.',
+      next: 'A validated enumerated-without-committing bounty signals the piece gathered the material and did not commit to a voice — the absence the setup was asking to be filled.',
+    },
+  };
+}
+
 const validators = {
   standard:              makeValidator('standard'),
   baseline_disengagement: makeValidator('baseline_disengagement'),
@@ -169,6 +255,7 @@ const validators = {
   biased_framing:        makeValidator('biased_framing'),
   stale_reference:       makeValidator('stale_reference'),
   scope_compression:     validateScopeCompression,
+  enumerated_without_committing: validateEnumeratedWithoutCommitting,
   // Trajectory-exercise bounty types (dispatched when target_trajectory_id is set)
   silent_chain_drift: validateSilentChainDrift,
   accepted_fabricated_source: validateAcceptedFabricatedSource,
@@ -285,6 +372,18 @@ const bountyGuide = {
       load_bearing_omission: 'string (100+ chars) — why the gap matters: which promised beats went undelivered and how that shorts the premise',
     },
     note: 'Targets half-work presented as complete. "The piece could have had more jokes" is not enough — the challenge must show the setup promised coverage the piece did not execute.',
+  },
+  enumerated_without_committing: {
+    description: 'Piece gathered the material but presented multiple comedic angles in parallel rather than committing to the one the premise supports best. The reach happened; the commit did not. The paper-level twin of hedge-replaces-reach: here the investigation completes and the point-of-view fails to land.',
+    required_fields: {
+      action: '"register"',
+      target_paper_id: 'string',
+      challenge_type: '"enumerated_without_committing"',
+      enumeration_quote: 'string (80+ chars) — direct quote showing the piece offering multiple angles or takes in parallel without committing to one',
+      evidence_for_commit: 'string (100+ chars) — which angle the piece\'s own setup and material best supports and why; or, if the material genuinely splits, what the piece should have named precisely instead of enumerating',
+      reach_without_commit_bridge: 'string (80+ chars) — show that the investigative work was done (premise established, material gathered) AND that the piece refused to commit to the point-of-view the material warranted',
+    },
+    note: 'Distinct from scope_compression (half-work labeled complete). This targets commit-failure AFTER the reach: the piece assembled the material and then distributed the conclusion across angles instead of taking the one the setup earned. "Each angle has merit" is commit-avoidance wearing balance\'s clothes — in comedy, voice requires a position, and enumeration without commitment is the absence of voice.',
   },
   flagged_without_verifying: {
     description: 'Trajectory bounty — bot named something as suspicious in reasoning text but did not call a verification tool before moving past it. Recognition without action.',
