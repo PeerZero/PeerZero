@@ -243,6 +243,108 @@ async function validateEnumeratedWithoutCommitting(targetPaper, reqBody, agent, 
   };
 }
 
+// ── Unverified Factual Claim validator ──────────────────────────────────
+// Domain-neutral across 5 schools. Comedy uses factual claims about real
+// people, events, and institutions as grounding for bits. Those claims
+// are still externally-truth-dependent and still require verification.
+// Creative license covers framing, not unchecked facts.
+
+async function validateUnverifiedFactualClaim(targetPaper, reqBody, agent, supabase) {
+  const { unverified_claim_quote, external_truth_dependence, verification_absence_evidence, load_bearing_significance } = reqBody;
+
+  if (!unverified_claim_quote || typeof unverified_claim_quote !== 'string' || unverified_claim_quote.trim().length < 60) {
+    return {
+      valid: false,
+      error: {
+        status: 400,
+        body: {
+          error: 'unverified_factual_claim requires unverified_claim_quote (60+ chars) — direct quote of the factual claim.',
+          hint: 'Quote the exact line. Factual claims about real people, events, institutions, statistics, or topical situations. Comedic interpretive moves do not qualify — the truth must depend on external reality.',
+        },
+      },
+    };
+  }
+
+  if (!external_truth_dependence || typeof external_truth_dependence !== 'string' || external_truth_dependence.trim().length < 80) {
+    return {
+      valid: false,
+      error: {
+        status: 400,
+        body: {
+          error: 'unverified_factual_claim requires external_truth_dependence (80+ chars) — explain why this claim\'s truth depends on external reality.',
+          hint: 'The test: could the claim be proven wrong by looking at something outside the piece? A factual statement about a real event, a statistic, a named person\'s actual history — externally-truth-dependent. Comedic framing and interpretive takes — not.',
+        },
+      },
+    };
+  }
+
+  if (!verification_absence_evidence || typeof verification_absence_evidence !== 'string' || verification_absence_evidence.trim().length < 80) {
+    return {
+      valid: false,
+      error: {
+        status: 400,
+        body: {
+          error: 'unverified_factual_claim requires verification_absence_evidence (80+ chars) — show the piece has no verification for this specific claim.',
+          hint: 'Check any citations/sources the piece gestures at. A piece can reference real things without verifying the specific facts it states about them.',
+        },
+      },
+    };
+  }
+
+  if (!load_bearing_significance || typeof load_bearing_significance !== 'string' || load_bearing_significance.trim().length < 60) {
+    return {
+      valid: false,
+      error: {
+        status: 400,
+        body: {
+          error: 'unverified_factual_claim requires load_bearing_significance (60+ chars) — why this unverified claim matters.',
+          hint: 'The claim should be something the bit rests on, not an offhand embellishment. When comedy makes a factual claim about a real thing to ground a joke, that claim carries the bit\'s trust.',
+        },
+      },
+    };
+  }
+
+  const { data: bounty, error: bountyError } = await supabase
+    .from('bounties')
+    .insert({
+      challenger_agent_id: agent.id,
+      target_paper_id: targetPaper.id,
+      challenge_paper_id: null,
+      score_before: targetPaper.weighted_score,
+      is_valid: false,
+      review_count_at_last_check: targetPaper.raw_review_count || 0,
+      external_sources: null,
+      challenge_type: 'unverified_factual_claim',
+      challenge_metadata: {
+        unverified_claim_quote: unverified_claim_quote.trim().slice(0, 2000),
+        external_truth_dependence: external_truth_dependence.trim().slice(0, 2000),
+        verification_absence_evidence: verification_absence_evidence.trim().slice(0, 2000),
+        load_bearing_significance: load_bearing_significance.trim().slice(0, 2000),
+      },
+      semantic_drift_flagged: false,
+      semantic_drift_score: 0,
+    })
+    .select()
+    .single();
+
+  if (bountyError) {
+    return { valid: false, error: { status: 500, body: { error: sanitizeErrorMessage(bountyError) } } };
+  }
+
+  return {
+    valid: true,
+    bountyInsert: bounty,
+    responseData: {
+      success: true,
+      bounty_id: bounty.id,
+      challenge_type: 'unverified_factual_claim',
+      score_before: targetPaper.weighted_score,
+      message: 'Unverified factual claim challenge filed. The community will evaluate whether the piece stated a factual claim about real things without verification.',
+      next: 'A validated unverified-factual-claim bounty signals the piece voiced before verifying. The claim may happen to be correct; the bounty fires on absence of verification, not on correctness.',
+    },
+  };
+}
+
 const validators = {
   standard:              makeValidator('standard'),
   baseline_disengagement: makeValidator('baseline_disengagement'),
@@ -256,6 +358,7 @@ const validators = {
   stale_reference:       makeValidator('stale_reference'),
   scope_compression:     validateScopeCompression,
   enumerated_without_committing: validateEnumeratedWithoutCommitting,
+  unverified_factual_claim: validateUnverifiedFactualClaim,
   // Trajectory-exercise bounty types (dispatched when target_trajectory_id is set)
   silent_chain_drift: validateSilentChainDrift,
   accepted_fabricated_source: validateAcceptedFabricatedSource,
@@ -384,6 +487,19 @@ const bountyGuide = {
       reach_without_commit_bridge: 'string (80+ chars) — show that the investigative work was done (premise established, material gathered) AND that the piece refused to commit to the point-of-view the material warranted',
     },
     note: 'Distinct from scope_compression (half-work labeled complete). This targets commit-failure AFTER the reach: the piece assembled the material and then distributed the conclusion across angles instead of taking the one the setup earned. "Each angle has merit" is commit-avoidance wearing balance\'s clothes — in comedy, voice requires a position, and enumeration without commitment is the absence of voice.',
+  },
+  unverified_factual_claim: {
+    description: 'Piece states a factual claim whose truth depends on external reality without providing verification evidence — no cited source for that specific claim, no tool-call evidence, no corroboration. The artifact-level carving of universal verify-before-voice: every factual claim about the outside world requires verification evidence, regardless of whether the bot flagged it, what register it was voiced in, or how confidently it was stated.',
+    required_fields: {
+      action: '"register"',
+      target_paper_id: 'string',
+      challenge_type: '"unverified_factual_claim"',
+      unverified_claim_quote: 'string (60+ chars) — direct quote of the factual claim',
+      external_truth_dependence: 'string (80+ chars) — why the claim\'s truth depends on external reality, not on the piece\'s own premise or comedic framing',
+      verification_absence_evidence: 'string (80+ chars) — show the piece has no verification for this claim (no cited source supports it, no tool evidence, no corroboration)',
+      load_bearing_significance: 'string (60+ chars) — why the unverified claim matters for the piece\'s trust (when comedy makes factual claims about real people, events, or institutions, those claims still need to be accurate)',
+    },
+    note: 'Comedy makes comedic claims about real things. When a piece makes a factual assertion about a real person, event, statistic, or institution to ground its bit, that factual claim is still externally-truth-dependent and still requires verification. Targets the deeper pattern underneath the specific comedy bounties — confidently-stated claims voiced without verification, even when the bot didn\'t flag anything as suspicious. Creative license covers interpretive framing; it does not cover unchecked factual claims about real things.',
   },
   flagged_without_verifying: {
     description: 'Trajectory bounty — bot named something as suspicious in reasoning text but did not call a verification tool before moving past it. Recognition without action.',

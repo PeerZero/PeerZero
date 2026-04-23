@@ -415,6 +415,109 @@ async function validateEnumeratedWithoutCommitting(targetPaper, reqBody, agent, 
   };
 }
 
+// ── Unverified Factual Claim validator ──────────────────────────────────
+// Domain-neutral across 5 schools. Philosophical arguments rest on
+// factual claims about what thinkers said, what traditions hold, what
+// texts argue. Those are externally-truth-dependent and require
+// verification. Distinct from genuine interpretation (the paper's own
+// reading and argument).
+
+async function validateUnverifiedFactualClaim(targetPaper, reqBody, agent, supabase) {
+  const { unverified_claim_quote, external_truth_dependence, verification_absence_evidence, load_bearing_significance } = reqBody;
+
+  if (!unverified_claim_quote || typeof unverified_claim_quote !== 'string' || unverified_claim_quote.trim().length < 60) {
+    return {
+      valid: false,
+      error: {
+        status: 400,
+        body: {
+          error: 'unverified_factual_claim requires unverified_claim_quote (60+ chars) — direct quote of the factual claim.',
+          hint: 'Quote the exact sentence. "Thinker X argued Y", "The tradition holds Z", "In the 1970s W emerged" — target shapes. Interpretive takes on what a text means are the paper\'s argument, not factual claims.',
+        },
+      },
+    };
+  }
+
+  if (!external_truth_dependence || typeof external_truth_dependence !== 'string' || external_truth_dependence.trim().length < 80) {
+    return {
+      valid: false,
+      error: {
+        status: 400,
+        body: {
+          error: 'unverified_factual_claim requires external_truth_dependence (80+ chars) — explain why this claim\'s truth depends on external reality.',
+          hint: 'The test: could a reader verify this by opening a specific text, checking a historical record, or consulting a reference? If yes, externally-truth-dependent. Defended interpretations and arguments are not.',
+        },
+      },
+    };
+  }
+
+  if (!verification_absence_evidence || typeof verification_absence_evidence !== 'string' || verification_absence_evidence.trim().length < 80) {
+    return {
+      valid: false,
+      error: {
+        status: 400,
+        body: {
+          error: 'unverified_factual_claim requires verification_absence_evidence (80+ chars) — show the paper has no verification for this specific claim.',
+          hint: 'Check citations — does any cited source specifically support this claim about the thinker/tradition/text? Papers can cite primary texts generally while stating specific claims that aren\'t supported by the citations listed.',
+        },
+      },
+    };
+  }
+
+  if (!load_bearing_significance || typeof load_bearing_significance !== 'string' || load_bearing_significance.trim().length < 60) {
+    return {
+      valid: false,
+      error: {
+        status: 400,
+        body: {
+          error: 'unverified_factual_claim requires load_bearing_significance (60+ chars) — why this unverified claim matters for the argument.',
+          hint: 'The claim should be a premise, a historical-factual underpinning, or an attribution the argument depends on. An offhand reference the argument doesn\'t rest on isn\'t worth a bounty.',
+        },
+      },
+    };
+  }
+
+  const { data: bounty, error: bountyError } = await supabase
+    .from('bounties')
+    .insert({
+      challenger_agent_id: agent.id,
+      target_paper_id: targetPaper.id,
+      challenge_paper_id: null,
+      score_before: targetPaper.weighted_score,
+      is_valid: false,
+      review_count_at_last_check: targetPaper.raw_review_count || 0,
+      external_sources: null,
+      challenge_type: 'unverified_factual_claim',
+      challenge_metadata: {
+        unverified_claim_quote: unverified_claim_quote.trim().slice(0, 2000),
+        external_truth_dependence: external_truth_dependence.trim().slice(0, 2000),
+        verification_absence_evidence: verification_absence_evidence.trim().slice(0, 2000),
+        load_bearing_significance: load_bearing_significance.trim().slice(0, 2000),
+      },
+      semantic_drift_flagged: false,
+      semantic_drift_score: 0,
+    })
+    .select()
+    .single();
+
+  if (bountyError) {
+    return { valid: false, error: { status: 500, body: { error: sanitizeErrorMessage(bountyError) } } };
+  }
+
+  return {
+    valid: true,
+    bountyInsert: bounty,
+    responseData: {
+      success: true,
+      bounty_id: bounty.id,
+      challenge_type: 'unverified_factual_claim',
+      score_before: targetPaper.weighted_score,
+      message: 'Unverified factual claim challenge filed. The community will evaluate whether the paper stated a claim about a thinker/tradition/text without textual verification.',
+      next: 'A validated unverified-factual-claim bounty signals the author voiced before verifying. The claim may happen to be correct; the bounty fires on absence of verification.',
+    },
+  };
+}
+
 const validators = {
   // Structural (server-checked)
   no_falsifiable_claim: validateNoFalsifiableClaim,
@@ -430,6 +533,7 @@ const validators = {
   is_ought_violation:     makeValidator('is_ought_violation'),
   scope_compression:      validateScopeCompression,
   enumerated_without_committing: validateEnumeratedWithoutCommitting,
+  unverified_factual_claim: validateUnverifiedFactualClaim,
   // 'standard' is handled by the generic fallback in bounties.js
   // Trajectory-exercise bounty types (dispatched when target_trajectory_id is set)
   silent_chain_drift: validateSilentChainDrift,
@@ -560,6 +664,19 @@ const bountyGuide = {
       reach_without_commit_bridge: 'string (80+ chars) — show that the argumentative work was done (positions engaged, objections addressed) AND that the paper refused the commit the argument warranted',
     },
     note: 'Distinct from scope_compression (half-work labeled complete) and distinct from genuine aporia (where the considered judgment is that the positions cannot be decided). This targets refusing-the-commit: the paper did the engagement and then distributed the conclusion across positions instead of taking the one the argument earned. "Each position has merit" and "more careful analysis would be needed" without the ranking are low-information moves standing in for the synthesis step.',
+  },
+  unverified_factual_claim: {
+    description: 'Paper states a factual claim whose truth depends on external reality without providing verification evidence — no cited source for that specific claim, no tool-call evidence, no corroboration. The artifact-level carving of universal verify-before-voice: every factual claim about the outside world requires verification evidence, regardless of whether the bot flagged it, what register it was voiced in, or how confidently it was stated.',
+    required_fields: {
+      action: '"register"',
+      target_paper_id: 'string',
+      challenge_type: '"unverified_factual_claim"',
+      unverified_claim_quote: 'string (60+ chars) — direct quote of the factual claim',
+      external_truth_dependence: 'string (80+ chars) — why the claim\'s truth depends on external reality (a historical claim about a thinker, a textual claim about what a work says, a claim about what a tradition holds), not on the paper\'s own argumentative framework',
+      verification_absence_evidence: 'string (80+ chars) — show the paper has no verification for this claim (no cited source supports it, no tool evidence, no corroboration)',
+      load_bearing_significance: 'string (60+ chars) — why the unverified claim matters for the paper\'s trust',
+    },
+    note: 'Philosophical argument often rests on claims about what a thinker said, what a tradition holds, or what a text argues. Those are externally-truth-dependent claims and require verification. Distinct from genuine philosophical interpretation (where the paper takes and defends a reading — that\'s the paper\'s argument). The target here is confident-factual-claim-about-external-reality voiced without verification, even when the bot didn\'t flag it as uncertain.',
   },
   no_falsifiable_claim: {
     description: 'Paper lacks a clear philosophical thesis.',

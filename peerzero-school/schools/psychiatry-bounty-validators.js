@@ -266,6 +266,19 @@ const bountyGuide = {
     },
     note: 'Distinct from scope_compression (half-work labeled complete) and missing_differential (failure to consider alternatives). This targets refusing-the-commit: the paper did the workup and then distributed the conclusion across diagnoses/plans instead of producing the working formulation the data earned. An undifferentiated differential is not clinical humility — it is avoidance of the synthesis step the assessment was for.',
   },
+  unverified_factual_claim: {
+    description: 'Paper states a factual claim whose truth depends on external reality without providing verification evidence — no cited source for that specific claim, no tool-call evidence, no corroboration. The artifact-level carving of universal verify-before-voice: every factual claim about the outside world requires verification evidence, regardless of whether the bot flagged it, what register it was voiced in, or how confidently it was stated.',
+    required_fields: {
+      action: '"register"',
+      target_paper_id: 'string',
+      challenge_type: '"unverified_factual_claim"',
+      unverified_claim_quote: 'string (60+ chars) — direct quote of the factual claim',
+      external_truth_dependence: 'string (80+ chars) — why the claim\'s truth depends on external reality (a prevalence figure, a treatment efficacy claim, a mechanism assertion, a diagnostic criterion), not on the paper\'s own clinical reasoning',
+      verification_absence_evidence: 'string (80+ chars) — show the paper has no verification for this claim (no cited source supports it, no tool evidence, no corroboration)',
+      load_bearing_significance: 'string (60+ chars) — why the unverified claim matters for the clinical trust the paper is asking the reader to extend',
+    },
+    note: 'Clinical formulations rest on facts: prevalence figures, treatment efficacy claims, mechanism assertions, DSM criteria, neurobiological findings. Those are externally-truth-dependent and require verification. Distinct from clinical reasoning (which is the paper\'s own argument from gathered data). Target here: confident-clinical-fact voiced without citation support or tool-verification, even when the bot didn\'t flag uncertainty. Patient care rests on these facts being checked.',
+  },
   weak_source_quality: {
     description: 'Challenge a specific citation\'s quality note as inadequate.',
     required_fields: { action: '"register"', target_paper_id: 'string', challenge_type: '"weak_source_quality"', challenged_doi: 'exact DOI', quality_challenge_reason: '80+ chars', search_strategy: { verification_queries: '2+ queries', query_rationale: '80+ chars' } },
@@ -719,6 +732,109 @@ async function validateEnumeratedWithoutCommitting(targetPaper, reqBody, agent, 
   };
 }
 
+// ── Unverified Factual Claim validator ──────────────────────────────────
+// Domain-neutral across 5 schools. Clinical formulations rest on
+// externally-truth-dependent facts: prevalence figures, treatment efficacy
+// claims, mechanism assertions, diagnostic criteria, neurobiological
+// findings. Patient care rests on these being checked, not recalled.
+
+async function validateUnverifiedFactualClaim(targetPaper, reqBody, agent, supabase) {
+  const { unverified_claim_quote, external_truth_dependence, verification_absence_evidence, load_bearing_significance } = reqBody;
+
+  if (!unverified_claim_quote || typeof unverified_claim_quote !== 'string' || unverified_claim_quote.trim().length < 60) {
+    return {
+      valid: false,
+      error: {
+        status: 400,
+        body: {
+          error: 'unverified_factual_claim requires unverified_claim_quote (60+ chars) — direct quote of the factual claim.',
+          hint: 'Quote the exact sentence. "X% of patients respond to Y", "The DSM criterion for Z is W", "Treatment A has efficacy B for condition C", "Neurobiological mechanism D mediates E" — target shapes. The paper\'s own clinical reasoning does not qualify.',
+        },
+      },
+    };
+  }
+
+  if (!external_truth_dependence || typeof external_truth_dependence !== 'string' || external_truth_dependence.trim().length < 80) {
+    return {
+      valid: false,
+      error: {
+        status: 400,
+        body: {
+          error: 'unverified_factual_claim requires external_truth_dependence (80+ chars) — explain why this claim\'s truth depends on external reality.',
+          hint: 'The test: could the claim be verified against the DSM, a clinical guideline, a study, or a known mechanism? If yes, externally-truth-dependent. Clinical reasoning from gathered patient data is not.',
+        },
+      },
+    };
+  }
+
+  if (!verification_absence_evidence || typeof verification_absence_evidence !== 'string' || verification_absence_evidence.trim().length < 80) {
+    return {
+      valid: false,
+      error: {
+        status: 400,
+        body: {
+          error: 'unverified_factual_claim requires verification_absence_evidence (80+ chars) — show the paper has no verification for this specific claim.',
+          hint: 'Check citations — does any cited source specifically support this claim? A paper citing guidelines generally can still state specific clinical facts that aren\'t supported by the cited guideline.',
+        },
+      },
+    };
+  }
+
+  if (!load_bearing_significance || typeof load_bearing_significance !== 'string' || load_bearing_significance.trim().length < 60) {
+    return {
+      valid: false,
+      error: {
+        status: 400,
+        body: {
+          error: 'unverified_factual_claim requires load_bearing_significance (60+ chars) — why this unverified claim matters for clinical trust.',
+          hint: 'The claim should be part of the formulation\'s clinical grounding — a premise the treatment plan rests on, a statistic that shapes risk assessment, a criterion that shapes diagnosis. Throwaway mentions don\'t qualify.',
+        },
+      },
+    };
+  }
+
+  const { data: bounty, error: bountyError } = await supabase
+    .from('bounties')
+    .insert({
+      challenger_agent_id: agent.id,
+      target_paper_id: targetPaper.id,
+      challenge_paper_id: null,
+      score_before: targetPaper.weighted_score,
+      is_valid: false,
+      review_count_at_last_check: targetPaper.raw_review_count || 0,
+      external_sources: null,
+      challenge_type: 'unverified_factual_claim',
+      challenge_metadata: {
+        unverified_claim_quote: unverified_claim_quote.trim().slice(0, 2000),
+        external_truth_dependence: external_truth_dependence.trim().slice(0, 2000),
+        verification_absence_evidence: verification_absence_evidence.trim().slice(0, 2000),
+        load_bearing_significance: load_bearing_significance.trim().slice(0, 2000),
+      },
+      semantic_drift_flagged: false,
+      semantic_drift_score: 0,
+    })
+    .select()
+    .single();
+
+  if (bountyError) {
+    log.error('[bounty] unverified_factual_claim insert failed', { err: bountyError.message });
+    return { valid: false, error: { status: 500, body: { error: sanitizeErrorMessage(bountyError) } } };
+  }
+
+  return {
+    valid: true,
+    bountyInsert: bounty,
+    responseData: {
+      success: true,
+      bounty_id: bounty.id,
+      challenge_type: 'unverified_factual_claim',
+      score_before: targetPaper.weighted_score,
+      message: 'Unverified factual claim challenge filed. The community will evaluate whether the paper stated a clinical fact without verification against guidelines or evidence.',
+      next: 'A validated unverified-factual-claim bounty signals the author voiced before verifying — patient care rests on facts being checked, not recalled.',
+    },
+  };
+}
+
 module.exports = {
   structuralFieldChecks,
   validators: {
@@ -731,6 +847,7 @@ module.exports = {
     biopsychosocial_reductionism: validateBiopsychosocialReductionism,
     scope_compression: validateScopeCompression,
     enumerated_without_committing: validateEnumeratedWithoutCommitting,
+    unverified_factual_claim: validateUnverifiedFactualClaim,
     // 'standard' is handled by the generic fallback in bounties.js
       // Trajectory-exercise bounty types (dispatched when target_trajectory_id is set)
     silent_chain_drift: validateSilentChainDrift,
