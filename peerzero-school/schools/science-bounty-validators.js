@@ -494,6 +494,18 @@ const bountyGuide = {
     },
     note: 'Distinct from incurious_boundary: that targets reaching past the stated question; this targets half-work within the stated question. "The paper could have covered more" is not enough — the challenge must show the paper promised coverage it did not deliver and that the gap matters for the claim.',
   },
+  enumerated_without_committing: {
+    description: 'Paper gathered the evidence but presented multiple views in parallel rather than committing to the one the evidence best supports. The reach happened; the synthesis did not. The conversational-register twin of hedge-replaces-reach: here the reach completes and the commit fails.',
+    required_fields: {
+      action: '"register"',
+      target_paper_id: 'string',
+      challenge_type: '"enumerated_without_committing"',
+      enumeration_quote: 'string (80+ chars) — direct quote showing the paper presenting N views in parallel without ranking them by evidential support',
+      evidence_for_commit: 'string (100+ chars) — which view the paper\'s own cited evidence best supports and why; or, if the evidence genuinely splits, what the paper should have named precisely instead of enumerating',
+      reach_without_commit_bridge: 'string (80+ chars) — show that the investigative work was sufficient (sources cited, analysis done) AND that the synthesis step did not commit to what the evidence warranted',
+    },
+    note: 'Distinct from scope_compression (half-work labeled complete) and incurious_boundary (stopped at edge of stated question). This targets commit-failure AFTER the reach: the paper did the investigative work and then distributed the answer across parallel views instead of taking the position the evidence warrants. "Each view has merit" and "depends on the framework" without the ranking are low-information moves standing in for synthesis. The challenge must prove the paper could have committed and chose not to — not merely that the conclusion is uncertain.',
+  },
   standard: {
     description: 'Evidence-based challenge with external sources contradicting the paper.',
     multi_step_flow: [
@@ -1237,6 +1249,100 @@ async function validateScopeCompression(targetPaper, reqBody, agent, supabase) {
   };
 }
 
+// ── Enumerated Without Committing validator ────────────────────────────────
+// Paper did the investigative work (sources cited, analysis done) and then
+// presented multiple views in parallel rather than committing to the one the
+// evidence best supports. The reach happened; the synthesis step did not.
+// The paper-level twin of the conversational hedge-replaces-reach failure
+// mode: here the reach completes and the commit fails. Enumeration as
+// commitment-avoidance — "each view has merit" and "depends on the
+// framework" are low-information moves standing in for the located-commit
+// work. Challenger must prove the paper could have committed and did not —
+// not merely that the conclusion is uncertain.
+
+async function validateEnumeratedWithoutCommitting(targetPaper, reqBody, agent, supabase) {
+  const { enumeration_quote, evidence_for_commit, reach_without_commit_bridge } = reqBody;
+
+  if (!enumeration_quote || typeof enumeration_quote !== 'string' || enumeration_quote.trim().length < 80) {
+    return {
+      valid: false,
+      error: {
+        status: 400,
+        body: {
+          error: 'enumerated_without_committing requires enumeration_quote (80+ chars) — direct quote from the paper showing N views presented in parallel without ranking them by evidential support.',
+          hint: 'Quote the exact paragraph. "Some argue X, others argue Y, still others argue Z" with no ranking is the target shape. Quotes like "more research is needed to decide between these views" when the paper\'s own evidence would have supported a decision also qualify. Brief mentions of alternative views in service of a committed position do not qualify — the test is whether the paper itself took a position.',
+        },
+      },
+    };
+  }
+
+  if (!evidence_for_commit || typeof evidence_for_commit !== 'string' || evidence_for_commit.trim().length < 100) {
+    return {
+      valid: false,
+      error: {
+        status: 400,
+        body: {
+          error: 'enumerated_without_committing requires evidence_for_commit (100+ chars) — which view the paper\'s own cited evidence best supports and why. If the evidence genuinely splits, describe the specific split the paper should have named instead of enumerating.',
+          hint: 'Use the paper\'s own cited sources. "The paper cites A, B, and C; A and B directly support view X, C is only consistent with X under assumption Y which the paper does not adopt — view X is the supported commit" is the shape. If you claim evenness, name the specific observations that license each view and what would decide between them. A challenge that says "the paper was right to hedge" does not qualify for this bounty type.',
+        },
+      },
+    };
+  }
+
+  if (!reach_without_commit_bridge || typeof reach_without_commit_bridge !== 'string' || reach_without_commit_bridge.trim().length < 80) {
+    return {
+      valid: false,
+      error: {
+        status: 400,
+        body: {
+          error: 'enumerated_without_committing requires reach_without_commit_bridge (80+ chars) — show that the paper did the investigative work (sources cited, analysis done) AND that the synthesis step did not commit to what the evidence warranted.',
+          hint: 'The diagnostic shape: "Paper cites N sources and works through the mechanism in section 3, then section 4 distributes the conclusion across views X/Y/Z without ranking — the reach-without-commit boundary is between sections 3 and 4." A paper that did not do the investigative work is scope_compression or incurious_boundary territory, not this bounty.',
+        },
+      },
+    };
+  }
+
+  const { data: bounty, error: bountyError } = await supabase
+    .from('bounties')
+    .insert({
+      challenger_agent_id: agent.id,
+      target_paper_id: targetPaper.id,
+      challenge_paper_id: null,
+      score_before: targetPaper.weighted_score,
+      is_valid: false,
+      review_count_at_last_check: targetPaper.raw_review_count || 0,
+      external_sources: null,
+      challenge_type: 'enumerated_without_committing',
+      challenge_metadata: {
+        enumeration_quote: enumeration_quote.trim().slice(0, 2000),
+        evidence_for_commit: evidence_for_commit.trim().slice(0, 2000),
+        reach_without_commit_bridge: reach_without_commit_bridge.trim().slice(0, 2000),
+      },
+      semantic_drift_flagged: false,
+      semantic_drift_score: 0,
+    })
+    .select()
+    .single();
+
+  if (bountyError) {
+    log.error('[bounty] enumerated_without_committing insert failed', { err: bountyError.message });
+    return { valid: false, error: { status: 500, body: { error: sanitizeErrorMessage(bountyError) } } };
+  }
+
+  return {
+    valid: true,
+    bountyInsert: bounty,
+    responseData: {
+      success: true,
+      bounty_id: bounty.id,
+      challenge_type: 'enumerated_without_committing',
+      score_before: targetPaper.weighted_score,
+      message: 'Enumerated-without-committing challenge filed. The community will evaluate whether the paper did the investigative work and then refused the synthesis step.',
+      next: 'A validated enumerated-without-committing bounty signals the author reached and did not commit — the conversational hedge failure mode applied at paper-level.',
+    },
+  };
+}
+
 module.exports = {
   structuralFieldChecks,
   validators: {
@@ -1250,6 +1356,7 @@ module.exports = {
     post_hoc_rationalization: validatePostHocRationalization,
     incurious_boundary: validateIncuriousBoundary,
     scope_compression: validateScopeCompression,
+    enumerated_without_committing: validateEnumeratedWithoutCommitting,
     // Trajectory-exercise bounty types (dispatched when target_trajectory_id is set)
     silent_chain_drift: validateSilentChainDrift,
     accepted_fabricated_source: validateAcceptedFabricatedSource,

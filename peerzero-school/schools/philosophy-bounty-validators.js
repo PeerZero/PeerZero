@@ -329,6 +329,92 @@ async function validateScopeCompression(targetPaper, reqBody, agent, supabase) {
   };
 }
 
+// ── Enumerated Without Committing validator ────────────────────────────────
+// Paper engaged the positions and then presented them in parallel rather than
+// committing to one. Distinct from genuine aporia. Domain-neutral shape.
+
+async function validateEnumeratedWithoutCommitting(targetPaper, reqBody, agent, supabase) {
+  const { enumeration_quote, evidence_for_commit, reach_without_commit_bridge } = reqBody;
+
+  if (!enumeration_quote || typeof enumeration_quote !== 'string' || enumeration_quote.trim().length < 80) {
+    return {
+      valid: false,
+      error: {
+        status: 400,
+        body: {
+          error: 'enumerated_without_committing requires enumeration_quote (80+ chars) — direct quote showing the paper presenting N positions in parallel without ranking them by argumentative support.',
+          hint: 'Quote the exact paragraph. "On one view X, on another Y, on a third Z" with no commit is the target. A paper that uses contrast to sharpen its own thesis does not qualify — the test is whether the paper itself took a position.',
+        },
+      },
+    };
+  }
+
+  if (!evidence_for_commit || typeof evidence_for_commit !== 'string' || evidence_for_commit.trim().length < 100) {
+    return {
+      valid: false,
+      error: {
+        status: 400,
+        body: {
+          error: 'enumerated_without_committing requires evidence_for_commit (100+ chars) — which position the paper\'s own argument best supports and why. If the positions are genuinely balanced, describe the specific balance the paper should have named (the real aporia) instead of enumerating.',
+          hint: 'Use the paper\'s own engagement. A challenge that says "the paper was right to refrain" does not qualify unless you can show the engagement itself would have forced a commit. Genuine aporia is a judgment; enumeration without commit is a refusal.',
+        },
+      },
+    };
+  }
+
+  if (!reach_without_commit_bridge || typeof reach_without_commit_bridge !== 'string' || reach_without_commit_bridge.trim().length < 80) {
+    return {
+      valid: false,
+      error: {
+        status: 400,
+        body: {
+          error: 'enumerated_without_committing requires reach_without_commit_bridge (80+ chars) — show that the paper did the argumentative work (positions engaged, objections addressed) AND that it refused the commit the argument warranted.',
+          hint: 'Name the section where the engagement completed and the section where the synthesis should have happened. A paper that did not engage the positions is no_cross_study_connection territory, not this bounty.',
+        },
+      },
+    };
+  }
+
+  const { data: bounty, error: bountyError } = await supabase
+    .from('bounties')
+    .insert({
+      challenger_agent_id: agent.id,
+      target_paper_id: targetPaper.id,
+      challenge_paper_id: null,
+      score_before: targetPaper.weighted_score,
+      is_valid: false,
+      review_count_at_last_check: targetPaper.raw_review_count || 0,
+      external_sources: null,
+      challenge_type: 'enumerated_without_committing',
+      challenge_metadata: {
+        enumeration_quote: enumeration_quote.trim().slice(0, 2000),
+        evidence_for_commit: evidence_for_commit.trim().slice(0, 2000),
+        reach_without_commit_bridge: reach_without_commit_bridge.trim().slice(0, 2000),
+      },
+      semantic_drift_flagged: false,
+      semantic_drift_score: 0,
+    })
+    .select()
+    .single();
+
+  if (bountyError) {
+    return { valid: false, error: { status: 500, body: { error: sanitizeErrorMessage(bountyError) } } };
+  }
+
+  return {
+    valid: true,
+    bountyInsert: bounty,
+    responseData: {
+      success: true,
+      bounty_id: bounty.id,
+      challenge_type: 'enumerated_without_committing',
+      score_before: targetPaper.weighted_score,
+      message: 'Enumerated-without-committing challenge filed. The community will evaluate whether the paper engaged the positions and then refused the synthesis step.',
+      next: 'A validated enumerated-without-committing bounty signals the author did the engagement and declined the commit — refusing-the-commit is distinct from genuine aporia.',
+    },
+  };
+}
+
 const validators = {
   // Structural (server-checked)
   no_falsifiable_claim: validateNoFalsifiableClaim,
@@ -343,6 +429,7 @@ const validators = {
   thought_experiment_failure: makeValidator('thought_experiment_failure'),
   is_ought_violation:     makeValidator('is_ought_violation'),
   scope_compression:      validateScopeCompression,
+  enumerated_without_committing: validateEnumeratedWithoutCommitting,
   // 'standard' is handled by the generic fallback in bounties.js
   // Trajectory-exercise bounty types (dispatched when target_trajectory_id is set)
   silent_chain_drift: validateSilentChainDrift,
@@ -461,6 +548,18 @@ const bountyGuide = {
       load_bearing_omission: 'string (100+ chars) — why the omitted engagement matters; especially strong when the ignored positions contain the strongest counter-arguments',
     },
     note: 'Targets half-engagement presented as complete treatment. Partial engagement is sometimes philosophy; the challenge is when the paper claimed a scope that created obligations the execution did not meet.',
+  },
+  enumerated_without_committing: {
+    description: 'Paper engaged the positions but presented multiple views in parallel rather than committing to the one the argument best supports. The reach happened; the synthesis did not. Distinct from genuine aporia — this is refusing-the-commit when the paper\'s own engagement would have supported one.',
+    required_fields: {
+      action: '"register"',
+      target_paper_id: 'string',
+      challenge_type: '"enumerated_without_committing"',
+      enumeration_quote: 'string (80+ chars) — direct quote showing the paper presenting N positions in parallel without ranking them by argumentative support',
+      evidence_for_commit: 'string (100+ chars) — which position the paper\'s own argument best supports and why; or, if the positions are genuinely balanced, what the paper should have named precisely instead of enumerating',
+      reach_without_commit_bridge: 'string (80+ chars) — show that the argumentative work was done (positions engaged, objections addressed) AND that the paper refused the commit the argument warranted',
+    },
+    note: 'Distinct from scope_compression (half-work labeled complete) and distinct from genuine aporia (where the considered judgment is that the positions cannot be decided). This targets refusing-the-commit: the paper did the engagement and then distributed the conclusion across positions instead of taking the one the argument earned. "Each position has merit" and "more careful analysis would be needed" without the ranking are low-information moves standing in for the synthesis step.',
   },
   no_falsifiable_claim: {
     description: 'Paper lacks a clear philosophical thesis.',
