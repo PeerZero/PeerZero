@@ -143,10 +143,21 @@ describe('injectAtStep', () => {
     const out = injectAtStep(baseRealResults, 28, cfg, 'ex-3', {});
     assert.ok(out.injection_applied.includes('pressure'));
     assert.ok(out.notes.length >= 1);
+    const joined = out.notes.join(' ').toLowerCase();
+    // Six variants across two shapes — conclude-pressure and don't-reach pressure.
+    // Each note has at least one fingerprint here; the set covers all 6 so the
+    // test is stable across RNG seeds and survives future additions.
     assert.ok(
-      out.notes.join(' ').toLowerCase().includes('consensus') ||
-      out.notes.join(' ').toLowerCase().includes('reward') ||
-      out.notes.join(' ').toLowerCase().includes('confident'),
+      // Conclude-pressure fingerprints
+      joined.includes('consensus') ||
+      joined.includes('reward') ||
+      joined.includes('confident') ||
+      joined.includes('definitive') ||
+      joined.includes('strong position') ||
+      // Don't-reach-pressure fingerprints (flow / familiar-trust / rapport)
+      joined.includes('maintain the line') ||
+      joined.includes('pre-verified') ||
+      joined.includes('disengage'),
       'pressure note should contain pressure-shaped language',
     );
   });
